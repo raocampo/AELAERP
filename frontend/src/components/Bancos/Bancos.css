@@ -1,0 +1,377 @@
+/* ============================================================
+   AELA — Módulo Bancos
+   ============================================================ */
+
+.bancos-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.bancos-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+/* ── Tarjetas de cuentas ── */
+.bancos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.banco-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.banco-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.banco-card.selected {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
+}
+
+.banco-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.banco-card-nombre {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text-primary);
+}
+
+.banco-card-tipo {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.banco-card-info {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.banco-card-saldo {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.banco-card-saldo.negativo {
+  color: var(--color-danger);
+}
+
+.banco-card-actions {
+  display: flex;
+  gap: 0.4rem;
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.banco-card:hover .banco-card-actions {
+  opacity: 1;
+}
+
+/* ── Tabs dentro de detalle ── */
+.bancos-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 2px solid var(--color-border);
+  margin-bottom: 1.25rem;
+}
+
+.bancos-tab {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.bancos-tab:hover {
+  color: var(--color-text-primary);
+}
+
+.bancos-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* ── Tabla de movimientos ── */
+.movimientos-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.movimientos-tabla th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.movimientos-tabla td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  vertical-align: middle;
+}
+
+.movimientos-tabla tr:last-child td {
+  border-bottom: none;
+}
+
+.movimientos-tabla tr:hover td {
+  background: var(--color-bg);
+}
+
+.monto-debe {
+  color: var(--color-success, #16a34a);
+  font-weight: 600;
+}
+
+.monto-haber {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.saldo-positivo {
+  color: var(--color-success, #16a34a);
+  font-weight: 600;
+}
+
+.saldo-negativo {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+/* ── Badge de tipo movimiento ── */
+.tipo-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tipo-DEPOSITO,
+.tipo-TRANSFERENCIA_IN,
+.tipo-NOTA_CREDITO {
+  background: #d1fae5;
+  color: #22C55E;
+}
+
+.tipo-RETIRO,
+.tipo-CHEQUE,
+.tipo-NOTA_DEBITO,
+.tipo-TRANSFERENCIA_OUT {
+  background: #fee2e2;
+  color: #EF4444;
+}
+
+.tipo-AJUSTE {
+  background: #fef3c7;
+  color: #F59E0B;
+}
+
+/* ── Badge de estado cheque ── */
+.estado-PENDIENTE   { background: #fef3c7; color: #F59E0B; }
+.estado-COBRADO     { background: #d1fae5;  color: #22C55E; }
+.estado-ANULADO     { background: rgba(124,58,237,0.08); color: #64748b; }
+.estado-PROTESTADO  { background: #fee2e2;  color: #EF4444; }
+
+.cheque-estado-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* ── Saldo resumen ── */
+.saldo-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  background: var(--color-bg);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.saldo-item {
+  text-align: center;
+}
+
+.saldo-item-label {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.saldo-item-valor {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+/* ── Filtros ── */
+.bancos-filtros {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.bancos-filtros select,
+.bancos-filtros input[type="date"] {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+/* ── Modal formulario ── */
+.bancos-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.bancos-modal {
+  background: var(--color-surface);
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.bancos-modal h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 1.25rem;
+  color: var(--color-text-primary);
+}
+
+.bancos-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.bancos-form-grid .full-col {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.3rem;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+/* ── Vacío ── */
+.bancos-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--color-text-secondary);
+}
+
+.bancos-empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .bancos-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bancos-grid {
+    grid-template-columns: 1fr;
+  }
+}

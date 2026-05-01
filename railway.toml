@@ -1,0 +1,21 @@
+# ============================================================
+#  railway.toml — AELA ERP Backend (Railway)
+#  Configuración para despliegue automático en Railway
+# ============================================================
+
+[build]
+builder = "NIXPACKS"
+# Instalar dependencias del backend y generar Prisma clients
+buildCommand = "cd backend && npm install && npx prisma generate && npx prisma generate --schema=./prisma/schema-master.prisma"
+
+[deploy]
+# Ejecutar migraciones antes de arrancar el servidor
+startCommand = "cd backend && npx prisma migrate deploy && node server.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[env]
+PORT = "5600"
+NODE_ENV = "production"

@@ -1,0 +1,277 @@
+﻿/* ====================================
+   REPORTES TRIBUTARIOS
+   ==================================== */
+
+.rep-container {
+  padding: 24px;
+  max-width: 1200px;
+}
+
+.rep-header { margin-bottom: 20px; }
+.rep-title  { font-size: 1.6rem; font-weight: 700; color: #192C4A; margin: 0 0 4px; }
+.rep-subtitle { color: #64748b; font-size: 0.9rem; margin: 0; }
+
+/* Selector de período */
+.rep-periodo-box {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.rep-periodo-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rep-periodo-selector label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.rep-select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #1a1a2e;
+  background: #fff;
+}
+.rep-select:focus { outline: none; border-color: #192C4A; }
+
+.btn-generar-rep {
+  background: #192C4A;
+  color: #fff;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-generar-rep:hover:not(:disabled) { background: #003056; }
+.btn-generar-rep:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btn-imprimir-rep {
+  background: #f8fafc;
+  color: #1b3a6b;
+  border: 1px solid #cbd5e1;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-imprimir-rep:hover:not(:disabled) { background: #eef2f7; }
+.btn-imprimir-rep:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.rep-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+/* Tarjetas de resumen */
+.rep-resumen-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) { .rep-resumen-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px)  { .rep-resumen-grid { grid-template-columns: 1fr; } }
+
+.rep-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rep-card-ventas { border-top: 3px solid #192C4A; }
+.rep-card-nc     { border-top: 3px solid #F9A825; }
+.rep-card-ret    { border-top: 3px solid #8b5cf6; }
+.rep-card-iva.positivo { border-top: 3px solid #dc2626; }
+.rep-card-iva.negativo { border-top: 3px solid #2E7D32; }
+
+.rep-card-titulo {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.rep-card-periodo {
+  font-size: 0.78rem;
+  color: #9ca3af;
+}
+
+.rep-card-rows { display: flex; flex-direction: column; gap: 6px; }
+
+.rep-card-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: #374151;
+  padding: 4px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.rep-card-row span { color: #64748b; }
+.rep-card-row strong { color: #1a1a2e; }
+
+.rep-card-row-total  { background: #f0f9ff; border-radius: 4px; padding: 4px 6px; font-weight: 600; }
+.rep-card-row-subtotal { background: #f0fdf4; border-radius: 4px; padding: 4px 6px; font-weight: 700; font-size: 0.9rem; }
+
+.rep-card-badge {
+  display: inline-block;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* IVA Neto */
+.rep-iva-formula { display: flex; flex-direction: column; gap: 6px; }
+.rep-formula-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: #374151;
+  padding: 3px 0;
+}
+.rep-formula-menos span:first-child { color: #64748b; }
+.rep-formula-menos span:last-child  { color: #dc2626; }
+.rep-formula-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1rem;
+  padding: 8px 6px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  margin-top: 4px;
+  font-weight: 700;
+  color: #192C4A;
+}
+.iva-positivo { color: #dc2626; }
+.iva-negativo { color: #2E7D32; }
+
+.rep-iva-nota {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Secciones con tablas */
+.rep-seccion {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.rep-seccion-titulo {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rep-sec-count {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 0.75rem;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.rep-empty {
+  color: #64748b;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 20px;
+}
+
+/* Tabla */
+.rep-tabla-wrap {
+  overflow-x: auto;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.rep-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.rep-tabla thead {
+  background: #192C4A;
+  color: #fff;
+}
+.rep-tabla th {
+  padding: 9px 10px;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rep-tabla td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+.rep-tabla tbody tr:hover { background: #f8fafc; }
+
+.rep-num { font-weight: 700; color: #192C4A; white-space: nowrap; font-size: 0.8rem; }
+.rep-money { text-align: right; color: #374151; white-space: nowrap; }
+.rep-money-total { font-weight: 700; color: #192C4A; }
+
+.rep-tfoot { background: #f0f4ff; }
+.rep-tfoot td { font-weight: 700; }
+
+/* Badges */
+.rep-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-success   { background: #d1fae5; color: #065f46; }
+.badge-warning   { background: #fef3c7; color: #92400e; }
+
+/* Placeholder */
+.rep-placeholder {
+  text-align: center;
+  color: #64748b;
+  padding: 60px 20px;
+  font-size: 1rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px dashed #d1d5db;
+}

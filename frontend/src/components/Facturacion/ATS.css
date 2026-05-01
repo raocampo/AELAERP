@@ -1,0 +1,281 @@
+﻿/* ====================================
+   ATS — ANEXO TRANSACCIONAL SIMPLIFICADO
+   ==================================== */
+
+.ats-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.ats-header {
+  margin-bottom: 20px;
+}
+
+.ats-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0 0 4px 0;
+}
+
+.ats-subtitle {
+  color: #64748b;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* Selector de período */
+.ats-periodo-box {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+
+.ats-periodo-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ats-periodo-selector label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.ats-select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #1a1a2e;
+  background: #fff;
+}
+.ats-select:focus { outline: none; border-color: #2E7D32; }
+
+.btn-generar-ats {
+  background: #2E7D32;
+  color: #fff;
+  border: none;
+  padding: 9px 22px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-generar-ats:hover    { background: #1b5e20; }
+.btn-generar-ats:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btn-imprimir-ats {
+  background: #f8fafc;
+  color: #1b3a6b;
+  border: 1px solid #cbd5e1;
+  padding: 9px 22px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-imprimir-ats:hover { background: #eef2f7; }
+.btn-imprimir-ats:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.ats-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+/* Tarjetas de resumen */
+.ats-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+  .ats-cards-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 540px) {
+  .ats-cards-grid { grid-template-columns: 1fr; }
+}
+
+.ats-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.ats-card-icono  { font-size: 1.8rem; margin-bottom: 8px; }
+.ats-card-titulo { font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+.ats-card-valor  { font-size: 2rem; font-weight: 800; margin-bottom: 4px; }
+.ats-card-sub    { font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; }
+.ats-card-nota   { font-size: 0.72rem; color: #9ca3af; }
+
+.ats-card-ventas { border-top: 4px solid #192C4A; }
+.ats-card-ventas .ats-card-valor { color: #192C4A; }
+.ats-card-ventas .ats-card-sub   { color: #192C4A; }
+
+.ats-card-liq { border-top: 4px solid #1976D2; }
+.ats-card-liq .ats-card-valor { color: #0284c7; }
+.ats-card-liq .ats-card-sub   { color: #0284c7; }
+
+.ats-card-ret { border-top: 4px solid #F9A825; }
+.ats-card-ret .ats-card-valor { color: #d97706; }
+.ats-card-ret .ats-card-sub   { color: #d97706; }
+
+.ats-card-total { border-top: 4px solid #2E7D32; }
+.ats-card-total .ats-card-valor { color: #2E7D32; }
+.ats-card-total .ats-card-sub   { color: #374151; }
+
+/* Descarga XML */
+.ats-descarga-box {
+  background: linear-gradient(135deg, #192C4A 0%, #1976D2 100%);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.ats-descarga-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ats-descarga-info strong { color: #fff; font-size: 1rem; }
+.ats-descarga-info span   { color: rgba(255,255,255,0.8); font-size: 0.85rem; }
+
+.btn-descargar-ats {
+  background: #fff;
+  color: #192C4A;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.btn-descargar-ats:hover    { background: #e0f2fe; transform: translateY(-1px); }
+.btn-descargar-ats:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+
+/* Nota SRI */
+.ats-nota-sri {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  font-size: 0.85rem;
+  color: #78350f;
+}
+.ats-nota-sri strong { display: block; margin-bottom: 6px; font-size: 0.9rem; }
+.ats-nota-sri ol { margin: 0; padding-left: 20px; }
+.ats-nota-sri li { margin-bottom: 4px; }
+
+/* Secciones de tabla */
+.ats-seccion {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.ats-seccion-titulo {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ats-sec-count {
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 12px;
+}
+
+.ats-empty {
+  text-align: center;
+  color: #9ca3af;
+  padding: 20px;
+  font-size: 0.9rem;
+}
+
+/* Tablas */
+.ats-tabla-wrap {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.ats-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.ats-tabla thead { background: #192C4A; color: #fff; }
+.ats-tabla th {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ats-tabla td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+.ats-tabla tbody tr:hover { background: #f8fafc; }
+
+.ats-num          { font-weight: 700; color: #192C4A; white-space: nowrap; }
+.ats-money        { text-align: right; white-space: nowrap; color: #374151; }
+.ats-money-total  { font-weight: 700; color: #2E7D32; }
+
+.ats-tfoot td {
+  background: #f1f5f9;
+  border-top: 2px solid #e5e7eb;
+  border-bottom: none;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+}
+
+/* Placeholder */
+.ats-placeholder {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+  font-size: 0.95rem;
+  background: #f8fafc;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+}
+.ats-placeholder strong { color: #d97706; }

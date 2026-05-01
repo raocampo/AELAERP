@@ -1,0 +1,308 @@
+﻿.conta-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.conta-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.conta-header h1 {
+  margin: 0 0 8px;
+}
+
+.conta-header p {
+  margin: 0;
+  color: #64748b;
+}
+
+.conta-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.conta-container .btn-primary {
+  background: #22C55E;
+  color: #ffffff;
+  border: 1px solid #22C55E;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+}
+
+.conta-container .btn-primary:hover {
+  background: #16a34a;
+}
+
+.conta-container .btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.conta-container .btn-secondary {
+  background: #ffffff;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+}
+
+.conta-container .btn-secondary:hover {
+  background: #f1f5f9;
+}
+
+.conta-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.conta-tabs button {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.conta-tabs button.active {
+  border-color: #22C55E;
+  color: #22C55E;
+}
+
+.conta-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.conta-kpis-compact {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.conta-kpi {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.conta-kpi span {
+  font-size: 13px;
+  color: #64748b;
+  display: block;
+}
+
+.conta-kpi strong {
+  font-size: 19px;
+}
+
+.conta-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+
+.conta-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.conta-card h3 {
+  margin: 0 0 12px;
+}
+
+.conta-note {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+.conta-note p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.conta-note strong {
+  color: #1e293b;
+}
+
+.conta-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.conta-table th,
+.conta-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.conta-empty {
+  text-align: center;
+  color: #64748b;
+}
+
+.conta-mini-list {
+  display: grid;
+  gap: 8px;
+}
+
+.conta-mini-list div {
+  display: flex;
+  justify-content: space-between;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.conta-loading {
+  color: #64748b;
+}
+
+.conta-tab-body {
+  display: grid;
+  gap: 12px;
+}
+
+.conta-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.conta-form-grid label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.conta-form-grid input,
+.conta-form-grid select {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.conta-form-grid .full-width {
+  grid-column: 1 / -1;
+}
+
+.conta-form-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.conta-detail-box {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.conta-balance {
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.conta-balance.ok {
+  background: #d1fae5;
+  color: #22C55E;
+}
+
+.conta-balance.warn {
+  background: #fee2e2;
+  color: #EF4444;
+}
+
+.conta-check-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.conta-filters {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(2, minmax(140px, 1fr)) auto auto;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.conta-filters input,
+.conta-filters select {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.conta-check-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.conta-badge {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.conta-badge.ok {
+  background: #d1fae5;
+  color: #22C55E;
+}
+
+.conta-badge.warn {
+  background: #fef3c7;
+  color: #F59E0B;
+}
+
+.btn-link {
+  border: none;
+  background: transparent;
+  color: #22C55E;
+  cursor: pointer;
+  padding: 0;
+  margin-right: 10px;
+}
+
+.btn-link.danger {
+  color: #EF4444;
+}
+
+@media (max-width: 960px) {
+  .conta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .conta-filters {
+    grid-template-columns: 1fr;
+  }
+}

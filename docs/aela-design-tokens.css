@@ -1,0 +1,360 @@
+/* ============================================================
+   AELA ERP — Paleta de Colores del Sistema
+   Design Tokens para uso en React / CSS / Tailwind
+   ============================================================ */
+
+/* ──────────────────────────────────────────────────────────
+   1. CSS CUSTOM PROPERTIES (usar en cualquier proyecto CSS)
+   ────────────────────────────────────────────────────────── */
+:root {
+
+  /* ── MARCA PRINCIPAL ── */
+  --aela-violet-50:   #F5F3FF;
+  --aela-violet-100:  #EDE9FE;
+  --aela-violet-200:  #DDD6FE;
+  --aela-violet-300:  #C4B5FD;
+  --aela-violet-400:  #A78BFA;   /* ← texto sobre oscuro, íconos */
+  --aela-violet-500:  #8B5CF6;   /* ← hover estados */
+  --aela-violet-600:  #7C3AED;   /* ← COLOR PRIMARIO DE MARCA */
+  --aela-violet-700:  #6D28D9;   /* ← hover botones */
+  --aela-violet-800:  #5B21B6;
+  --aela-violet-900:  #4C1D95;
+
+  /* ── ACENTO CIAN ── */
+  --aela-cyan-50:     #ECFEFF;
+  --aela-cyan-100:    #CFFAFE;
+  --aela-cyan-200:    #A5F3FC;
+  --aela-cyan-300:    #67E8F9;   /* ← stats, highlights */
+  --aela-cyan-400:    #22D3EE;
+  --aela-cyan-500:    #06B6D4;   /* ← ACENTO SECUNDARIO */
+  --aela-cyan-600:    #0891B2;   /* ← hover acento */
+  --aela-cyan-700:    #0E7490;
+  --aela-cyan-800:    #155E75;
+  --aela-cyan-900:    #164E63;
+
+  /* ── FONDOS (modo oscuro) ── */
+  --aela-bg-base:     #0F0A1E;   /* ← fondo principal */
+  --aela-bg-surface:  #1A1030;   /* ← tarjetas, paneles */
+  --aela-bg-surface2: #261847;   /* ← hover de superficie */
+  --aela-bg-overlay:  #0A0716;   /* ← modales, overlays */
+
+  /* ── BORDES ── */
+  --aela-border:      #2E1F54;   /* ← bordes por defecto */
+  --aela-border-l:    rgba(124, 58, 237, 0.35);  /* ← bordes activos */
+  --aela-border-cyan: rgba(6, 182, 212, 0.35);   /* ← bordes acento */
+
+  /* ── TEXTO ── */
+  --aela-text-primary:   #F1F0FF;   /* ← texto principal */
+  --aela-text-secondary: #9488BC;   /* ← texto muted */
+  --aela-text-disabled:  #5A4F7A;   /* ← texto deshabilitado */
+  --aela-text-inverse:   #0F0A1E;   /* ← texto sobre fondo claro */
+
+  /* ── SEMÁNTICOS ── */
+  --aela-success:     #22C55E;
+  --aela-success-bg:  rgba(34, 197, 94, 0.12);
+  --aela-warning:     #F59E0B;
+  --aela-warning-bg:  rgba(245, 158, 11, 0.12);
+  --aela-danger:      #EF4444;
+  --aela-danger-bg:   rgba(239, 68, 68, 0.12);
+  --aela-info:        #06B6D4;
+  --aela-info-bg:     rgba(6, 182, 212, 0.12);
+
+  /* ── SOMBRAS ── */
+  --aela-shadow-sm:   0 2px 8px rgba(0, 0, 0, 0.4);
+  --aela-shadow-md:   0 4px 24px rgba(0, 0, 0, 0.45);
+  --aela-shadow-lg:   0 8px 40px rgba(0, 0, 0, 0.5);
+  --aela-shadow-glow: 0 0 30px rgba(124, 58, 237, 0.2);
+
+  /* ── TIPOGRAFÍA ── */
+  --aela-font:        'Inter', system-ui, sans-serif;
+  --aela-radius-sm:   6px;
+  --aela-radius-md:   10px;
+  --aela-radius-lg:   14px;
+  --aela-radius-full: 999px;
+}
+
+
+/* ──────────────────────────────────────────────────────────
+   2. TAILWIND CONFIG (tailwind.config.js)
+   Copia esto en tu archivo de configuración de Tailwind
+   ────────────────────────────────────────────────────────── */
+/*
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        aela: {
+          violet: {
+            50:  '#F5F3FF',
+            100: '#EDE9FE',
+            200: '#DDD6FE',
+            300: '#C4B5FD',
+            400: '#A78BFA',
+            500: '#8B5CF6',
+            600: '#7C3AED',  // PRIMARY
+            700: '#6D28D9',
+            800: '#5B21B6',
+            900: '#4C1D95',
+          },
+          cyan: {
+            50:  '#ECFEFF',
+            100: '#CFFAFE',
+            200: '#A5F3FC',
+            300: '#67E8F9',
+            400: '#22D3EE',
+            500: '#06B6D4',  // ACCENT
+            600: '#0891B2',
+            700: '#0E7490',
+            800: '#155E75',
+            900: '#164E63',
+          },
+          bg: {
+            base:    '#0F0A1E',
+            surface: '#1A1030',
+            surf2:   '#261847',
+          },
+          border:  '#2E1F54',
+          text:    '#F1F0FF',
+          muted:   '#9488BC',
+        }
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+      borderRadius: {
+        'aela': '10px',
+      },
+      boxShadow: {
+        'aela-glow': '0 0 30px rgba(124, 58, 237, 0.2)',
+        'aela-glow-cyan': '0 0 30px rgba(6, 182, 212, 0.15)',
+      },
+    },
+  },
+}
+*/
+
+
+/* ──────────────────────────────────────────────────────────
+   3. COMPONENTES DE SISTEMA — clases utilitarias AELA
+   ────────────────────────────────────────────────────────── */
+
+/* Botón primario */
+.aela-btn-primary {
+  background: var(--aela-violet-600);
+  color: #fff;
+  border: none;
+  border-radius: var(--aela-radius-md);
+  padding: .6rem 1.4rem;
+  font-weight: 600;
+  font-size: .9rem;
+  cursor: pointer;
+  transition: background .2s, transform .15s;
+}
+.aela-btn-primary:hover {
+  background: var(--aela-violet-700);
+  transform: translateY(-1px);
+}
+
+/* Botón secundario */
+.aela-btn-secondary {
+  background: transparent;
+  color: var(--aela-violet-400);
+  border: 1px solid var(--aela-border-l);
+  border-radius: var(--aela-radius-md);
+  padding: .6rem 1.4rem;
+  font-weight: 500;
+  font-size: .9rem;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.aela-btn-secondary:hover {
+  background: rgba(124, 58, 237, 0.1);
+  border-color: var(--aela-violet-500);
+}
+
+/* Botón peligro */
+.aela-btn-danger {
+  background: var(--aela-danger);
+  color: #fff;
+  border: none;
+  border-radius: var(--aela-radius-md);
+  padding: .6rem 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Tarjeta */
+.aela-card {
+  background: var(--aela-bg-surface);
+  border: 1px solid var(--aela-border);
+  border-radius: var(--aela-radius-lg);
+  padding: 1.5rem;
+  transition: border-color .2s;
+}
+.aela-card:hover { border-color: var(--aela-border-l); }
+
+/* Badge de estado */
+.aela-badge-success {
+  background: var(--aela-success-bg);
+  color: var(--aela-success);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  padding: .2rem .65rem;
+  border-radius: var(--aela-radius-full);
+  font-size: .75rem;
+  font-weight: 600;
+}
+.aela-badge-warning {
+  background: var(--aela-warning-bg);
+  color: var(--aela-warning);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: .2rem .65rem;
+  border-radius: var(--aela-radius-full);
+  font-size: .75rem;
+  font-weight: 600;
+}
+.aela-badge-danger {
+  background: var(--aela-danger-bg);
+  color: var(--aela-danger);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: .2rem .65rem;
+  border-radius: var(--aela-radius-full);
+  font-size: .75rem;
+  font-weight: 600;
+}
+.aela-badge-info {
+  background: var(--aela-info-bg);
+  color: var(--aela-info);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  padding: .2rem .65rem;
+  border-radius: var(--aela-radius-full);
+  font-size: .75rem;
+  font-weight: 600;
+}
+.aela-badge-violet {
+  background: rgba(124, 58, 237, 0.15);
+  color: var(--aela-violet-400);
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  padding: .2rem .65rem;
+  border-radius: var(--aela-radius-full);
+  font-size: .75rem;
+  font-weight: 600;
+}
+
+/* Input */
+.aela-input {
+  background: rgba(124, 58, 237, 0.06);
+  border: 1px solid var(--aela-border);
+  border-radius: var(--aela-radius-sm);
+  padding: .6rem .9rem;
+  color: var(--aela-text-primary);
+  font-size: .9rem;
+  font-family: var(--aela-font);
+  width: 100%;
+  transition: border-color .2s;
+}
+.aela-input:focus {
+  outline: none;
+  border-color: var(--aela-violet-600);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+/* Sidebar item activo */
+.aela-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .6rem 1rem;
+  border-radius: var(--aela-radius-md);
+  color: var(--aela-text-secondary);
+  font-size: .9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .2s, color .2s;
+}
+.aela-sidebar-item:hover {
+  background: rgba(124, 58, 237, 0.1);
+  color: var(--aela-text-primary);
+}
+.aela-sidebar-item.active {
+  background: rgba(124, 58, 237, 0.18);
+  color: var(--aela-violet-400);
+  border-left: 3px solid var(--aela-violet-600);
+}
+
+/* Table */
+.aela-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.aela-table th {
+  background: var(--aela-bg-surface2);
+  color: var(--aela-text-secondary);
+  font-weight: 600;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  padding: .75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--aela-border);
+}
+.aela-table td {
+  padding: .75rem 1rem;
+  border-bottom: 1px solid var(--aela-border);
+  color: var(--aela-text-primary);
+}
+.aela-table tr:hover td { background: rgba(124, 58, 237, 0.04); }
+
+/* KPI Card (métricas del dashboard) */
+.aela-kpi {
+  background: var(--aela-bg-surface);
+  border: 1px solid var(--aela-border);
+  border-radius: var(--aela-radius-lg);
+  padding: 1.25rem 1.5rem;
+  border-top: 3px solid var(--aela-violet-600);
+}
+.aela-kpi-label {
+  font-size: .78rem;
+  color: var(--aela-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: .4rem;
+}
+.aela-kpi-value {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--aela-violet-400);
+  line-height: 1;
+}
+.aela-kpi-sub {
+  font-size: .78rem;
+  color: var(--aela-text-secondary);
+  margin-top: .35rem;
+}
+.aela-kpi.cyan { border-top-color: var(--aela-cyan-500); }
+.aela-kpi.cyan .aela-kpi-value { color: var(--aela-cyan-300); }
+.aela-kpi.success { border-top-color: var(--aela-success); }
+.aela-kpi.success .aela-kpi-value { color: var(--aela-success); }
+.aela-kpi.warning { border-top-color: var(--aela-warning); }
+.aela-kpi.warning .aela-kpi-value { color: var(--aela-warning); }
+
+
+/* ──────────────────────────────────────────────────────────
+   4. REFERENCIAS RÁPIDAS DE COLOR
+   ────────────────────────────────────────────────────────── */
+/*
+  USO                          | TOKEN                       | HEX
+  ─────────────────────────────|─────────────────────────────|──────────
+  Botón primario / CTA         | --aela-violet-600           | #7C3AED
+  Hover botón primario         | --aela-violet-700           | #6D28D9
+  Texto sobre fondo oscuro     | --aela-violet-400           | #A78BFA
+  Acento / highlights          | --aela-cyan-500             | #06B6D4
+  Stats / números destacados   | --aela-cyan-300             | #67E8F9
+  Fondo principal (app)        | --aela-bg-base              | #0F0A1E
+  Fondo de tarjetas            | --aela-bg-surface           | #1A1030
+  Fondo hover/activo           | --aela-bg-surface2          | #261847
+  Bordes por defecto           | --aela-border               | #2E1F54
+  Bordes activos               | --aela-border-l             | violet/0.35
+  Texto principal              | --aela-text-primary         | #F1F0FF
+  Texto secundario/muted       | --aela-text-secondary       | #9488BC
+  Éxito (autorizado SRI)       | --aela-success              | #22C55E
+  Advertencia                  | --aela-warning              | #F59E0B
+  Error / anulado              | --aela-danger               | #EF4444
+  Info / informativo           | --aela-info                 | #06B6D4
+*/

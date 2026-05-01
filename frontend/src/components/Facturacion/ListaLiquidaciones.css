@@ -1,0 +1,291 @@
+﻿/* ====================================
+   LISTA LIQUIDACIONES DE COMPRA
+   ==================================== */
+
+.liq-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.liq-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.liq-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-nav-liq {
+  background: #fff;
+  color: #1e3a8a;
+  border: 1px solid #cbd5e1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-nav-liq:hover {
+  background: #eff6ff;
+}
+
+.liq-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0 0 4px 0;
+}
+
+.liq-subtitle {
+  color: #64748b;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.btn-nueva-liq {
+  background: #1976D2;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.btn-nueva-liq:hover { background: #0284c7; }
+
+/* Filtros */
+.liq-filtros {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.liq-input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #fff;
+  color: #1a1a2e;
+}
+.liq-input:focus { outline: none; border-color: #1976D2; box-shadow: 0 0 0 2px rgba(25,118,210,0.1); }
+
+.btn-buscar-liq {
+  background: #1976D2;
+  color: #fff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-buscar-liq:hover { background: #1565c0; }
+
+.liq-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+
+/* Tabla */
+.liq-tabla-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.liq-loading, .liq-empty {
+  text-align: center;
+  padding: 40px;
+  color: #64748b;
+}
+
+.liq-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.liq-tabla thead {
+  background: #192C4A;
+  color: #fff;
+}
+
+.liq-tabla th {
+  padding: 11px 12px;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.liq-tabla td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.liq-tabla tbody tr:hover { background: #f0f9ff; }
+
+.liq-row-anulada { opacity: 0.55; }
+.liq-row-anulada td { text-decoration: line-through; }
+
+.liq-numero   { font-weight: 700; color: #0284c7; white-space: nowrap; }
+.liq-proveedor { max-width: 200px; }
+.liq-total    { font-weight: 700; color: #2E7D32; white-space: nowrap; }
+
+/* Badges */
+.liq-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-success   { background: #d1fae5; color: #065f46; }
+.badge-warning   { background: #fef3c7; color: #92400e; }
+.badge-info      { background: #dbeafe; color: #1e40af; }
+.badge-danger    { background: #fee2e2; color: #991b1b; }
+.badge-secondary { background: #f1f5f9; color: #475569; }
+
+/* Acciones */
+.liq-acciones {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.btn-liq {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+.btn-liq:hover   { opacity: 0.8; }
+.btn-pdf         { background: #dbeafe; color: #1e40af; }
+.btn-xml         { background: #d1fae5; color: #065f46; }
+.btn-reenviar    { background: #fef3c7; color: #92400e; }
+.btn-anular      { background: #fee2e2; color: #991b1b; }
+
+/* Paginación */
+.liq-paginacion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.liq-total-info { color: #64748b; font-size: 0.875rem; }
+
+.liq-paginas {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.btn-pag {
+  padding: 6px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background 0.2s;
+}
+.btn-pag:disabled             { opacity: 0.4; cursor: default; }
+.btn-pag:not(:disabled):hover { background: #f0f9ff; }
+
+/* Modal anulación */
+.liq-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.liq-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.liq-modal h3 { margin: 0 0 12px; color: #0284c7; }
+.liq-modal p  { color: #475569; margin: 0 0 10px; }
+
+.liq-textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  resize: vertical;
+  color: #1a1a2e;
+  box-sizing: border-box;
+}
+.liq-textarea:focus { outline: none; border-color: #1976D2; }
+
+.liq-modal-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.btn-cancel-modal {
+  padding: 8px 18px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #374151;
+  transition: background 0.2s;
+}
+.btn-cancel-modal:hover { background: #f1f5f9; }
+
+.btn-confirm-anular {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 6px;
+  background: #dc2626;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+.btn-confirm-anular:hover { background: #b91c1c; }

@@ -1,0 +1,383 @@
+﻿/* ====================================
+   FORMULARIO NUEVA LIQUIDACIÓN DE COMPRA
+   ==================================== */
+
+.lf-container {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.lf-header {
+  margin-bottom: 20px;
+}
+
+.lf-nav-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.btn-back-lf {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  border: 1.5px solid #d1d5db;
+  color: #374151;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn-back-lf:hover {
+  background: #f0f6ff;
+  border-color: #1976D2;
+  color: #1976D2;
+  text-decoration: none;
+}
+
+.lf-header h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0 0 4px;
+}
+.lf-header p { color: #64748b; font-size: 0.9rem; margin: 0; }
+
+.lf-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+}
+
+.lf-form { display: flex; flex-direction: column; gap: 20px; }
+
+/* Secciones */
+.lf-seccion {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.lf-seccion-titulo {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0284c7;
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e0f2fe;
+}
+
+.lf-seccion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.lf-seccion-header .lf-seccion-titulo { margin-bottom: 0; }
+
+/* Grids */
+.lf-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.lf-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 768px) {
+  .lf-grid-3, .lf-grid-2 { grid-template-columns: 1fr; }
+}
+
+.lf-campo { display: flex; flex-direction: column; gap: 5px; }
+.lf-campo-wide { grid-column: 1 / -1; }
+
+.lf-campo label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+}
+.req { color: #dc2626; }
+
+.lf-input-form {
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #1a1a2e;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+}
+.lf-input-form:focus {
+  outline: none;
+  border-color: #1976D2;
+  box-shadow: 0 0 0 2px rgba(14,165,233,0.1);
+}
+
+/* Tabla de detalles */
+.lf-tabla-wrap {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.lf-det-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.lf-det-tabla thead {
+  background: #f0f9ff;
+}
+.lf-det-tabla th {
+  padding: 9px 10px;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0369a1;
+  white-space: nowrap;
+  border-bottom: 1px solid #bae6fd;
+}
+.lf-det-tabla td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+.lf-det-tabla tbody tr:last-child td { border-bottom: none; }
+
+.lf-det-input {
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  color: #1a1a2e;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+}
+.lf-det-input:focus { outline: none; border-color: #1976D2; }
+
+.lf-det-desc { min-width: 200px; }
+.lf-det-num  { max-width: 100px; text-align: right; }
+.lf-det-iva  { max-width: 80px; }
+
+.lf-det-total {
+  font-weight: 700;
+  color: #2E7D32;
+  white-space: nowrap;
+  text-align: right;
+  min-width: 80px;
+}
+
+/* Botones tabla */
+.btn-add-lf {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.btn-add-lf:hover { background: #bae6fd; }
+
+.btn-del-lf {
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition: background 0.2s;
+}
+.btn-del-lf:hover { background: #fecaca; }
+
+/* Totales */
+.lf-totales {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.lf-totales-grid {
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+
+.lf-tot-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+  color: #374151;
+}
+.lf-tot-row strong { font-weight: 600; }
+
+.lf-tot-final {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 2px solid #1976D2;
+  font-size: 1rem;
+  color: #0284c7;
+  font-weight: 700;
+}
+.lf-tot-final strong {
+  font-size: 1.15rem;
+  color: #0284c7;
+}
+
+/* Textarea */
+.lf-textarea-form {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  color: #1a1a2e;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.lf-textarea-form:focus { outline: none; border-color: #1976D2; }
+
+/* Botones de acción */
+.lf-form-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-cancelar-lf {
+  padding: 10px 24px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-cancelar-lf:hover { background: #f9fafb; }
+
+.btn-emitir-lf {
+  padding: 10px 28px;
+  border: none;
+  border-radius: 8px;
+  background: #1976D2;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-emitir-lf:hover   { background: #1565c0; }
+.btn-emitir-lf:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ── Pantalla de Éxito ─────────────────────────────────────────────────────── */
+.lf-exito {
+  background: #fff;
+  border: 1px solid #d1fae5;
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+  max-width: 480px;
+  margin: 40px auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+.lf-exito-icono { font-size: 3rem; margin-bottom: 14px; }
+
+.lf-exito h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #065f46;
+  margin: 0 0 8px;
+}
+
+.lf-exito-num {
+  font-size: 1.1rem;
+  color: #0284c7;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.lf-exito p {
+  color: #374151;
+  font-size: 0.95rem;
+  margin: 0 0 8px;
+}
+
+.lf-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.lf-badge-lg {
+  font-size: 0.9rem;
+  padding: 6px 18px;
+  margin: 12px auto;
+  display: inline-block;
+}
+
+.lf-exito-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-exito-lf-pdf {
+  background: #1976D2;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s;
+}
+.btn-exito-lf-pdf:hover { background: #0284c7; }
+
+.btn-exito-lf-lista, .btn-exito-lf-nueva {
+  background: #f1f5f9;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+.btn-exito-lf-lista:hover, .btn-exito-lf-nueva:hover { background: #e2e8f0; }

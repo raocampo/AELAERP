@@ -1,0 +1,178 @@
+/* AELA — Estilos globales */
+
+:root {
+  --color-primary:    #7C3AED;
+  --color-primary-dk: #6D28D9;
+  --color-accent:     #06B6D4;
+  --color-success:    #22C55E;
+  --color-success-dk: #16a34a;
+  --color-danger:     #EF4444;
+  --color-danger-dk:  #dc2626;
+  --color-warning:    #F59E0B;
+  --color-warning-dk: #d97706;
+  --color-bg:         #f8fafc;
+  --color-sidebar:    #0F0A1E;
+  --color-text:       #1e293b;
+  --color-text-muted: #64748b;
+  --sidebar-width:    240px;
+  --btn-radius:       8px;
+  --btn-font-size:    14px;
+  --btn-padding:      9px 20px;
+  --btn-font-weight:  600;
+  --btn-transition:   background 0.18s, opacity 0.18s, border-color 0.18s;
+}
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-main {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  padding: 24px;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+@media (max-width: 768px) {
+  .app-main { margin-left: 0; padding: 16px; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   SISTEMA GLOBAL DE BOTONES — única fuente de verdad
+   Usar: btn-primary / btn-secondary (la clase base se
+   aplica automáticamente a todas las variantes).
+   Los archivos CSS de módulo NO deben redefinir .btn-*
+   ═══════════════════════════════════════════════════════ */
+
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-success,
+.btn-danger,
+.btn-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--btn-padding);
+  border: none;
+  border-radius: var(--btn-radius);
+  font-family: inherit;
+  font-size: var(--btn-font-size);
+  font-weight: var(--btn-font-weight);
+  cursor: pointer;
+  transition: var(--btn-transition);
+  white-space: nowrap;
+  text-decoration: none;
+  line-height: 1.4;
+}
+
+.btn:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-success:focus-visible,
+.btn-danger:focus-visible,
+.btn-warning:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"],
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-success:disabled,
+.btn-danger:disabled,
+.btn-warning:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Primary — azul principal */
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-dk);
+}
+
+/* Secondary — borde gris, fondo claro */
+.btn-secondary {
+  background: #fff;
+  color: var(--color-text);
+  border: 1.5px solid #e2e8f0;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+/* Success — verde */
+.btn-success {
+  background: var(--color-success);
+  color: #fff;
+}
+.btn-success:hover:not(:disabled) {
+  background: var(--color-success-dk);
+}
+
+/* Danger — rojo */
+.btn-danger {
+  background: var(--color-danger);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-danger-dk);
+}
+
+/* Warning — naranja */
+.btn-warning {
+  background: var(--color-warning);
+  color: #fff;
+}
+.btn-warning:hover:not(:disabled) {
+  background: var(--color-warning-dk);
+}
+
+/* Ghost — sin fondo, solo texto */
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1.5px solid transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: var(--color-text);
+}
+
+/* Tamaños alternativos */
+.btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.btn-lg {
+  padding: 12px 28px;
+  font-size: 15px;
+  border-radius: 10px;
+}
+
+/* Icono-only */
+.btn-icon {
+  padding: 6px 8px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  color: var(--color-text);
+  border-radius: 7px;
+}
+.btn-icon:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+.btn-icon.danger:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #c62828;
+}

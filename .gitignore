@@ -1,0 +1,53 @@
+# ===========================
+# AELA ERP — .gitignore raíz
+# ===========================
+
+# Variables de entorno — NUNCA subir al repositorio
+.env
+.env.local
+.env.production
+.env.*.local
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Dependencias
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+landing/node_modules/
+
+# Builds
+frontend/dist/
+frontend/build/
+
+# Prisma — cliente generado (se regenera con prisma generate)
+backend/node_modules/@prisma/
+backend/node_modules/.prisma/
+
+# Logs
+*.log
+npm-debug.log*
+backend/tmp-backend-*.log
+
+# Backups locales (solo para desarrollo)
+backups/
+
+# Uploads de usuarios (certificados, logos)
+backend/uploads/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Archivos temporales
+*.tmp
+*.temp
+tmp/

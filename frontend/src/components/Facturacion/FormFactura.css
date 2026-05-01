@@ -1,0 +1,609 @@
+﻿/* ====================================
+   FORMULARIO NUEVA FACTURA
+   frontend/src/components/Facturacion/FormFactura.css
+   ==================================== */
+
+.form-factura-container {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;     /* llena el flex container (app-layout) */
+  min-width: 0;    /* permite que el flex item encoja; sin esto el contenido de 720px lo expande */
+}
+
+.form-fact-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.form-fact-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0 0 4px;
+}
+
+.form-fact-subtitle {
+  color: #64748b;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* ─── Secciones ──────────────────────────────────────────────────────────── */
+.fact-seccion {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 18px;
+}
+
+.fact-seccion h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* ─── Grids ──────────────────────────────────────────────────────────────── */
+.fact-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* ─── Campos ─────────────────────────────────────────────────────────────── */
+.fact-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+}
+
+.fact-field.full { grid-column: 1 / -1; }
+
+.fact-field label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.fact-field input,
+.fact-field select,
+.fact-field textarea {
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #1e293b;
+  background: white;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.fact-field input:focus,
+.fact-field select:focus,
+.fact-field textarea:focus {
+  border-color: #2E7D32;
+}
+
+.fact-field input[readonly] {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+/* ─── Dropdown paciente ───────────────────────────────────────────────────── */
+.pac-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 50;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.pac-item {
+  padding: 9px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.88rem;
+}
+
+.pac-item:hover { background: #f0f4ff; }
+.pac-item:last-child { border-bottom: none; }
+
+.pac-nombre { font-weight: 600; color: #1e293b; }
+.pac-cedula { color: #64748b; font-size: 0.82rem; }
+
+/* ─── Barra de búsqueda de productos ─────────────────────────────────────── */
+.fact-busq-prod-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.fact-busq-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.fact-busq-input-wrap {
+  flex: 1;
+  min-width: 200px;
+  position: relative;
+}
+
+.fact-busq-input {
+  width: 100%;
+  padding: 9px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #1e293b;
+  background: white;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.fact-busq-input:focus { border-color: #2E7D32; }
+
+.btn-busq-prod {
+  background: #192C4A;
+  color: white;
+  border: none;
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btn-busq-prod:hover { background: #003056; }
+
+/* ─── Autocomplete de productos ─────────────────────────────────────────── */
+.prod-auto-drop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  z-index: 100;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+
+.prod-auto-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.85rem;
+  transition: background 0.12s;
+}
+
+.prod-auto-item:hover { background: #f0f4ff; }
+.prod-auto-item:last-child { border-bottom: none; }
+
+.prod-auto-codigo {
+  font-family: monospace;
+  font-size: 0.78rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.prod-auto-nombre {
+  flex: 1;
+  font-weight: 500;
+  color: #1e293b;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prod-auto-precio {
+  font-weight: 700;
+  color: #192C4A;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ─── Contenedor externo de la tabla (clip horizontal) ────────────────────── */
+.fact-tabla-outer {
+  overflow: hidden;   /* evita que la tabla ensanche la página */
+  width: 100%;
+}
+
+/* ─── Tabla de detalles ───────────────────────────────────────────────────── */
+.fact-detalles-wrap {
+  background: #fafbfc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* scroll suave en iOS */
+  width: 100%;
+}
+
+.fact-det-header {
+  display: flex;
+  gap: 4px;
+  padding: 7px 8px;
+  background: #192C4A;
+  color: white;
+  font-size: 0.70rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  min-width: 510px;
+  align-items: center;
+}
+
+.fact-det-row {
+  display: flex;
+  gap: 4px;
+  padding: 3px 8px;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  min-width: 510px;
+}
+
+.fact-det-row:last-child { border-bottom: none; }
+.fact-det-row:nth-child(even) { background: #f8fafc; }
+
+.fact-det-row input,
+.fact-det-row select {
+  padding: 3px 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  outline: none;
+  font-family: inherit;
+  background: white;
+  color: #1e293b;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+  height: 26px;
+  line-height: 1.2;
+  min-width: 0;        /* evita que el navegador expanda el input más allá del flex-basis */
+  width: 100%;         /* ocupa todo el espacio asignado por flex */
+}
+
+.fact-det-row input:focus,
+.fact-det-row select:focus { border-color: #2E7D32; }
+
+.fact-det-empty {
+  text-align: center;
+  padding: 24px 16px;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
+.btn-agregar-linea {
+  background: #e0e7ff;
+  color: #4338ca;
+  border: 1.5px dashed #2E7D32;
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-agregar-linea:hover { background: #c7d2fe; }
+
+/* ─── Sección Pagos + Totales ─────────────────────────────────────────────── */
+.fact-pago-totales-row {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.fact-pago-col { margin-bottom: 0; }
+
+/* Tabla de pagos agregados */
+.fact-pagos-tabla-wrap {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.fact-pagos-vacio {
+  text-align: center;
+  padding: 16px;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.fact-pagos-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+  min-width: 340px;
+}
+
+.fact-pagos-tabla th {
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.fact-pagos-tabla td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.fact-pagos-tabla tr:last-child td { border-bottom: none; }
+
+.pago-label {
+  font-size: 0.8rem;
+  color: #374151;
+  max-width: 200px;
+}
+
+/* Botones rápidos de pago */
+.fact-pago-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-pago-rapido {
+  background: white;
+  border: 1.5px solid #192C4A;
+  color: #192C4A;
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 0.83rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.btn-pago-rapido:hover { background: #192C4A; color: white; }
+
+.btn-pago-mas {
+  border-style: dashed;
+  color: #2E7D32;
+  border-color: #2E7D32;
+}
+
+.btn-pago-mas:hover { background: #1976D2; color: white; }
+
+/* ─── Totales ────────────────────────────────────────────────────────────── */
+.fact-totales-box {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.total-fila {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.88rem;
+  color: #374151;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.total-fila:last-child { border-bottom: none; }
+
+.total-principal {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 2px solid #2E7D32;
+  border-bottom: none;
+}
+
+/* ─── Acciones ────────────────────────────────────────────────────────────── */
+.form-fact-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+/* ─── Modal de Forma de Pago ─────────────────────────────────────────────── */
+.modal-pago {
+  max-width: 480px !important;
+}
+
+.modal-pago-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modal-pago-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #192C4A;
+}
+
+.pago-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+/* ─── Botones ────────────────────────────────────────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, #2E7D32, #1b5e20);
+  color: white;
+  border: none;
+  padding: 11px 26px;
+  border-radius: 9px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-primary:hover:not(:disabled) { opacity: 0.9; }
+
+.btn-secondary {
+  background: white;
+  color: #374151;
+  border: 1.5px solid #e2e8f0;
+  padding: 10px 22px;
+  border-radius: 9px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover { background: #f8fafc; }
+
+.btn-icon {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 5px 7px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: background 0.15s;
+}
+
+.btn-icon.danger:hover { background: #fee2e2; border-color: #ef4444; }
+
+.btn-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: #64748b;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.btn-close:hover { background: #f1f5f9; }
+
+/* ─── Modal overlay ──────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 14px;
+  padding: 28px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ─── Utilidades ─────────────────────────────────────────────────────────── */
+.text-right  { text-align: right; }
+.text-center { text-align: center; }
+
+/* ─── RESPONSIVE ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .fact-pago-totales-row {
+    grid-template-columns: 1fr;
+  }
+  .fact-totales-box { order: -1; }
+}
+
+@media (max-width: 700px) {
+  .form-factura-container { padding: 14px; }
+  .form-fact-header h1    { font-size: 1.2rem; }
+  .fact-seccion           { padding: 14px; }
+  .fact-grid-2            { grid-template-columns: 1fr; }
+  .pago-modal-grid        { grid-template-columns: 1fr; }
+
+  .form-fact-actions {
+    justify-content: stretch;
+  }
+  .form-fact-actions .btn-primary,
+  .form-fact-actions .btn-secondary {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-factura-container { padding: 10px; }
+  .fact-seccion { padding: 12px; border-radius: 8px; }
+  .fact-totales-box { padding: 14px; }
+  .fact-busq-prod-bar { flex-direction: column; align-items: stretch; }
+  .btn-busq-prod { width: 100%; }
+}

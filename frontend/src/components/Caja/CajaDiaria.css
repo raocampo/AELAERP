@@ -1,0 +1,151 @@
+﻿.cash-page {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.cash-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.cash-header h1 {
+  margin: 0 0 6px;
+}
+
+.cash-header p {
+  margin: 0;
+  color: #64748b;
+}
+
+.cash-header input {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.cash-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.cash-kpi,
+.cash-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+}
+
+.cash-kpi span {
+  display: block;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.cash-kpi strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.45rem;
+}
+
+.cash-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.cash-tabs button {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cash-tabs button.active {
+  background: #22C55E;
+  border-color: #22C55E;
+  color: #fff;
+}
+
+.cash-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.cash-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cash-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.cash-form input,
+.cash-form select,
+.cash-form textarea {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.cash-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #1e293b;
+}
+
+.cash-note,
+.cash-empty {
+  color: #64748b;
+}
+
+.cash-table-wrap {
+  overflow-x: auto;
+}
+
+.cash-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cash-table th,
+.cash-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+@media (max-width: 1024px) {
+  .cash-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .cash-header {
+    flex-direction: column;
+  }
+}

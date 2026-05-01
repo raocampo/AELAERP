@@ -1,0 +1,393 @@
+.layout-root { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 240px;
+  min-height: 100vh;
+  background: #0F0A1E;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+}
+
+.sidebar-brand {
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid rgba(124,58,237,0.2);
+}
+
+.sidebar-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.sidebar-sigla {
+  display: block;
+  font-size: 28px;
+  font-weight: 900;
+  color: #A78BFA;
+  letter-spacing: 3px;
+}
+
+.sidebar-sub {
+  display: block;
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar-link {
+  display: block;
+  padding: 11px 20px;
+  color: rgba(255,255,255,0.75);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.sidebar-link:hover {
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+
+.sidebar-link.active {
+  background: rgba(124,58,237,0.2);
+  color: white;
+  border-left-color: #7C3AED;
+  font-weight: 700;
+}
+
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.sidebar-usuario {
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-rol {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 10px;
+  text-transform: capitalize;
+}
+
+.sidebar-logout {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.7);
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.2s;
+}
+
+.sidebar-logout:hover {
+  background: rgba(198,40,40,0.3);
+  color: white;
+}
+
+.sidebar-cambiar-pass {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  font-size: 11px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  padding: 4px 0 8px;
+  transition: color 0.2s;
+}
+
+.sidebar-cambiar-pass:hover {
+  color: rgba(255,255,255,0.9);
+}
+
+.layout-main {
+  margin-left: 240px;
+  flex: 1;
+  padding: 28px;
+  background: #f8fafc;
+  min-height: 100vh;
+}
+
+/* ── Badge Plan Lite / Medium / Pro ── */
+.sidebar-plan-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.sidebar-plan-badge.lite {
+  background: #06B6D4;
+  color: #0F0A1E;
+}
+.sidebar-plan-badge.medium {
+  background: #7C3AED;
+  color: white;
+}
+.sidebar-plan-badge.pro {
+  background: #7C3AED;
+  color: white;
+}
+/* alias legacy */
+.sidebar-plan-badge.full {
+  background: #7C3AED;
+  color: white;
+}
+
+/* ── Nombre empresa en modo multi ── */
+.sidebar-empresa {
+  padding: 8px 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Badge Cola SRI (comprobantes pendientes de envío) ── */
+.sidebar-cola-sri-badge {
+  margin: 6px 12px;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #FBB024;
+  animation: colaSRI-pulse 2s ease-in-out infinite;
+}
+.cola-sri-icon {
+  font-size: 14px;
+  margin-right: 4px;
+}
+.cola-sri-hint {
+  font-size: 9px;
+  font-weight: 400;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+@keyframes colaSRI-pulse {
+  0%, 100% { border-color: rgba(251, 191, 36, 0.4); }
+  50%       { border-color: rgba(251, 191, 36, 0.9); }
+}
+
+/* ── Banner límite Lite ── */
+.sidebar-limite-banner {
+  margin: 8px 12px;
+  padding: 8px 12px;
+  background: rgba(249,168,37,0.12);
+  border: 1px solid rgba(249,168,37,0.3);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: #F9A825;
+  font-weight: 600;
+}
+
+/* ── Banner offline ── */
+.banner-offline {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  background: #1e3a5f;
+  color: #93c5fd;
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-top: 2px solid #7C3AED;
+}
+
+/* ── Toast actualización SW ── */
+.toast-sw-update {
+  position: fixed;
+  bottom: 48px;
+  right: 24px;
+  z-index: 9998;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+.toast-sw-update button {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.toast-sw-update button:first-of-type {
+  background: #7C3AED;
+  color: #fff;
+}
+.toast-sw-update button:last-of-type {
+  background: #334155;
+  color: #64748b;
+}
+
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .layout-main { margin-left: 0; padding: 16px; }
+}
+
+/* ── Ítems sueltos (Dashboard, POS) ── */
+.sidebar-link-solo {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.1px;
+}
+
+/* ── Separador entre ítems sueltos y grupos ── */
+.sidebar-solo-separator {
+  height: 1px;
+  background: rgba(255,255,255,0.1);
+  margin: 6px 12px;
+}
+
+/* ── Grupos de menú colapsables ── */
+.sidebar-group {
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.sidebar-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: rgba(255,255,255,0.78);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-group-header:hover {
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.95);
+}
+
+.sidebar-group-header.active {
+  color: #C4B5FD;
+}
+
+.sidebar-group-icon {
+  font-size: 13px;
+}
+
+.sidebar-group-label {
+  flex: 1;
+}
+
+.sidebar-group-arrow {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.sidebar-group-arrow.open {
+  transform: rotate(180deg);
+}
+
+/* ── Sub-ítems dentro de grupo ── */
+.sidebar-group-items {
+  background: rgba(0,0,0,0.18);
+  padding: 2px 0;
+}
+
+.sidebar-sublink {
+  display: block;
+  padding: 9px 16px 9px 34px;
+  color: rgba(255,255,255,0.82);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 400;
+  transition: background 0.15s, color 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.sidebar-sublink:hover {
+  background: rgba(255,255,255,0.07);
+  color: white;
+}
+
+.sidebar-sublink.active {
+  background: rgba(124,58,237,0.2);
+  color: white;
+  border-left-color: #7C3AED;
+  font-weight: 600;
+}
+
+/* ── Sub-ítem bloqueado ── */
+.sidebar-sublink-locked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px 9px 34px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  color: rgba(255,255,255,0.38);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-sublink-locked:hover {
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.55);
+}

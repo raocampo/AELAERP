@@ -1,0 +1,1254 @@
+// ====================================
+// AELA — Schema Prisma
+// Sistema de Comprobantes Fiscales Inteligentes
+// Soporta: monoempresa / multiempresa / Lite
+// ====================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ====================================
+// EMPRESAS (tenant)
+// En modo monoempresa siempre existe id=1
+// plan: "full" | "lite"
+// ====================================
+model empresas {
+  id                  Int       @id @default(autoincrement())
+  ruc                 String    @unique @db.VarChar(13)
+  razonSocial         String    @db.VarChar(300)
+  nombreComercial     String?   @db.VarChar(300)
+  direccion           String?   @db.VarChar(300)
+  email               String?   @db.VarChar(150)
+  telefono            String?   @db.VarChar(20)
+  plan                String    @default("pro") @db.VarChar(10)
+  // plan: "lite" | "medium" | "pro"
+  factAnualesMax      Int?
+  // null = ilimitado; 100 = Lite; 1000 = Medium
+  maxUsuarios         Int?
+  // null = ilimitado; 1 = Lite; 3 = Medium
+  activo              Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  usuarios            usuarios[]
+  clientes            clientes[]
+  proveedores         proveedores[]
+  facturas            facturas[]
+  facturasCompra      facturas_compra[]
+  retenciones         retenciones[]
+  liquidaciones       liquidaciones_compra[]
+  notas_credito       notas_credito[]
+  notas_debito        notas_debito[]
+  notas_venta         notas_venta[]
+  productos           productos_servicios[]
+  configuracion_sri   configuracion_sri[]
+  configuracionSistema configuracion_sistema?
+  cajasDiarias        cajas_diarias[]
+  cajaMovimientos     caja_movimientos[]
+  movimientosInventario movimientos_inventario[]
+  retencionesRecibidas  retenciones_recibidas[]
+  docsRecibidosOtros    docs_recibidos_otros[]
+  guiasRemision         guias_remision[]
+  bancos                bancos[]
+  cheques               cheques[]
+  departamentos         departamentos[]
+  cargos                cargos[]
+  empleados             empleados[]
+  contratos             contratos[]
+  nominas               nominas[]
+  ausencias             ausencias[]
+
+  @@map("empresas")
+}
+
+// ====================================
+// USUARIOS DEL SISTEMA
+// ====================================
+model usuarios {
+  id               Int       @id @default(autoincrement())
+  empresaId        Int       @default(1)
+  nombre           String    @db.VarChar(200)
+  username         String    @unique @db.VarChar(60)
+  email            String?   @unique @db.VarChar(150)
+  password         String
+  rol              String    @default("operador") @db.VarChar(50)
+  // roles: admin | supervisor | contador | facturador | operador
+  activo           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  empresa           empresas              @relation(fields: [empresaId], references: [id])
+  facturas          facturas[]
+  compras           facturas_compra[]
+  retenciones       retenciones[]
+  liquidaciones     liquidaciones_compra[]
+  notas_debito      notas_debito[]
+  notas_venta       notas_venta[]
+  asientos          asientos_contables[] @relation(map: "asientos_usuario_fk")
+  asientosBloqueados asientos_contables[] @relation("AsientoBloqueadoPor")
+  auditoria         auditoria[]
+  cheques           cheques[]
+  cajasAbiertas     cajas_diarias[]          @relation("CajaAperturaUsuario")
+  cajasCerradas     cajas_diarias[]          @relation("CajaCierreUsuario")
+  cajaMovimientos   caja_movimientos[]
+  movimientosInventario movimientos_inventario[]
+  guiasRemision         guias_remision[]
+
+  @@index([empresaId])
+  @@map("usuarios")
+}
+
+// ====================================
+// CLIENTES / PROVEEDORES
+// ====================================
+model clientes {
+  id                   Int       @id @default(autoincrement())
+  empresaId            Int       @default(1)
+  tipoIdentificacion   String    @db.VarChar(2)
+  // 04=RUC, 05=Cédula, 06=Pasaporte, 07=Cons.Final, 08=Identificación exterior
+  identificacion       String    @db.VarChar(20)
+  razonSocial          String    @db.VarChar(300)
+  nombreComercial      String?   @db.VarChar(300)
+  direccion            String?   @db.VarChar(300)
+  email                String?   @db.VarChar(150)
+  telefono             String?   @db.VarChar(20)
+  activo               Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  empresa              empresas   @relation(fields: [empresaId], references: [id])
+  facturas             facturas[]
+  notas_venta          notas_venta[]
+
+  @@unique([empresaId, identificacion])
+  @@index([empresaId])
+  @@index([identificacion])
+  @@map("clientes")
+}
+
+model proveedores {
+  id                   Int       @id @default(autoincrement())
+  empresaId            Int       @default(1)
+  tipoIdentificacion   String    @db.VarChar(2)
+  identificacion       String    @db.VarChar(20)
+  razonSocial          String    @db.VarChar(300)
+  nombreComercial      String?   @db.VarChar(300)
+  direccion            String?   @db.VarChar(300)
+  ciudad               String?   @db.VarChar(100)
+  provincia            String?   @db.VarChar(100)
+  email                String?   @db.VarChar(150)
+  telefono             String?   @db.VarChar(20)
+  contactoNombre       String?   @db.VarChar(150)
+  banco                String?   @db.VarChar(100)
+  cuentaBancaria       String?   @db.VarChar(50)
+  observaciones        String?
+  activo               Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  empresa              empresas          @relation(fields: [empresaId], references: [id])
+  compras              facturas_compra[]
+  cheques              cheques[]
+
+  @@unique([empresaId, identificacion])
+  @@index([empresaId])
+  @@index([identificacion])
+  @@map("proveedores")
+}
+
+// ====================================
+// PRODUCTOS Y SERVICIOS (catálogo)
+// ====================================
+model productos_servicios {
+  id               Int       @id @default(autoincrement())
+  empresaId        Int       @default(1)
+  codigoPrincipal  String    @db.VarChar(50)
+  codigoAuxiliar   String?   @db.VarChar(50)
+  nombre           String    @db.VarChar(300)
+  precioUnitario   Decimal   @db.Decimal(14, 4)
+  costoUnitario    Decimal   @default(0) @db.Decimal(14, 4)
+  tarifaIva        Int       @default(15)
+  // 0=0%, 5=5%, 6=6%, 7=7%, 15=15%
+  unidadMedida     String    @default("UND") @db.VarChar(20)
+  inventariable    Boolean   @default(false)
+  stockActual      Decimal   @default(0) @db.Decimal(14, 3)
+  stockMinimo      Decimal   @default(0) @db.Decimal(14, 3)
+  infoAdicional    String?
+  activo           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  empresa          empresas  @relation(fields: [empresaId], references: [id])
+  movimientosInventario movimientos_inventario[]
+
+  @@unique([empresaId, codigoPrincipal])
+  @@index([empresaId])
+  @@map("productos_servicios")
+}
+
+// ====================================
+// CONFIGURACIÓN DEL SISTEMA
+// ====================================
+model configuracion_sistema {
+  id                    Int       @id @default(autoincrement())
+  empresaId             Int       @unique
+  tipoSistema           String    @default("full") @db.VarChar(20)
+  modoOperacion         String    @default("monoempresa") @db.VarChar(20)
+  cajaNombre            String    @default("Caja General") @db.VarChar(80)
+  cajaDiariaHabilitada  Boolean   @default(true)
+  cierreCajaObligatorio Boolean   @default(false)
+  posHabilitado         Boolean   @default(false)
+  documentoPosDefault   String    @default("factura") @db.VarChar(20)
+  inventarioHabilitado  Boolean   @default(false)
+  permitirStockNegativo Boolean   @default(false)
+  comprasHabilitadas    Boolean   @default(true)
+  contabilidadHabilitada Boolean  @default(true)
+  retencionesHabilitadas Boolean  @default(true)
+  liquidacionesHabilitadas Boolean @default(true)
+  atsHabilitado         Boolean   @default(true)
+  talentoHumanoHabilitado Boolean @default(false)
+  sbuEcuador            Decimal   @default(460.00) @db.Decimal(8, 2)
+  updatedAt             DateTime  @updatedAt
+
+  empresa               empresas  @relation(fields: [empresaId], references: [id])
+
+  @@map("configuracion_sistema")
+}
+
+// ====================================
+// CAJA DIARIA
+// ====================================
+model cajas_diarias {
+  id                  Int       @id @default(autoincrement())
+  empresaId           Int       @default(1)
+  fechaOperacion      DateTime
+  nombreCaja          String    @default("Caja General") @db.VarChar(80)
+  estado              String    @default("ABIERTA") @db.VarChar(20)
+  montoApertura       Decimal   @default(0) @db.Decimal(14, 2)
+  aperturaRegistrada  Boolean   @default(false)
+  montoCierreReal     Decimal?  @db.Decimal(14, 2)
+  diferenciaCierre    Decimal?  @db.Decimal(14, 2)
+  observacionesApertura String?
+  observacionesCierre String?
+  usuarioAperturaId   Int?
+  usuarioCierreId     Int?
+  openedAt            DateTime  @default(now())
+  closedAt            DateTime?
+  updatedAt           DateTime  @updatedAt
+
+  empresa             empresas  @relation(fields: [empresaId], references: [id])
+  usuarioApertura     usuarios? @relation("CajaAperturaUsuario", fields: [usuarioAperturaId], references: [id])
+  usuarioCierre       usuarios? @relation("CajaCierreUsuario", fields: [usuarioCierreId], references: [id])
+  movimientos         caja_movimientos[]
+  asientos            asientos_contables[]
+
+  @@unique([empresaId, fechaOperacion])
+  @@index([empresaId])
+  @@index([estado])
+  @@map("cajas_diarias")
+}
+
+model caja_movimientos {
+  id          Int       @id @default(autoincrement())
+  cajaId       Int
+  empresaId    Int       @default(1)
+  usuarioId    Int?
+  tipo         String    @db.VarChar(30)
+  categoria    String?   @db.VarChar(30)
+  monto        Decimal   @db.Decimal(14, 2)
+  descripcion  String?
+  referencia   String?   @db.VarChar(120)
+  origenId     Int?
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+
+  caja         cajas_diarias @relation(fields: [cajaId], references: [id], onDelete: Cascade)
+  empresa      empresas      @relation(fields: [empresaId], references: [id])
+  usuario      usuarios?     @relation(fields: [usuarioId], references: [id])
+
+  @@index([cajaId])
+  @@index([empresaId])
+  @@index([tipo])
+  @@map("caja_movimientos")
+}
+
+// ====================================
+// INVENTARIO
+// ====================================
+model movimientos_inventario {
+  id            Int       @id @default(autoincrement())
+  empresaId     Int       @default(1)
+  productoId    Int
+  usuarioId     Int?
+  tipo          String    @db.VarChar(30)
+  cantidad      Decimal   @db.Decimal(14, 3)
+  stockAnterior Decimal   @db.Decimal(14, 3)
+  stockNuevo    Decimal   @db.Decimal(14, 3)
+  costoUnitario Decimal?  @db.Decimal(14, 4)
+  referencia    String?   @db.VarChar(120)
+  observacion   String?
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+
+  empresa       empresas              @relation(fields: [empresaId], references: [id])
+  producto      productos_servicios   @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  usuario       usuarios?             @relation(fields: [usuarioId], references: [id])
+
+  @@index([empresaId])
+  @@index([productoId])
+  @@index([tipo])
+  @@map("movimientos_inventario")
+}
+
+// ====================================
+// CONFIGURACIÓN SRI (por empresa)
+// ====================================
+model configuracion_sri {
+  id                      Int       @id @default(autoincrement())
+  empresaId               Int       @default(1)
+  ruc                     String    @db.VarChar(13)
+  razonSocial             String    @db.VarChar(300)
+  nombreComercial         String?   @db.VarChar(300)
+  dirMatriz               String    @db.VarChar(300)
+  dirEstablecimiento      String?   @db.VarChar(300)
+  establecimiento         String    @default("001") @db.VarChar(3)
+  puntoEmision            String    @default("001") @db.VarChar(3)
+  ambiente                Int       @default(1)
+  // 1=Pruebas, 2=Producción
+  contribuyenteEspecial   String?   @db.VarChar(13)
+  contribuyenteRimpe      Boolean   @default(false)
+  negocioPopular          Boolean   @default(false)
+  // true = habilitado para nota de venta Lite
+  obligadoContabilidad    Boolean   @default(false)
+  agenteRetencion         String?   @db.VarChar(13)
+  certificadoP12          String?   @db.VarChar(500)
+  claveCertificado        String?   @db.VarChar(500)
+  tipoCertificado         String?   @default("archivo") @db.VarChar(20)
+  logoUrl                 String?   @db.VarChar(500)
+  emailNotificaciones     String?   @db.VarChar(150)
+  telefono                String?   @db.VarChar(20)
+  activo                  Boolean   @default(true)
+  updatedAt               DateTime  @updatedAt
+
+  empresa  empresas @relation(fields: [empresaId], references: [id])
+
+  @@index([empresaId])
+  @@map("configuracion_sri")
+}
+
+// ====================================
+// FACTURAS (Tipo 01)
+// ====================================
+model facturas {
+  id                            Int       @id @default(autoincrement())
+  empresaId                     Int       @default(1)
+  claveAcceso                   String    @unique @db.VarChar(49)
+  numeroFactura                 String    @db.VarChar(17)
+  secuencial                    String    @db.VarChar(9)
+  rucEmisor                     String    @db.VarChar(13)
+  razonSocialEmisor             String    @db.VarChar(300)
+  tipoIdentificacionComprador   String    @db.VarChar(2)
+  identificacionComprador       String    @db.VarChar(20)
+  razonSocialComprador          String    @db.VarChar(300)
+  direccionComprador            String?   @db.VarChar(300)
+  emailComprador                String?   @db.VarChar(150)
+  telefonoComprador             String?   @db.VarChar(20)
+  clienteId                     Int?
+  fechaEmision                  DateTime
+  subtotal0                     Decimal   @default(0) @db.Decimal(14, 2)
+  subtotal5                     Decimal   @default(0) @db.Decimal(14, 2)
+  subtotal15                    Decimal   @default(0) @db.Decimal(14, 2)
+  subtotalNoObjetoIva           Decimal   @default(0) @db.Decimal(14, 2)
+  totalDescuento                Decimal   @default(0) @db.Decimal(14, 2)
+  totalIva                      Decimal   @default(0) @db.Decimal(14, 2)
+  propina                       Decimal   @default(0) @db.Decimal(14, 2)
+  importeTotal                  Decimal   @default(0) @db.Decimal(14, 2)
+  detalles                      Json
+  pagos                         Json
+  infoAdicional                 Json?
+  estadoSri                     String    @default("PENDIENTE_FIRMA") @db.VarChar(30)
+  numeroAutorizacion            String?   @db.VarChar(49)
+  fechaAutorizacion             DateTime?
+  mensajesSri                   Json?
+  xmlGenerado                   String?
+  xmlFirmado                    String?
+  xmlAutorizado                 String?
+  pdfUrl                        String?   @db.VarChar(500)
+  anulada                       Boolean   @default(false)
+  motivoAnulacion               String?
+  cobrada                       Boolean   @default(false)
+  fechaCobro                    DateTime?
+  vendedor                      String?   @db.VarChar(200)
+  sincronizadoOffline           Boolean   @default(false)
+  observaciones                 String?
+  emisorId                      Int?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  empresa       empresas?  @relation(fields: [empresaId], references: [id])
+  cliente       clientes?  @relation(fields: [clienteId], references: [id])
+  emisor        usuarios?  @relation(fields: [emisorId], references: [id])
+  notas_credito        notas_credito[]
+  retencionesRecibidas retenciones_recibidas[]
+  asientos             asientos_contables[]
+
+  @@index([empresaId])
+  @@index([estadoSri])
+  @@index([fechaEmision])
+  @@index([identificacionComprador])
+  @@map("facturas")
+}
+
+// ====================================
+// FACTURAS DE COMPRA / REGISTRO DE COMPRAS
+// ====================================
+model facturas_compra {
+  id                            Int       @id @default(autoincrement())
+  empresaId                     Int       @default(1)
+  emisorId                      Int?
+  proveedorId                   Int?
+  tipoIdentificacionProveedor   String    @db.VarChar(2)
+  identificacionProveedor       String    @db.VarChar(20)
+  razonSocialProveedor          String    @db.VarChar(300)
+  nombreComercialProveedor      String?   @db.VarChar(300)
+  direccionProveedor            String?   @db.VarChar(300)
+  numeroFactura                 String    @db.VarChar(17)
+  numeroAutorizacion            String?   @db.VarChar(49)
+  claveAcceso                   String?   @db.VarChar(49)
+  fechaEmision                  DateTime
+  subtotal0                     Decimal   @default(0) @db.Decimal(14, 2)
+  subtotal5                     Decimal   @default(0) @db.Decimal(14, 2)
+  subtotal15                    Decimal   @default(0) @db.Decimal(14, 2)
+  totalDescuento                Decimal   @default(0) @db.Decimal(14, 2)
+  totalIva                      Decimal   @default(0) @db.Decimal(14, 2)
+  importeTotal                  Decimal   @default(0) @db.Decimal(14, 2)
+  // Retenciones aplicadas en esta compra (calculadas al registrar retención)
+  retencionIVA                  Decimal   @default(0) @db.Decimal(14, 2)
+  retencionRenta                Decimal   @default(0) @db.Decimal(14, 2)
+  anulada                       Boolean   @default(false)
+  detalles                      Json
+  pagos                         Json
+  origenRegistro                String    @default("MANUAL") @db.VarChar(30)
+  registraInventario            Boolean   @default(false)
+  creaProductos                 Boolean   @default(false)
+  movimientosInventario         Int       @default(0)
+  egresoCajaRegistrado          Boolean   @default(false)
+  xmlOrigen                     String?
+  observaciones                 String?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  empresa  empresas?  @relation(fields: [empresaId], references: [id])
+  emisor   usuarios?  @relation(fields: [emisorId], references: [id])
+  proveedor proveedores? @relation(fields: [proveedorId], references: [id])
+  retenciones retenciones[]
+
+  @@unique([empresaId, identificacionProveedor, numeroFactura])
+  @@index([empresaId])
+  @@index([fechaEmision])
+  @@index([identificacionProveedor])
+  @@index([proveedorId])
+  @@map("facturas_compra")
+}
+
+// ====================================
+// NOTAS DE CRÉDITO (Tipo 04)
+// ====================================
+model notas_credito {
+  id                            Int       @id @default(autoincrement())
+  empresaId                     Int       @default(1)
+  claveAcceso                   String    @unique @db.VarChar(49)
+  numeroNC                      String    @db.VarChar(17)
+  secuencial                    String    @db.VarChar(9)
+  facturaId                     Int?
+  numeroFacturaAfectada         String    @db.VarChar(17)
+  claveAccesoFacturaAfectada    String?   @db.VarChar(49)
+  tipoIdentificacionComprador   String    @db.VarChar(2)
+  identificacionComprador       String    @db.VarChar(20)
+  razonSocialComprador          String    @db.VarChar(300)
+  direccionComprador            String?   @db.VarChar(300)
+  motivoModificacion            String
+  fechaEmisionDocSustento       DateTime
+  totalSinImpuestos             Decimal   @default(0) @db.Decimal(14, 2)
+  totalIva                      Decimal   @default(0) @db.Decimal(14, 2)
+  importeTotal                  Decimal   @default(0) @db.Decimal(14, 2)
+  detalles                      Json
+  estadoSri                     String    @default("PENDIENTE_FIRMA") @db.VarChar(30)
+  anulada                       Boolean   @default(false)
+  motivoAnulacion               String?
+  numeroAutorizacion            String?   @db.VarChar(49)
+  fechaAutorizacion             DateTime?
+  mensajesSri                   Json?
+  xmlGenerado                   String?
+  xmlFirmado                    String?
+  xmlAutorizado                 String?
+  pdfUrl                        String?   @db.VarChar(500)
+  emisorId                      Int?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  empresa  empresas?  @relation(fields: [empresaId], references: [id])
+  factura  facturas?  @relation(fields: [facturaId], references: [id])
+
+  @@index([empresaId])
+  @@index([estadoSri])
+  @@map("notas_credito")
+}
+
+// ====================================
+// RETENCIONES (Tipo 07)
+// ====================================
+model retenciones {
+  id                            Int       @id @default(autoincrement())
+  empresaId                     Int       @default(1)
+  compraId                      Int?
+  claveAcceso                   String    @unique @db.VarChar(49)
+  numeroRetencion               String    @db.VarChar(17)
+  secuencial                    String    @db.VarChar(9)
+  rucEmisor                     String    @db.VarChar(13)
+  periodoFiscal                 String    @db.VarChar(7)
+  tipoIdentificacionProveedor   String    @db.VarChar(2)
+  identificacionProveedor       String    @db.VarChar(20)
+  razonSocialProveedor          String    @db.VarChar(300)
+  tipoDocSustento               String    @db.VarChar(2)
+  numeroDocSustento             String    @db.VarChar(17)
+  fechaEmisionDocSustento       DateTime
+  impuestos                     Json
+  totalRetenido                 Decimal   @default(0) @db.Decimal(14, 2)
+  fechaEmision                  DateTime
+  estadoSri                     String    @default("PENDIENTE_FIRMA") @db.VarChar(30)
+  numeroAutorizacion            String?   @db.VarChar(49)
+  fechaAutorizacion             DateTime?
+  mensajesSri                   Json?
+  xmlGenerado                   String?
+  xmlFirmado                    String?
+  xmlAutorizado                 String?
+  pdfUrl                        String?   @db.VarChar(500)
+  anulada                       Boolean   @default(false)
+  emisorId                      Int?
+  observaciones                 String?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  empresa  empresas?  @relation(fields: [empresaId], references: [id])
+  emisor   usuarios?  @relation(fields: [emisorId], references: [id])
+  compra   facturas_compra? @relation(fields: [compraId], references: [id])
+
+  @@index([empresaId])
+  @@index([compraId])
+  @@index([estadoSri])
+  @@index([fechaEmision])
+  @@map("retenciones")
+}
+
+// ====================================
+// LIQUIDACIONES DE COMPRA (Tipo 03)
+// ====================================
+model liquidaciones_compra {
+  id                            Int       @id @default(autoincrement())
+  empresaId                     Int       @default(1)
+  claveAcceso                   String    @unique @db.VarChar(49)
+  numeroLiquidacion             String    @db.VarChar(17)
+  secuencial                    String    @db.VarChar(9)
+  rucEmisor                     String    @db.VarChar(13)
+  tipoIdentificacionProveedor   String    @db.VarChar(2)
+  identificacionProveedor       String    @db.VarChar(20)
+  razonSocialProveedor          String    @db.VarChar(300)
+  direccionProveedor            String?   @db.VarChar(300)
+  subtotal0                     Decimal   @default(0) @db.Decimal(14, 2)
+  subtotal15                    Decimal   @default(0) @db.Decimal(14, 2)
+  totalDescuento                Decimal   @default(0) @db.Decimal(14, 2)
+  totalIva                      Decimal   @default(0) @db.Decimal(14, 2)
+  importeTotal                  Decimal   @default(0) @db.Decimal(14, 2)
+  detalles                      Json
+  pagos                         Json
+  fechaEmision                  DateTime
+  estadoSri                     String    @default("PENDIENTE_FIRMA") @db.VarChar(30)
+  numeroAutorizacion            String?   @db.VarChar(49)
+  fechaAutorizacion             DateTime?
+  mensajesSri                   Json?
+  xmlGenerado                   String?
+  xmlFirmado                    String?
+  xmlAutorizado                 String?
+  pdfUrl                        String?   @db.VarChar(500)
+  anulada                       Boolean   @default(false)
+  motivoAnulacion               String?
+  emisorId                      Int?
+  observaciones                 String?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  empresa  empresas?  @relation(fields: [empresaId], references: [id])
+  emisor   usuarios?  @relation(fields: [emisorId], references: [id])
+
+  @@index([empresaId])
+  @@index([estadoSri])
+  @@index([fechaEmision])
+  @@map("liquidaciones_compra")
+}
+
+// ====================================
+// NOTAS DE DÉBITO (Tipo 05)
+// ====================================
+model notas_debito {
+  id                            Int       @id @default(autoincrement())
+  empresaId                     Int       @default(1)
+  claveAcceso                   String    @unique @db.VarChar(49)
+  numero                        String    @db.VarChar(17)
+  // formato: 001-001-000000001
+  secuencial                    String    @db.VarChar(9)
+  rucEmisor                     String    @db.VarChar(13)
+  // Documento sustento
+  codDocSustento                String    @default("01") @db.VarChar(2)
+  numeroDocSustento             String    @db.VarChar(17)
+  fechaEmisionDocSustento       DateTime
+  // Comprador/deudor
+  tipoIdentificacionComprador   String    @db.VarChar(2)
+  identificacionComprador       String    @db.VarChar(20)
+  razonSocialComprador          String    @db.VarChar(300)
+  // Motivos (JSON: [{ razon, valor }])
+  motivos                       Json
+  // Totales
+  ivaPorcentaje                 Int       @default(15)
+  totalSinImpuestos             Decimal   @default(0) @db.Decimal(14, 2)
+  totalIva                      Decimal   @default(0) @db.Decimal(14, 2)
+  valorTotal                    Decimal   @default(0) @db.Decimal(14, 2)
+  // SRI
+  estadoSri                     String    @default("PENDIENTE_FIRMA") @db.VarChar(30)
+  numeroAutorizacion            String?   @db.VarChar(49)
+  fechaAutorizacion             DateTime?
+  mensajesSri                   Json?
+  xmlGenerado                   String?
+  xmlFirmado                    String?
+  xmlAutorizado                 String?
+  pdfUrl                        String?   @db.VarChar(500)
+  anulada                       Boolean   @default(false)
+  motivoAnulacion               String?
+  fechaEmision                  DateTime
+  emisorId                      Int?
+  observaciones                 String?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  empresa  empresas?  @relation(fields: [empresaId], references: [id])
+  emisor   usuarios?  @relation(fields: [emisorId], references: [id])
+
+  @@index([empresaId])
+  @@index([estadoSri])
+  @@index([fechaEmision])
+  @@map("notas_debito")
+}
+
+// ====================================
+// NOTAS DE VENTA — AELA
+// Documento físico autorizado por SRI para RIMPE Negocio Popular
+// NO es comprobante electrónico XML — es imprimible/PDF
+// ====================================
+model notas_venta {
+  id                   Int       @id @default(autoincrement())
+  empresaId            Int       @default(1)
+  numeroNota           String    @db.VarChar(17)
+  // formato: 001-001-000000001
+  secuencial           Int
+  rucEmisor            String    @db.VarChar(13)
+  razonSocialEmisor    String    @db.VarChar(300)
+  // Datos comprador
+  tipoIdentificacion   String    @db.VarChar(2)
+  identificacion       String    @db.VarChar(20)
+  razonSocial          String    @db.VarChar(300)
+  direccion            String?   @db.VarChar(300)
+  email                String?   @db.VarChar(150)
+  clienteId            Int?
+  // Totales
+  subtotal             Decimal   @default(0) @db.Decimal(14, 2)
+  totalDescuento       Decimal   @default(0) @db.Decimal(14, 2)
+  total                Decimal   @default(0) @db.Decimal(14, 2)
+  // Detalle en JSON
+  detalles             Json
+  formaPago            String    @default("Efectivo") @db.VarChar(50)
+  fechaEmision         DateTime
+  observaciones        String?
+  anulada              Boolean   @default(false)
+  motivoAnulacion      String?
+  pdfUrl               String?   @db.VarChar(500)
+  sincronizadoOffline  Boolean   @default(false)
+  emisorId             Int?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  empresa  empresas?  @relation(fields: [empresaId], references: [id])
+  cliente  clientes?  @relation(fields: [clienteId], references: [id])
+  emisor   usuarios?  @relation(fields: [emisorId], references: [id])
+
+  @@unique([empresaId, secuencial])
+  @@index([empresaId])
+  @@index([fechaEmision])
+  @@map("notas_venta")
+}
+
+// ====================================
+// CONTABILIDAD — Períodos
+// ====================================
+model periodos_contables {
+  id          Int       @id @default(autoincrement())
+  empresaId   Int       @default(1)
+  codigo      String    @db.VarChar(7)
+  nombre      String    @db.VarChar(100)
+  fechaInicio DateTime
+  fechaFin    DateTime
+  estado      String    @default("ABIERTO") @db.VarChar(20)
+  observacion String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([empresaId, codigo])
+  @@index([empresaId])
+  @@map("periodos_contables")
+}
+
+// ====================================
+// CONTABILIDAD — Plan de Cuentas
+// ====================================
+model plan_cuentas {
+  id               Int       @id @default(autoincrement())
+  empresaId        Int       @default(1)
+  codigo           String    @db.VarChar(20)
+  nombre           String    @db.VarChar(200)
+  nivel            Int
+  tipo             String    @db.VarChar(50)
+  naturaleza       String    @db.VarChar(20)
+  codigoPadre      String?   @db.VarChar(20)
+  aceptaMovimiento Boolean   @default(true)
+  activo           Boolean   @default(true)
+
+  detalles  asientos_contables_detalle[]
+  bancos    bancos[]
+
+  @@unique([empresaId, codigo])
+  @@index([empresaId])
+  @@map("plan_cuentas")
+}
+
+// ====================================
+// CONTABILIDAD — Asientos
+// ====================================
+model asientos_contables {
+  id          Int       @id @default(autoincrement())
+  empresaId   Int       @default(1)
+  numero      String    @db.VarChar(20)
+  fecha       DateTime
+  descripcion String
+  tipo        String    @db.VarChar(50)
+  referencia  String?   @db.VarChar(100)
+  facturaId   Int?
+  cajaId      Int?
+  totalDebe   Decimal   @db.Decimal(14, 2)
+  totalHaber  Decimal   @db.Decimal(14, 2)
+  cerrado     Boolean   @default(false)
+  bloqueado   Boolean   @default(false)
+  bloqueadoPor Int?
+  usuarioId   Int?
+  createdAt   DateTime  @default(now())
+
+  factura      facturas?       @relation(fields: [facturaId], references: [id])
+  caja         cajas_diarias?  @relation(fields: [cajaId], references: [id])
+  usuario      usuarios?       @relation(fields: [usuarioId], references: [id], map: "asientos_usuario_fk")
+  bloqueadoBy  usuarios?       @relation("AsientoBloqueadoPor", fields: [bloqueadoPor], references: [id])
+  detalles     asientos_contables_detalle[]
+  movimientos  movimientos_bancarios[]
+
+  @@index([empresaId])
+  @@index([fecha])
+  @@map("asientos_contables")
+}
+
+model asientos_contables_detalle {
+  id          Int     @id @default(autoincrement())
+  asientoId   Int
+  cuentaId    Int
+  descripcion String?
+  debe        Decimal @default(0) @db.Decimal(14, 2)
+  haber       Decimal @default(0) @db.Decimal(14, 2)
+
+  asiento  asientos_contables @relation(fields: [asientoId], references: [id], onDelete: Cascade)
+  cuenta   plan_cuentas       @relation(fields: [cuentaId], references: [id])
+
+  @@map("asientos_contables_detalle")
+}
+
+// ====================================
+// AUDITORÍA
+// ====================================
+// ====================================
+// CATASTRO SRI LOCAL
+// Cargado desde CSVs oficiales del SRI (datos abiertos)
+// Permite lookup offline sin depender del API online
+// ====================================
+model contribuyentes_sri {
+  id                  Int      @id @default(autoincrement())
+  ruc                 String   @unique @db.VarChar(13)
+  razonSocial         String   @db.VarChar(300)
+  nombreComercial     String?  @db.VarChar(300)
+  estado              String?  @db.VarChar(20)
+  // ACTIVO | SUSPENDIDO | PASIVO
+  claseContribuyente  String?  @db.VarChar(50)
+  // RIMPE | ESPECIAL | OTROS
+  tipoContribuyente   String?  @db.VarChar(50)
+  // PERSONAS NATURALES | SOCIEDADES
+  obligadoContabilidad Boolean @default(false)
+  provincia           String?  @db.VarChar(80)
+  canton              String?  @db.VarChar(80)
+  updatedAt           DateTime @updatedAt
+
+  @@index([ruc])
+  @@map("contribuyentes_sri")
+}
+
+model auditoria {
+  id          Int       @id @default(autoincrement())
+  empresaId   Int       @default(1)
+  usuarioId   Int?
+  accion      String    @db.VarChar(100)
+  tabla       String?   @db.VarChar(100)
+  registroId  Int?
+  datosAntes  Json?
+  datosNuevos Json?
+  ip          String?   @db.VarChar(45)
+  fecha       DateTime  @default(now())
+
+  usuario   usuarios? @relation(fields: [usuarioId], references: [id])
+
+  @@index([empresaId])
+  @@index([accion])
+  @@index([fecha])
+  @@map("auditoria")
+}
+
+// ====================================
+// BUZÓN SRI — Documentos Recibidos
+// ====================================
+
+model retenciones_recibidas {
+  id                  Int       @id @default(autoincrement())
+  empresaId           Int
+  claveAcceso         String    @db.VarChar(49)
+  numeroAutorizacion  String?   @db.VarChar(49)
+  fechaAutorizacion   DateTime?
+  rucAgente           String    @db.VarChar(20)
+  razonSocialAgente   String    @db.VarChar(300)
+  fechaEmision        DateTime
+  numDocSustento      String?   @db.VarChar(17)
+  totalRetencionIva   Decimal   @default(0) @db.Decimal(14, 4)
+  totalRetencionRenta Decimal   @default(0) @db.Decimal(14, 4)
+  facturaId           Int?
+  detalles            Json
+  xmlAutorizado       String?
+  observaciones       String?
+  anulada             Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  empresa  empresas  @relation(fields: [empresaId], references: [id])
+  factura  facturas? @relation(fields: [facturaId], references: [id])
+
+  @@unique([empresaId, claveAcceso])
+  @@index([empresaId])
+  @@index([fechaEmision])
+  @@map("retenciones_recibidas")
+}
+
+model docs_recibidos_otros {
+  id                  Int      @id @default(autoincrement())
+  empresaId           Int
+  claveAcceso         String   @db.VarChar(49)
+  tipoDocumento       String   @db.VarChar(2)
+  tipoDescripcion     String   @db.VarChar(50)
+  numeroAutorizacion  String?  @db.VarChar(49)
+  fechaEmision        DateTime
+  rucEmisor           String   @db.VarChar(20)
+  razonSocialEmisor   String   @db.VarChar(300)
+  importeTotal        Decimal  @default(0) @db.Decimal(14, 2)
+  xmlAutorizado       String?
+  observaciones       String?
+  createdAt           DateTime @default(now())
+
+  empresa  empresas  @relation(fields: [empresaId], references: [id])
+
+  @@unique([empresaId, claveAcceso])
+  @@index([empresaId])
+  @@map("docs_recibidos_otros")
+}
+
+// ====================================
+// GUÍAS DE REMISIÓN (tipo 06 SRI)
+// ====================================
+
+model guias_remision {
+  id                  Int       @id @default(autoincrement())
+  empresaId           Int
+  usuarioId           Int?
+
+  // Numeración
+  establecimiento     String    @default("001") @db.VarChar(3)
+  puntoEmision        String    @default("001") @db.VarChar(3)
+  secuencial          String    @db.VarChar(9)
+  // Número completo: establ-ptoEmision-secuencial (001-001-000000001)
+
+  fechaIniTransporte  DateTime
+  fechaFinTransporte  DateTime
+  dirPartida          String    @db.VarChar(300)
+
+  // Transportista
+  rucTransportista    String    @db.VarChar(20)
+  nombreTransportista String    @db.VarChar(300)
+  placaVehiculo       String?   @db.VarChar(20)
+
+  // Destinatario
+  rucDestinatario     String    @db.VarChar(20)
+  nombreDestinatario  String    @db.VarChar(300)
+  dirDestinatario     String    @db.VarChar(300)
+  motivoTraslado      String    @db.VarChar(300)
+  docAduaneroUnico    String?   @db.VarChar(20)
+
+  // Items
+  detalles            Json      // array { codigoInterno, descripcion, cantidad }
+
+  // Documento sustento del traslado (requerido por SRI XSD)
+  codDocSustento          String?   @default("01") @db.VarChar(2)
+  numDocSustento          String?   @db.VarChar(17)
+  numAutDocSustento       String?   @db.VarChar(49)
+  fechaEmisionDocSustento DateTime?
+
+  // SRI
+  claveAcceso         String?   @db.VarChar(49)
+  numeroAutorizacion  String?   @db.VarChar(49)
+  fechaAutorizacion   DateTime?
+  estadoSRI           String    @default("NO_ENVIADA") @db.VarChar(20)
+  // NO_ENVIADA | PENDIENTE | AUTORIZADA | RECHAZADA | ANULADA
+  mensajesSri         Json?
+
+  observaciones       String?   @db.Text
+  xmlGenerado         String?   @db.Text
+  xmlFirmado          String?   @db.Text
+  pdfUrl              String?   @db.VarChar(500)
+  pdfBase64           String?   @db.Text
+
+  anulada             Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  empresa  empresas  @relation(fields: [empresaId], references: [id])
+  usuario  usuarios? @relation(fields: [usuarioId], references: [id])
+
+  @@unique([empresaId, establecimiento, puntoEmision, secuencial])
+  @@index([empresaId])
+  @@index([fechaIniTransporte])
+  @@index([estadoSRI])
+  @@map("guias_remision")
+}
+
+// ====================================
+// BANCOS — Cuentas Bancarias de la Empresa
+// ====================================
+
+model bancos {
+  id               Int      @id @default(autoincrement())
+  empresaId        Int
+  nombre           String   @db.VarChar(200)
+  // Nombre descriptivo: "Banco del Pacífico - Cta Cte Principal"
+  banco            String   @db.VarChar(100)
+  // Institución financiera: "Banco del Pacífico"
+  tipoCuenta       String   @default("CORRIENTE") @db.VarChar(20)
+  // CORRIENTE | AHORROS
+  numeroCuenta     String   @db.VarChar(30)
+  titular          String?  @db.VarChar(200)
+  saldoInicial     Decimal  @default(0) @db.Decimal(14, 2)
+  cuentaContableId Int?
+  // FK opcional al plan_cuentas para integración contable
+  activo           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  empresa        empresas      @relation(fields: [empresaId], references: [id])
+  cuentaContable plan_cuentas? @relation(fields: [cuentaContableId], references: [id])
+  movimientos    movimientos_bancarios[]
+  cheques        cheques[]
+
+  @@unique([empresaId, numeroCuenta])
+  @@index([empresaId])
+  @@map("bancos")
+}
+
+model movimientos_bancarios {
+  id          Int      @id @default(autoincrement())
+  bancoId     Int
+  empresaId   Int
+  fecha       DateTime
+  tipo        String   @db.VarChar(30)
+  // DEPOSITO | RETIRO | TRANSFERENCIA_IN | TRANSFERENCIA_OUT | CHEQUE | NOTA_DEBITO | NOTA_CREDITO | AJUSTE
+  concepto    String   @db.VarChar(300)
+  referencia  String?  @db.VarChar(100)
+  // # cheque, # transferencia, etc.
+  debe        Decimal  @default(0) @db.Decimal(14, 2)
+  // entradas (+)
+  haber       Decimal  @default(0) @db.Decimal(14, 2)
+  // salidas (-)
+  saldoParcial Decimal @default(0) @db.Decimal(14, 2)
+  asientoId   Int?
+  chequeId    Int?
+  conciliado  Boolean  @default(false)
+  observaciones String? @db.VarChar(300)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  banco   bancos             @relation(fields: [bancoId], references: [id])
+  asiento asientos_contables? @relation(fields: [asientoId], references: [id])
+  cheque  cheques?            @relation(fields: [chequeId], references: [id])
+
+  @@index([bancoId])
+  @@index([empresaId])
+  @@index([fecha])
+  @@map("movimientos_bancarios")
+}
+
+model cheques {
+  id               Int       @id @default(autoincrement())
+  bancoId          Int
+  empresaId        Int
+  numero           String    @db.VarChar(30)
+  beneficiario     String    @db.VarChar(300)
+  fecha            DateTime
+  fechaVencimiento DateTime?
+  monto            Decimal   @db.Decimal(14, 2)
+  concepto         String?   @db.VarChar(300)
+  estado           String    @default("PENDIENTE") @db.VarChar(20)
+  // PENDIENTE | COBRADO | ANULADO | PROTESTADO
+  proveedorId      Int?
+  usuarioId        Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  banco       bancos        @relation(fields: [bancoId], references: [id])
+  empresa     empresas      @relation(fields: [empresaId], references: [id])
+  proveedor   proveedores?  @relation(fields: [proveedorId], references: [id])
+  usuario     usuarios?     @relation(fields: [usuarioId], references: [id])
+  movimientos movimientos_bancarios[]
+
+  @@unique([bancoId, numero])
+  @@index([bancoId])
+  @@index([empresaId])
+  @@map("cheques")
+}
+
+// ====================================
+// TALENTO HUMANO
+// ====================================
+
+model departamentos {
+  id            Int       @id @default(autoincrement())
+  empresaId     Int       @default(1)
+  nombre        String    @db.VarChar(150)
+  descripcion   String?   @db.VarChar(300)
+  activo        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  empresa   empresas  @relation(fields: [empresaId], references: [id])
+  cargos    cargos[]
+  empleados empleados[]
+
+  @@unique([empresaId, nombre])
+  @@index([empresaId])
+  @@map("departamentos")
+}
+
+model cargos {
+  id             Int       @id @default(autoincrement())
+  empresaId      Int       @default(1)
+  departamentoId Int?
+  nombre         String    @db.VarChar(150)
+  descripcion    String?   @db.VarChar(300)
+  activo         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  empresa       empresas       @relation(fields: [empresaId], references: [id])
+  departamento  departamentos? @relation(fields: [departamentoId], references: [id])
+  empleados     empleados[]
+
+  @@unique([empresaId, nombre])
+  @@index([empresaId])
+  @@map("cargos")
+}
+
+model empleados {
+  id                 Int       @id @default(autoincrement())
+  empresaId          Int       @default(1)
+  departamentoId     Int?
+  cargoId            Int?
+  // Datos personales
+  cedula             String    @db.VarChar(13)
+  nombres            String    @db.VarChar(150)
+  apellidos          String    @db.VarChar(150)
+  email              String?   @db.VarChar(150)
+  telefono           String?   @db.VarChar(20)
+  direccion          String?   @db.VarChar(300)
+  fechaNacimiento    DateTime?
+  sexo               String?   @db.VarChar(1)
+  // M | F
+  estadoCivil        String?   @db.VarChar(20)
+  // soltero | casado | divorciado | viudo | union_libre
+  // Datos laborales
+  tipoContrato       String    @default("indefinido") @db.VarChar(30)
+  // indefinido | plazo_fijo | eventual | obra_cierta | pasantia
+  fechaIngreso       DateTime
+  fechaSalida        DateTime?
+  motivoSalida       String?   @db.VarChar(200)
+  salarioBase        Decimal   @db.Decimal(10, 2)
+  // Configuracion IESS
+  afiliadoIESS       Boolean   @default(true)
+  codigoIESS         String?   @db.VarChar(30)
+  tieneRenta         Boolean   @default(false)
+  // Proyeccion de impuesto a la renta
+  // Configuracion beneficios
+  fondosReserva      Boolean   @default(false)
+  // Se activa automaticamente despues del primer año
+  // Estado
+  activo             Boolean   @default(true)
+  observaciones      String?   @db.Text
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  empresa        empresas       @relation(fields: [empresaId], references: [id])
+  departamento   departamentos? @relation(fields: [departamentoId], references: [id])
+  cargo          cargos?        @relation(fields: [cargoId], references: [id])
+  nominaDetalles nomina_detalles[]
+  ausencias      ausencias[]
+  contratos      contratos[]
+
+  @@unique([empresaId, cedula])
+  @@index([empresaId])
+  @@index([activo])
+  @@map("empleados")
+}
+
+model contratos {
+  id           Int       @id @default(autoincrement())
+  empresaId    Int       @default(1)
+  empleadoId   Int
+  tipo         String    @db.VarChar(30)
+  // indefinido | plazo_fijo | eventual | obra_cierta | pasantia
+  fechaInicio  DateTime
+  fechaFin     DateTime?
+  salario      Decimal   @db.Decimal(10, 2)
+  observaciones String?  @db.Text
+  activo       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  empresa    empresas  @relation(fields: [empresaId], references: [id])
+  empleado   empleados @relation(fields: [empleadoId], references: [id])
+
+  @@index([empresaId])
+  @@index([empleadoId])
+  @@map("contratos")
+}
+
+model nominas {
+  id           Int       @id @default(autoincrement())
+  empresaId    Int       @default(1)
+  mes          Int
+  // 1-12
+  anio         Int
+  estado       String    @default("BORRADOR") @db.VarChar(20)
+  // BORRADOR | PROCESADA | PAGADA
+  observaciones String?  @db.Text
+  totalBruto   Decimal   @default(0) @db.Decimal(14, 2)
+  totalDescuentos Decimal @default(0) @db.Decimal(14, 2)
+  totalNeto    Decimal   @default(0) @db.Decimal(14, 2)
+  creadoPor    Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  empresa   empresas          @relation(fields: [empresaId], references: [id])
+  detalles  nomina_detalles[]
+
+  @@unique([empresaId, mes, anio])
+  @@index([empresaId])
+  @@map("nominas")
+}
+
+model nomina_detalles {
+  id                    Int       @id @default(autoincrement())
+  nominaId              Int
+  empleadoId            Int
+  // Ingresos
+  salarioBase           Decimal   @db.Decimal(10, 2)
+  horasExtraSuplemento  Decimal   @default(0) @db.Decimal(6, 2)
+  // horas al 25%
+  horasExtraExtraordinario Decimal @default(0) @db.Decimal(6, 2)
+  // horas al 50%
+  valorHorasExtraSuplemento Decimal @default(0) @db.Decimal(10, 2)
+  valorHorasExtraExtraordinario Decimal @default(0) @db.Decimal(10, 2)
+  otrosIngresos         Decimal   @default(0) @db.Decimal(10, 2)
+  otrosIngresosDetalle  String?   @db.VarChar(300)
+  // Beneficios proporcionales (informativo)
+  decimoTerceroProp     Decimal   @default(0) @db.Decimal(10, 2)
+  decimoCuartoProp      Decimal   @default(0) @db.Decimal(10, 2)
+  fondosReservaProp     Decimal   @default(0) @db.Decimal(10, 2)
+  // Descuentos
+  aportePersonalIESS    Decimal   @default(0) @db.Decimal(10, 2)
+  // 9.45%
+  impuestoRenta         Decimal   @default(0) @db.Decimal(10, 2)
+  prestamosIESS         Decimal   @default(0) @db.Decimal(10, 2)
+  anticipos             Decimal   @default(0) @db.Decimal(10, 2)
+  otrosDescuentos       Decimal   @default(0) @db.Decimal(10, 2)
+  otrosDescuentosDetalle String?  @db.VarChar(300)
+  // Aporte patronal (informativo para contabilidad)
+  aportePatronal        Decimal   @default(0) @db.Decimal(10, 2)
+  // 11.15%
+  // Totales
+  totalIngresos         Decimal   @default(0) @db.Decimal(10, 2)
+  totalDescuentos       Decimal   @default(0) @db.Decimal(10, 2)
+  netoApagar            Decimal   @default(0) @db.Decimal(10, 2)
+  observaciones         String?   @db.VarChar(300)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  nomina   nominas   @relation(fields: [nominaId], references: [id], onDelete: Cascade)
+  empleado empleados @relation(fields: [empleadoId], references: [id])
+
+  @@unique([nominaId, empleadoId])
+  @@index([nominaId])
+  @@index([empleadoId])
+  @@map("nomina_detalles")
+}
+
+model ausencias {
+  id           Int       @id @default(autoincrement())
+  empresaId    Int       @default(1)
+  empleadoId   Int
+  tipo         String    @db.VarChar(30)
+  // vacacion | permiso | enfermedad | maternidad | paternidad | licencia | otro
+  fechaInicio  DateTime
+  fechaFin     DateTime
+  dias         Int
+  aprobado     Boolean   @default(false)
+  aprobadoPor  Int?
+  observaciones String?  @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  empresa  empresas  @relation(fields: [empresaId], references: [id])
+  empleado empleados @relation(fields: [empleadoId], references: [id])
+
+  @@index([empresaId])
+  @@index([empleadoId])
+  @@map("ausencias")
+}

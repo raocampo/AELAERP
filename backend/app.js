@@ -1,0 +1,111 @@
+// ====================================
+// AELA — Configuración de la app Express
+// backend/app.js
+// ====================================
+
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+
+const app = express();
+
+app.use(cors({
+  origin: (origin, callback) => {
+    const allowed = (process.env.FRONTEND_URL || 'http://localhost:5174').split(',').map(s => s.trim());
+    // En desarrollo permitir cualquier origen localhost/127.0.0.1
+    if (!origin || process.env.NODE_ENV !== 'production') return callback(null, true);
+    if (allowed.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS: origen no permitido → ${origin}`));
+  },
+  credentials: true,
+}));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+const authRoutes = require('./routes/auth');
+const usuariosRoutes = require('./routes/usuarios');
+const clientesRoutes = require('./routes/clientes');
+const proveedoresRoutes = require('./routes/proveedores');
+const productosRoutes = require('./routes/productos');
+const comprasRoutes = require('./routes/compras');
+const facturasRoutes = require('./routes/facturas');
+const retencionesRoutes = require('./routes/retenciones');
+const liquidacionesRoutes = require('./routes/liquidacionesCompra');
+const atsRoutes = require('./routes/ats');
+const contabilidadRoutes = require('./routes/contabilidad');
+const empresasRoutes = require('./routes/empresas');
+const notasVentaRoutes = require('./routes/notasVenta');
+const configuracionSistemaRoutes = require('./routes/configuracionSistema');
+const cajaRoutes = require('./routes/caja');
+const inventarioRoutes = require('./routes/inventario');
+const registroRoutes = require('./routes/registro');
+const syncRoutes = require('./routes/sync');
+const notasDebitoRoutes = require('./routes/notasDebito');
+const declaracionesRoutes = require('./routes/declaraciones');
+const buzonRoutes = require('./routes/buzon');
+const guiasRemisionRoutes = require('./routes/guiasRemision');
+const bancosRoutes = require('./routes/bancos');
+const talentoHumanoRoutes = require('./routes/talentoHumano');
+const { soloMediumOPro, soloPro } = require('./middleware/edition');
+const { contarPendientes } = require('./utils/colaSRI');
+const { proteger } = require('./middleware/auth');
+
+app.use('/api/registro', registroRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/usuarios', usuariosRoutes);
+app.use('/api/empresas', empresasRoutes);
+app.use('/api/configuracion-sistema', configuracionSistemaRoutes);
+app.use('/api/clientes', clientesRoutes);
+app.use('/api/proveedores', soloMediumOPro, proveedoresRoutes);
+app.use('/api/productos', productosRoutes);
+app.use('/api/compras', soloMediumOPro, comprasRoutes);
+app.use('/api/inventario', inventarioRoutes);
+app.use('/api/caja', cajaRoutes);
+app.use('/api/facturas', facturasRoutes);
+app.use('/api/notas-venta', notasVentaRoutes);
+app.use('/api/retenciones', soloPro, retencionesRoutes);
+app.use('/api/liquidaciones', soloPro, liquidacionesRoutes);
+app.use('/api/liquidaciones-compra', soloPro, liquidacionesRoutes);
+app.use('/api/ats', soloPro, atsRoutes);
+app.use('/api/contabilidad', soloPro, contabilidadRoutes);
+app.use('/api/sync', syncRoutes);
+app.use('/api/notas-debito', notasDebitoRoutes);
+app.use('/api/declaraciones', soloPro, declaracionesRoutes);
+app.use('/api/buzon', soloMediumOPro, buzonRoutes);
+app.use('/api/guias-remision', soloMediumOPro, guiasRemisionRoutes);
+app.use('/api/bancos', bancosRoutes);
+app.use('/api/talento-humano', soloMediumOPro, talentoHumanoRoutes);
+
+app.get('/api/cola-sri/estado', proteger, async (req, res) => {
+  try {
+    const empresaId = req.empresa?.id || (req.query.empresaId ? parseInt(req.query.empresaId, 10) : undefined);
+    const pendientes = await contarPendientes(empresaId);
+    res.json({ ok: true, pendientes });
+  } catch (err) {
+    res.status(500).json({ ok: false, mensaje: err.message });
+  }
+});
+
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    mensaje: '🧾 AELA API — ERP de Comprobantes Fiscales Inteligentes',
+    version: '1.0.0',
+    ambiente: process.env.NODE_ENV || 'development',
+  });
+});
+
+app.use((err, req, res, next) => {
+  console.error('Error no manejado:', err);
+  res.status(500).json({
+    success: false,
+    mensaje: 'Error interno del servidor',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+  });
+});
+
+module.exports = app;

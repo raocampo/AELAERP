@@ -1,0 +1,367 @@
+﻿/* TalentoHumano — estilos generales del módulo */
+
+.th-hub {
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.th-hub-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.th-hub-header h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #1a202c);
+  margin: 0;
+}
+
+.th-hub-header p {
+  color: var(--color-text-muted, #718096);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Tarjetas de métricas */
+.th-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.th-metric-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.th-metric-card .metric-icon {
+  font-size: 1.6rem;
+}
+
+.th-metric-card .metric-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--color-primary, #3b82f6);
+}
+
+.th-metric-card .metric-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #718096);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Tarjetas de acceso rápido */
+.th-quick-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.th-quick-card {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s, transform 0.1s;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.th-quick-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  border-color: var(--color-primary, #3b82f6);
+  transform: translateY(-2px);
+}
+
+.th-quick-card .qc-icon {
+  font-size: 2rem;
+}
+
+.th-quick-card .qc-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a202c);
+}
+
+.th-quick-card .qc-desc {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #718096);
+}
+
+/* ─── Tabla genérica ─────────────────────────────── */
+.th-page {
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.th-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.th-page-header h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.th-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.th-search {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  min-width: 220px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text-primary, #1a202c);
+}
+
+.th-search:focus {
+  outline: none;
+  border-color: var(--color-primary, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
+}
+
+.btn-th-primary {
+  background: var(--color-primary, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.45rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-th-primary:hover { background: var(--color-primary-dark, #2563eb); }
+
+.btn-th-secondary {
+  background: transparent;
+  color: var(--color-text-primary, #1a202c);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 0.45rem 1rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-th-secondary:hover { background: var(--color-surface-hover, #f1f5f9); }
+
+.btn-th-danger {
+  background: transparent;
+  color: #e53e3e;
+  border: 1px solid #e53e3e;
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-th-danger:hover { background: #fee2e2; }
+
+.btn-th-sm {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface, #fff);
+  cursor: pointer;
+}
+
+/* Tabla */
+.th-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 10px;
+}
+
+.th-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.th-table th {
+  background: var(--color-surface-alt, #f8fafc);
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-muted, #718096);
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  white-space: nowrap;
+}
+
+.th-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  color: var(--color-text-primary, #1a202c);
+}
+
+.th-table tr:last-child td { border-bottom: none; }
+
+.th-table tr:hover td { background: var(--color-surface-alt, #f1f5f9); }
+
+.th-table .actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* Badge estado */
+.badge-activo   { color: #22C55E; background: #d1fae5; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+.badge-inactivo { color: #EF4444; background: #fee2e2; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+.badge-borrador { color: #F59E0B; background: #fef3c7; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+.badge-procesada{ color: #A78BFA; background: #edf2fb; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+.badge-pagada   { color: #22C55E; background: #d1fae5; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+.badge-pendiente{ color: #7C3AED; background: #edf2fb; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+.badge-aprobado { color: #22C55E; background: #d1fae5; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+
+/* Modal */
+.th-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.th-modal {
+  background: var(--color-surface, #fff);
+  border-radius: 14px;
+  padding: 1.75rem;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.th-modal-lg {
+  max-width: 800px;
+}
+
+.th-modal h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 1.25rem;
+}
+
+.th-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+/* Form */
+.th-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+
+.th-form-grid .full { grid-column: 1 / -1; }
+
+.th-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.th-form-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #718096);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.th-form-group input,
+.th-form-group select,
+.th-form-group textarea {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: var(--color-surface, #fff);
+  color: var(--color-text-primary, #1a202c);
+}
+
+.th-form-group input:focus,
+.th-form-group select:focus,
+.th-form-group textarea:focus {
+  outline: none;
+  border-color: var(--color-primary, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
+}
+
+.th-form-group textarea { resize: vertical; min-height: 70px; }
+
+/* Paginación */
+.th-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #718096);
+}
+
+.th-pagination-btns {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* Loading */
+.th-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: var(--color-text-muted, #718096);
+  font-size: 0.9rem;
+}
+
+.th-empty {
+  text-align: center;
+  padding: 3rem;
+  color: var(--color-text-muted, #718096);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .th-form-grid { grid-template-columns: 1fr; }
+  .th-metrics { grid-template-columns: 1fr 1fr; }
+  .th-quick-links { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,1731 @@
+const express = require('express');
+const PDFDocument = require('pdfkit');
+const prisma = require('../config/prisma');
+const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { soloFull } = require('../middleware/edition');
+const { requiereModulo } = require('../middleware/modulos');
+const { crearAsientoContable, crearAsientoNominaPeriodo, round2 } = require('../utils/contabilidad');
+const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
+
+const router = express.Router();
+
+router.use(proteger);
+router.use(soloFull);
+router.use(requiereModulo('contabilidadHabilitada'));
+
+// GET → contabilidad.ver (incluye asistente_contabilidad y secretaria)
+// POST/PUT/DELETE/PATCH → contabilidad.gestionar (excluye secretaria)
+router.use((req, res, next) => {
+  const { tienePermiso } = require('../utils/roles');
+  const rol = req.usuario?.rol || '';
+  const esLectura = req.method === 'GET';
+  const permiso = esLectura ? 'contabilidad.ver' : 'contabilidad.gestionar';
+  if (!tienePermiso(rol, permiso)) {
+    return res.status(403).json({ success: false, mensaje: 'No tiene permiso para esta acción contable' });
+  }
+  return next();
+});
+
+const ESTADOS_PERIODO = ['ABIERTO', 'CERRADO'];
+const TIPOS_CUENTA = ['ACTIVO', 'PASIVO', 'PATRIMONIO', 'INGRESO', 'GASTO', 'COSTO'];
+const NATURALEZAS = ['DEBITO', 'CREDITO'];
+const TIPOS_ASIENTO_EDITABLES = ['MANUAL', 'AJUSTE'];
+
+function parseIntSafe(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function startOfDay(value) {
+  const date = parseDate(value);
+  if (!date) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function endOfDay(value) {
+  const date = parseDate(value);
+  if (!date) return null;
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function formatDateOnly(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+}
+
+function esCodigoPeriodoValido(codigo) {
+  return typeof codigo === 'string' && /^\d{2}\/\d{4}$/.test(codigo);
+}
+
+function obtenerNombrePeriodo(codigo) {
+  if (!esCodigoPeriodoValido(codigo)) return codigo;
+  const [mm, yyyy] = codigo.split('/').map((x) => parseInt(x, 10));
+  const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  return `${meses[mm - 1] || mm}/${yyyy}`;
+}
+
+function obtenerEmpresaId(req) {
+  return parseIntSafe(req.empresa?.id || req.usuario?.empresaId || 1) || 1;
+}
+
+function parseRango({ desde, hasta, periodo }) {
+  if (periodo && esCodigoPeriodoValido(periodo)) {
+    const [mm, yyyy] = periodo.split('/').map((x) => parseInt(x, 10));
+    const inicio = new Date(yyyy, mm - 1, 1, 0, 0, 0, 0);
+    const fin = new Date(yyyy, mm, 0, 23, 59, 59, 999);
+    return { inicio, fin };
+  }
+
+  return {
+    inicio: desde ? startOfDay(desde) : null,
+    fin: hasta ? endOfDay(hasta) : null,
+  };
+}
+
+function whereFechaDesdeFiltros({ desde, hasta, periodo }) {
+  const { inicio, fin } = parseRango({ desde, hasta, periodo });
+  const where = {};
+  if (inicio) where.gte = inicio;
+  if (fin) where.lte = fin;
+  return Object.keys(where).length ? where : null;
+}
+
+function calcularSaldo(naturaleza, totalDebe, totalHaber) {
+  return round2(naturaleza === 'DEBITO' ? totalDebe - totalHaber : totalHaber - totalDebe);
+}
+
+function construirArbolCuentas(cuentas) {
+  const porCodigo = new Map();
+  const roots = [];
+
+  cuentas.forEach((cuenta) => porCodigo.set(cuenta.codigo, { ...cuenta, children: [] }));
+  cuentas.forEach((cuenta) => {
+    const node = porCodigo.get(cuenta.codigo);
+    if (cuenta.codigoPadre && porCodigo.has(cuenta.codigoPadre)) {
+      porCodigo.get(cuenta.codigoPadre).children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+
+  const sortNode = (node) => {
+    node.children.sort((a, b) => a.codigo.localeCompare(b.codigo));
+    node.children.forEach(sortNode);
+  };
+
+  roots.sort((a, b) => a.codigo.localeCompare(b.codigo));
+  roots.forEach(sortNode);
+  return roots;
+}
+
+function csvEscape(value) {
+  if (value === null || value === undefined) return '';
+  const text = String(value).replace(/\r?\n/g, ' ');
+  if (text.includes(',') || text.includes('"') || text.includes(';')) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function enviarCsv(res, filename, headers, rows) {
+  const lineas = [headers.join(',')];
+  rows.forEach((row) => {
+    lineas.push(headers.map((header) => csvEscape(row[header])).join(','));
+  });
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(`\uFEFF${lineas.join('\n')}`);
+}
+
+function crearDocumentoPdf(res, filename) {
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  const doc = new PDFDocument({ size: 'A4', margin: 36 });
+  doc.pipe(res);
+  return doc;
+}
+
+function escribirLineaPdf(doc, texto = '', opts = {}) {
+  if (doc.y > 760) doc.addPage();
+  doc.text(texto, opts);
+}
+
+async function validarPeriodoAbiertoParaFecha(empresaId, fecha) {
+  const totalPeriodos = await prisma.periodos_contables.count({
+    where: { empresaId },
+  });
+  if (!totalPeriodos) return;
+
+  const fechaInicio = startOfDay(fecha);
+  const fechaFin = endOfDay(fecha);
+  if (!fechaInicio || !fechaFin) {
+    throw new Error('Fecha inválida para el asiento');
+  }
+
+  const periodo = await prisma.periodos_contables.findFirst({
+    where: {
+      empresaId,
+      fechaInicio: { lte: fechaFin },
+      fechaFin: { gte: fechaInicio },
+    },
+  });
+
+  if (!periodo) {
+    throw new Error('La fecha del asiento no pertenece a un período contable registrado');
+  }
+
+  if (periodo.estado !== 'ABIERTO') {
+    throw new Error(`El período ${periodo.codigo} se encuentra cerrado`);
+  }
+}
+
+async function normalizarDetallesAsiento(empresaId, detalles = []) {
+  if (!Array.isArray(detalles) || detalles.length < 2) {
+    throw new Error('El asiento debe contener al menos 2 líneas de detalle');
+  }
+
+  const normalizados = detalles.map((detalle) => ({
+    cuentaId: parseIntSafe(detalle.cuentaId),
+    descripcion: detalle.descripcion || null,
+    debe: round2(detalle.debe || 0),
+    haber: round2(detalle.haber || 0),
+  }));
+
+  if (normalizados.some((d) => !d.cuentaId || (d.debe <= 0 && d.haber <= 0) || (d.debe > 0 && d.haber > 0))) {
+    throw new Error('Cada línea debe tener cuenta válida y solo un valor positivo (debe o haber)');
+  }
+
+  const cuentaIds = [...new Set(normalizados.map((d) => d.cuentaId))];
+  const cuentas = await prisma.plan_cuentas.findMany({
+    where: {
+      empresaId,
+      id: { in: cuentaIds },
+    },
+  });
+
+  if (cuentas.length !== cuentaIds.length) {
+    throw new Error('Una o más cuentas del detalle no existen para la empresa actual');
+  }
+
+  const mapa = new Map(cuentas.map((cuenta) => [cuenta.id, cuenta]));
+  if (normalizados.some((d) => !mapa.get(d.cuentaId)?.aceptaMovimiento || !mapa.get(d.cuentaId)?.activo)) {
+    throw new Error('Solo cuentas activas y de movimiento pueden usarse en asientos');
+  }
+
+  const totalDebe = round2(normalizados.reduce((acc, d) => acc + d.debe, 0));
+  const totalHaber = round2(normalizados.reduce((acc, d) => acc + d.haber, 0));
+  if (totalDebe !== totalHaber) {
+    throw new Error(`El asiento está descuadrado: debe=${totalDebe} haber=${totalHaber}`);
+  }
+
+  return { normalizados, totalDebe, totalHaber };
+}
+
+function construirWhereAsientos(empresaId, filtros = {}) {
+  const { tipo, desde, hasta, periodo, q, cerrado = 'todos' } = filtros;
+  const where = { empresaId };
+  if (tipo) where.tipo = String(tipo).toUpperCase();
+  if (cerrado !== 'todos') where.cerrado = String(cerrado) === 'true';
+
+  const fecha = whereFechaDesdeFiltros({ desde, hasta, periodo });
+  if (fecha) where.fecha = fecha;
+
+  if (q) {
+    where.OR = [
+      { numero: { contains: String(q), mode: 'insensitive' } },
+      { descripcion: { contains: String(q), mode: 'insensitive' } },
+      { referencia: { contains: String(q), mode: 'insensitive' } },
+    ];
+  }
+
+  return where;
+}
+
+async function obtenerCuentaPorId(empresaId, id) {
+  return prisma.plan_cuentas.findFirst({
+    where: { empresaId, id },
+  });
+}
+
+async function obtenerLibroMayor(empresaId, cuentaId, filtros = {}) {
+  const cuenta = await obtenerCuentaPorId(empresaId, cuentaId);
+  if (!cuenta) return null;
+
+  const fechaWhere = whereFechaDesdeFiltros(filtros);
+  const detalles = await prisma.asientos_contables_detalle.findMany({
+    where: {
+      cuentaId,
+      asiento: {
+        is: {
+          empresaId,
+          ...(fechaWhere ? { fecha: fechaWhere } : {}),
+        },
+      },
+    },
+    include: {
+      asiento: true,
+      cuenta: true,
+    },
+    orderBy: [{ id: 'asc' }],
+  });
+
+  detalles.sort((a, b) => {
+    const fechaA = new Date(a.asiento.fecha).getTime();
+    const fechaB = new Date(b.asiento.fecha).getTime();
+    if (fechaA !== fechaB) return fechaA - fechaB;
+    return a.id - b.id;
+  });
+
+  let saldo = 0;
+  const movimientos = detalles.map((detalle) => {
+    const debe = round2(detalle.debe || 0);
+    const haber = round2(detalle.haber || 0);
+    saldo = round2(saldo + (cuenta.naturaleza === 'DEBITO' ? (debe - haber) : (haber - debe)));
+    return {
+      id: detalle.id,
+      fecha: detalle.asiento.fecha,
+      numero: detalle.asiento.numero,
+      tipo: detalle.asiento.tipo,
+      referencia: detalle.asiento.referencia,
+      descripcionDetalle: detalle.descripcion,
+      descripcionAsiento: detalle.asiento.descripcion,
+      debe,
+      haber,
+      saldo,
+    };
+  });
+
+  return { cuenta, movimientos, saldoFinal: round2(saldo) };
+}
+
+async function obtenerMayorizacion(empresaId, filtros = {}) {
+  const fechaWhere = whereFechaDesdeFiltros(filtros);
+  const detalles = await prisma.asientos_contables_detalle.findMany({
+    where: {
+      asiento: {
+        is: {
+          empresaId,
+          ...(fechaWhere ? { fecha: fechaWhere } : {}),
+        },
+      },
+    },
+    include: { cuenta: true },
+  });
+
+  const mapa = new Map();
+  detalles.forEach((detalle) => {
+    if (!mapa.has(detalle.cuentaId)) {
+      mapa.set(detalle.cuentaId, {
+        cuentaId: detalle.cuentaId,
+        codigo: detalle.cuenta.codigo,
+        nombre: detalle.cuenta.nombre,
+        tipo: detalle.cuenta.tipo,
+        naturaleza: detalle.cuenta.naturaleza,
+        movimientos: 0,
+        totalDebe: 0,
+        totalHaber: 0,
+      });
+    }
+
+    const item = mapa.get(detalle.cuentaId);
+    item.movimientos += 1;
+    item.totalDebe = round2(item.totalDebe + Number(detalle.debe || 0));
+    item.totalHaber = round2(item.totalHaber + Number(detalle.haber || 0));
+  });
+
+  const tabla = [...mapa.values()]
+    .map((item) => ({
+      ...item,
+      saldo: calcularSaldo(item.naturaleza, item.totalDebe, item.totalHaber),
+    }))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+  return {
+    resumen: {
+      cuentas: tabla.length,
+      movimientos: detalles.length,
+      totalDebe: round2(tabla.reduce((acc, item) => acc + item.totalDebe, 0)),
+      totalHaber: round2(tabla.reduce((acc, item) => acc + item.totalHaber, 0)),
+    },
+    tabla,
+  };
+}
+
+async function obtenerBalanceComprobacion(empresaId, filtros = {}) {
+  const fechaWhere = whereFechaDesdeFiltros(filtros);
+  const detalles = await prisma.asientos_contables_detalle.findMany({
+    where: {
+      asiento: {
+        is: {
+          empresaId,
+          ...(fechaWhere ? { fecha: fechaWhere } : {}),
+        },
+      },
+    },
+    include: { cuenta: true },
+  });
+
+  const mapa = new Map();
+  detalles.forEach((detalle) => {
+    if (!mapa.has(detalle.cuentaId)) {
+      mapa.set(detalle.cuentaId, {
+        cuentaId: detalle.cuentaId,
+        codigo: detalle.cuenta.codigo,
+        nombre: detalle.cuenta.nombre,
+        tipo: detalle.cuenta.tipo,
+        naturaleza: detalle.cuenta.naturaleza,
+        totalDebe: 0,
+        totalHaber: 0,
+      });
+    }
+
+    const item = mapa.get(detalle.cuentaId);
+    item.totalDebe = round2(item.totalDebe + Number(detalle.debe || 0));
+    item.totalHaber = round2(item.totalHaber + Number(detalle.haber || 0));
+  });
+
+  const tabla = [...mapa.values()]
+    .map((item) => ({
+      ...item,
+      saldo: calcularSaldo(item.naturaleza, item.totalDebe, item.totalHaber),
+    }))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+  return {
+    resumen: {
+      totalCuentas: tabla.length,
+      totalDebe: round2(tabla.reduce((acc, item) => acc + item.totalDebe, 0)),
+      totalHaber: round2(tabla.reduce((acc, item) => acc + item.totalHaber, 0)),
+      saldoNeto: round2(tabla.reduce((acc, item) => acc + item.saldo, 0)),
+    },
+    tabla,
+  };
+}
+
+async function obtenerEstadoResultados(empresaId, filtros = {}) {
+  const fechaWhere = whereFechaDesdeFiltros(filtros);
+  const detalles = await prisma.asientos_contables_detalle.findMany({
+    where: {
+      asiento: {
+        is: {
+          empresaId,
+          ...(fechaWhere ? { fecha: fechaWhere } : {}),
+        },
+      },
+      cuenta: {
+        is: {
+          empresaId,
+          tipo: { in: ['INGRESO', 'GASTO', 'COSTO'] },
+        },
+      },
+    },
+    include: { cuenta: true },
+  });
+
+  const mapa = new Map();
+  detalles.forEach((detalle) => {
+    if (!mapa.has(detalle.cuentaId)) {
+      mapa.set(detalle.cuentaId, {
+        cuentaId: detalle.cuentaId,
+        codigo: detalle.cuenta.codigo,
+        nombre: detalle.cuenta.nombre,
+        tipo: detalle.cuenta.tipo,
+        naturaleza: detalle.cuenta.naturaleza,
+        totalDebe: 0,
+        totalHaber: 0,
+      });
+    }
+
+    const item = mapa.get(detalle.cuentaId);
+    item.totalDebe = round2(item.totalDebe + Number(detalle.debe || 0));
+    item.totalHaber = round2(item.totalHaber + Number(detalle.haber || 0));
+  });
+
+  const tabla = [...mapa.values()]
+    .map((item) => ({
+      ...item,
+      saldo: calcularSaldo(item.naturaleza, item.totalDebe, item.totalHaber),
+    }))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+  const totalIngresos = round2(tabla.filter((x) => x.tipo === 'INGRESO').reduce((acc, item) => acc + item.saldo, 0));
+  const totalGastos = round2(tabla.filter((x) => x.tipo === 'GASTO').reduce((acc, item) => acc + item.saldo, 0));
+  const totalCostos = round2(tabla.filter((x) => x.tipo === 'COSTO').reduce((acc, item) => acc + item.saldo, 0));
+
+  return {
+    totalIngresos,
+    totalGastos,
+    totalCostos,
+    utilidad: round2(totalIngresos - totalGastos - totalCostos),
+    tabla,
+  };
+}
+
+async function obtenerBalanceGeneral(empresaId, fechaCorte = new Date()) {
+  const fecha = endOfDay(fechaCorte) || endOfDay(new Date());
+  const detalles = await prisma.asientos_contables_detalle.findMany({
+    where: {
+      asiento: {
+        is: {
+          empresaId,
+          fecha: { lte: fecha },
+        },
+      },
+      cuenta: {
+        is: {
+          empresaId,
+          tipo: { in: ['ACTIVO', 'PASIVO', 'PATRIMONIO'] },
+        },
+      },
+    },
+    include: { cuenta: true },
+  });
+
+  const mapa = new Map();
+  detalles.forEach((detalle) => {
+    if (!mapa.has(detalle.cuentaId)) {
+      mapa.set(detalle.cuentaId, {
+        cuentaId: detalle.cuentaId,
+        codigo: detalle.cuenta.codigo,
+        nombre: detalle.cuenta.nombre,
+        tipo: detalle.cuenta.tipo,
+        naturaleza: detalle.cuenta.naturaleza,
+        totalDebe: 0,
+        totalHaber: 0,
+      });
+    }
+
+    const item = mapa.get(detalle.cuentaId);
+    item.totalDebe = round2(item.totalDebe + Number(detalle.debe || 0));
+    item.totalHaber = round2(item.totalHaber + Number(detalle.haber || 0));
+  });
+
+  const tabla = [...mapa.values()]
+    .map((item) => ({
+      ...item,
+      saldo: calcularSaldo(item.naturaleza, item.totalDebe, item.totalHaber),
+    }))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+  const activos = tabla.filter((item) => item.tipo === 'ACTIVO');
+  const pasivos = tabla.filter((item) => item.tipo === 'PASIVO');
+  const patrimonio = tabla.filter((item) => item.tipo === 'PATRIMONIO');
+
+  const totalActivos = round2(activos.reduce((acc, item) => acc + item.saldo, 0));
+  const totalPasivos = round2(pasivos.reduce((acc, item) => acc + item.saldo, 0));
+  const totalPatrimonio = round2(patrimonio.reduce((acc, item) => acc + item.saldo, 0));
+
+  return {
+    fecha,
+    activos,
+    pasivos,
+    patrimonio,
+    totalActivos,
+    totalPasivos,
+    totalPatrimonio,
+    balanceado: round2(totalActivos - (totalPasivos + totalPatrimonio)) === 0,
+  };
+}
+
+async function obtenerConsultasResumen(empresaId, filtros = {}) {
+  const where = construirWhereAsientos(empresaId, filtros);
+  const asientos = await prisma.asientos_contables.findMany({
+    where,
+    orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+  });
+
+  const tiposMap = new Map();
+  asientos.forEach((asiento) => {
+    if (!tiposMap.has(asiento.tipo)) {
+      tiposMap.set(asiento.tipo, {
+        tipo: asiento.tipo,
+        cantidad: 0,
+        totalDebe: 0,
+        totalHaber: 0,
+      });
+    }
+
+    const item = tiposMap.get(asiento.tipo);
+    item.cantidad += 1;
+    item.totalDebe = round2(item.totalDebe + Number(asiento.totalDebe || 0));
+    item.totalHaber = round2(item.totalHaber + Number(asiento.totalHaber || 0));
+  });
+
+  return {
+    total: asientos.length,
+    abiertos: asientos.filter((item) => !item.cerrado).length,
+    cerrados: asientos.filter((item) => item.cerrado).length,
+    tipos: [...tiposMap.values()].sort((a, b) => a.tipo.localeCompare(b.tipo)),
+  };
+}
+
+async function listarAsientos(empresaId, filtros = {}, opciones = {}) {
+  const { page = 1, limit = 50 } = filtros;
+  const pageNum = Math.max(parseIntSafe(page) || 1, 1);
+  const limitNum = Math.max(parseIntSafe(limit) || 50, 1);
+  const includeDetails = Boolean(opciones.includeDetails);
+  const ignorePagination = Boolean(opciones.ignorePagination);
+
+  return prisma.asientos_contables.findMany({
+    where: construirWhereAsientos(empresaId, filtros),
+    include: includeDetails
+      ? {
+          detalles: {
+            include: { cuenta: true },
+            orderBy: { id: 'asc' },
+          },
+        }
+      : undefined,
+    orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+    ...(ignorePagination ? {} : { skip: (pageNum - 1) * limitNum, take: limitNum }),
+  });
+}
+
+// GET /api/contabilidad/periodos
+router.get('/periodos', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const { estado = 'todos' } = req.query;
+    const where = { empresaId };
+    if (estado !== 'todos') where.estado = String(estado).toUpperCase();
+
+    const periodos = await prisma.periodos_contables.findMany({
+      where,
+      orderBy: [{ fechaInicio: 'desc' }, { id: 'desc' }],
+    });
+
+    const abiertos = periodos.filter((p) => p.estado === 'ABIERTO').length;
+    res.json({
+      success: true,
+      data: {
+        resumen: {
+          total: periodos.length,
+          abiertos,
+          cerrados: periodos.length - abiertos,
+        },
+        items: periodos,
+      },
+    });
+  } catch (error) {
+    console.error('GET /contabilidad/periodos:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al listar períodos contables' });
+  }
+});
+
+// POST /api/contabilidad/periodos
+router.post('/periodos', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const { codigo, fechaInicio, fechaFin, estado = 'ABIERTO', observacion = null, nombre } = req.body || {};
+
+    if (!esCodigoPeriodoValido(codigo)) {
+      return res.status(400).json({ success: false, mensaje: 'El código de período debe tener formato MM/YYYY' });
+    }
+
+    const inicio = startOfDay(fechaInicio);
+    const fin = endOfDay(fechaFin);
+    if (!inicio || !fin) {
+      return res.status(400).json({ success: false, mensaje: 'fechaInicio y fechaFin son requeridos' });
+    }
+    if (inicio > fin) {
+      return res.status(400).json({ success: false, mensaje: 'La fecha de inicio no puede ser mayor a la fecha de fin' });
+    }
+
+    const estadoNormalizado = String(estado).toUpperCase();
+    if (!ESTADOS_PERIODO.includes(estadoNormalizado)) {
+      return res.status(400).json({ success: false, mensaje: 'Estado inválido. Valores permitidos: ABIERTO o CERRADO' });
+    }
+
+    const traslape = await prisma.periodos_contables.findFirst({
+      where: {
+        empresaId,
+        fechaInicio: { lte: fin },
+        fechaFin: { gte: inicio },
+      },
+    });
+    if (traslape) {
+      return res.status(400).json({ success: false, mensaje: `El período se cruza con ${traslape.codigo}` });
+    }
+
+    const creado = await prisma.$transaction(async (tx) => {
+      if (estadoNormalizado === 'ABIERTO') {
+        await tx.periodos_contables.updateMany({
+          where: { empresaId, estado: 'ABIERTO' },
+          data: { estado: 'CERRADO' },
+        });
+      }
+
+      return tx.periodos_contables.create({
+        data: {
+          empresaId,
+          codigo,
+          nombre: nombre || obtenerNombrePeriodo(codigo),
+          fechaInicio: inicio,
+          fechaFin: fin,
+          estado: estadoNormalizado,
+          observacion,
+        },
+      });
+    });
+
+    res.status(201).json({ success: true, data: creado });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, mensaje: 'El código de período ya existe en esta empresa' });
+    }
+    console.error('POST /contabilidad/periodos:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al crear período contable' });
+  }
+});
+
+// PUT /api/contabilidad/periodos/:id
+router.put('/periodos/:id', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const actual = await prisma.periodos_contables.findFirst({
+      where: { id, empresaId },
+    });
+    if (!actual) return res.status(404).json({ success: false, mensaje: 'Período no encontrado' });
+
+    const codigo = req.body?.codigo || actual.codigo;
+    const inicio = startOfDay(req.body?.fechaInicio || actual.fechaInicio);
+    const fin = endOfDay(req.body?.fechaFin || actual.fechaFin);
+    const estadoNormalizado = String(req.body?.estado || actual.estado).toUpperCase();
+    const observacion = req.body?.observacion ?? actual.observacion;
+    const nombre = req.body?.nombre || actual.nombre;
+
+    if (!esCodigoPeriodoValido(codigo)) {
+      return res.status(400).json({ success: false, mensaje: 'El código de período debe tener formato MM/YYYY' });
+    }
+    if (!inicio || !fin) {
+      return res.status(400).json({ success: false, mensaje: 'fechaInicio y fechaFin son requeridos' });
+    }
+    if (inicio > fin) {
+      return res.status(400).json({ success: false, mensaje: 'La fecha de inicio no puede ser mayor a la fecha de fin' });
+    }
+    if (!ESTADOS_PERIODO.includes(estadoNormalizado)) {
+      return res.status(400).json({ success: false, mensaje: 'Estado inválido. Valores permitidos: ABIERTO o CERRADO' });
+    }
+
+    const traslape = await prisma.periodos_contables.findFirst({
+      where: {
+        empresaId,
+        id: { not: id },
+        fechaInicio: { lte: fin },
+        fechaFin: { gte: inicio },
+      },
+    });
+    if (traslape) {
+      return res.status(400).json({ success: false, mensaje: `El período se cruza con ${traslape.codigo}` });
+    }
+
+    const actualizado = await prisma.$transaction(async (tx) => {
+      if (estadoNormalizado === 'ABIERTO') {
+        await tx.periodos_contables.updateMany({
+          where: { empresaId, id: { not: id }, estado: 'ABIERTO' },
+          data: { estado: 'CERRADO' },
+        });
+      }
+
+      return tx.periodos_contables.update({
+        where: { id },
+        data: {
+          codigo,
+          nombre: nombre || obtenerNombrePeriodo(codigo),
+          fechaInicio: inicio,
+          fechaFin: fin,
+          estado: estadoNormalizado,
+          observacion,
+        },
+      });
+    });
+
+    res.json({ success: true, data: actualizado });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, mensaje: 'El código de período ya existe en esta empresa' });
+    }
+    console.error('PUT /contabilidad/periodos/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al actualizar período contable' });
+  }
+});
+
+// GET /api/contabilidad/plan-cuentas
+router.get('/plan-cuentas', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const { activo = 'true', tipo, q, soloMovimiento = 'false' } = req.query;
+    const where = { empresaId };
+    if (activo !== 'todos') where.activo = String(activo) === 'true';
+    if (tipo) where.tipo = String(tipo).toUpperCase();
+    if (soloMovimiento === 'true') where.aceptaMovimiento = true;
+    if (q) {
+      where.OR = [
+        { codigo: { contains: String(q), mode: 'insensitive' } },
+        { nombre: { contains: String(q), mode: 'insensitive' } },
+      ];
+    }
+
+    const cuentas = await prisma.plan_cuentas.findMany({
+      where,
+      orderBy: { codigo: 'asc' },
+    });
+
+    res.json({ success: true, data: { tree: construirArbolCuentas(cuentas), flat: cuentas } });
+  } catch (error) {
+    console.error('GET /contabilidad/plan-cuentas:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al listar plan de cuentas' });
+  }
+});
+
+// POST /api/contabilidad/plan-cuentas
+router.post('/plan-cuentas', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const {
+      codigo,
+      nombre,
+      nivel,
+      tipo,
+      naturaleza,
+      codigoPadre,
+      aceptaMovimiento = false,
+      activo = true,
+    } = req.body || {};
+
+    const nivelNum = parseIntSafe(nivel);
+    if (!codigo || !nombre || !nivelNum || !tipo || !naturaleza) {
+      return res.status(400).json({ success: false, mensaje: 'codigo, nombre, nivel, tipo y naturaleza son requeridos' });
+    }
+    if (!TIPOS_CUENTA.includes(String(tipo).toUpperCase())) {
+      return res.status(400).json({ success: false, mensaje: 'Tipo de cuenta inválido' });
+    }
+    if (!NATURALEZAS.includes(String(naturaleza).toUpperCase())) {
+      return res.status(400).json({ success: false, mensaje: 'Naturaleza inválida' });
+    }
+
+    if (codigoPadre) {
+      const padre = await prisma.plan_cuentas.findFirst({
+        where: { empresaId, codigo: codigoPadre },
+      });
+      if (!padre) return res.status(400).json({ success: false, mensaje: 'La cuenta padre no existe en esta empresa' });
+    }
+
+    const cuenta = await prisma.plan_cuentas.create({
+      data: {
+        empresaId,
+        codigo,
+        nombre,
+        nivel: nivelNum,
+        tipo: String(tipo).toUpperCase(),
+        naturaleza: String(naturaleza).toUpperCase(),
+        codigoPadre: codigoPadre || null,
+        aceptaMovimiento: Boolean(aceptaMovimiento),
+        activo: Boolean(activo),
+      },
+    });
+
+    res.status(201).json({ success: true, data: cuenta });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, mensaje: 'Código de cuenta ya existe en esta empresa' });
+    }
+    console.error('POST /contabilidad/plan-cuentas:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al crear cuenta contable' });
+  }
+});
+
+// PUT /api/contabilidad/plan-cuentas/:id
+router.put('/plan-cuentas/:id', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const actual = await prisma.plan_cuentas.findFirst({
+      where: { id, empresaId },
+    });
+    if (!actual) return res.status(404).json({ success: false, mensaje: 'Cuenta no encontrada' });
+
+    const codigo = req.body?.codigo || actual.codigo;
+    const nombre = req.body?.nombre || actual.nombre;
+    const nivelNum = parseIntSafe(req.body?.nivel ?? actual.nivel);
+    const tipo = String(req.body?.tipo || actual.tipo).toUpperCase();
+    const naturaleza = String(req.body?.naturaleza || actual.naturaleza).toUpperCase();
+    const cuentaPadre = req.body?.codigoPadre === undefined ? actual.codigoPadre : (req.body.codigoPadre || null);
+    const aceptaMovimiento = req.body?.aceptaMovimiento === undefined ? actual.aceptaMovimiento : Boolean(req.body.aceptaMovimiento);
+    const activo = req.body?.activo === undefined ? actual.activo : Boolean(req.body.activo);
+
+    if (!codigo || !nombre || !nivelNum || !tipo || !naturaleza) {
+      return res.status(400).json({ success: false, mensaje: 'codigo, nombre, nivel, tipo y naturaleza son requeridos' });
+    }
+    if (!TIPOS_CUENTA.includes(tipo)) {
+      return res.status(400).json({ success: false, mensaje: 'Tipo de cuenta inválido' });
+    }
+    if (!NATURALEZAS.includes(naturaleza)) {
+      return res.status(400).json({ success: false, mensaje: 'Naturaleza inválida' });
+    }
+
+    if (cuentaPadre) {
+      if (cuentaPadre === codigo) {
+        return res.status(400).json({ success: false, mensaje: 'Una cuenta no puede ser padre de sí misma' });
+      }
+
+      const padre = await prisma.plan_cuentas.findFirst({
+        where: { empresaId, codigo: cuentaPadre },
+      });
+      if (!padre) return res.status(400).json({ success: false, mensaje: 'La cuenta padre no existe en esta empresa' });
+    }
+
+    const actualizado = await prisma.$transaction(async (tx) => {
+      const cuenta = await tx.plan_cuentas.update({
+        where: { id },
+        data: {
+          codigo,
+          nombre,
+          nivel: nivelNum,
+          tipo,
+          naturaleza,
+          codigoPadre: cuentaPadre,
+          aceptaMovimiento,
+          activo,
+        },
+      });
+
+      if (actual.codigo !== codigo) {
+        await tx.plan_cuentas.updateMany({
+          where: {
+            empresaId,
+            codigoPadre: actual.codigo,
+          },
+          data: { codigoPadre: codigo },
+        });
+      }
+
+      return cuenta;
+    });
+
+    res.json({ success: true, data: actualizado });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, mensaje: 'Código de cuenta ya existe en esta empresa' });
+    }
+    console.error('PUT /contabilidad/plan-cuentas/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al actualizar cuenta contable' });
+  }
+});
+
+// DELETE /api/contabilidad/plan-cuentas/:id
+router.delete('/plan-cuentas/:id', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const cuenta = await prisma.plan_cuentas.findFirst({
+      where: { id, empresaId },
+    });
+    if (!cuenta) return res.status(404).json({ success: false, mensaje: 'Cuenta no encontrada' });
+
+    const [tieneHijas, tieneMovimientos] = await Promise.all([
+      prisma.plan_cuentas.count({
+        where: { empresaId, codigoPadre: cuenta.codigo },
+      }),
+      prisma.asientos_contables_detalle.count({
+        where: { cuentaId: id },
+      }),
+    ]);
+
+    if (tieneHijas > 0) {
+      return res.status(400).json({ success: false, mensaje: 'No se puede eliminar una cuenta con subcuentas' });
+    }
+    if (tieneMovimientos > 0) {
+      return res.status(400).json({ success: false, mensaje: 'No se puede eliminar una cuenta con movimientos contables' });
+    }
+
+    await prisma.plan_cuentas.delete({ where: { id } });
+    res.json({ success: true, mensaje: 'Cuenta contable eliminada' });
+  } catch (error) {
+    console.error('DELETE /contabilidad/plan-cuentas/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al eliminar cuenta contable' });
+  }
+});
+
+// POST /api/contabilidad/importar-plan
+router.post('/importar-plan', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const cuentas = Array.isArray(req.body)
+      ? req.body
+      : (Array.isArray(req.body?.cuentas) ? req.body.cuentas : []);
+
+    if (!cuentas.length) {
+      return res.status(400).json({ success: false, mensaje: 'No se recibieron cuentas para importar' });
+    }
+
+    let creadas = 0;
+    let actualizadas = 0;
+
+    for (const cuenta of cuentas) {
+      const nivelNum = parseIntSafe(cuenta.nivel);
+      const tipo = String(cuenta.tipo || '').toUpperCase();
+      const naturaleza = String(cuenta.naturaleza || '').toUpperCase();
+      if (!cuenta.codigo || !cuenta.nombre || !nivelNum || !TIPOS_CUENTA.includes(tipo) || !NATURALEZAS.includes(naturaleza)) {
+        continue;
+      }
+
+      const existente = await prisma.plan_cuentas.findFirst({
+        where: { empresaId, codigo: cuenta.codigo },
+      });
+
+      const data = {
+        empresaId,
+        codigo: cuenta.codigo,
+        nombre: cuenta.nombre,
+        nivel: nivelNum,
+        tipo,
+        naturaleza,
+        codigoPadre: cuenta.codigoPadre || null,
+        aceptaMovimiento: Boolean(cuenta.aceptaMovimiento),
+        activo: cuenta.activo === undefined ? true : Boolean(cuenta.activo),
+      };
+
+      if (existente) {
+        await prisma.plan_cuentas.update({
+          where: { id: existente.id },
+          data,
+        });
+        actualizadas += 1;
+      } else {
+        await prisma.plan_cuentas.create({ data });
+        creadas += 1;
+      }
+    }
+
+    res.json({
+      success: true,
+      mensaje: 'Plan de cuentas importado',
+      data: { creadas, actualizadas, total: creadas + actualizadas },
+    });
+  } catch (error) {
+    console.error('POST /contabilidad/importar-plan:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al importar plan de cuentas' });
+  }
+});
+
+// POST /api/contabilidad/plan-cuentas/semilla
+router.post('/plan-cuentas/semilla', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const overwriteExisting = Boolean(req.body?.overwriteExisting);
+    const resultado = await prisma.$transaction(async (tx) => sembrarPlanCuentasBase(tx, empresaId, { overwriteExisting }));
+
+    res.json({
+      success: true,
+      data: resultado,
+      mensaje: overwriteExisting
+        ? 'Plan de cuentas base sincronizado para la empresa'
+        : 'Plan de cuentas base instalado para la empresa',
+    });
+  } catch (error) {
+    console.error('POST /contabilidad/plan-cuentas/semilla:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo instalar el plan de cuentas base' });
+  }
+});
+
+// GET /api/contabilidad/asientos
+router.get('/asientos', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const asientos = await listarAsientos(empresaId, req.query);
+    res.json({ success: true, data: asientos });
+  } catch (error) {
+    console.error('GET /contabilidad/asientos:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al listar asientos contables' });
+  }
+});
+
+// POST /api/contabilidad/asiento-inicial
+router.post('/asiento-inicial', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const { periodo, fecha = new Date(), descripcion, detalles } = req.body || {};
+
+    if (periodo && !esCodigoPeriodoValido(periodo)) {
+      return res.status(400).json({ success: false, mensaje: 'El período debe tener formato MM/YYYY' });
+    }
+
+    if (periodo) {
+      const periodoExistente = await prisma.periodos_contables.findFirst({
+        where: { empresaId, codigo: periodo },
+      });
+      if (!periodoExistente) {
+        return res.status(400).json({ success: false, mensaje: 'El período indicado no existe para la empresa actual' });
+      }
+    }
+
+    await validarPeriodoAbiertoParaFecha(empresaId, fecha);
+    const asiento = await crearAsientoContable({
+      empresaId,
+      fecha,
+      descripcion: descripcion || `Asiento inicial${periodo ? ` ${periodo}` : ''}`,
+      tipo: 'INICIAL',
+      referencia: periodo ? `APERTURA-${periodo}` : 'APERTURA',
+      usuarioId: req.usuario?.id,
+      detalles,
+    });
+
+    res.status(201).json({ success: true, data: asiento });
+  } catch (error) {
+    console.error('POST /contabilidad/asiento-inicial:', error);
+    res.status(400).json({ success: false, mensaje: error.message || 'No se pudo registrar el asiento inicial' });
+  }
+});
+
+// POST /api/contabilidad/asientos
+router.post('/asientos', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const { fecha = new Date(), descripcion, tipo = 'MANUAL', referencia = null, detalles } = req.body || {};
+
+    if (!TIPOS_ASIENTO_EDITABLES.includes(String(tipo).toUpperCase())) {
+      return res.status(400).json({ success: false, mensaje: 'Solo se permiten asientos MANUAL o AJUSTE desde este formulario' });
+    }
+
+    await validarPeriodoAbiertoParaFecha(empresaId, fecha);
+    const asiento = await crearAsientoContable({
+      empresaId,
+      fecha,
+      descripcion,
+      tipo: String(tipo).toUpperCase(),
+      referencia,
+      usuarioId: req.usuario?.id,
+      detalles,
+    });
+
+    res.status(201).json({ success: true, data: asiento });
+  } catch (error) {
+    console.error('POST /contabilidad/asientos:', error);
+    res.status(400).json({ success: false, mensaje: error.message || 'No se pudo crear el asiento contable' });
+  }
+});
+
+// GET /api/contabilidad/asientos/:id
+router.get('/asientos/:id', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const asiento = await prisma.asientos_contables.findFirst({
+      where: { id, empresaId },
+      include: {
+        detalles: {
+          include: { cuenta: true },
+          orderBy: { id: 'asc' },
+        },
+      },
+    });
+
+    if (!asiento) return res.status(404).json({ success: false, mensaje: 'Asiento no encontrado' });
+    res.json({ success: true, data: asiento });
+  } catch (error) {
+    console.error('GET /contabilidad/asientos/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al obtener asiento contable' });
+  }
+});
+
+// PUT /api/contabilidad/asientos/:id
+router.put('/asientos/:id', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const actual = await prisma.asientos_contables.findFirst({
+      where: { id, empresaId },
+      include: { detalles: true },
+    });
+    if (!actual) return res.status(404).json({ success: false, mensaje: 'Asiento no encontrado' });
+    if (!TIPOS_ASIENTO_EDITABLES.includes(actual.tipo)) {
+      return res.status(400).json({ success: false, mensaje: 'Solo los asientos MANUAL o AJUSTE pueden editarse' });
+    }
+    if (actual.cerrado) {
+      return res.status(400).json({ success: false, mensaje: 'El asiento está cerrado y no puede modificarse' });
+    }
+    if (actual.bloqueado) {
+      const { tienePermiso } = require('../utils/roles');
+      if (!tienePermiso(req.usuario?.rol, 'contabilidad.bloquear')) {
+        return res.status(403).json({ success: false, mensaje: 'El asiento está bloqueado. Solo el Contador o Administrador puede modificarlo.' });
+      }
+    }
+
+    const fecha = req.body?.fecha || actual.fecha;
+    const tipo = String(req.body?.tipo || actual.tipo).toUpperCase();
+    const descripcion = req.body?.descripcion || actual.descripcion;
+    const referencia = req.body?.referencia === undefined ? actual.referencia : (req.body.referencia || null);
+    const detalles = req.body?.detalles || actual.detalles;
+
+    if (!TIPOS_ASIENTO_EDITABLES.includes(tipo)) {
+      return res.status(400).json({ success: false, mensaje: 'Solo se permiten asientos MANUAL o AJUSTE' });
+    }
+
+    await validarPeriodoAbiertoParaFecha(empresaId, fecha);
+    const { normalizados, totalDebe, totalHaber } = await normalizarDetallesAsiento(empresaId, detalles);
+
+    const actualizado = await prisma.$transaction(async (tx) => {
+      await tx.asientos_contables_detalle.deleteMany({
+        where: { asientoId: id },
+      });
+
+      return tx.asientos_contables.update({
+        where: { id },
+        data: {
+          fecha: new Date(fecha),
+          descripcion,
+          tipo,
+          referencia,
+          totalDebe,
+          totalHaber,
+          detalles: { create: normalizados },
+        },
+        include: {
+          detalles: {
+            include: { cuenta: true },
+            orderBy: { id: 'asc' },
+          },
+        },
+      });
+    });
+
+    res.json({ success: true, data: actualizado });
+  } catch (error) {
+    console.error('PUT /contabilidad/asientos/:id:', error);
+    res.status(400).json({ success: false, mensaje: error.message || 'No se pudo actualizar el asiento' });
+  }
+});
+
+// POST /api/contabilidad/asientos/:id/cerrar
+router.post('/asientos/:id/cerrar', async (req, res) => {  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const actual = await prisma.asientos_contables.findFirst({
+      where: { id, empresaId },
+    });
+    if (!actual) return res.status(404).json({ success: false, mensaje: 'Asiento no encontrado' });
+    if (actual.cerrado) return res.json({ success: true, data: actual });
+
+    const actualizado = await prisma.asientos_contables.update({
+      where: { id },
+      data: { cerrado: true },
+    });
+
+    res.json({ success: true, data: actualizado });
+  } catch (error) {
+    console.error('POST /contabilidad/asientos/:id/cerrar:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo cerrar el asiento' });
+  }
+});
+
+// POST /api/contabilidad/asientos/:id/bloquear
+router.post('/asientos/:id/bloquear', async (req, res) => {
+  try {
+    const { tienePermiso } = require('../utils/roles');
+    if (!tienePermiso(req.usuario?.rol, 'contabilidad.bloquear')) {
+      return res.status(403).json({ success: false, mensaje: 'Solo el Contador o Administrador puede bloquear asientos' });
+    }
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const actual = await prisma.asientos_contables.findFirst({ where: { id, empresaId } });
+    if (!actual) return res.status(404).json({ success: false, mensaje: 'Asiento no encontrado' });
+    if (actual.bloqueado) return res.json({ success: true, data: actual });
+
+    const actualizado = await prisma.asientos_contables.update({
+      where: { id },
+      data: { bloqueado: true, bloqueadoPor: req.usuario.id },
+    });
+    res.json({ success: true, data: actualizado, mensaje: 'Asiento bloqueado' });
+  } catch (error) {
+    console.error('POST /contabilidad/asientos/:id/bloquear:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo bloquear el asiento' });
+  }
+});
+
+// POST /api/contabilidad/asientos/:id/desbloquear
+router.post('/asientos/:id/desbloquear', async (req, res) => {
+  try {
+    const { tienePermiso } = require('../utils/roles');
+    if (!tienePermiso(req.usuario?.rol, 'contabilidad.bloquear')) {
+      return res.status(403).json({ success: false, mensaje: 'Solo el Contador o Administrador puede desbloquear asientos' });
+    }
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const actual = await prisma.asientos_contables.findFirst({ where: { id, empresaId } });
+    if (!actual) return res.status(404).json({ success: false, mensaje: 'Asiento no encontrado' });
+
+    const actualizado = await prisma.asientos_contables.update({
+      where: { id },
+      data: { bloqueado: false, bloqueadoPor: null },
+    });
+    res.json({ success: true, data: actualizado, mensaje: 'Asiento desbloqueado' });
+  } catch (error) {
+    console.error('POST /contabilidad/asientos/:id/desbloquear:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo desbloquear el asiento' });
+  }
+});
+
+// POST /api/contabilidad/asientos/:id/anular
+router.post('/asientos/:id/anular', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    const fecha = req.body?.fecha || new Date();
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const actual = await prisma.asientos_contables.findFirst({
+      where: { id, empresaId },
+      include: {
+        detalles: {
+          orderBy: { id: 'asc' },
+        },
+      },
+    });
+    if (!actual) return res.status(404).json({ success: false, mensaje: 'Asiento no encontrado' });
+    if (actual.tipo === 'ANULACION') {
+      return res.status(400).json({ success: false, mensaje: 'No se puede anular un asiento de anulación' });
+    }
+
+    const referencia = `REV-ASI-${actual.id}`;
+    const existente = await prisma.asientos_contables.findFirst({
+      where: {
+        empresaId,
+        tipo: 'ANULACION',
+        referencia,
+      },
+      include: {
+        detalles: {
+          include: { cuenta: true },
+          orderBy: { id: 'asc' },
+        },
+      },
+    });
+    if (existente) {
+      return res.json({ success: true, data: existente, mensaje: 'El asiento ya tenía reverso registrado' });
+    }
+
+    await validarPeriodoAbiertoParaFecha(empresaId, fecha);
+    const reverso = await crearAsientoContable({
+      empresaId,
+      fecha,
+      descripcion: `Reverso de asiento ${actual.numero}: ${actual.descripcion}`,
+      tipo: 'ANULACION',
+      referencia,
+      usuarioId: req.usuario?.id,
+      detalles: actual.detalles.map((detalle) => ({
+        cuentaId: detalle.cuentaId,
+        descripcion: detalle.descripcion || `Reverso asiento ${actual.numero}`,
+        debe: round2(detalle.haber || 0),
+        haber: round2(detalle.debe || 0),
+      })),
+    });
+
+    await prisma.asientos_contables.update({
+      where: { id },
+      data: { cerrado: true },
+    });
+
+    res.json({ success: true, data: reverso });
+  } catch (error) {
+    console.error('POST /contabilidad/asientos/:id/anular:', error);
+    res.status(400).json({ success: false, mensaje: error.message || 'No se pudo anular el asiento' });
+  }
+});
+
+// POST /api/contabilidad/asientos/auto/nomina/:periodo
+router.post('/asientos/auto/nomina/:periodo', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const periodo = req.params.periodo;
+    if (!esCodigoPeriodoValido(periodo)) {
+      return res.status(400).json({ success: false, mensaje: 'El período debe tener formato MM/YYYY' });
+    }
+
+    const resultado = await crearAsientoNominaPeriodo({
+      empresaId,
+      periodo,
+      usuarioId: req.usuario?.id,
+      fecha: req.body?.fecha || new Date(),
+    });
+
+    res.json({ success: true, data: resultado });
+  } catch (error) {
+    const status = error.message?.includes('no está implementado') ? 501 : 400;
+    console.error('POST /contabilidad/asientos/auto/nomina/:periodo:', error);
+    res.status(status).json({ success: false, mensaje: error.message || 'No se pudo generar el asiento de nómina' });
+  }
+});
+
+// GET /api/contabilidad/mayor/:cuentaId
+router.get('/mayor/:cuentaId', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const cuentaId = parseIntSafe(req.params.cuentaId);
+    if (!cuentaId) return res.status(400).json({ success: false, mensaje: 'Cuenta inválida' });
+
+    const data = await obtenerLibroMayor(empresaId, cuentaId, req.query);
+    if (!data) return res.status(404).json({ success: false, mensaje: 'Cuenta no encontrada' });
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /contabilidad/mayor/:cuentaId:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al generar libro mayor' });
+  }
+});
+
+// GET /api/contabilidad/mayorizacion
+router.get('/mayorizacion', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const data = await obtenerMayorizacion(empresaId, req.query);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /contabilidad/mayorizacion:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al procesar mayorización' });
+  }
+});
+
+// GET /api/contabilidad/consultas/resumen
+router.get('/consultas/resumen', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const data = await obtenerConsultasResumen(empresaId, req.query);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /contabilidad/consultas/resumen:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al generar consulta de resumen contable' });
+  }
+});
+
+// GET /api/contabilidad/reportes/diario?formato=csv|pdf
+router.get('/reportes/diario', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const formato = String(req.query.formato || 'csv').toLowerCase();
+    if (!['csv', 'pdf'].includes(formato)) {
+      return res.status(400).json({ success: false, mensaje: 'Formato inválido. Use csv o pdf' });
+    }
+
+    const asientos = await listarAsientos(empresaId, req.query, { includeDetails: true, ignorePagination: true });
+
+    if (formato === 'csv') {
+      const rows = [];
+      asientos.forEach((asiento) => {
+        if (!asiento.detalles?.length) {
+          rows.push({
+            numero: asiento.numero,
+            fecha: formatDateOnly(asiento.fecha),
+            tipo: asiento.tipo,
+            referencia: asiento.referencia || '',
+            descripcion: asiento.descripcion,
+            cuenta: '',
+            detalle: '',
+            debe: round2(asiento.totalDebe),
+            haber: round2(asiento.totalHaber),
+            estado: asiento.cerrado ? 'CERRADO' : 'ABIERTO',
+          });
+          return;
+        }
+
+        asiento.detalles.forEach((detalle) => {
+          rows.push({
+            numero: asiento.numero,
+            fecha: formatDateOnly(asiento.fecha),
+            tipo: asiento.tipo,
+            referencia: asiento.referencia || '',
+            descripcion: asiento.descripcion,
+            cuenta: `${detalle.cuenta.codigo} - ${detalle.cuenta.nombre}`,
+            detalle: detalle.descripcion || '',
+            debe: round2(detalle.debe || 0),
+            haber: round2(detalle.haber || 0),
+            estado: asiento.cerrado ? 'CERRADO' : 'ABIERTO',
+          });
+        });
+      });
+
+      return enviarCsv(
+        res,
+        `libro_diario_${formatDateOnly(new Date())}.csv`,
+        ['numero', 'fecha', 'tipo', 'referencia', 'descripcion', 'cuenta', 'detalle', 'debe', 'haber', 'estado'],
+        rows,
+      );
+    }
+
+    const doc = crearDocumentoPdf(res, `libro_diario_${formatDateOnly(new Date())}.pdf`);
+    doc.fontSize(14).text('Libro Diario', { align: 'left' });
+    doc.moveDown(0.3);
+    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC')}`);
+    doc.text(`Filtros: periodo=${req.query.periodo || '-'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} tipo=${req.query.tipo || '-'}`);
+    doc.moveDown(0.5);
+
+    asientos.forEach((asiento) => {
+      escribirLineaPdf(doc, `Asiento ${asiento.numero} | ${formatDateOnly(asiento.fecha)} | ${asiento.tipo} | ${asiento.descripcion}`);
+      (asiento.detalles || []).forEach((detalle) => {
+        escribirLineaPdf(
+          doc,
+          `  ${detalle.cuenta.codigo} ${detalle.cuenta.nombre} | Debe ${round2(detalle.debe || 0)} | Haber ${round2(detalle.haber || 0)} | ${detalle.descripcion || ''}`,
+        );
+      });
+      doc.moveDown(0.2);
+    });
+
+    doc.end();
+  } catch (error) {
+    console.error('GET /contabilidad/reportes/diario:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al exportar libro diario' });
+  }
+});
+
+// GET /api/contabilidad/reportes/mayor?formato=csv|pdf
+router.get('/reportes/mayor', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const formato = String(req.query.formato || 'csv').toLowerCase();
+    const cuentaId = parseIntSafe(req.query.cuentaId);
+    if (!['csv', 'pdf'].includes(formato)) {
+      return res.status(400).json({ success: false, mensaje: 'Formato inválido. Use csv o pdf' });
+    }
+
+    const mayor = cuentaId ? await obtenerLibroMayor(empresaId, cuentaId, req.query) : null;
+    const mayorizacion = await obtenerMayorizacion(empresaId, req.query);
+
+    if (cuentaId && !mayor) {
+      return res.status(404).json({ success: false, mensaje: 'Cuenta no encontrada para reporte de mayor' });
+    }
+
+    if (formato === 'csv') {
+      const rows = [];
+      if (mayor) {
+        mayor.movimientos.forEach((movimiento) => {
+          rows.push({
+            seccion: 'MAYOR',
+            codigo: mayor.cuenta.codigo,
+            cuenta: mayor.cuenta.nombre,
+            fecha: formatDateOnly(movimiento.fecha),
+            asientoNumero: movimiento.numero,
+            tipo: movimiento.tipo,
+            detalle: movimiento.descripcionDetalle || movimiento.descripcionAsiento || '',
+            debe: movimiento.debe,
+            haber: movimiento.haber,
+            saldo: movimiento.saldo,
+          });
+        });
+      }
+
+      mayorizacion.tabla.forEach((fila) => {
+        rows.push({
+          seccion: 'MAYORIZACION',
+          codigo: fila.codigo,
+          cuenta: fila.nombre,
+          fecha: '',
+          asientoNumero: '',
+          tipo: fila.tipo,
+          detalle: `Movimientos: ${fila.movimientos}`,
+          debe: fila.totalDebe,
+          haber: fila.totalHaber,
+          saldo: fila.saldo,
+        });
+      });
+
+      return enviarCsv(
+        res,
+        `libro_mayor_${formatDateOnly(new Date())}.csv`,
+        ['seccion', 'codigo', 'cuenta', 'fecha', 'asientoNumero', 'tipo', 'detalle', 'debe', 'haber', 'saldo'],
+        rows,
+      );
+    }
+
+    const doc = crearDocumentoPdf(res, `libro_mayor_${formatDateOnly(new Date())}.pdf`);
+    doc.fontSize(14).text('Libro Mayor', { align: 'left' });
+    doc.moveDown(0.3);
+    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC')}`);
+    doc.text(`Filtros: cuentaId=${cuentaId || 'todas'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} periodo=${req.query.periodo || '-'}`);
+    doc.moveDown(0.5);
+
+    if (mayor) {
+      doc.fontSize(11).text(`Cuenta: ${mayor.cuenta.codigo} - ${mayor.cuenta.nombre} | Saldo final: ${mayor.saldoFinal}`);
+      doc.moveDown(0.2);
+      mayor.movimientos.forEach((movimiento) => {
+        escribirLineaPdf(
+          doc,
+          `${formatDateOnly(movimiento.fecha)} | As. ${movimiento.numero} | ${movimiento.tipo} | Debe ${movimiento.debe} | Haber ${movimiento.haber} | Saldo ${movimiento.saldo}`,
+        );
+      });
+      doc.moveDown(0.5);
+    }
+
+    doc.fontSize(11).text('Mayorización por lote');
+    mayorizacion.tabla.forEach((fila) => {
+      escribirLineaPdf(
+        doc,
+        `${fila.codigo} ${fila.nombre} | Mov: ${fila.movimientos} | Debe ${fila.totalDebe} | Haber ${fila.totalHaber} | Saldo ${fila.saldo}`,
+      );
+    });
+    doc.end();
+  } catch (error) {
+    console.error('GET /contabilidad/reportes/mayor:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al exportar reporte de libro mayor' });
+  }
+});
+
+// GET /api/contabilidad/reportes/estados?formato=csv|pdf
+router.get('/reportes/estados', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const formato = String(req.query.formato || 'csv').toLowerCase();
+    if (!['csv', 'pdf'].includes(formato)) {
+      return res.status(400).json({ success: false, mensaje: 'Formato inválido. Use csv o pdf' });
+    }
+
+    const filtros = {
+      periodo: req.query.periodo,
+      desde: req.query.desde,
+      hasta: req.query.hasta,
+    };
+
+    const [balance, resultados, consultas] = await Promise.all([
+      obtenerBalanceComprobacion(empresaId, filtros),
+      obtenerEstadoResultados(empresaId, filtros),
+      obtenerConsultasResumen(empresaId, filtros),
+    ]);
+    const balanceGeneral = await obtenerBalanceGeneral(empresaId, req.query.fechaBalance || req.query.hasta || new Date());
+
+    if (formato === 'csv') {
+      const rows = [
+        {
+          seccion: 'BALANCE_COMPROBACION',
+          metrica: 'Totales',
+          valor1: balance.resumen.totalDebe,
+          valor2: balance.resumen.totalHaber,
+          valor3: balance.resumen.saldoNeto,
+        },
+        {
+          seccion: 'ESTADO_RESULTADOS',
+          metrica: 'Totales',
+          valor1: resultados.totalIngresos,
+          valor2: round2(resultados.totalGastos + resultados.totalCostos),
+          valor3: resultados.utilidad,
+        },
+        {
+          seccion: 'BALANCE_GENERAL',
+          metrica: 'Totales',
+          valor1: balanceGeneral.totalActivos,
+          valor2: round2(balanceGeneral.totalPasivos + balanceGeneral.totalPatrimonio),
+          valor3: balanceGeneral.balanceado ? 'SI' : 'NO',
+        },
+        {
+          seccion: 'CONSULTAS',
+          metrica: 'Asientos',
+          valor1: consultas.total,
+          valor2: consultas.abiertos,
+          valor3: consultas.cerrados,
+        },
+      ];
+
+      consultas.tipos.forEach((tipo) => rows.push({
+        seccion: 'CONSULTAS_POR_TIPO',
+        metrica: tipo.tipo,
+        valor1: tipo.cantidad,
+        valor2: tipo.totalDebe,
+        valor3: tipo.totalHaber,
+      }));
+
+      return enviarCsv(
+        res,
+        `estados_financieros_${formatDateOnly(new Date())}.csv`,
+        ['seccion', 'metrica', 'valor1', 'valor2', 'valor3'],
+        rows,
+      );
+    }
+
+    const doc = crearDocumentoPdf(res, `estados_financieros_${formatDateOnly(new Date())}.pdf`);
+    doc.fontSize(14).text('Estados Financieros', { align: 'left' });
+    doc.moveDown(0.3);
+    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC')}`);
+    doc.text(`Filtros: periodo=${req.query.periodo || '-'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} fechaBalance=${req.query.fechaBalance || '-'}`);
+    doc.moveDown(0.5);
+
+    doc.fontSize(11).text('Balance de Comprobación');
+    escribirLineaPdf(doc, `Debe: ${balance.resumen.totalDebe} | Haber: ${balance.resumen.totalHaber} | Saldo neto: ${balance.resumen.saldoNeto}`);
+    doc.moveDown(0.2);
+    doc.fontSize(11).text('Estado de Resultados');
+    escribirLineaPdf(doc, `Ingresos: ${resultados.totalIngresos} | Gastos: ${resultados.totalGastos} | Costos: ${resultados.totalCostos} | Utilidad: ${resultados.utilidad}`);
+    doc.moveDown(0.2);
+    doc.fontSize(11).text('Balance General');
+    escribirLineaPdf(doc, `Activos: ${balanceGeneral.totalActivos} | Pasivos + Patrimonio: ${round2(balanceGeneral.totalPasivos + balanceGeneral.totalPatrimonio)} | Balanceado: ${balanceGeneral.balanceado ? 'Sí' : 'No'}`);
+    doc.moveDown(0.2);
+    doc.fontSize(11).text('Consultas de Asientos');
+    escribirLineaPdf(doc, `Total: ${consultas.total} | Abiertos: ${consultas.abiertos} | Cerrados: ${consultas.cerrados}`);
+    consultas.tipos.forEach((tipo) => {
+      escribirLineaPdf(doc, ` - ${tipo.tipo}: Cant ${tipo.cantidad}, Debe ${tipo.totalDebe}, Haber ${tipo.totalHaber}`);
+    });
+    doc.end();
+  } catch (error) {
+    console.error('GET /contabilidad/reportes/estados:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al exportar reporte de estados financieros' });
+  }
+});
+
+// GET /api/contabilidad/balance-comprobacion
+router.get('/balance-comprobacion', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const data = await obtenerBalanceComprobacion(empresaId, req.query);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /contabilidad/balance-comprobacion:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al generar balance de comprobación' });
+  }
+});
+
+// GET /api/contabilidad/estado-resultados
+router.get('/estado-resultados', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const data = await obtenerEstadoResultados(empresaId, req.query);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /contabilidad/estado-resultados:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al generar estado de resultados' });
+  }
+});
+
+// GET /api/contabilidad/balance-general
+router.get('/balance-general', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const data = await obtenerBalanceGeneral(empresaId, req.query.fecha || new Date());
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /contabilidad/balance-general:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al generar balance general' });
+  }
+});
+
+module.exports = router;

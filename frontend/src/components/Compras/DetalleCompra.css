@@ -1,0 +1,358 @@
+﻿.detalle-compra-page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.detalle-compra-header,
+.detalle-compra-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+}
+
+.detalle-compra-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.detalle-compra-header h1 {
+  margin: 0 0 0.35rem;
+  color: #1e293b;
+}
+
+.detalle-compra-header p {
+  margin: 0;
+  color: #64748b;
+}
+
+.detalle-compra-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.detalle-compra-grid,
+.detalle-compra-bottom {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.detalle-compra-bottom {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+
+.detalle-compra-card {
+  padding: 1.25rem;
+}
+
+.detalle-compra-card h2 {
+  margin: 0 0 1rem;
+  color: #1e293b;
+}
+
+.detalle-compra-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.detalle-compra-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.detalle-compra-row span:first-child {
+  color: #64748b;
+}
+
+.detalle-compra-wrap {
+  word-break: break-all;
+  text-align: right;
+}
+
+.detalle-compra-badge,
+.detalle-compra-mini-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.detalle-compra-badge-alert {
+  margin-left: 0.6rem;
+  background: #fef3c7;
+  border-color: rgba(245,158,11,0.3);
+  color: #F59E0B;
+}
+
+.detalle-compra-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.detalle-compra-section-head p {
+  margin: 0.3rem 0 0;
+  color: #64748b;
+}
+
+.detalle-compra-table-wrap {
+  overflow: auto;
+}
+
+.detalle-compra-table {
+  width: 100%;
+  min-width: 1024px;
+  border-collapse: collapse;
+}
+
+.detalle-compra-table th,
+.detalle-compra-table td {
+  padding: 0.9rem 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.detalle-compra-table th {
+  color: #64748b;
+  font-size: 0.88rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.detalle-compra-total {
+  margin-top: 0.35rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.detalle-compra-total span,
+.detalle-compra-total strong {
+  color: #1e293b;
+  font-size: 1.02rem;
+}
+
+.detalle-compra-stack {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.detalle-compra-payment {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  background: #ffffff;
+}
+
+.detalle-compra-payment p {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+.detalle-compra-note {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.detalle-compra-note span {
+  display: block;
+  color: #64748b;
+  margin-bottom: 0.45rem;
+}
+
+.detalle-compra-note p,
+.detalle-compra-muted {
+  margin: 0;
+  color: #64748b;
+}
+
+.detalle-compra-ret-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.detalle-compra-ret-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  background: #ffffff;
+}
+
+.detalle-compra-ret-item p {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+.detalle-compra-ret-status.estado-autorizado {
+  background: #d1fae5;
+  border-color: rgba(34,197,94,0.3);
+  color: #22C55E;
+}
+
+.detalle-compra-ret-status.estado-pendiente_firma,
+.detalle-compra-ret-status.estado-enviado,
+.detalle-compra-ret-status.estado-firmado_pendiente_envio {
+  background: rgba(124,58,237,0.1);
+  border-color: rgba(124,58,237,0.3);
+  color: #A78BFA;
+}
+
+.detalle-compra-ret-status.estado-rechazado,
+.detalle-compra-ret-status.estado-error,
+.detalle-compra-ret-status.estado-anulado {
+  background: #fee2e2;
+  border-color: rgba(239,68,68,0.3);
+  color: #EF4444;
+}
+
+.detalle-compra-empty {
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+}
+
+.text-right {
+  text-align: right !important;
+}
+
+@media (max-width: 1080px) {
+  .detalle-compra-grid,
+  .detalle-compra-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .detalle-compra-header,
+  .detalle-compra-actions,
+  .detalle-compra-row,
+  .detalle-compra-payment,
+  .detalle-compra-ret-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+
+/* ── Modal editar / anular ── */
+.dc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+
+.dc-modal {
+  background: #ffffff;
+  border-radius: 1.25rem;
+  padding: 2rem;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.2);
+  display: grid;
+  gap: 1.2rem;
+}
+
+.dc-modal h3 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 1.1rem;
+}
+
+.dc-modal--danger h3 {
+  color: #EF4444;
+}
+
+.dc-modal-warn {
+  margin: 0;
+  color: #F59E0B;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.3);
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.dc-modal-label {
+  display: grid;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.dc-modal-textarea,
+.dc-modal-input {
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #1e293b;
+  background: #ffffff;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.dc-modal-textarea:focus,
+.dc-modal-input:focus {
+  outline: none;
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
+}
+
+.dc-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.65rem 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.92rem;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.btn-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+

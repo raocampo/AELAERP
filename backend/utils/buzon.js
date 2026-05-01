@@ -1,0 +1,394 @@
+// ============================================================
+//  AELA — Buzón SRI: utilidades de parseo e importación
+//  backend/utils/buzon.js
+//
+//  Funciones para recibir documentos electrónicos emitidos
+//  por terceros y autorizados por el SRI, y registrarlos en
+//  las tablas correspondientes de la empresa receptora.
+// ============================================================
+
+const { XMLParser } = require('fast-xml-parser');
+const prisma = require('../config/prisma');
+
+const XML_OPTIONS = {
+  ignoreAttributes: false,
+  trimValues: true,
+  parseTagValue: false,
+  cdataPropName: '__cdata',
+};
+
+// ─── Tipos de documento por código SRI ──────────────────────
+const TIPOS_DOCUMENTO = {
+  '01': { nombre: 'Factura', destino: 'facturas_compra' },
+  '03': { nombre: 'Liquidación de Compra', destino: 'facturas_compra' },
+  '04': { nombre: 'Nota de Crédito', destino: 'docs_recibidos_otros' },
+  '05': { nombre: 'Nota de Débito', destino: 'docs_recibidos_otros' },
+  '07': { nombre: 'Comprobante de Retención', destino: 'retenciones_recibidas' },
+};
+
+// ─── Helpers ────────────────────────────────────────────────
+function limpiar(valor) {
+  return String(valor || '').trim();
+}
+
+function toNum(valor, fallback = 0) {
+  const n = Number(String(valor || '').replace(',', '.'));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function ensureArray(v) {
+  if (!v) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
+function parsearFecha(texto) {
+  if (!texto) return new Date();
+  const partes = String(texto).split('/');
+  if (partes.length === 3) {
+    return new Date(`${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}T00:00:00`);
+  }
+  return new Date(texto);
+}
+
+// ─── 1. Detectar tipo desde clave de acceso ─────────────────
+/**
+ * Los dígitos 9-10 (1-indexed) de la clave de acceso de 49 dígitos
+ * indican el tipo de comprobante SRI.
+ */
+function detectarTipoDesdeClaveAcceso(clave) {
+  const c = limpiar(clave);
+  if (c.length !== 49) return null;
+  const cod = c.substring(8, 10); // posiciones 9-10 (base 1) = índices 8-9
+  return TIPOS_DOCUMENTO[cod] ? { cod, ...TIPOS_DOCUMENTO[cod] } : null;
+}
+
+// ─── 2. Extraer XML interno desde respuesta autorizada ──────
+function extraerXmlPrincipal(xmlString) {
+  const cdataMatch = xmlString.match(/<comprobante><!\[CDATA\[([\s\S]*?)\]\]><\/comprobante>/i);
+  if (cdataMatch) return cdataMatch[1];
+  const compMatch = xmlString.match(/<comprobante>([\s\S]*?)<\/comprobante>/i);
+  return compMatch ? compMatch[1] : xmlString;
+}
+
+function extraerNumeroAutorizacion(xmlString) {
+  const m = xmlString.match(/<numeroAutorizacion>([^<]+)<\/numeroAutorizacion>/i);
+  return m ? m[1] : null;
+}
+
+function extraerFechaAutorizacion(xmlString) {
+  const m = xmlString.match(/<fechaAutorizacion>([^<]+)<\/fechaAutorizacion>/i);
+  if (!m) return null;
+  try { return new Date(m[1]); } catch { return null; }
+}
+
+// ─── 3. Parsear Retención Recibida (tipo 07) ─────────────────
+/**
+ * Parsea el XML de un comprobante de retención emitido por un
+ * cliente (agente de retención) dirigido a la empresa receptora.
+ */
+function parsearRetencionRecibida(xmlAutorizado, xmlEnvuelto) {
+  const xmlPrincipal = extraerXmlPrincipal(xmlEnvuelto || xmlAutorizado);
+  const parser = new XMLParser(XML_OPTIONS);
+  const parsed = parser.parse(xmlPrincipal);
+  const doc = parsed?.comprobanteRetencion || parsed;
+  const infoTrib = doc?.infoTributaria || {};
+  const infoRet = doc?.infoCompRetencion || doc?.infoRetencion || {};
+
+  const impuestos = ensureArray(doc?.impuestos?.impuesto);
+  let totalRetencionIva = 0;
+  let totalRetencionRenta = 0;
+  const detalles = [];
+
+  for (const imp of impuestos) {
+    const codigo = limpiar(imp.codigo);
+    const valorRetener = toNum(imp.valorRetener || imp.valor, 0);
+    const detalle = {
+      codigo,
+      codigoRetencion: limpiar(imp.codigoRetencion),
+      porcentajeRetener: toNum(imp.porcentajeRetener || imp.porcentaje, 0),
+      valorRetener,
+      baseImponible: toNum(imp.baseImponible, 0),
+      numDocSustento: limpiar(imp.numDocSustento || imp.numeroDocSustento || ''),
+      fechaEmisionDocSustento: limpiar(imp.fechaEmisionDocSustento || ''),
+    };
+    detalles.push(detalle);
+    if (codigo === '1') totalRetencionRenta += valorRetener;
+    else if (codigo === '2' || codigo === '4' || codigo === '6') totalRetencionIva += valorRetener;
+    else totalRetencionRenta += valorRetener; // ISD u otro
+  }
+
+  const numDocSustento = detalles[0]?.numDocSustento || null;
+
+  return {
+    rucAgente: limpiar(infoTrib.ruc || ''),
+    razonSocialAgente: limpiar(infoTrib.razonSocial || ''),
+    fechaEmision: parsearFecha(infoRet.fechaEmisionDocSustento || infoTrib.fechaEmision || ''),
+    numDocSustento,
+    totalRetencionIva: Number(totalRetencionIva.toFixed(4)),
+    totalRetencionRenta: Number(totalRetencionRenta.toFixed(4)),
+    detalles,
+    xmlAutorizado: xmlAutorizado || xmlPrincipal,
+  };
+}
+
+// ─── 4. Parsear documento otro (NC/ND recibida — básico) ──────
+function parsearDocOtro(xmlAutorizado, xmlEnvuelto, tipoDoc) {
+  const xmlPrincipal = extraerXmlPrincipal(xmlEnvuelto || xmlAutorizado);
+  const parser = new XMLParser(XML_OPTIONS);
+  const parsed = parser.parse(xmlPrincipal);
+  const doc = parsed?.notaCredito || parsed?.notaDebito || Object.values(parsed || {})[0] || {};
+  const infoTrib = doc?.infoTributaria || {};
+  const infoDoc = doc?.infoNotaCredito || doc?.infoNotaDebito || doc?.info || {};
+
+  const tipo = TIPOS_DOCUMENTO[tipoDoc] || { nombre: 'Documento' };
+  return {
+    tipoDocumento: tipoDoc,
+    tipoDescripcion: tipo.nombre,
+    rucEmisor: limpiar(infoTrib.ruc || ''),
+    razonSocialEmisor: limpiar(infoTrib.razonSocial || ''),
+    fechaEmision: parsearFecha(infoDoc.fechaEmision || ''),
+    importeTotal: toNum(infoDoc.totalComprobante || infoDoc.valorModificacion || 0, 0),
+    xmlAutorizado: xmlAutorizado || xmlPrincipal,
+  };
+}
+
+// ─── 5. Importar documento recibido (routing por tipo) ───────
+/**
+ * Importa un documento al modelo correspondiente según su tipo.
+ * Ejecuta dentro de la transacción `tx` que se pasa como parámetro.
+ *
+ * Para facturas/liquidaciones (01, 03): reutiliza parsearFacturaCompraDesdeXml
+ * Para retenciones recibidas (07): crea registro en retenciones_recibidas
+ * Para NC/ND (04, 05): crea registro en docs_recibidos_otros
+ *
+ * @returns {{ accion: 'creado'|'omitido', modelo: string, id?: number }}
+ */
+async function importarDocumentoRecibido({
+  tx,
+  empresaId,
+  usuarioId,
+  tipoDoc,
+  xmlAutorizado,
+  xmlEnvuelto,
+  claveAcceso,
+  numeroAutorizacion,
+  fechaAutorizacion,
+  opcionesFactura = {},
+}) {
+  const modelo = TIPOS_DOCUMENTO[tipoDoc]?.destino;
+  if (!modelo) throw new Error(`Tipo de documento no soportado: ${tipoDoc}`);
+
+  // ── Facturas y Liquidaciones ─────────────────────────────
+  if (modelo === 'facturas_compra') {
+    const { parsearFacturaCompraDesdeXml } = require('./importacionProductos');
+
+    const xmlParaParsear = xmlEnvuelto || xmlAutorizado;
+    const datos = parsearFacturaCompraDesdeXml(xmlParaParsear);
+
+    // Verificar duplicado
+    const existente = await tx.facturas_compra.findFirst({
+      where: {
+        empresaId,
+        OR: [
+          ...(claveAcceso ? [{ claveAcceso }] : []),
+          {
+            identificacionProveedor: datos.proveedor.identificacionProveedor,
+            numeroFactura: datos.comprobante.numeroFactura,
+          },
+        ],
+      },
+      select: { id: true },
+    });
+    if (existente) return { accion: 'omitido', modelo, motivo: 'Ya existe', id: existente.id };
+
+    // Resolver proveedor
+    let proveedorId = null;
+    if (datos.proveedor.identificacionProveedor) {
+      const prov = await tx.proveedores.findFirst({
+        where: { empresaId, identificacion: datos.proveedor.identificacionProveedor },
+        select: { id: true },
+      });
+      proveedorId = prov?.id || null;
+    }
+
+    // Crear compra
+    const nuevaCompra = await tx.facturas_compra.create({
+      data: {
+        empresaId,
+        emisorId: usuarioId || null,
+        proveedorId,
+        tipoIdentificacionProveedor: datos.proveedor.tipoIdentificacionProveedor || '04',
+        identificacionProveedor: datos.proveedor.identificacionProveedor,
+        razonSocialProveedor: datos.proveedor.razonSocialProveedor,
+        nombreComercialProveedor: datos.proveedor.nombreComercialProveedor || null,
+        direccionProveedor: datos.proveedor.direccionProveedor || null,
+        numeroFactura: datos.comprobante.numeroFactura,
+        numeroAutorizacion: numeroAutorizacion || datos.comprobante.numeroAutorizacion || null,
+        claveAcceso: claveAcceso || datos.comprobante.claveAcceso || null,
+        fechaEmision: datos.comprobante.fechaEmision || new Date(),
+        subtotal0: datos.totales.subtotal0,
+        subtotal5: datos.totales.subtotal5 || 0,
+        subtotal15: datos.totales.subtotal15,
+        totalDescuento: datos.totales.totalDescuento,
+        totalIva: datos.totales.totalIva,
+        importeTotal: datos.totales.importeTotal,
+        detalles: datos.detalles,
+        pagos: datos.pagos,
+        origenRegistro: 'BUZON_SRI',
+        xmlOrigen: datos.xmlOrigen || null,
+      },
+    });
+
+    // Inventario y caja opcionales (igual que compras manuales)
+    const { registraInventario = false, creaProductos = false, registraCaja = false } = opcionesFactura;
+    let movimientosInventario = 0;
+
+    if ((registraInventario || creaProductos) && datos.detalles?.length) {
+      const { importarProductos } = require('./importacionProductos');
+      const { aplicarMovimientoInventario } = require('./inventario');
+
+      for (const det of datos.detalles) {
+        let prod = await tx.productos_servicios.findFirst({
+          where: { empresaId, codigoPrincipal: det.codigoPrincipal },
+          select: { id: true, inventariable: true },
+        });
+
+        if (!prod && creaProductos) {
+          prod = await tx.productos_servicios.create({
+            data: {
+              empresaId,
+              codigoPrincipal: det.codigoPrincipal,
+              nombre: det.descripcion,
+              precioUnitario: det.precioUnitario || 0,
+              costoUnitario: det.precioUnitario || 0,
+              tarifaIva: det.porcentajeIva || 0,
+              inventariable: true,
+              stockActual: 0,
+              stockMinimo: 0,
+            },
+          });
+        }
+
+        if (prod && registraInventario && prod.inventariable !== false) {
+          await aplicarMovimientoInventario({
+            tx,
+            empresaId,
+            productoId: prod.id,
+            usuarioId,
+            tipo: 'ENTRADA',
+            deltaCantidad: toNum(det.cantidad, 0),
+            referencia: `BUZON-${nuevaCompra.id}`,
+            observacion: `Entrada por Buzón SRI: ${datos.comprobante.numeroFactura}`,
+            costoUnitario: det.precioUnitario || 0,
+          });
+          movimientosInventario += 1;
+        }
+      }
+    }
+
+    if (movimientosInventario > 0 || registraInventario) {
+      await tx.facturas_compra.update({
+        where: { id: nuevaCompra.id },
+        data: { registraInventario: registraInventario || false, movimientosInventario },
+      });
+    }
+
+    if (registraCaja && datos.totales.importeTotal > 0) {
+      const { registrarMovimientoCaja } = require('./caja');
+      await registrarMovimientoCaja({
+        tx,
+        empresaId,
+        usuarioId,
+        tipo: 'EGRESO',
+        monto: datos.totales.importeTotal,
+        descripcion: `Pago compra ${datos.comprobante.numeroFactura} (Buzón SRI)`,
+        referencia: `COMPRA-${nuevaCompra.id}`,
+      });
+      await tx.facturas_compra.update({
+        where: { id: nuevaCompra.id },
+        data: { egresoCajaRegistrado: true },
+      });
+    }
+
+    return { accion: 'creado', modelo, id: nuevaCompra.id };
+  }
+
+  // ── Retención recibida (07) ──────────────────────────────
+  if (modelo === 'retenciones_recibidas') {
+    const existente = await tx.retenciones_recibidas.findFirst({
+      where: { empresaId, claveAcceso },
+      select: { id: true },
+    });
+    if (existente) return { accion: 'omitido', modelo, motivo: 'Ya existe', id: existente.id };
+
+    const datos = parsearRetencionRecibida(xmlAutorizado, xmlEnvuelto);
+
+    // Intentar vincular a factura emitida por el número de doc sustento
+    let facturaId = null;
+    if (datos.numDocSustento) {
+      const facturaVinculada = await tx.facturas.findFirst({
+        where: { empresaId, numeroFactura: datos.numDocSustento },
+        select: { id: true },
+      });
+      facturaId = facturaVinculada?.id || null;
+    }
+
+    const nueva = await tx.retenciones_recibidas.create({
+      data: {
+        empresaId,
+        claveAcceso,
+        numeroAutorizacion: numeroAutorizacion || null,
+        fechaAutorizacion: fechaAutorizacion || null,
+        rucAgente: datos.rucAgente,
+        razonSocialAgente: datos.razonSocialAgente,
+        fechaEmision: datos.fechaEmision,
+        numDocSustento: datos.numDocSustento || null,
+        totalRetencionIva: datos.totalRetencionIva,
+        totalRetencionRenta: datos.totalRetencionRenta,
+        facturaId,
+        detalles: datos.detalles,
+        xmlAutorizado: datos.xmlAutorizado || null,
+      },
+    });
+
+    return { accion: 'creado', modelo, id: nueva.id };
+  }
+
+  // ── NC / ND recibidas (04, 05) ───────────────────────────
+  if (modelo === 'docs_recibidos_otros') {
+    const existente = await tx.docs_recibidos_otros.findFirst({
+      where: { empresaId, claveAcceso },
+      select: { id: true },
+    });
+    if (existente) return { accion: 'omitido', modelo, motivo: 'Ya existe', id: existente.id };
+
+    const datos = parsearDocOtro(xmlAutorizado, xmlEnvuelto, tipoDoc);
+
+    const nuevo = await tx.docs_recibidos_otros.create({
+      data: {
+        empresaId,
+        claveAcceso,
+        tipoDocumento: tipoDoc,
+        tipoDescripcion: datos.tipoDescripcion,
+        numeroAutorizacion: numeroAutorizacion || null,
+        fechaEmision: datos.fechaEmision,
+        rucEmisor: datos.rucEmisor,
+        razonSocialEmisor: datos.razonSocialEmisor,
+        importeTotal: datos.importeTotal,
+        xmlAutorizado: datos.xmlAutorizado || null,
+      },
+    });
+
+    return { accion: 'creado', modelo, id: nuevo.id };
+  }
+
+  throw new Error(`Destino desconocido para tipo: ${tipoDoc}`);
+}
+
+module.exports = {
+  detectarTipoDesdeClaveAcceso,
+  parsearRetencionRecibida,
+  parsearDocOtro,
+  importarDocumentoRecibido,
+  TIPOS_DOCUMENTO,
+};

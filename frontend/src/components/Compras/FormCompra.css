@@ -1,0 +1,297 @@
+﻿.compra-page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.compra-header,
+.compra-card,
+.compra-success {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+  padding: 1.4rem;
+}
+
+.compra-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.compra-header h1,
+.compra-card h2,
+.compra-success h1 {
+  margin: 0 0 0.35rem;
+  color: #1e293b;
+}
+
+.compra-header p,
+.compra-card p,
+.compra-note {
+  margin: 0;
+  color: #64748b;
+}
+
+.compra-header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.compra-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 1.25rem;
+}
+
+.compra-card-wide {
+  grid-column: 1 / -1;
+}
+
+.compra-section-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.compra-import-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.3fr);
+  gap: 1rem;
+}
+
+.compra-upload {
+  display: grid;
+  gap: 0.5rem;
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.compra-upload input,
+.compra-keybox input,
+.compra-fields input,
+.compra-fields select,
+.compra-fields textarea,
+.compra-table input,
+.compra-table select {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  font: inherit;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.compra-keybox {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.compra-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.compra-fields label {
+  display: grid;
+  gap: 0.4rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.compra-fields .wide {
+  grid-column: 1 / -1;
+}
+
+.compra-provider-master {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+}
+
+.compra-provider-results {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.compra-provider-option {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.8rem 0.9rem;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.95rem;
+  background: #ffffff;
+  cursor: pointer;
+  color: #1e293b;
+  font: inherit;
+}
+
+.compra-provider-option:hover {
+  background: #f1f5f9;
+  border-color: rgba(124,58,237,0.3);
+}
+
+.compra-provider-option span {
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.compra-provider-linked {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 0.35rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.95rem;
+  background: #ffffff;
+  color: #64748b;
+}
+
+.compra-provider-linked button {
+  border: 0;
+  background: transparent;
+  color: #7C3AED;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.compra-provider-linked button:hover {
+  text-decoration: underline;
+}
+
+.compra-helper-text {
+  color: #64748b;
+  display: block;
+  margin-top: 0.1rem;
+}
+
+.compra-table-wrap {
+  overflow: auto;
+}
+
+.compra-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1200px;
+}
+
+.compra-table th,
+.compra-table td {
+  padding: 0.75rem 0.55rem;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+  text-align: left;
+}
+
+.compra-table th {
+  color: #64748b;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.compra-table .money {
+  white-space: nowrap;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.compra-delete {
+  border: none;
+  background: transparent;
+  color: #EF4444;
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+
+.compra-check {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  margin-bottom: 0.85rem;
+  color: #1e293b;
+}
+
+.compra-total-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.compra-total-row.total {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.compra-submit {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.compra-success {
+  max-width: 760px;
+}
+
+.compra-success-icon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #d1fae5;
+  color: #22C55E;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+}
+
+.compra-success-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin: 1rem 0 1.25rem;
+}
+
+.compra-success-grid span {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.9rem;
+  background: #ffffff;
+  color: #64748b;
+}
+
+@media (max-width: 980px) {
+  .compra-header,
+  .compra-section-header,
+  .compra-header-actions,
+  .compra-import-grid,
+  .compra-keybox,
+  .compra-provider-master,
+  .compra-fields,
+  .compra-grid,
+  .compra-success-grid {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .compra-provider-linked {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

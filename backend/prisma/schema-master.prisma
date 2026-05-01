@@ -1,0 +1,67 @@
+// ====================================
+// PRISMA SCHEMA — BD MASTER (catálogo de tenants)
+// BD: aela_master
+// Genera: @prisma/client-master
+// ====================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client-master"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_MASTER_URL")
+}
+
+// ── Tenants (una fila = una empresa cliente) ──────────────────────────────────
+model tenants {
+  id               Int       @id @default(autoincrement())
+  slug             String    @unique @db.VarChar(50)  // subdominio: empresa → empresa.aela.ec
+  plan             String    @default("lite") @db.VarChar(10)  // lite | medium | pro
+  estado           String    @default("provisioning") @db.VarChar(20)
+  // estado: provisioning | activo | suspendido | vencido | error
+
+  // Datos de conexión a la BD del tenant
+  dbName           String    @db.VarChar(80)
+  dbHost           String    @default("localhost") @db.VarChar(100)
+  dbPort           Int       @default(5432)
+  dbUser           String    @default("postgres") @db.VarChar(50)
+  dbPass           String    @db.VarChar(200)
+
+  // Datos del contacto
+  emailContacto    String?   @db.VarChar(150)
+  telefonoContacto String?   @db.VarChar(30)
+  nombreContacto   String?   @db.VarChar(200)
+
+  // Suscripción
+  periodoFacturacion String?  @db.VarChar(10)  // mensual | anual
+  fechaActivacion   DateTime?
+  fechaVencimiento  DateTime?
+  autoRenovar       Boolean  @default(false)
+
+  // Branding (white-label)
+  brandConfig      Json?    // { dominio, logo, colores, ... }
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  suscripciones    suscripciones[]
+}
+
+// ── Historial de suscripciones y pagos ───────────────────────────────────────
+model suscripciones {
+  id             Int      @id @default(autoincrement())
+  tenantId       Int
+  plan           String   @db.VarChar(10)
+  periodo        String?  @db.VarChar(10)   // mensual | anual
+  monto          Decimal? @db.Decimal(10,2)
+  estado         String   @default("activo") @db.VarChar(20)
+  fechaInicio    DateTime @default(now())
+  fechaFin       DateTime?
+  pagoReferencia String?  @db.VarChar(200)
+  proveedor      String?  @db.VarChar(50)   // stripe | paypal | manual
+
+  tenant         tenants  @relation(fields: [tenantId], references: [id])
+  createdAt      DateTime @default(now())
+}

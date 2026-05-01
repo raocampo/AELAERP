@@ -1,0 +1,119 @@
+// ====================================
+// SCHEMA — BD MASTER (aela_master)
+// Gestiona el catálogo de tenants (clientes del sistema).
+// Esta BD es independiente de cada tenant — nunca mezcla datos de clientes.
+//
+// Flujo:
+//   1. Cliente se registra en la landing → se crea un tenant aquí
+//   2. El backend provisiona automáticamente su BD (aela_<slug>)
+//   3. Cada request llega con subdominio → se resuelve el tenant → se conecta a su BD
+// ====================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client-master"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_MASTER_URL")
+}
+
+// ── Tenant (cliente del sistema) ─────────────────────────────────────────────
+model tenants {
+  id        Int      @id @default(autoincrement())
+
+  // Identidad
+  slug      String   @unique @db.VarChar(60)
+  // slug es el identificador URL: "empresa-xyz" → empresa-xyz.aela.ec
+
+  // Plan y estado
+  plan      String   @default("lite") @db.VarChar(20)
+  // "lite" | "medium" | "pro" | "whitelabel"
+
+  estado    String   @default("activo") @db.VarChar(20)
+  // "activo" | "suspendido" | "vencido" | "provisioning" | "error"
+
+  // Facturación
+  periodoFacturacion String? @db.VarChar(20)
+  // "mensual" | "anual" | null (lite gratis no tiene período)
+
+  fechaActivacion    DateTime?
+  fechaVencimiento   DateTime?
+  // null = sin vencimiento (lite gratis o whitelabel con contrato especial)
+
+  autoRenovar        Boolean  @default(false)
+
+  // Base de datos del tenant
+  dbName    String   @db.VarChar(80)
+  // Nombre de la BD PostgreSQL: "aela_empresa_xyz"
+  // En modo whitelabel puede ser en otro host
+
+  dbHost    String   @default("localhost") @db.VarChar(120)
+  dbPort    Int      @default(5432)
+  dbUser    String   @default("postgres") @db.VarChar(60)
+  dbPass    String   @db.VarChar(200)
+  // La contraseña se encripta en reposo
+
+  // White-label
+  brandConfig Json?
+  // {
+  //   nombre: "Mi Sistema de Facturación",
+  //   logo: "https://...",
+  //   colorPrimario: "#1976D2",
+  //   colorSecundario: "#F9A825",
+  //   dominio: "factura.miempresa.com",    ← dominio personalizado
+  //   subdominio: "miempresa"              ← subdominio en aela.ec
+  // }
+
+  // Datos de contacto del cliente
+  nombreContacto  String?  @db.VarChar(200)
+  emailContacto   String?  @db.VarChar(150)
+  telefonoContacto String? @db.VarChar(20)
+  paisContacto    String?  @db.VarChar(60)
+
+  // Referencia de pago
+  stripeCustomerId   String? @db.VarChar(80)
+  stripeSubId        String? @db.VarChar(80)
+  payphoneRef        String? @db.VarChar(80)
+
+  // Auditoría
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  suscripciones suscripciones[]
+
+  @@index([slug])
+  @@index([estado])
+  @@index([plan])
+  @@map("tenants")
+}
+
+// ── Historial de suscripciones ───────────────────────────────────────────────
+model suscripciones {
+  id         Int      @id @default(autoincrement())
+  tenantId   Int
+
+  plan       String   @db.VarChar(20)
+  periodo    String?  @db.VarChar(20)   // "mensual" | "anual"
+  monto      Decimal? @db.Decimal(10,2)
+  moneda     String   @default("USD") @db.VarChar(5)
+
+  estado     String   @default("activo") @db.VarChar(20)
+  // "activo" | "vencido" | "cancelado" | "reembolsado"
+
+  fechaInicio    DateTime
+  fechaFin       DateTime?
+  pagoReferencia String?  @db.VarChar(120)
+  proveedor      String?  @db.VarChar(30)
+  // "payphone" | "stripe" | "manual"
+
+  metadataPago   Json?
+  createdAt      DateTime @default(now())
+
+  tenant  tenants @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([estado])
+  @@map("suscripciones")
+}

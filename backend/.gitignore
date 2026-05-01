@@ -1,0 +1,6 @@
+node_modules/
+.env
+uploads/certificados/*.p12
+uploads/certificados/*.pfx
+uploads/logos/
+tmp-backend-*.log

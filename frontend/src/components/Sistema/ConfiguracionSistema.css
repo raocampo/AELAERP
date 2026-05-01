@@ -1,0 +1,194 @@
+﻿.syscfg-page {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.syscfg-header {
+  margin-bottom: 20px;
+}
+
+.syscfg-header h1 {
+  margin: 0 0 6px;
+  font-size: 1.9rem;
+}
+
+.syscfg-header p,
+.syscfg-note {
+  color: #64748b;
+}
+
+.syscfg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.syscfg-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+}
+
+.syscfg-card-wide {
+  grid-column: 1 / -1;
+}
+
+.syscfg-card h2 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+}
+
+.syscfg-field,
+.syscfg-check {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.syscfg-check {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.syscfg-field input,
+.syscfg-field select {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+/* ── Tarjetas de plan ── */
+.syscfg-planes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.syscfg-plan-card {
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 18px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.syscfg-plan-card:hover {
+  border-color: var(--plan-color, #7C3AED);
+  background: #f1f5f9;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+}
+
+.syscfg-plan-card.selected {
+  border-color: var(--plan-color, #7C3AED);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--plan-color, #7C3AED) 15%, transparent);
+}
+
+.syscfg-plan-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.syscfg-plan-label {
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.syscfg-plan-sublabel {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.syscfg-plan-desc {
+  font-size: 0.88rem;
+  color: #64748b;
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+
+.syscfg-plan-limites {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin: 0 0 10px;
+  font-weight: 600;
+}
+
+.syscfg-plan-modulos {
+  margin: 0;
+  padding: 0 0 0 16px;
+  font-size: 0.82rem;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+/* ── Badges de plan en resumen ── */
+.syscfg-badge.plan-lite   { background: #fef3c7; color: #F59E0B; }
+.syscfg-badge.plan-medium { background: #edf2fb; color: #A78BFA; }
+.syscfg-badge.plan-pro    { background: #edf2fb; color: #7C3AED; }
+
+.syscfg-badges {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.syscfg-badge {
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.syscfg-badge.on {
+  background: #d1fae5;
+  color: #22C55E;
+}
+
+.syscfg-badge.mode {
+  background: rgba(6,182,212,0.1);
+  color: #06B6D4;
+}
+
+.syscfg-badge.off {
+  background: #fee2e2;
+  color: #EF4444;
+}
+
+.syscfg-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.syscfg-loading {
+  padding: 40px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .syscfg-page {
+    padding-bottom: 30px;
+  }
+
+  .syscfg-actions {
+    justify-content: stretch;
+  }
+
+  .syscfg-actions .btn-primary {
+    width: 100%;
+  }
+}

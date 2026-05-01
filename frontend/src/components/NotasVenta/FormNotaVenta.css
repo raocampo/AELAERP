@@ -1,0 +1,244 @@
+﻿/* ── Formulario Nota de Venta ── */
+
+.fnv-container {
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.fnv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 12px;
+}
+
+.fnv-header h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.fnv-header p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* ── Secciones card ── */
+.fnv-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 22px 24px;
+  margin-bottom: 16px;
+}
+
+.fnv-section h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* ── Grid de campos ── */
+.fnv-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.fnv-grid-2 .full {
+  grid-column: 1 / -1;
+}
+
+.fnv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fnv-field label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.fnv-field input,
+.fnv-field select,
+.fnv-field textarea {
+  padding: 8px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #1e293b;
+  background: #ffffff;
+  transition: border-color 0.15s;
+}
+
+.fnv-field input:focus,
+.fnv-field select:focus,
+.fnv-field textarea:focus {
+  outline: none;
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
+}
+
+.fnv-field input[readonly] {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+/* ── Tabla detalle ── */
+.fnv-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 12px;
+}
+
+.fnv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.fnv-table thead tr {
+  background: #f8fafc;
+}
+
+.fnv-table th {
+  padding: 9px 10px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.fnv-table th.right { text-align: right; }
+.fnv-table th.center { text-align: center; }
+
+.fnv-table td {
+  padding: 6px 6px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.fnv-table tr:last-child td { border-bottom: none; }
+
+.fnv-table input[type="text"],
+.fnv-table input[type="number"] {
+  padding: 5px 8px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #ffffff;
+  color: #1e293b;
+  transition: border-color 0.15s;
+}
+
+.fnv-table input[type="text"]:focus,
+.fnv-table input[type="number"]:focus {
+  outline: none;
+  border-color: #7C3AED;
+}
+
+.fnv-cell-total {
+  text-align: right;
+  font-weight: 600;
+  color: #1e293b;
+  padding-right: 10px;
+}
+
+/* ── Fila de totales + opciones ── */
+.fnv-bottom-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 20px;
+  align-items: start;
+}
+
+.fnv-opciones {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Caja totales ── */
+.fnv-totales-box {
+  background: rgba(124,58,237,0.08);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px 20px;
+  min-width: 230px;
+}
+
+.fnv-total-fila {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: #64748b;
+}
+
+.fnv-total-fila span:last-child {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.fnv-total-fila.fnv-total-principal {
+  border-top: 2px solid #e2e8f0;
+  margin-top: 8px;
+  padding-top: 10px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.fnv-total-fila.fnv-total-principal span:last-child {
+  color: #7C3AED;
+}
+
+.fnv-nota-rimpe {
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ── Acciones finales ── */
+.fnv-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 4px;
+  padding-bottom: 8px;
+}
+
+/* ── Mensajes SRI ── */
+.fnv-sri-ok   { color: #22C55E; font-size: 12px; margin-top: 2px; }
+.fnv-sri-warn { color: #F59E0B; font-size: 12px; margin-top: 2px; }
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  .fnv-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .fnv-bottom-row {
+    grid-template-columns: 1fr;
+  }
+  .fnv-totales-box {
+    min-width: unset;
+  }
+}
