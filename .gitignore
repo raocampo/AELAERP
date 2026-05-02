@@ -51,3 +51,6 @@ desktop.ini
 *.tmp
 *.temp
 tmp/
+
+# CSVs catastro SRI — solo para importación local, no en repo
+docs/datosRuc/
