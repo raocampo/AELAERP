@@ -101,6 +101,10 @@ app.get('/', (req, res) => {
   });
 });
 
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ ok: true, status: 'healthy', ts: Date.now() });
+});
+
 app.use((err, req, res, next) => {
   console.error('Error no manejado:', err);
   res.status(500).json({
