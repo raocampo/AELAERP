@@ -53,6 +53,11 @@ const ConfiguracionSRI = () => {
   const [savingPunto, setSavingPunto] = useState(false);
 
   const abrirModalPunto = async () => {
+    const defaults = {
+      secInicialFactura: 0, secInicialNotaCredito: 0, secInicialNotaDebito: 0,
+      secInicialRetencion: 0, secInicialLiquidacion: 0,
+      secInicialGuiaRemision: 0, secInicialNotaVenta: 0,
+    };
     try {
       const res = await api.get('/puntos-emision/activo');
       const p   = res.data.punto;
@@ -66,10 +71,13 @@ const ConfiguracionSRI = () => {
         secInicialGuiaRemision: p.secInicialGuiaRemision ?? 0,
         secInicialNotaVenta:    p.secInicialNotaVenta    ?? 0,
       });
-      setShowModalPunto(true);
-    } catch {
-      toast.error('Error al cargar punto de emisión');
+    } catch (err) {
+      console.error('[puntos-emision] error al cargar:', err.response?.data || err.message);
+      toast.error('No se pudo cargar el punto de emisión — mostrando valores por defecto');
+      setPuntoDatos({ establecimiento: form.establecimiento, puntoEmision: form.puntoEmision });
+      setPuntoForm(defaults);
     }
+    setShowModalPunto(true);
   };
 
   const handlePuntoChange = (e) => {
@@ -246,6 +254,7 @@ const ConfiguracionSRI = () => {
   if (loading) return <div className="loading">Cargando configuración SRI...</div>;
 
   return (
+    <>
     <div className="sri-config-container">
       <div className="sri-config-header">
         <div>
@@ -545,15 +554,42 @@ const ConfiguracionSRI = () => {
 
     {/* ─── Modal: Secuenciales iniciales del punto de emisión ─── */}
     {showModalPunto && (
-      <div className="pos-recibo-overlay" onClick={() => setShowModalPunto(false)}>
-        <div className="pos-recibo-modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-          <div className="pos-recibo-header">
-            <h3>🔢 Secuenciales iniciales — Punto {puntoDatos?.establecimiento}-{puntoDatos?.puntoEmision}</h3>
-            <button className="pos-recibo-close" onClick={() => setShowModalPunto(false)}>✕</button>
+      <div
+        onClick={() => setShowModalPunto(false)}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(15,23,42,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            background: '#fff', borderRadius: 16, width: '100%', maxWidth: 520,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden',
+          }}
+        >
+          {/* Header */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '16px 20px', borderBottom: '1px solid #e5e7eb',
+            background: '#f8fafc',
+          }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#1e293b' }}>
+              🔢 Secuenciales iniciales — Punto {puntoDatos?.establecimiento}-{puntoDatos?.puntoEmision}
+            </h3>
+            <button
+              onClick={() => setShowModalPunto(false)}
+              style={{
+                background: 'none', border: 'none', fontSize: 18,
+                cursor: 'pointer', color: '#64748b', lineHeight: 1,
+              }}
+            >✕</button>
           </div>
 
-          <div className="pos-recibo-body" style={{ padding: '16px 20px' }}>
-            <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+          {/* Body */}
+          <div style={{ padding: '16px 20px' }}>
+            <p style={{ fontSize: 13, color: '#6b7280', marginTop: 0, marginBottom: 16 }}>
               Ingrese el último número emitido en cada tipo de documento.
               El sistema continuará desde el número siguiente.
               Deje en <strong>0</strong> si empieza desde el inicio.
@@ -564,7 +600,7 @@ const ConfiguracionSRI = () => {
                 { campo: 'secInicialFactura',      label: 'Factura' },
                 { campo: 'secInicialNotaCredito',  label: 'Nota de Crédito' },
                 { campo: 'secInicialNotaDebito',   label: 'Nota de Débito' },
-                { campo: 'secInicialRetencion',    label: 'Comprobante de Retención' },
+                { campo: 'secInicialRetencion',    label: 'Comp. de Retención' },
                 { campo: 'secInicialLiquidacion',  label: 'Liquidación de Compra' },
                 { campo: 'secInicialGuiaRemision', label: 'Guía de Remisión' },
                 { campo: 'secInicialNotaVenta',    label: 'Nota de Venta' },
@@ -584,8 +620,15 @@ const ConfiguracionSRI = () => {
             </div>
           </div>
 
-          <div className="pos-recibo-footer" style={{ padding: '12px 20px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button className="btn-secondary" onClick={() => setShowModalPunto(false)}>Cancelar</button>
+          {/* Footer */}
+          <div style={{
+            padding: '12px 20px', borderTop: '1px solid #e5e7eb',
+            display: 'flex', gap: 10, justifyContent: 'flex-end',
+            background: '#f8fafc',
+          }}>
+            <button className="btn-secondary" onClick={() => setShowModalPunto(false)}>
+              Cancelar
+            </button>
             <button className="btn-primary" onClick={guardarPunto} disabled={savingPunto}>
               {savingPunto ? 'Guardando…' : '💾 Guardar'}
             </button>
@@ -593,6 +636,7 @@ const ConfiguracionSRI = () => {
         </div>
       </div>
     )}
+    </>
   );
 };
 

@@ -9,8 +9,8 @@
 //      guarda en cola IndexedDB (Background Sync)
 // ============================================================
 
-const CACHE_APP    = 'aela-app-v2';
-const CACHE_API    = 'aela-api-v1';
+const CACHE_APP    = 'aela-app-v3';
+const CACHE_API    = 'aela-api-v2';
 const SYNC_TAG     = 'aela-sync-queue';
 
 // Archivos del app shell que se cachean en la instalación

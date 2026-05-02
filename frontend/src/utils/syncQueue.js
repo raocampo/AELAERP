@@ -212,13 +212,16 @@ export async function registrarServiceWorker() {
     const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     console.log('[SW] Registrado:', reg.scope);
 
-    // Cuando hay una nueva versión disponible
+    // Cuando hay una nueva versión disponible, activarla inmediatamente
     reg.addEventListener('updatefound', () => {
       const newWorker = reg.installing;
       newWorker.addEventListener('statechange', () => {
-        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          // Nueva versión disponible — la app puede mostrar un toast
-          window.dispatchEvent(new CustomEvent('aela:sw-update'));
+        if (newWorker.state === 'installed') {
+          // Activar el nuevo SW de inmediato (descarta el viejo)
+          newWorker.postMessage({ type: 'SKIP_WAITING' });
+          if (navigator.serviceWorker.controller) {
+            window.dispatchEvent(new CustomEvent('aela:sw-update'));
+          }
         }
       });
     });
