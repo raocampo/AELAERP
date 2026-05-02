@@ -55,6 +55,7 @@ model empresas {
   retencionesRecibidas  retenciones_recibidas[]
   docsRecibidosOtros    docs_recibidos_otros[]
   guiasRemision         guias_remision[]
+  puntosEmision         puntos_emision[]
   bancos                bancos[]
   cheques               cheques[]
   departamentos         departamentos[]
@@ -884,6 +885,39 @@ model docs_recibidos_otros {
   @@unique([empresaId, claveAcceso])
   @@index([empresaId])
   @@map("docs_recibidos_otros")
+}
+
+// ====================================
+// PUNTOS DE EMISIÓN — Secuenciales por tipo de documento
+// Permite configurar el número inicial de cada tipo para empresas
+// que ya tienen documentos emitidos en otro sistema.
+// ====================================
+model puntos_emision {
+  id              Int     @id @default(autoincrement())
+  empresaId       Int
+  establecimiento String  @default("001") @db.VarChar(3)
+  puntoEmision    String  @default("001") @db.VarChar(3)
+  descripcion     String? @db.VarChar(100)
+  activo          Boolean @default(true)
+
+  // Secuencial inicial por tipo de documento (0 = empieza desde 1)
+  // Útil para empresas que migran desde otro sistema con documentos previos.
+  secInicialFactura      Int @default(0)
+  secInicialNotaCredito  Int @default(0)
+  secInicialNotaDebito   Int @default(0)
+  secInicialRetencion    Int @default(0)
+  secInicialLiquidacion  Int @default(0)
+  secInicialGuiaRemision Int @default(0)
+  secInicialNotaVenta    Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  empresa empresas @relation(fields: [empresaId], references: [id])
+
+  @@unique([empresaId, establecimiento, puntoEmision])
+  @@index([empresaId])
+  @@map("puntos_emision")
 }
 
 // ====================================

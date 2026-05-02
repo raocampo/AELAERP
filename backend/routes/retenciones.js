@@ -337,12 +337,17 @@ router.post('/', async (req, res) => {
     if (!fechaEmisionDocSustentoFinal) return res.status(400).json({ ok: false, error: 'fechaEmisionDocSustento requerida' });
     if (!impuestos || impuestos.length === 0) return res.status(400).json({ ok: false, error: 'Debe ingresar al menos un impuesto retenido' });
 
-    // Calcular secuencial
+    // Calcular secuencial (respeta secuencial inicial configurado)
     const maxSec = await prisma.retenciones.aggregate({
       _max: { secuencial: true },
       where: { empresaId: req.empresa.id, rucEmisor: config.ruc },
     });
-    const secuencial = (parseInt(maxSec._max.secuencial || '0', 10) || 0) + 1;
+    const maxEnBD = parseInt(maxSec._max.secuencial || '0', 10) || 0;
+    const { siguienteSecuencial: nextSec } = require('../utils/secuenciales');
+    const secuencial = await nextSec(
+      prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+      maxEnBD, 'secInicialRetencion'
+    );
 
     const fechaEmision = new Date();
 

@@ -160,15 +160,19 @@ router.post('/', async (req, res) => {
 
     const config = await getConfigSRI(req.empresa.id);
 
-    // Calcular secuencial
+    // Calcular secuencial (respeta secuencial inicial configurado)
     const lastND = await prisma.notas_debito.findFirst({
       where: { empresaId: req.empresa.id },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { secuencial: 'desc' },
       select: { secuencial: true },
     });
-    const secuencial = String(
-      lastND ? parseInt(lastND.secuencial) + 1 : 1
-    ).padStart(9, '0');
+    const maxEnBD_nd = lastND ? (parseInt(lastND.secuencial, 10) || 0) : 0;
+    const { siguienteSecuencial: nextSec_nd } = require('../utils/secuenciales');
+    const secuencialNum_nd = await nextSec_nd(
+      prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+      maxEnBD_nd, 'secInicialNotaDebito'
+    );
+    const secuencial = String(secuencialNum_nd).padStart(9, '0');
 
     const fechaEmision = new Date();
     const claveAcceso  = sri.generarClaveAcceso({

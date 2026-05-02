@@ -18,6 +18,7 @@ const {
 } = require('../utils/contabilidad');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { construirConfiguracionSriBase } = require('../utils/sriContribuyente');
+const { siguienteSecuencial } = require('../utils/secuenciales');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
 const { esErrorConectividad } = require('../utils/colaSRI');
@@ -407,12 +408,16 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
 
     const detallesFinales = detalles;
 
-    // Siguiente secuencial
+    // Siguiente secuencial (respeta secuencial inicial si la empresa migró desde otro sistema)
     const lastFact = await prisma.facturas.findFirst({
       where: { empresaId: req.empresa.id, rucEmisor: config.ruc },
       orderBy: { secuencial: 'desc' },
     });
-    const secuencialNum = lastFact ? (parseInt(String(lastFact.secuencial), 10) || 0) + 1 : 1;
+    const maxEnBD = lastFact ? (parseInt(String(lastFact.secuencial), 10) || 0) : 0;
+    const secuencialNum = await siguienteSecuencial(
+      prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+      maxEnBD, 'secInicialFactura'
+    );
     const secuencial = String(secuencialNum).padStart(9, '0');
 
     const fecha = fechaEmision ? new Date(fechaEmision) : new Date();
@@ -720,13 +725,17 @@ router.post('/notas-credito', permitirEmitirFacturacion, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'No se puede emitir Nota de Crédito sobre una factura anulada' });
     }
 
-    // Siguiente secuencial de NC
+    // Siguiente secuencial de NC (respeta secuencial inicial configurado)
     const lastNC = await prisma.notas_credito.findFirst({
       where: { empresaId: req.empresa.id },
       orderBy: { secuencial: 'desc' },
     });
-    const secuencialNum = lastNC ? (parseInt(String(lastNC.secuencial), 10) || 0) + 1 : 1;
-    const secuencial = String(secuencialNum).padStart(9, '0');
+    const maxEnBD_nc = lastNC ? (parseInt(String(lastNC.secuencial), 10) || 0) : 0;
+    const secuencialNum_nc = await siguienteSecuencial(
+      prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+      maxEnBD_nc, 'secInicialNotaCredito'
+    );
+    const secuencial = String(secuencialNum_nc).padStart(9, '0');
 
     const fecha = new Date();
     const claveAcceso = sri.generarClaveAcceso({

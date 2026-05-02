@@ -38,6 +38,60 @@ const ConfiguracionSRI = () => {
   });
   const [tipoCertificado, setTipoCertificado] = useState('archivo');
 
+  // Punto de emisión — secuenciales iniciales
+  const [showModalPunto, setShowModalPunto] = useState(false);
+  const [puntoDatos,     setPuntoDatos]     = useState(null);
+  const [puntoForm,      setPuntoForm]      = useState({
+    secInicialFactura:      0,
+    secInicialNotaCredito:  0,
+    secInicialNotaDebito:   0,
+    secInicialRetencion:    0,
+    secInicialLiquidacion:  0,
+    secInicialGuiaRemision: 0,
+    secInicialNotaVenta:    0,
+  });
+  const [savingPunto, setSavingPunto] = useState(false);
+
+  const abrirModalPunto = async () => {
+    try {
+      const res = await api.get('/puntos-emision/activo');
+      const p   = res.data.punto;
+      setPuntoDatos(p);
+      setPuntoForm({
+        secInicialFactura:      p.secInicialFactura      ?? 0,
+        secInicialNotaCredito:  p.secInicialNotaCredito  ?? 0,
+        secInicialNotaDebito:   p.secInicialNotaDebito   ?? 0,
+        secInicialRetencion:    p.secInicialRetencion    ?? 0,
+        secInicialLiquidacion:  p.secInicialLiquidacion  ?? 0,
+        secInicialGuiaRemision: p.secInicialGuiaRemision ?? 0,
+        secInicialNotaVenta:    p.secInicialNotaVenta    ?? 0,
+      });
+      setShowModalPunto(true);
+    } catch {
+      toast.error('Error al cargar punto de emisión');
+    }
+  };
+
+  const handlePuntoChange = (e) => {
+    const { name, value } = e.target;
+    const n = parseInt(value, 10);
+    setPuntoForm(prev => ({ ...prev, [name]: isNaN(n) ? 0 : Math.max(0, n) }));
+  };
+
+  const guardarPunto = async () => {
+    if (!puntoDatos) return;
+    setSavingPunto(true);
+    try {
+      await api.put(`/puntos-emision/${puntoDatos.id}`, puntoForm);
+      toast.success('Secuenciales actualizados');
+      setShowModalPunto(false);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al guardar');
+    } finally {
+      setSavingPunto(false);
+    }
+  };
+
   // Logo
   const [logoUrl,   setLogoUrl]   = useState(null);
   const [logoFile,  setLogoFile]  = useState(null);
@@ -320,6 +374,14 @@ const ConfiguracionSRI = () => {
               </select>
             </div>
           </div>
+          <div style={{ marginTop: 12 }}>
+            <button type="button" className="btn-secondary" onClick={abrirModalPunto}>
+              🔢 Configurar secuenciales iniciales
+            </button>
+            <span className="field-hint" style={{ marginLeft: 10 }}>
+              Útil si ya tiene documentos emitidos en otro sistema
+            </span>
+          </div>
         </div>
 
         {/* ─── Información Tributaria Adicional ─── */}
@@ -480,6 +542,57 @@ const ConfiguracionSRI = () => {
         </div>
       </div>
     </div>
+
+    {/* ─── Modal: Secuenciales iniciales del punto de emisión ─── */}
+    {showModalPunto && (
+      <div className="pos-recibo-overlay" onClick={() => setShowModalPunto(false)}>
+        <div className="pos-recibo-modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+          <div className="pos-recibo-header">
+            <h3>🔢 Secuenciales iniciales — Punto {puntoDatos?.establecimiento}-{puntoDatos?.puntoEmision}</h3>
+            <button className="pos-recibo-close" onClick={() => setShowModalPunto(false)}>✕</button>
+          </div>
+
+          <div className="pos-recibo-body" style={{ padding: '16px 20px' }}>
+            <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+              Ingrese el último número emitido en cada tipo de documento.
+              El sistema continuará desde el número siguiente.
+              Deje en <strong>0</strong> si empieza desde el inicio.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}>
+              {[
+                { campo: 'secInicialFactura',      label: 'Factura' },
+                { campo: 'secInicialNotaCredito',  label: 'Nota de Crédito' },
+                { campo: 'secInicialNotaDebito',   label: 'Nota de Débito' },
+                { campo: 'secInicialRetencion',    label: 'Comprobante de Retención' },
+                { campo: 'secInicialLiquidacion',  label: 'Liquidación de Compra' },
+                { campo: 'secInicialGuiaRemision', label: 'Guía de Remisión' },
+                { campo: 'secInicialNotaVenta',    label: 'Nota de Venta' },
+              ].map(({ campo, label }) => (
+                <div key={campo} className="sri-field" style={{ margin: 0 }}>
+                  <label style={{ fontSize: 13 }}>{label}</label>
+                  <input
+                    type="number"
+                    name={campo}
+                    min="0"
+                    value={puntoForm[campo]}
+                    onChange={handlePuntoChange}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="pos-recibo-footer" style={{ padding: '12px 20px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button className="btn-secondary" onClick={() => setShowModalPunto(false)}>Cancelar</button>
+            <button className="btn-primary" onClick={guardarPunto} disabled={savingPunto}>
+              {savingPunto ? 'Guardando…' : '💾 Guardar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   );
 };
 

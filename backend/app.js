@@ -50,6 +50,7 @@ const buzonRoutes = require('./routes/buzon');
 const guiasRemisionRoutes = require('./routes/guiasRemision');
 const bancosRoutes = require('./routes/bancos');
 const talentoHumanoRoutes = require('./routes/talentoHumano');
+const puntosEmisionRoutes = require('./routes/puntosEmision');
 const { soloMediumOPro, soloPro } = require('./middleware/edition');
 const { contarPendientes } = require('./utils/colaSRI');
 const { proteger } = require('./middleware/auth');
@@ -79,6 +80,7 @@ app.use('/api/buzon', soloMediumOPro, buzonRoutes);
 app.use('/api/guias-remision', soloMediumOPro, guiasRemisionRoutes);
 app.use('/api/bancos', bancosRoutes);
 app.use('/api/talento-humano', soloMediumOPro, talentoHumanoRoutes);
+app.use('/api/puntos-emision', puntosEmisionRoutes);
 
 app.get('/api/cola-sri/estado', proteger, async (req, res) => {
   try {

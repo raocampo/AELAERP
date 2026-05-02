@@ -601,12 +601,17 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
     subtotal = parseFloat(subtotal.toFixed(2));
     totalDescuento = parseFloat(totalDescuento.toFixed(2));
 
-    // Siguiente secuencial para esta empresa
+    // Siguiente secuencial para esta empresa (respeta secuencial inicial configurado)
     const ultimo = await prisma.notas_venta.findFirst({
       where: { empresaId: req.empresa.id },
       orderBy: { secuencial: 'desc' },
     });
-    const secuencial = (ultimo?.secuencial || 0) + 1;
+    const maxEnBD_nv = ultimo?.secuencial || 0;
+    const { siguienteSecuencial: nextSec_nv } = require('../utils/secuenciales');
+    const secuencial = await nextSec_nv(
+      prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+      maxEnBD_nv, 'secInicialNotaVenta'
+    );
     const numeroNota = `${config.establecimiento}-${config.puntoEmision}-${String(secuencial).padStart(9, '0')}`;
 
     const fechaDoc = fechaEmision ? new Date(fechaEmision) : new Date();

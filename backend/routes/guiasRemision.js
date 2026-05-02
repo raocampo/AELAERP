@@ -70,6 +70,8 @@ async function procesarGuiaEnSRI(guiaId, xmlGenerado, config) {
   }
 }
 
+const { siguienteSecuencial: _nextSec } = require('../utils/secuenciales');
+
 // ─── Helper: próximo secuencial ──────────────────────────────────────────────
 async function siguienteSecuencial(empresaId, establecimiento, puntoEmision) {
   const ultima = await prisma.guias_remision.findFirst({
@@ -78,7 +80,11 @@ async function siguienteSecuencial(empresaId, establecimiento, puntoEmision) {
     select: { secuencial: true },
   });
   const actual = ultima ? parseInt(ultima.secuencial, 10) : 0;
-  return String(actual + 1).padStart(9, '0');
+  const num = await _nextSec(
+    prisma, empresaId, establecimiento, puntoEmision,
+    actual, 'secInicialGuiaRemision'
+  );
+  return String(num).padStart(9, '0');
 }
 
 // ─── GET /api/guias-remision ──────────────────────────────────────────────────
