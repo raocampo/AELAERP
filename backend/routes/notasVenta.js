@@ -246,6 +246,7 @@ async function generarRIDENotaVenta(nota, configSri, outputPath) {
 
     // Información adicional
     const camposIA = [];
+    if (nota.telefono)      camposIA.push({ n: 'Teléfono',   v: nota.telefono });
     if (nota.email)         camposIA.push({ n: 'Email',      v: nota.email });
     if (nota.observaciones) camposIA.push({ n: 'Observación', v: nota.observaciones });
 
@@ -576,7 +577,7 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
     }
 
     const {
-      tipoIdentificacion, identificacion, razonSocial, direccion, email,
+      tipoIdentificacion, identificacion, razonSocial, direccion, email, telefono,
       detalles, formaPago, fechaEmision, observaciones, clienteId,
     } = req.body;
 
@@ -622,6 +623,7 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
           razonSocial: razonSocial.trim().toUpperCase(),
           direccion: direccion?.trim() || null,
           email: email?.trim().toLowerCase() || null,
+          telefono: telefono?.trim() || null,
           clienteId: clienteId ? parseInt(clienteId, 10) : null,
           subtotal,
           totalDescuento,

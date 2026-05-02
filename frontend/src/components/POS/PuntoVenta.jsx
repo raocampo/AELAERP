@@ -47,6 +47,7 @@ export default function PuntoVenta() {
   const [clienteIdBD, setClienteIdBD] = useState(null);
   const [clienteOriginal, setClienteOriginal] = useState({ direccion: '', email: '', telefono: '' });
   const [docEmitido, setDocEmitido] = useState(null); // { id, tipo, numero, total }
+  const [showModalCliente, setShowModalCliente] = useState(false);
   const dropRef = useRef(null);
 
   useEffect(() => {
@@ -96,7 +97,8 @@ export default function PuntoVenta() {
         setTelefono(c.telefono || '');
         if (d.requiereDatosManuales) {
           setClienteIdBD(null);
-          setMensajeSRI('Identificación válida — completa los datos manualmente');
+          setMensajeSRI('Identificación válida — completa los datos del cliente');
+          setShowModalCliente(true);
         } else {
           setClienteIdBD(c.id || null);
           setClienteOriginal({
@@ -105,7 +107,12 @@ export default function PuntoVenta() {
             telefono: c.telefono || '',
           });
           const incompleto = !c.direccion || !c.email || !c.telefono;
-          setMensajeSRI(incompleto ? '⚠ Datos incompletos — completa y se actualizarán al guardar' : '');
+          if (incompleto) {
+            setMensajeSRI('⚠ Datos incompletos — completa los campos faltantes');
+            setShowModalCliente(true);
+          } else {
+            setMensajeSRI('');
+          }
         }
       } else if (d.servicioNoDisponible) {
         setMensajeSRI('SRI no disponible — ingresa los datos manualmente');
@@ -432,8 +439,13 @@ export default function PuntoVenta() {
               </div>
               {buscandoSRI && <small style={{ color: '#2563eb', marginTop: 2, display: 'block' }}>Consultando SRI...</small>}
               {mensajeSRI && !buscandoSRI && (
-                <small style={{ color: mensajeSRI.startsWith('✓') ? '#2a7a2a' : '#b85a00', marginTop: 2, display: 'block' }}>
+                <small style={{ color: mensajeSRI.startsWith('✓') ? '#2a7a2a' : '#b85a00', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
                   {mensajeSRI}
+                  {mensajeSRI.includes('incompleto') || mensajeSRI.includes('completa') ? (
+                    <button type="button" onClick={() => setShowModalCliente(true)} style={{ fontSize: 11, padding: '1px 8px', borderRadius: 5, border: '1px solid #b85a00', background: '#fff7ed', color: '#b85a00', cursor: 'pointer', fontWeight: 600 }}>
+                      Editar
+                    </button>
+                  ) : null}
                 </small>
               )}
             </label>
@@ -571,6 +583,59 @@ export default function PuntoVenta() {
         </section>
       </div>
     </div>
+
+    {/* Modal de completar datos del cliente */}
+    {showModalCliente && (
+      <div className="pos-recibo-overlay" onClick={() => setShowModalCliente(false)}>
+        <div className="pos-recibo-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+          <div className="recibo-icono">👤</div>
+          <h2 style={{ marginBottom: 4 }}>Datos del cliente</h2>
+          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+            Completa los campos faltantes. Se guardarán al emitir el documento.
+          </p>
+          <div className="pos-form" style={{ textAlign: 'left', gridTemplateColumns: '1fr 1fr' }}>
+            <label className="full">
+              <span>Nombre / Razón social</span>
+              <input value={razonSocial} readOnly style={{ background: '#f1f5f9' }} />
+            </label>
+            <label>
+              <span>Dirección</span>
+              <input
+                value={direccion}
+                onChange={(e) => setDireccion(e.target.value)}
+                placeholder="Calle, sector, ciudad"
+                autoFocus
+              />
+            </label>
+            <label>
+              <span>Teléfono</span>
+              <input
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                placeholder="0987654321"
+              />
+            </label>
+            <label className="full">
+              <span>Email</span>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="cliente@empresa.com"
+                type="email"
+              />
+            </label>
+          </div>
+          <div className="pos-recibo-acciones" style={{ marginTop: 16 }}>
+            <button className="btn-recibo-new" onClick={() => setShowModalCliente(false)}>
+              ✓ Guardar y continuar
+            </button>
+            <button className="btn-recibo-detail" onClick={() => setShowModalCliente(false)} style={{ background: '#f1f5f9', color: '#64748b' }}>
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Modal de recibo tras emisión */}
     {docEmitido && (

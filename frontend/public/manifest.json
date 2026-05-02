@@ -1,11 +1,11 @@
 {
-  "name": "SCFI — Sistema de Comprobantes Fiscales",
-  "short_name": "SCFI",
-  "description": "Sistema de Comprobantes Fiscales Inteligentes para Ecuador",
+  "name": "AELA ERP — Sistema de Facturación Electrónica",
+  "short_name": "AELA ERP",
+  "description": "Sistema de Facturación Electrónica Inteligente para Ecuador",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
-  "theme_color": "#1e40af",
+  "theme_color": "#7C3AED",
   "orientation": "portrait-primary",
   "icons": [
     {

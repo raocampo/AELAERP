@@ -121,7 +121,7 @@ async function enviarEmailBienvenida(tenant, email) {
     return;
   }
 
-  const dominioBase = process.env.SCFI_DOMINIO_BASE || 'app.aela.ec';
+  const dominioBase = process.env.AELA_DOMINIO_BASE || 'app.aela.ec';
   const urlAcceso   = `https://${tenant.slug}.${dominioBase}`;
 
   const html = templateBienvenida({

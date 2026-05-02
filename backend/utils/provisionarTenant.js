@@ -19,6 +19,7 @@ const crypto       = require('crypto');
 const { getPrismaMaster }  = require('../config/prismaMaster');
 const { getTenantPrisma }  = require('../config/prismaTenant');
 const { limitesPlan }      = require('./configuracionSistema');
+const { cifrar }           = require('./cifrado');
 
 // ─── Genera un slug URL-safe a partir del nombre de empresa ──────────────────
 function generarSlug(nombre) {
@@ -146,7 +147,7 @@ async function provisionarTenant({
       dbHost,
       dbPort,
       dbUser,
-      dbPass,    // TODO: encriptar con AES antes de guardar en producción
+      dbPass: cifrar(dbPass),
       emailContacto:    emailContacto    || null,
       telefonoContacto: telefonoContacto || null,
       nombreContacto:   nombreContacto   || nombreEmpresa || null,

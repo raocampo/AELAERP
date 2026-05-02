@@ -1,5 +1,5 @@
 // ============================================================
-//  SCFI Landing — main.js
+//  AELA ERP Landing — main.js
 //  Scroll spy, nav sticky, hamburger, fade-in, scroll-top
 // ============================================================
 

@@ -664,6 +664,7 @@ model notas_venta {
   razonSocial          String    @db.VarChar(300)
   direccion            String?   @db.VarChar(300)
   email                String?   @db.VarChar(150)
+  telefono             String?   @db.VarChar(30)
   clienteId            Int?
   // Totales
   subtotal             Decimal   @default(0) @db.Decimal(14, 2)

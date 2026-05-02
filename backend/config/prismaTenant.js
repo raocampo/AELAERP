@@ -9,6 +9,7 @@
 // ====================================
 
 const { PrismaClient } = require('@prisma/client');
+const { descifrar }    = require('../utils/cifrado');
 
 // Pool de clientes Prisma — una instancia por BD de tenant
 // Se mantienen vivos durante el proceso para reutilizar conexiones
@@ -43,7 +44,7 @@ function getTenantPrisma(tenant) {
  * Soporta contraseñas con caracteres especiales (encodeURIComponent).
  */
 function buildConnectionUrl(tenant) {
-  const pass = encodeURIComponent(tenant.dbPass);
+  const pass = encodeURIComponent(descifrar(tenant.dbPass));
   const host = tenant.dbHost || 'localhost';
   const port = tenant.dbPort || 5432;
   const db   = tenant.dbName;

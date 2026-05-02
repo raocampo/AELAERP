@@ -1,5 +1,5 @@
 // ============================================================
-//  SCFI — Service Worker (PWA offline)
+//  AELA ERP — Service Worker (PWA offline)
 //  public/sw.js
 //
 //  Estrategias:
@@ -9,9 +9,9 @@
 //      guarda en cola IndexedDB (Background Sync)
 // ============================================================
 
-const CACHE_APP    = 'scfi-app-v2';
-const CACHE_API    = 'scfi-api-v1';
-const SYNC_TAG     = 'scfi-sync-queue';
+const CACHE_APP    = 'aela-app-v2';
+const CACHE_API    = 'aela-api-v1';
+const SYNC_TAG     = 'aela-sync-queue';
 
 // Archivos del app shell que se cachean en la instalación
 const APP_SHELL = [
@@ -149,7 +149,7 @@ async function procesarColaSync() {
   // Notificar a las pestañas abiertas para que procesen su cola IndexedDB
   const clients = await self.clients.matchAll({ type: 'window' });
   clients.forEach((client) => {
-    client.postMessage({ type: 'SCFI_SYNC_NOW' });
+    client.postMessage({ type: 'AELA_SYNC_NOW' });
   });
 }
 

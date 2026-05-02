@@ -35,7 +35,7 @@ function resolverSlugDesdeHost(host) {
   if (!host) return null;
   const hostSinPuerto = host.split(':')[0];
 
-  // Subdominio de aela.ec / scfi.ec / tu dominio base
+  // Subdominio de aela.ec / tu dominio base
   const dominioBase = process.env.AELA_DOMINIO_BASE || 'aela.ec';
   const sufijo = `.${dominioBase}`;
 

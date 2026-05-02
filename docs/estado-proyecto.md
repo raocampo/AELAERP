@@ -331,6 +331,42 @@ Durante la implementacion se verifico:
 - sincronizacion del esquema Prisma con PostgreSQL
 - migracion `20260427231353_talento_humano` aplicada exitosamente
 
+### 21. Sesión 2026-05-01 — Seguridad, catastro SRI y cierre de rebrand
+
+#### Rebrand SCFI → AELA completado al 100%
+- Service Worker (`sw.js`): caches `aela-app-v2`, `aela-api-v1`, sync tag `aela-sync-queue`, mensaje `AELA_SYNC_NOW`.
+- PWA Manifest: nombre "AELA ERP", theme_color `#7C3AED`.
+- Landing `ant/`: branding completo AELA, email `info@aela.ec`.
+- Variables de entorno: `AELA_EDITION`, `AELA_DOMINIO_BASE` en `.env`, `.env.example` y `email.js`.
+- `package.json` raíz: nombre `aela-erp`.
+- 0 referencias SCFI en código fuente.
+
+#### Bases de datos renombradas
+- `scfi_db` → `aela_db` | `scfi_master` → `aela_master`
+- `.env` actualizado. Backend conectado a `aela_db` verificado.
+
+#### Catastro SRI importado
+- 6.799.463 contribuyentes en tabla `contribuyentes_sri` (25 provincias).
+
+#### POS — mejoras
+- Modal de edición de cliente con datos incompletos (abre automáticamente al detectar campos vacíos).
+- Campo `telefono` agregado a `notas_venta` (Prisma + migración + recibo PDF).
+
+#### Seguridad
+- `dbPass` en tabla `tenants` ahora se cifra con **AES-256-GCM** (`utils/cifrado.js`).
+- `DB_ENCRYPT_KEY` (32 bytes, 64 hex chars) en `.env`.
+- Tenant existente migrado a contraseña cifrada.
+- `JWT_SECRET` renovado con clave aleatoria segura de 48 bytes.
+
+#### Timeout de sesión
+- Cierre automático por inactividad: aviso a los 25 min, logout a los 30 min.
+- Implementado en `AuthContext.jsx` con event listeners globales.
+
+#### Manual de usuario
+- `docs/manual-usuario.md` creado — cubre todos los módulos del sistema.
+
+---
+
 ## Pendiente
 
 ### 🔴 Prioridad alta — ANTES de producción
@@ -366,9 +402,8 @@ Durante la implementacion se verifico:
    - Cuando `estado = 'error'` → mensaje con contacto WhatsApp / email soporte
    - Timeout a los 3 min (60 intentos) → nota informativa sin cortar la experiencia
 
-6. **Encriptación de credenciales de BD** en la tabla `tenants`
-   - `dbPass` actualmente se guarda en texto plano
-   - Encriptar con AES-256 usando `JWT_SECRET` como llave maestra
+6. ✅ **Encriptación de credenciales de BD** — completado 2026-05-01
+   - `dbPass` cifrado con AES-256-GCM (`utils/cifrado.js`), clave independiente `DB_ENCRYPT_KEY`
 
 7. **Panel de administración SaaS** (backoffice CorpSimtelec)
    - Ver todos los tenants, planes, estado

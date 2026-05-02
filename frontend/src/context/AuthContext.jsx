@@ -3,9 +3,10 @@
 // Expone: usuario, empresa, edition, modoMulti
 // ====================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import AuthContext from './auth-context';
+import toast from 'react-hot-toast';
 import {
   construirSistemaFallback,
   crearEmpresaFallback,
@@ -13,11 +14,17 @@ import {
   resolverEstadoSistema,
 } from '../utils/sistema';
 
+const INACTIVIDAD_MS      = 30 * 60 * 1000; // 30 minutos → logout automático
+const ADVERTENCIA_MS      = 25 * 60 * 1000; // 25 minutos → aviso previo
+
 export function AuthProvider({ children }) {
   const [usuario,   setUsuario]   = useState(null);
   const [empresa,   setEmpresa]   = useState(null);
   const [sistema,   setSistema]   = useState(null);
   const [cargando,  setCargando]  = useState(true);
+  const timerLogout   = useRef(null);
+  const timerAviso    = useRef(null);
+  const toastAvisoId  = useRef(null);
 
   // Leer config de entorno expuesta por Vite
   const edition = import.meta.env.VITE_EDITION || 'full';
@@ -121,7 +128,10 @@ export function AuthProvider({ children }) {
     return res.data;
   };
 
-  const logout = () => {
+  const logout = useCallback((porInactividad = false) => {
+    clearTimeout(timerLogout.current);
+    clearTimeout(timerAviso.current);
+    if (toastAvisoId.current) toast.dismiss(toastAvisoId.current);
     localStorage.removeItem('aela_token');
     localStorage.removeItem('token');
     localStorage.removeItem('aela_usuario');
@@ -130,7 +140,44 @@ export function AuthProvider({ children }) {
     setUsuario(null);
     setEmpresa(null);
     setSistema(null);
-  };
+    if (porInactividad) {
+      toast('Sesión cerrada por inactividad. Vuelve a iniciar sesión.', { icon: '🔒', duration: 6000 });
+    }
+  }, []);
+
+  // ── Cierre automático por inactividad ──────────────────────────────────────
+  const reiniciarTimerInactividad = useCallback(() => {
+    clearTimeout(timerLogout.current);
+    clearTimeout(timerAviso.current);
+    if (toastAvisoId.current) toast.dismiss(toastAvisoId.current);
+
+    timerAviso.current = setTimeout(() => {
+      toastAvisoId.current = toast(
+        'Tu sesión se cerrará en 5 minutos por inactividad.',
+        { icon: '⏰', duration: 5 * 60 * 1000 }
+      );
+    }, ADVERTENCIA_MS);
+
+    timerLogout.current = setTimeout(() => {
+      logout(true);
+    }, INACTIVIDAD_MS);
+  }, [logout]);
+
+  useEffect(() => {
+    if (!usuario) return;
+
+    const eventos = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    const handler = () => reiniciarTimerInactividad();
+
+    eventos.forEach((ev) => window.addEventListener(ev, handler, { passive: true }));
+    reiniciarTimerInactividad();
+
+    return () => {
+      eventos.forEach((ev) => window.removeEventListener(ev, handler));
+      clearTimeout(timerLogout.current);
+      clearTimeout(timerAviso.current);
+    };
+  }, [usuario, reiniciarTimerInactividad]);
 
   // Helpers derivados
   const {
