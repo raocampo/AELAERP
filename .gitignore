@@ -54,3 +54,8 @@ tmp/
 
 # CSVs catastro SRI — solo para importación local, no en repo
 docs/datosRuc/
+
+# Scripts y datos auxiliares SRI (solo uso local)
+docs/ReIdi.py.ts-main/
+# PDFs técnicos pesados
+docs/*.pdf
