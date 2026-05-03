@@ -46,32 +46,14 @@ function esErrorCredencialesSri(err) {
   return /credenciales|contraseña|password|clave.*incorrect/i.test(msg);
 }
 
-function puedeUsarRespaldoSri(err) {
-  const status = err.response?.status;
+function esErrorBrowserNoDisponible(err) {
   const msg = err.response?.data?.mensaje || err.message || '';
-  if (esErrorCredencialesSri(err)) return false;
-  return (
-    status === 404 ||
-    status === 405 ||
-    /navegador|chromium|chrome|selector|estructura|no se encontró el campo|no se pudo iniciar|timeout|tiempo/i.test(msg)
-  );
+  return /BROWSER_UNAVAILABLE|no se pudo iniciar el navegador|chromium|chrome/i.test(msg);
 }
 
 async function consultarSriAutomatico(payload) {
-  try {
-    return await api.post('/buzon/sri/consultar', payload);
-  } catch (err) {
-    const status = err.response?.status;
-    if (status !== 404 && status !== 405) throw err;
-  }
-
-  try {
-    return await api.post('/buzon/sri-scraper/consultar', payload);
-  } catch (scraperErr) {
-    if (!puedeUsarRespaldoSri(scraperErr)) throw scraperErr;
-  }
-
-  return api.post('/buzon/sri-portal/consultar', payload);
+  // Endpoint principal: scraper Puppeteer
+  return api.post('/buzon/sri-scraper/consultar', payload);
 }
 
 export default function BuzonSRI() {
@@ -203,7 +185,17 @@ export default function BuzonSRI() {
       if (resultados.length === 0) toast('No se encontraron comprobantes en ese período.', { icon: 'ℹ️' });
       else toast.success(`${res.data.nuevos} nuevos de ${res.data.total} comprobantes encontrados`);
     } catch (err) {
-      toast.error(err.response?.data?.mensaje || 'Error al consultar el portal SRI');
+      if (esErrorBrowserNoDisponible(err)) {
+        toast.error(
+          'La descarga automática no está disponible en este momento (navegador no iniciado). ' +
+          'Descarga el ZIP desde srienlinea.sri.gob.ec y usa la pestaña "Importar ZIP".',
+          { duration: 8000 }
+        );
+      } else if (esErrorCredencialesSri(err)) {
+        toast.error(err.response?.data?.mensaje || 'Credenciales del portal SRI incorrectas.');
+      } else {
+        toast.error(err.response?.data?.mensaje || 'Error al consultar el portal SRI');
+      }
     } finally {
       setDmConsultando(false);
     }

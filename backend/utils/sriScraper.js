@@ -12,6 +12,8 @@
 // ============================================================
 
 const puppeteer = require('puppeteer');
+const nodePath   = require('path');
+const { execSync } = require('child_process');
 
 const SRI_BASE          = 'https://srienlinea.sri.gob.ec';
 const SRI_LOGIN_URL     = `${SRI_BASE}/sri-en-linea/SriLoginInternet/ConsultaRucActionInternet/AgregarServicio`;
@@ -21,12 +23,27 @@ const TIMEOUT_NAV    = 45_000;
 const TIMEOUT_SEL    = 20_000;
 const MAX_PAGINAS    = 30;  // máx 3 000 docs (30 páginas × 100)
 
+// ─── Resolver ruta absoluta de Chromium ─────────────────────
+// Cuando PUPPETEER_EXECUTABLE_PATH es solo un nombre ("chromium"),
+// lo convierte a ruta absoluta via `which` para que spawn lo encuentre.
+function _resolverRutaChromium() {
+  const raw = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROMIUM_PATH;
+  if (!raw) return null; // Puppeteer usará el Chrome que descargó
+  if (nodePath.isAbsolute(raw)) return raw;
+  try {
+    const fullPath = execSync(`which "${raw}" 2>/dev/null`, {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 3000,
+      encoding: 'utf8',
+    }).trim();
+    if (fullPath) return fullPath;
+  } catch { /* noop */ }
+  return raw; // usar como está (puede estar en PATH)
+}
+
 // ─── Lanzar navegador ────────────────────────────────────────
 async function _lanzarNavegador() {
-  const execPath =
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    process.env.CHROMIUM_PATH ||
-    null; // null → puppeteer usa el Chrome que descargó
+  const execPath = _resolverRutaChromium();
 
   const opts = {
     headless: true,
@@ -53,8 +70,7 @@ async function _lanzarNavegador() {
     return await puppeteer.launch(opts);
   } catch (err) {
     throw new Error(
-      `No se pudo iniciar el navegador para el scraping del SRI: ${err.message}. ` +
-      'Asegúrate de que Chromium/Chrome esté instalado en el servidor.'
+      `BROWSER_UNAVAILABLE: No se pudo iniciar el navegador: ${err.message}`
     );
   }
 }

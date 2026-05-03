@@ -19,9 +19,6 @@ restartPolicyMaxRetries = 3
 [env]
 PORT = "5600"
 NODE_ENV = "production"
-# Puppeteer usará el chromium instalado por nixpacks (no descarga el suyo)
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-PUPPETEER_EXECUTABLE_PATH = "chromium"
-# Railway tiene filesystem efímero; el backup protege el despliegue actual y
-# queda disponible en logs/instancia si se requiere rollback manual inmediato.
+# Puppeteer descarga su propio Chrome durante npm install (más confiable en Railway).
+# nixpacks.toml provee las librerías del sistema que Chrome necesita.
 DB_BACKUP_DIR = "/tmp/aela-backups"
