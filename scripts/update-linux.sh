@@ -8,7 +8,7 @@
 #  Qué hace:
 #    1. Copia los nuevos archivos (sin borrar .env ni uploads)
 #    2. Instala/actualiza dependencias
-#    3. Aplica cambios de BD (prisma db push)
+#    3. Aplica cambios de BD con backup y rollback automático
 #    4. Recompila el frontend
 #    5. Reinicia el backend con PM2 (sin downtime)
 # ============================================================
@@ -32,13 +32,8 @@ echo -e "\n${BLUE}  SCFI — Actualización${NC}\n"
 # Leer configuración actual
 source "$INSTALL_DIR/backend/.env"
 
-# 1. Hacer backup rápido de la BD
-info "Haciendo backup de la base de datos..."
-BACKUP_FILE="/var/backups/scfi/scfi_$(date +%Y%m%d_%H%M%S).sql"
 mkdir -p /var/backups/scfi
-sudo -u postgres pg_dump "$DB_NAME" 2>/dev/null > "$BACKUP_FILE" \
-  && ok "Backup guardado en $BACKUP_FILE" \
-  || warn "No se pudo hacer backup automático. Hazlo manualmente antes de continuar."
+info "El backup se realizará justo antes de aplicar migraciones Prisma."
 
 # 2. Copiar nuevos archivos (preservar .env y uploads)
 info "Copiando nuevos archivos..."
@@ -56,9 +51,8 @@ sudo -u "$SCFI_USER" bash -c "cd $INSTALL_DIR/backend && npm install --productio
 ok "Dependencias backend actualizadas"
 
 # 4. Aplicar cambios de BD
-info "Aplicando cambios de base de datos..."
-sudo -u "$SCFI_USER" bash -c "cd $INSTALL_DIR/backend && npx prisma db push --accept-data-loss"
-sudo -u "$SCFI_USER" bash -c "cd $INSTALL_DIR/backend && npx prisma generate"
+info "Aplicando cambios de base de datos con backup seguro..."
+sudo -u "$SCFI_USER" bash -c "cd $INSTALL_DIR/backend && DB_BACKUP_DIR=/var/backups/scfi npm run db:migrate:safe"
 ok "Base de datos actualizada"
 
 # 5. Recompilar frontend
@@ -81,6 +75,6 @@ sudo -u "$SCFI_USER" pm2 reload scfi-backend --update-env
 ok "Backend reiniciado"
 
 echo -e "\n${GREEN}  ✓ Actualización completada${NC}"
-echo "  Backup de BD: $BACKUP_FILE"
+echo "  Backups de BD: /var/backups/scfi"
 echo "  Para ver estado: pm2 status"
 echo ""

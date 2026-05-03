@@ -13,6 +13,7 @@
 | 5 | Buzón SRI — fix logout involuntario (401→422) | ✅ |
 | 6 | Landing page — URL dinámica localhost/producción | ✅ |
 | 7 | Buzón SRI — endpoint estable + fallback automático scraper/portal | ✅ |
+| 8 | Prisma seguro — backup/rollback + comandos catastro SRI | ✅ |
 
 ---
 

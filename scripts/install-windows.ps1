@@ -206,8 +206,9 @@ Push-Location $BackendDir
 
     Write-Info "Aplicando schema de base de datos..."
     $env:DATABASE_URL = $DB_URL
-    npx prisma db push --accept-data-loss 2>&1 | Out-Null
-    npx prisma generate 2>&1 | Out-Null
+    $env:DB_BACKUP_DIR = "$ProjectDir\backups"
+    npm run db:migrate:safe
+    Remove-Item Env:\DB_BACKUP_DIR -ErrorAction SilentlyContinue
     Write-Ok "Base de datos configurada"
 Pop-Location
 

@@ -126,11 +126,13 @@ startCommand = "node backend/server.js"
 Desde Railway CLI o la terminal del servicio:
 ```bash
 cd backend
-npx prisma migrate deploy
+npm run db:migrate:safe
+npm run catastro:import
 npx prisma db push --schema=./prisma/schema-master.prisma
 ```
 
 > La primera migración crea todas las tablas. `schema-master.prisma` crea las tablas de tenants.
+> `db:migrate:safe` crea backup antes de aplicar migraciones y restaura el backup si algo falla.
 
 ---
 
@@ -220,7 +222,8 @@ Cloudflare gestiona SSL automáticamente.
 
 ### Base de datos
 
-- [ ] Migraciones Prisma ejecutadas: `npx prisma migrate deploy`
+- [ ] Migraciones Prisma ejecutadas: `npm run db:migrate:safe`
+- [ ] Catastro SRI cargado: `npm run catastro:import`
 - [ ] Schema master aplicado: `npx prisma db push --schema=./prisma/schema-master.prisma`
 - [ ] Backup automático de BD configurado en Railway
 

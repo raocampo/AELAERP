@@ -8,10 +8,17 @@
     "dev": "nodemon server.js",
     "test": "node --test",
     "test:watch": "node --test --watch",
-    "prisma:migrate": "npx prisma migrate dev",
+    "prisma:migrate": "npm run db:migrate:dev:safe --",
     "prisma:generate": "npx prisma generate",
     "prisma:studio": "npx prisma studio",
-    "prisma:push": "npx prisma db push"
+    "prisma:push": "echo \"Usa npm run db:migrate:safe o npm run db:migrate:dev:safe -- --name nombre\" && exit 1",
+    "db:backup": "node scripts/dbMaintenance.js backup",
+    "db:restore": "node scripts/dbMaintenance.js restore",
+    "db:migrate:safe": "node scripts/dbMaintenance.js migrate",
+    "db:migrate:dev:safe": "node scripts/dbMaintenance.js migrate-dev",
+    "catastro:check": "node scripts/importarCatastroSRI.js --dry-run",
+    "catastro:import": "node scripts/importarCatastroSRI.js",
+    "catastro:replace": "node scripts/dbMaintenance.js backup && node scripts/importarCatastroSRI.js --replace"
   },
   "keywords": [
     "sri",

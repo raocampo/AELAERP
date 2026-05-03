@@ -97,7 +97,7 @@ function crearBaseDatos(dbName) {
 function ejecutarMigraciones(dbUrl) {
   const schemaPath = path.join(__dirname, '../prisma/schema.prisma');
   execSync(
-    `npx prisma db push --schema="${schemaPath}" --accept-data-loss`,
+    `npx prisma migrate deploy --schema="${schemaPath}"`,
     {
       env: { ...process.env, DATABASE_URL: dbUrl },
       stdio: 'pipe',

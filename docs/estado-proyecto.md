@@ -310,7 +310,8 @@ GET /api/registro/estado/:email → { estado: "activo", urlAcceso: "..." }
 
 
 
-- **Scripts de backup de BD para desarrollo** (`scripts/backup-dev.ps1` y `backup-dev.sh`): leen `DATABASE_URL` del `.env`, ejecutan `pg_dump` y guardan en `backups/` con timestamp. Mantienen los últimos 20 backups. Deben ejecutarse **antes de toda migración Prisma**.
+- **Scripts de backup/migración segura de BD**: `npm run db:migrate:safe` crea backup con `pg_dump`, ejecuta `prisma migrate deploy`, regenera Prisma Client y restaura el backup si falla. `npm run db:migrate:dev:safe -- --name nombre` hace lo mismo al crear migraciones locales. `prisma db push --accept-data-loss` queda fuera del flujo operativo.
+- **Catastro SRI local**: `npm run catastro:import` carga por defecto los CSV oficiales en `docs/datosRuc`; `npm run catastro:replace` hace backup y recarga completamente `contribuyentes_sri`.
 - **SBU Ecuador configurable**: campo `sbuEcuador` en `configuracion_sistema` (Prisma, migración `20260427234231_sbu_configurable`). La nómina lee el SBU desde la BD en lugar de usar una constante hardcodeada. UI en Configuración del Sistema muestra el campo con nota informativa.
 - **Exportación CSV de nómina**: endpoint `GET /api/talento-humano/nomina/:id/csv` que genera un CSV completo con todos los conceptos por empleado, incluyendo fila de totales. Incluye BOM UTF-8 para compatibilidad con Excel. Botón "📥 CSV" en el panel de detalle de nómina.
 - **Rol de pagos imprimible**: función `imprimirRolPagos()` en `Nomina.jsx` que genera una ventana HTML completa con diseño para impresión landscape, firma de elaborado/revisado/autorizado, y totales por columna. Botón "🖨️ Imprimir" en el panel de detalle.
@@ -321,7 +322,7 @@ Durante la implementacion se verifico:
 
 - `npx prisma validate`
 - `npx prisma generate`
-- `npx prisma migrate deploy`
+- `npm run db:migrate:safe`
 - `npm test` en backend
 - `npm test` en frontend
 - `npm run lint` en frontend sin warnings

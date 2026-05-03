@@ -154,8 +154,8 @@ info "Instalando dependencias del backend..."
 sudo -u "$SCFI_USER" bash -c "cd $INSTALL_DIR/backend && npm install --production --quiet"
 
 info "Aplicando schema de base de datos..."
-sudo -u "$SCFI_USER" bash -c "cd $INSTALL_DIR/backend && npx prisma db push --accept-data-loss"
-sudo -u "$SCFI_USER" bash -c "cd $INSTALL_DIR/backend && npx prisma generate"
+mkdir -p /var/backups/scfi
+sudo -u "$SCFI_USER" bash -c "cd $INSTALL_DIR/backend && DB_BACKUP_DIR=/var/backups/scfi npm run db:migrate:safe"
 
 ok "Backend configurado"
 

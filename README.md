@@ -58,8 +58,8 @@ Ambos se pueden configurar desde la pantalla `Configuracion del Sistema`.
 cd backend
 Copy-Item .env.example .env
 npm install
-npx prisma db push
-npx prisma generate
+npm run db:migrate:safe
+npm run catastro:import
 npm run dev
 ```
 
@@ -133,7 +133,15 @@ Comandos base recomendados:
 ```powershell
 cd backend
 npm test
+npm run db:backup
+npm run db:migrate:dev:safe -- --name nombre_del_cambio
+npm run catastro:import
 ```
+
+Notas de seguridad para Prisma:
+- No usar `prisma db push --accept-data-loss` sobre bases con datos.
+- `db:migrate:safe` crea backup con `pg_dump`, ejecuta migraciones y restaura automáticamente si la migración falla.
+- `catastro:import` carga por defecto los CSV oficiales de `docs/datosRuc` en `contribuyentes_sri`.
 
 ### Frontend
 

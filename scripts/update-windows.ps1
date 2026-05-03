@@ -8,7 +8,7 @@
 #    1. Backup de la base de datos
 #    2. Copia nuevos archivos (sin tocar .env ni uploads)
 #    3. Actualiza dependencias npm
-#    4. Aplica cambios de BD (prisma db push)
+#    4. Aplica cambios de BD con backup y rollback automático
 #    5. Recompila el frontend
 #    6. Reinicia los servicios Windows
 # ============================================================
@@ -57,19 +57,8 @@ $DB_NAME = ($DB_URL -split "/")[-1]
 
 Write-Ok "Configuración leída de .env"
 
-# ─── 2. Backup de la BD ─────────────────────────────────────
-Write-Info "Haciendo backup de la base de datos..."
 New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
-$timestamp  = Get-Date -Format "yyyyMMdd_HHmmss"
-$backupFile = "$BackupDir\scfi_$timestamp.sql"
-
-try {
-    $env:PGPASSWORD = ($DB_URL -split ":")[2] -split "@" | Select-Object -First 1
-    & pg_dump -U postgres $DB_NAME -f $backupFile 2>&1 | Out-Null
-    Write-Ok "Backup guardado: $backupFile"
-} catch {
-    Write-Warn "No se pudo hacer backup automático. Hazlo manualmente."
-}
+Write-Info "El backup se realizará justo antes de aplicar migraciones Prisma."
 
 # ─── 3. Detener servicios ────────────────────────────────────
 Write-Info "Deteniendo servicios SCFI..."
@@ -105,9 +94,10 @@ Push-Location $BackendDir
     npm install --production --quiet
     Write-Ok "Dependencias backend actualizadas"
 
-    Write-Info "Aplicando cambios de base de datos..."
-    npx prisma db push --accept-data-loss 2>&1 | Out-Null
-    npx prisma generate 2>&1 | Out-Null
+    Write-Info "Aplicando cambios de base de datos con backup seguro..."
+    $env:DB_BACKUP_DIR = $BackupDir
+    npm run db:migrate:safe
+    Remove-Item Env:\DB_BACKUP_DIR -ErrorAction SilentlyContinue
     Write-Ok "Base de datos actualizada"
 Pop-Location
 
@@ -145,5 +135,5 @@ Get-ChildItem $BackupDir -Filter "*.sql" |
 
 Write-Host ""
 Write-Host "  Actualizacion completada" -ForegroundColor Green
-Write-Host "  Backup guardado: $backupFile" -ForegroundColor Gray
+Write-Host "  Backups de BD: $BackupDir" -ForegroundColor Gray
 Write-Host ""

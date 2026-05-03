@@ -2,9 +2,9 @@
 // ====================================
 // SCRIPT: Importar catastro SRI desde CSVs oficiales
 //
-// Uso: node scripts/importarCatastroSRI.js [ruta-directorio-csvs]
+// Uso: node scripts/importarCatastroSRI.js [ruta-directorio-csvs] [--replace] [--dry-run]
 //
-// Si no se pasa ruta, usa los CSVs del directorio docs/ del proyecto.
+// Si no se pasa ruta, usa los CSVs del directorio docs/datosRuc del proyecto.
 //
 // Los CSVs oficiales se descargan de:
 //   https://srienlinea.sri.gob.ec/sri-en-linea/inicio/
@@ -151,11 +151,14 @@ async function main() {
   // Uso: node importarCatastroSRI.js <dir>
   // Uso: node importarCatastroSRI.js archivo1.csv archivo2.csv
   const args = process.argv.slice(2);
+  const reemplazar = args.includes('--replace');
+  const dryRun = args.includes('--dry-run');
+  const rutas = args.filter((a) => a !== '--replace' && a !== '--dry-run');
   let archivos = [];
 
-  if (args.length === 0) {
+  if (rutas.length === 0) {
     // Directorio por defecto
-    const dir = path.join(__dirname, '../../../docs/datosRuc');
+    const dir = path.join(__dirname, '../../docs/datosRuc');
     if (!fs.existsSync(dir)) {
       console.error(`Directorio no encontrado: ${dir}`);
       console.error('Uso: node scripts/importarCatastroSRI.js <ruta-directorio-o-archivos.csv>');
@@ -165,13 +168,13 @@ async function main() {
       .filter((f) => f.toLowerCase().endsWith('.csv'))
       .map((f) => path.join(dir, f))
       .sort();
-  } else if (args.length === 1 && fs.statSync(args[0]).isDirectory()) {
-    archivos = fs.readdirSync(args[0])
+  } else if (rutas.length === 1 && fs.statSync(rutas[0]).isDirectory()) {
+    archivos = fs.readdirSync(rutas[0])
       .filter((f) => f.toLowerCase().endsWith('.csv'))
-      .map((f) => path.join(args[0], f))
+      .map((f) => path.join(rutas[0], f))
       .sort();
   } else {
-    archivos = args.filter((a) => a.toLowerCase().endsWith('.csv'));
+    archivos = rutas.filter((a) => a.toLowerCase().endsWith('.csv'));
   }
 
   if (archivos.length === 0) {
@@ -179,8 +182,19 @@ async function main() {
     process.exit(1);
   }
 
+  if (reemplazar) {
+    console.log('Modo --replace: vaciando contribuyentes_sri antes de importar...');
+    await prisma.$executeRawUnsafe('TRUNCATE TABLE "contribuyentes_sri" RESTART IDENTITY');
+  }
+
   console.log(`Archivos CSV a importar: ${archivos.length}`);
   archivos.forEach((f) => console.log(`  - ${path.basename(f)}`));
+
+  if (dryRun) {
+    console.log('\nDry run: ruta y archivos validados. No se importó nada.');
+    await prisma.$disconnect();
+    return;
+  }
 
   let totalGlobal = 0;
   let erroresTotal = 0;

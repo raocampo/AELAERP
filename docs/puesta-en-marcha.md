@@ -27,8 +27,8 @@ DATABASE_URL="postgresql://postgres:clave%40segura@localhost:5432/aela_db"
 cd backend
 Copy-Item .env.example .env
 npm install
-npx prisma db push
-npx prisma generate
+npm run db:migrate:safe
+npm run catastro:import
 npm run dev
 ```
 
@@ -89,10 +89,20 @@ En `Contabilidad` ya existe una base inicial de plan de cuentas por empresa y el
 
 ```powershell
 npm run dev
-npm run prisma:push
+npm run db:backup
+npm run db:migrate:dev:safe -- --name nombre_del_cambio
+npm run db:migrate:safe
+npm run catastro:import
+npm run catastro:replace
 npm run prisma:generate
 npm run prisma:studio
 ```
+
+Notas:
+- `db:migrate:safe` hace backup con `pg_dump`, aplica `prisma migrate deploy` y restaura el backup si la migracion falla.
+- `db:migrate:dev:safe` se usa cuando estas creando una migracion local nueva.
+- `catastro:import` lee por defecto `docs/datosRuc`.
+- `catastro:replace` hace backup y recarga completamente la tabla `contribuyentes_sri`.
 
 ### Frontend
 
@@ -118,6 +128,6 @@ Instalar dependencias faltantes dentro de `frontend`.
 ### No aparecen tablas
 
 Confirmar:
-- que se ejecuto `npx prisma db push`
+- que se ejecuto `npm run db:migrate:safe`
 - que el cliente esta mirando la base correcta
 - que se refresco el esquema `public`
