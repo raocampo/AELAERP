@@ -33,6 +33,41 @@ router.get('/', proteger, soloAdmin, async (req, res) => {
   }
 });
 
+// GET /api/empresas/mis-empresas — todas las empresas a las que el usuario tiene acceso
+// Incluye su empresa default + las registradas en usuario_empresas
+router.get('/mis-empresas', proteger, async (req, res) => {
+  try {
+    const CAMPOS_EMPRESA = { id: true, ruc: true, razonSocial: true, nombreComercial: true, plan: true, activo: true, esMatriz: true, parentEmpresaId: true };
+
+    const [defaultEmpresa, accesos] = await Promise.all([
+      prisma.empresas.findUnique({ where: { id: req.usuario.empresaId }, select: CAMPOS_EMPRESA }),
+      prisma.usuario_empresas.findMany({
+        where: { usuarioId: req.usuario.id },
+        include: { empresa: { select: CAMPOS_EMPRESA } },
+      }),
+    ]);
+
+    const empresasMap = new Map();
+    if (defaultEmpresa) {
+      empresasMap.set(defaultEmpresa.id, { ...defaultEmpresa, esDefault: true, rol: req.usuario.rol });
+    }
+    for (const acceso of accesos) {
+      if (!empresasMap.has(acceso.empresaId)) {
+        empresasMap.set(acceso.empresaId, { ...acceso.empresa, esDefault: false, rol: acceso.rol });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: Array.from(empresasMap.values()),
+      empresaActivaId: req.empresa.id,
+    });
+  } catch (err) {
+    console.error('Error mis-empresas:', err);
+    res.status(500).json({ success: false, mensaje: 'Error al obtener empresas del usuario' });
+  }
+});
+
 // GET /api/empresas/mi-empresa — empresa del usuario autenticado
 router.get('/mi-empresa', proteger, async (req, res) => {
   try {

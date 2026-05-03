@@ -196,6 +196,99 @@ VITE_MODO_EMPRESA = monoempresa
 
 ---
 
+### 🟠 Prioridad media — Macro Empresa (una instalación, subsidiarias, un admin)
+
+> Documentado 2026-05-03. Escenario DISTINTO al SaaS multi-tenant.
+
+**Concepto:** Un único administrador gestiona múltiples empresas filiales/subsidiarias dentro
+de una misma instalación (mismo Vercel, mismo Railway, misma BD principal).  
+El admin puede **cambiar de empresa activa** sin cerrar sesión — como un contador que lleva
+varias empresas desde un solo panel.
+
+**Diferencia clave vs SaaS multi-tenant:**
+
+| | SaaS multi-tenant | Macro Empresa |
+|--|---|---|
+| Quién lo usa | Empresas sin relación entre sí | Un admin que gestiona subsidiarias |
+| BDs | Una por tenant (aislada) | Puede compartir o ser filiales de una BD raíz |
+| Acceso cruzado | ❌ Imposible por diseño | ✅ El admin ve todas; usuarios solo la suya |
+| Login | Cada empresa su URL / slug | Un solo login, selector de empresa en UI |
+| Facturación | Cada empresa paga su plan | La macro empresa centraliza |
+
+---
+
+**Arquitectura propuesta (Macro Empresa):**
+
+**1. BD — Tabla `empresas` con jerarquía**
+```sql
+-- Agregar campos a tabla empresas (Prisma schema):
+parentEmpresaId  Int?           -- null = empresa raíz; ID = subsidiaria
+esMatriz         Boolean  @default(false)
+```
+
+**2. Tabla `usuario_empresas` — acceso multi-empresa por usuario**
+```sql
+model UsuarioEmpresa {
+  id         Int      @id @default(autoincrement())
+  usuarioId  Int
+  empresaId  Int
+  rol        String   -- puede ser diferente por empresa
+  activa     Boolean  @default(false)  -- empresa actualmente seleccionada
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+}
+```
+
+**3. Backend — endpoint para cambiar empresa activa**
+```js
+// POST /auth/cambiar-empresa
+// Body: { empresaId }
+// Verifica que el usuario tenga acceso a esa empresa
+// Devuelve nuevo JWT con empresaId actualizado
+// O: actualiza campo activa en usuario_empresas y devuelve empresa activa
+```
+
+**4. JWT incluye empresaId activo**
+```js
+// backend/routes/auth.js — token al hacer login o al cambiar empresa:
+{ id, email, username, rol, empresaId }
+```
+
+**5. Middleware — resuelve empresa desde JWT (no desde tenant/subdominio)**
+```js
+// Para macro empresa: req.empresaId = decoded.empresaId
+// El middleware de tenant puede coexistir:
+// Si hay X-Tenant-Slug → SaaS mode
+// Si no → busca empresaId del JWT → macro empresa mode
+```
+
+**6. Frontend — Company Switcher en el header/sidebar**
+```jsx
+// Componente <EmpresaSwitcher />
+// Muestra: empresa activa (nombre + RUC)
+// Dropdown: lista de empresas a las que el usuario tiene acceso
+// Al seleccionar: POST /auth/cambiar-empresa → actualiza token → recarga datos
+```
+
+---
+
+**Orden de implementación sugerido:**
+
+1. `prisma/schema.prisma` → agregar `parentEmpresaId`, `esMatriz`, tabla `UsuarioEmpresa`
+2. Migración Prisma + seed de empresas subsidiarias
+3. `backend/routes/auth.js` → incluir `empresaId` en JWT
+4. `backend/middleware/empresaContext.js` → nuevo middleware resuelve empresa desde JWT
+5. `backend/routes/auth.js` → nuevo endpoint `POST /cambiar-empresa`
+6. `frontend/src/context/AuthContext.jsx` → guardar `empresaId` activo, exponer `cambiarEmpresa()`
+7. `frontend/src/components/Layout/EmpresaSwitcher.jsx` → nuevo componente UI
+8. Agregar `<EmpresaSwitcher />` en Sidebar o TopBar
+
+> ⚠ Este escenario NO requiere múltiples deploys ni múltiples BDs.
+> Todo corre en la misma instancia. La separación es lógica (por empresaId),
+> no física (por base de datos).
+
+---
+
 ### 🟠 Prioridad media — Multiempresa nativo (un solo deploy, varias empresas)
 
 > Implementar en sesión futura cuando se quiera operar como SaaS.

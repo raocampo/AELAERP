@@ -25,8 +25,15 @@ const {
 const { asegurarConfiguracionSistemaEmpresa } = require('../utils/configuracionSistema');
 const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
 
-const emitirToken = (usuario) => jwt.sign(
-  { id: usuario.id, email: usuario.email, username: usuario.username, rol: normalizarRol(usuario.rol) },
+const emitirToken = (usuario, opts = {}) => jwt.sign(
+  {
+    id: usuario.id,
+    email: usuario.email,
+    username: usuario.username,
+    rol: normalizarRol(usuario.rol),
+    empresaId: opts.empresaId ?? usuario.empresaId ?? null,
+    tenantSlug: opts.tenantSlug ?? null,
+  },
   process.env.JWT_SECRET,
   { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
 );
@@ -223,12 +230,14 @@ router.post('/bootstrap', async (req, res) => {
       return { empresa, usuario };
     });
 
-    const token = emitirToken(usuario);
+    const tenantSlug = req.tenant?.slug || null;
+    const token = emitirToken(usuario, { tenantSlug });
 
     res.status(201).json({
       success: true,
       mensaje: 'Configuración inicial completada',
       token,
+      tenantSlug,
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
@@ -286,11 +295,13 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, mensaje: 'Credenciales inválidas' });
     }
 
-    const token = emitirToken(usuario);
+    const tenantSlug = req.tenant?.slug || null;
+    const token = emitirToken(usuario, { tenantSlug });
 
     res.json({
       success: true,
       token,
+      tenantSlug,
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
@@ -351,6 +362,56 @@ router.post('/cambiar-password', proteger, async (req, res) => {
   } catch (error) {
     console.error('Error cambiar-password:', error);
     res.status(500).json({ success: false, mensaje: 'Error al cambiar la contraseña' });
+  }
+});
+
+// POST /api/auth/cambiar-empresa
+// Emite un nuevo JWT con la empresa activa seleccionada.
+// Solo disponible si el usuario tiene acceso a esa empresa (usuario_empresas o es su empresa default).
+router.post('/cambiar-empresa', proteger, async (req, res) => {
+  try {
+    const empresaId = parseInt(req.body.empresaId, 10);
+    if (!empresaId || isNaN(empresaId)) {
+      return res.status(400).json({ success: false, mensaje: 'empresaId requerido' });
+    }
+
+    // Verificar acceso: empresa propia del usuario O entrada en usuario_empresas
+    const [propiaEmpresa, accesoExtra] = await Promise.all([
+      req.usuario.empresaId === empresaId
+        ? prisma.empresas.findUnique({ where: { id: empresaId } })
+        : Promise.resolve(null),
+      prisma.usuario_empresas.findUnique({
+        where: { usuarioId_empresaId: { usuarioId: req.usuario.id, empresaId } },
+        include: { empresa: true },
+      }),
+    ]);
+
+    const empresa = propiaEmpresa || accesoExtra?.empresa || null;
+    if (!empresa || !empresa.activo) {
+      return res.status(403).json({ success: false, mensaje: 'No tienes acceso a esa empresa o está inactiva' });
+    }
+
+    const tenantSlug = req.tenant?.slug || null;
+    const token = emitirToken(req.usuario, { empresaId: empresa.id, tenantSlug });
+
+    res.json({
+      success: true,
+      token,
+      tenantSlug,
+      empresa: {
+        id: empresa.id,
+        ruc: empresa.ruc,
+        razonSocial: empresa.razonSocial,
+        nombreComercial: empresa.nombreComercial,
+        plan: empresa.plan,
+        factAnualesMax: empresa.factAnualesMax,
+        activo: empresa.activo,
+        esMatriz: empresa.esMatriz,
+      },
+    });
+  } catch (error) {
+    console.error('Error cambiar-empresa:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al cambiar de empresa' });
   }
 });
 

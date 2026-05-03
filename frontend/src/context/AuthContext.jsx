@@ -18,10 +18,11 @@ const INACTIVIDAD_MS      = 30 * 60 * 1000; // 30 minutos → logout automático
 const ADVERTENCIA_MS      = 25 * 60 * 1000; // 25 minutos → aviso previo
 
 export function AuthProvider({ children }) {
-  const [usuario,   setUsuario]   = useState(null);
-  const [empresa,   setEmpresa]   = useState(null);
-  const [sistema,   setSistema]   = useState(null);
-  const [cargando,  setCargando]  = useState(true);
+  const [usuario,             setUsuario]             = useState(null);
+  const [empresa,             setEmpresa]             = useState(null);
+  const [sistema,             setSistema]             = useState(null);
+  const [cargando,            setCargando]            = useState(true);
+  const [empresasDisponibles, setEmpresasDisponibles] = useState([]);
   const timerLogout   = useRef(null);
   const timerAviso    = useRef(null);
   const toastAvisoId  = useRef(null);
@@ -71,16 +72,31 @@ export function AuthProvider({ children }) {
     setCargando(false);
   }, [recargarSistema]);
 
-  const persistirSesion = useCallback(async ({ token, usuario: usuarioSesion, empresa: empresaSesion = null }) => {
+  const cargarEmpresasDisponibles = useCallback(async () => {
+    try {
+      const res = await api.get('/empresas/mis-empresas');
+      if (res.data?.success) setEmpresasDisponibles(res.data.data || []);
+    } catch {
+      // sin acceso a múltiples empresas — no es error crítico
+    }
+  }, []);
+
+  const persistirSesion = useCallback(async ({ token, usuario: usuarioSesion, empresa: empresaSesion = null, tenantSlug = null }) => {
     localStorage.setItem('aela_token', token);
     localStorage.setItem('token', token);
     localStorage.setItem('aela_usuario', JSON.stringify(usuarioSesion));
+    if (tenantSlug) {
+      localStorage.setItem('aela_tenant_slug', tenantSlug);
+    } else {
+      localStorage.removeItem('aela_tenant_slug');
+    }
     setUsuario(usuarioSesion);
 
     if (empresaSesion) {
       setEmpresa(empresaSesion);
       localStorage.setItem('aela_empresa', JSON.stringify(empresaSesion));
       await recargarSistema(empresaSesion);
+      cargarEmpresasDisponibles();
       return;
     }
 
@@ -90,6 +106,7 @@ export function AuthProvider({ children }) {
         setEmpresa(empRes.data.data);
         localStorage.setItem('aela_empresa', JSON.stringify(empRes.data.data));
         await recargarSistema(empRes.data.data);
+        cargarEmpresasDisponibles();
         return;
       }
     } catch {
@@ -105,7 +122,7 @@ export function AuthProvider({ children }) {
     });
     setSistema(fallback);
     localStorage.setItem('aela_sistema', JSON.stringify(fallback));
-  }, [edition, modoEnv, recargarSistema]);
+  }, [edition, modoEnv, recargarSistema, cargarEmpresasDisponibles]);
 
   const login = async (credential, password) => {
     const res = await api.post('/auth/login', { login: credential, password });
@@ -137,13 +154,38 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('aela_usuario');
     localStorage.removeItem('aela_empresa');
     localStorage.removeItem('aela_sistema');
+    localStorage.removeItem('aela_tenant_slug');
     setUsuario(null);
     setEmpresa(null);
     setSistema(null);
+    setEmpresasDisponibles([]);
     if (porInactividad) {
       toast('Sesión cerrada por inactividad. Vuelve a iniciar sesión.', { icon: '🔒', duration: 6000 });
     }
   }, []);
+
+  const cambiarEmpresa = useCallback(async (empresaId) => {
+    try {
+      const res = await api.post('/auth/cambiar-empresa', { empresaId });
+      if (!res.data.success) throw new Error(res.data.mensaje || 'Error al cambiar empresa');
+      const { token, empresa: nuevaEmpresa, tenantSlug } = res.data;
+      localStorage.setItem('aela_token', token);
+      localStorage.setItem('token', token);
+      if (tenantSlug) {
+        localStorage.setItem('aela_tenant_slug', tenantSlug);
+      } else {
+        localStorage.removeItem('aela_tenant_slug');
+      }
+      setEmpresa(nuevaEmpresa);
+      localStorage.setItem('aela_empresa', JSON.stringify(nuevaEmpresa));
+      await recargarSistema(nuevaEmpresa);
+      toast.success(`Empresa activa: ${nuevaEmpresa.nombreComercial || nuevaEmpresa.razonSocial}`);
+      return { success: true };
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || err.message || 'Error al cambiar empresa');
+      return { success: false };
+    }
+  }, [recargarSistema]);
 
   // ── Cierre automático por inactividad ──────────────────────────────────────
   const reiniciarTimerInactividad = useCallback(() => {
@@ -205,6 +247,7 @@ export function AuthProvider({ children }) {
       esLite, esMedium, esPro, esFull, planLabel,
       login, bootstrap, getBootstrapStatus, logout,
       setEmpresa, setSistema, recargarSistema,
+      empresasDisponibles, cambiarEmpresa, cargarEmpresasDisponibles,
     }}>
       {children}
     </AuthContext.Provider>

@@ -12,14 +12,15 @@ export const SESSION_STORAGE_KEYS = [
   'aela_usuario',
   'aela_empresa',
   'aela_sistema',
+  'aela_tenant_slug',
 ];
 
 export function inyectarTokenEnConfig(config, storage = globalThis.localStorage) {
+  if (!config.headers) config.headers = {};
   const token = storage?.getItem('aela_token') || storage?.getItem('token');
-  if (token) {
-    if (!config.headers) config.headers = {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const tenantSlug = storage?.getItem('aela_tenant_slug');
+  if (tenantSlug) config.headers['X-Tenant-Slug'] = tenantSlug;
   return config;
 }
 

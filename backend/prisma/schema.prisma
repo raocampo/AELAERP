@@ -33,9 +33,15 @@ model empresas {
   maxUsuarios         Int?
   // null = ilimitado; 1 = Lite; 3 = Medium
   activo              Boolean   @default(true)
+  // ── Macro Empresa: jerarquía de subsidiarias ──
+  parentEmpresaId     Int?
+  esMatriz            Boolean   @default(false)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
+  parent              empresas?  @relation("EmpresaFiliales", fields: [parentEmpresaId], references: [id])
+  filiales            empresas[] @relation("EmpresaFiliales")
+  usuariosAcceso      usuario_empresas[]
   usuarios            usuarios[]
   clientes            clientes[]
   proveedores         proveedores[]
@@ -101,8 +107,28 @@ model usuarios {
   movimientosInventario movimientos_inventario[]
   guiasRemision         guias_remision[]
 
+  empresasAcceso      usuario_empresas[]
+
   @@index([empresaId])
   @@map("usuarios")
+}
+
+// ====================================
+// ACCESO MULTI-EMPRESA POR USUARIO
+// Permite que un usuario acceda a varias empresas (macro empresa)
+// ====================================
+model usuario_empresas {
+  id         Int      @id @default(autoincrement())
+  usuarioId  Int
+  empresaId  Int
+  rol        String   @default("operador") @db.VarChar(50)
+  createdAt  DateTime @default(now())
+
+  usuario    usuarios @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  empresa    empresas @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, empresaId])
+  @@map("usuario_empresas")
 }
 
 // ====================================

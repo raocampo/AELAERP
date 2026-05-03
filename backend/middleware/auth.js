@@ -36,10 +36,11 @@ const proteger = async (req, res, next) => {
     };
 
     // ── Inyectar empresa ─────────────────────────────────────────────────────
-    // El modo operativo puede salir de la configuracion persistida del sistema.
     const modoOperacion = await obtenerModoOperacionGlobal(prisma);
     const modoMulti = modoOperacion === 'multiempresa';
-    const empresaId = modoMulti ? usuario.empresaId : 1;
+    // decoded.empresaId viene del JWT cuando el usuario cambió de empresa activa (macro empresa)
+    const empresaIdActiva = decoded.empresaId || usuario.empresaId;
+    const empresaId = modoMulti ? empresaIdActiva : 1;
 
     let empresa = await prisma.empresas.findUnique({ where: { id: empresaId } });
     if (!empresa && !modoMulti) {

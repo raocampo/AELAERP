@@ -16,6 +16,7 @@ import {
 import UpgradeModal from '../Upgrade/UpgradeModal';
 import CambiarPassword from '../Auth/CambiarPassword';
 import QuickBar from './QuickBar';
+import EmpresaSwitcher from './EmpresaSwitcher';
 import './Layout.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
@@ -242,6 +243,9 @@ export default function Layout() {
             {modoMulti ? 'Modo multiempresa' : 'Modo monoempresa'}
           </small>
         </div>
+
+        {/* Selector de empresa activa (macro empresa — solo si hay ≥2 empresas) */}
+        <EmpresaSwitcher />
 
         {/* Badge: comprobantes pendientes de envío al SRI */}
         {pendientesSRI > 0 && (
