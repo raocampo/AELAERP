@@ -141,6 +141,99 @@ Un solo backend, múltiples empresas con BDs separadas:
 | 6 | **Dominio personalizado** | Vincular `app.aela.ec` a Vercel y `api.aela.ec` a Railway (opcional) |
 | 7 | **Renombrar BDs PostgreSQL** | `scfi_dev` → `aela_dev`, `scfi_master` → `aela_master` (solo local) |
 
+### 🟡 Media prioridad — NUEVA EMPRESA (segunda empresa de prueba)
+
+> Documentado 2026-05-03. Hacer en la próxima sesión.
+
+#### Crear empresa 2 con dominio y BD limpios (monoempresa independiente)
+
+Cada empresa = su propio stack aislado: Vercel + Railway backend + Railway Postgres.
+
+**Paso a paso:**
+
+**1. Railway — Nuevo proyecto para empresa 2**
+- railway.app → **New Project** → **Deploy from GitHub repo** → `raocampo/AELAERP`
+- Root Directory: `backend`
+- Agregar un servicio **PostgreSQL** nuevo dentro del mismo proyecto
+- Variables de entorno del nuevo backend:
+```
+DATABASE_URL      = ${{Postgres.DATABASE_URL}}     ← enlazar al nuevo Postgres
+JWT_SECRET        = <generar nuevo, diferente al de empresa 1>
+DB_ENCRYPT_KEY    = <generar nuevo, diferente al de empresa 1>
+AELA_EDITION      = full
+MODO_EMPRESA      = mono
+NODE_ENV          = production
+FRONTEND_URL      = https://<URL-vercel-empresa2>.vercel.app
+```
+- Railway despliega y genera URL tipo `aelaerp-empresa2.up.railway.app`
+
+**2. Vercel — Nuevo proyecto para empresa 2**
+- vercel.com → **New Project** → importar `raocampo/AELAERP`
+- Root Directory: `frontend`
+- Limpiar Build & Output Settings (dejar vacío)
+- Variables de entorno:
+```
+VITE_API_URL      = https://aelaerp-empresa2.up.railway.app/api
+VITE_EDITION      = full
+VITE_MODO_EMPRESA = monoempresa
+```
+- Deploy → Vercel da URL tipo `aelaerp-empresa2.vercel.app`
+
+**3. Actualizar FRONTEND_URL en Railway empresa 2**
+- Railway → nuevo backend → Variables → `FRONTEND_URL=https://aelaerp-empresa2.vercel.app`
+
+**4. Primer acceso empresa 2**
+- Abrir `https://aelaerp-empresa2.vercel.app/bootstrap`
+- Llenar datos: RUC, razón social, correo admin, contraseña
+- BD limpia, sin datos de empresa 1
+
+**5. Dominio personalizado (opcional)**
+- Vercel → proyecto empresa2 → Settings → Domains → agregar `app.empresa2.com`
+- Railway → proyecto empresa2 → Settings → Domains → agregar `api.empresa2.com`
+
+> ⚠ JWT_SECRET y DB_ENCRYPT_KEY de cada empresa DEBEN ser distintos entre sí
+> para que las sesiones y datos cifrados de una empresa no sean válidos en la otra.
+
+---
+
+### 🟠 Prioridad media — Multiempresa nativo (un solo deploy, varias empresas)
+
+> Implementar en sesión futura cuando se quiera operar como SaaS.
+
+**Qué falta implementar (3 cambios de código):**
+
+**1. JWT incluye tenantSlug** — `backend/routes/auth.js` línea 29:
+```js
+// Cambiar esto:
+{ id, email, username, rol }
+// Por esto:
+{ id, email, username, rol, tenantSlug: req.tenant?.slug || null }
+```
+
+**2. axios interceptor envía X-Tenant-Slug** — `frontend/src/services/api.js`:
+```js
+// En inyectarTokenEnConfig(), después de inyectar el token:
+const tenantSlug = storage?.getItem('aela_tenant_slug');
+if (tenantSlug) config.headers['X-Tenant-Slug'] = tenantSlug;
+```
+
+**3. Guardar tenantSlug al hacer login** — `frontend/src/context/AuthContext.jsx`:
+```js
+// En persistirSesion(), después de setUsuario:
+if (res.data.tenantSlug) {
+  localStorage.setItem('aela_tenant_slug', res.data.tenantSlug);
+}
+```
+
+**Con esto:**
+- Un solo Vercel, un solo Railway, múltiples empresas en BDs separadas
+- Cada empresa se registra vía `/bootstrap` con su slug único
+- El sistema enruta automáticamente al DB correcto por cada sesión
+- En producción real: subdominio por empresa (`empresa1.aela.ec`, `empresa2.aela.ec`)
+- En pruebas sin dominio: header `X-Tenant-Slug` automático desde el JWT
+
+---
+
 ### 🟢 Baja prioridad / Futuras mejoras
 
 | # | Pendiente | Detalle |
