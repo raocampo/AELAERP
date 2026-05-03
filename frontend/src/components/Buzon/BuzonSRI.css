@@ -331,7 +331,62 @@
 
 .btn-secondary:hover { background: #f1f5f9; }
 
+/* ── Descarga automática ─────────────────────────────────── */
+.buzon-credentials-note {
+  padding: 0.7rem 1rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.65rem;
+  font-size: 0.87rem;
+  color: #15803d;
+}
+
+.buzon-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.buzon-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.buzon-form-field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.buzon-form-field--full {
+  grid-column: 1 / -1;
+}
+
+.buzon-input {
+  padding: 0.6rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.65rem;
+  font-size: 0.9rem;
+  color: #1e293b;
+  background: #ffffff;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.buzon-input:focus {
+  border-color: #7C3AED;
+  background: #f8fafc;
+}
+
+select.buzon-input {
+  cursor: pointer;
+}
+
 @media (max-width: 700px) {
   .buzon-resumen { flex-direction: column; }
   .buzon-tabs-bar { flex-direction: column; }
+  .buzon-form-grid { grid-template-columns: 1fr; }
+  .buzon-form-field--full { grid-column: 1; }
 }

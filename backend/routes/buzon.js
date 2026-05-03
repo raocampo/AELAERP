@@ -19,6 +19,11 @@ const {
   importarDocumentoRecibido,
   TIPOS_DOCUMENTO,
 } = require('../utils/buzon');
+const {
+  autenticarSriPortal,
+  obtenerTodosLosRecibidos,
+  isoAFormatoSri,
+} = require('../utils/sriPortal');
 
 const router  = express.Router();
 const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -311,6 +316,110 @@ router.get('/historial', async (req, res) => {
   } catch (error) {
     console.error('Error en /buzon/historial:', error);
     res.status(500).json({ success: false, mensaje: 'Error al obtener el historial' });
+  }
+});
+
+// ─── POST /sri-portal/consultar ─────────────────────────────
+// Autentica en el portal SRI y devuelve los comprobantes
+// recibidos en el rango de fechas indicado, sin importarlos.
+router.post('/sri-portal/consultar', async (req, res) => {
+  try {
+    const {
+      identificacion,
+      password,
+      fechaDesde,
+      fechaHasta,
+      tipoComprobante = 'TODOS',
+    } = req.body || {};
+
+    if (!identificacion || !password) {
+      return res.status(400).json({ success: false, mensaje: 'Se requiere identificación y contraseña del portal SRI' });
+    }
+    if (!fechaDesde || !fechaHasta) {
+      return res.status(400).json({ success: false, mensaje: 'Se requiere rango de fechas (fechaDesde, fechaHasta)' });
+    }
+
+    const empresaId = req.empresa.id;
+
+    // Autenticar en el portal SRI
+    let token;
+    try {
+      token = await autenticarSriPortal(identificacion, password);
+    } catch (err) {
+      return res.status(401).json({ success: false, mensaje: err.message });
+    }
+
+    // Convertir fechas de yyyy-mm-dd a dd/mm/yyyy si vienen en formato ISO
+    const fDesde = isoAFormatoSri(fechaDesde) || fechaDesde;
+    const fHasta = isoAFormatoSri(fechaHasta) || fechaHasta;
+
+    // Consultar todos los comprobantes recibidos (paginado)
+    let docsPortal;
+    try {
+      docsPortal = await obtenerTodosLosRecibidos(token, {
+        ruc: identificacion,
+        fechaDesde: fDesde,
+        fechaHasta: fHasta,
+        tipoComprobante,
+      });
+    } catch (err) {
+      return res.status(502).json({ success: false, mensaje: err.message });
+    }
+
+    if (docsPortal.length === 0) {
+      return res.json({ success: true, total: 0, resultados: [] });
+    }
+
+    // Verificar cuáles ya están en BD
+    const resultados = [];
+
+    for (const doc of docsPortal) {
+      const clave = doc.claveAcceso;
+      const tipo  = detectarTipoDesdeClaveAcceso(clave);
+
+      if (!tipo) {
+        resultados.push({
+          clave,
+          estado: 'error',
+          error:  'Tipo de documento no reconocido en la clave',
+          preview: {
+            emisorNombre: doc.razonSocialEmisor,
+            emisorRuc:    doc.rucEmisor,
+            fecha:        doc.fechaEmision,
+            total:        doc.importeTotal,
+            tipo:         doc.tipoComprobante,
+          },
+        });
+        continue;
+      }
+
+      const idExistente = await yaExisteEnBd(empresaId, clave, tipo.cod);
+      resultados.push({
+        clave,
+        estado:   idExistente ? 'existe' : 'nuevo',
+        tipo:     tipo.nombre,
+        tipoCod:  tipo.cod,
+        destino:  tipo.destino,
+        idExistente: idExistente || undefined,
+        preview: {
+          emisorNombre: doc.razonSocialEmisor,
+          emisorRuc:    doc.rucEmisor,
+          fecha:        doc.fechaEmision,
+          total:        doc.importeTotal,
+          tipo:         tipo.nombre,
+        },
+      });
+    }
+
+    res.json({
+      success:  true,
+      total:    docsPortal.length,
+      nuevos:   resultados.filter((r) => r.estado === 'nuevo').length,
+      resultados,
+    });
+  } catch (error) {
+    console.error('Error en /buzon/sri-portal/consultar:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al consultar el portal SRI' });
   }
 });
 

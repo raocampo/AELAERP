@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import AuthContext from '../../context/auth-context';
 import './BuzonSRI.css';
 
 const TIPO_COLORES = {
@@ -25,11 +26,40 @@ function formatFechaEc(fechaStr) {
   try { return new Date(fechaStr).toLocaleDateString('es-EC'); } catch { return fechaStr; }
 }
 
+// Helper: hoy y hace 30 días en formato yyyy-mm-dd
+function hoyISO() { return new Date().toISOString().slice(0, 10); }
+function hace30DiasISO() {
+  const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10);
+}
+
+const TIPOS_COMP_SRI = [
+  { value: 'TODOS',                   label: 'Todos los tipos' },
+  { value: '01',                      label: 'Facturas' },
+  { value: '03',                      label: 'Liquidaciones de compra' },
+  { value: '04',                      label: 'Notas de crédito' },
+  { value: '05',                      label: 'Notas de débito' },
+  { value: '07',                      label: 'Comprobantes de retención' },
+];
+
 export default function BuzonSRI() {
   const navigate = useNavigate();
+  const { empresa } = useContext(AuthContext);
 
-  const [tab, setTab] = useState('claves');
+  const [tab, setTab] = useState('descarga');
   const [paso, setPaso] = useState(1);
+
+  // ── Estado descarga automática ────────────────────────────
+  const [dmIdentificacion, setDmIdentificacion] = useState(() => empresa?.ruc || empresa?.identificacion || '');
+  const [dmPassword,       setDmPassword]       = useState('');
+  const [dmFechaDesde,     setDmFechaDesde]     = useState(hace30DiasISO);
+  const [dmFechaHasta,     setDmFechaHasta]     = useState(hoyISO);
+  const [dmTipo,           setDmTipo]           = useState('TODOS');
+  const [dmConsultando,    setDmConsultando]    = useState(false);
+  const [dmResultados,     setDmResultados]     = useState([]);
+  const [dmSeleccionados,  setDmSeleccionados]  = useState(new Set());
+  const [dmPaso,           setDmPaso]           = useState(1);
+  const [dmResumen,        setDmResumen]        = useState(null);
+  const [dmImportando,     setDmImportando]     = useState(false);
 
   const [textareaClaves, setTextareaClaves] = useState('');
   const [consultando, setConsultando] = useState(false);
@@ -119,6 +149,62 @@ export default function BuzonSRI() {
     }
   };
 
+  // ── Handlers descarga automática ─────────────────────────
+  const dmConsultar = async () => {
+    if (!dmIdentificacion.trim()) { toast.error('Ingresa tu RUC o cédula del portal SRI'); return; }
+    if (!dmPassword.trim())       { toast.error('Ingresa tu clave del portal SRI'); return; }
+    if (!dmFechaDesde || !dmFechaHasta) { toast.error('Selecciona el rango de fechas'); return; }
+    setDmConsultando(true);
+    try {
+      const res = await api.post('/buzon/sri-portal/consultar', {
+        identificacion: dmIdentificacion.trim(),
+        password:       dmPassword,
+        fechaDesde:     dmFechaDesde,
+        fechaHasta:     dmFechaHasta,
+        tipoComprobante: dmTipo,
+      });
+      const resultados = res.data?.resultados || [];
+      setDmResultados(resultados);
+      setDmSeleccionados(new Set(resultados.filter((r) => r.estado === 'nuevo').map((r) => r.clave)));
+      setDmPaso(2);
+      if (resultados.length === 0) toast('No se encontraron comprobantes en ese período.', { icon: 'ℹ️' });
+      else toast.success(`${res.data.nuevos} nuevos de ${res.data.total} comprobantes encontrados`);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al consultar el portal SRI');
+    } finally {
+      setDmConsultando(false);
+    }
+  };
+
+  const dmToggle = (clave) => {
+    setDmSeleccionados((prev) => { const s = new Set(prev); s.has(clave) ? s.delete(clave) : s.add(clave); return s; });
+  };
+
+  const dmToggleTodos = () => {
+    const nuevos = dmResultados.filter((r) => r.estado === 'nuevo').map((r) => r.clave);
+    setDmSeleccionados(dmSeleccionados.size === nuevos.length ? new Set() : new Set(nuevos));
+  };
+
+  const dmImportar = async () => {
+    const items = [...dmSeleccionados].map((clave) => ({ clave }));
+    if (items.length === 0) { toast.error('Selecciona al menos un documento'); return; }
+    setDmImportando(true);
+    try {
+      const res = await api.post('/buzon/importar', { items, opciones });
+      setDmResumen(res.data);
+      setDmPaso(3);
+      toast.success(`${res.data.resumen?.creados || 0} documento(s) importado(s)`);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al importar');
+    } finally {
+      setDmImportando(false);
+    }
+  };
+
+  const dmReiniciar = () => {
+    setDmPassword(''); setDmResultados([]); setDmSeleccionados(new Set()); setDmResumen(null); setDmPaso(1);
+  };
+
   const cargarHistorial = useCallback(async () => {
     setCargandoHistorial(true);
     try {
@@ -142,10 +228,190 @@ export default function BuzonSRI() {
       </div>
 
       <div className="buzon-tabs-bar">
+        <button className={`buzon-tab ${tab === 'descarga' ? 'active' : ''}`} onClick={() => handleTabChange('descarga')}>Descarga automática SRI</button>
         <button className={`buzon-tab ${tab === 'claves' ? 'active' : ''}`} onClick={() => handleTabChange('claves')}>Por claves de acceso</button>
         <button className={`buzon-tab ${tab === 'zip' ? 'active' : ''}`} onClick={() => handleTabChange('zip')}>Importar ZIP</button>
         <button className={`buzon-tab ${tab === 'historial' ? 'active' : ''}`} onClick={() => handleTabChange('historial')}>Historial</button>
       </div>
+
+      {/* ── TAB DESCARGA AUTOMÁTICA ───────────────────────── */}
+      {tab === 'descarga' && (
+        <div className="buzon-card">
+
+          {/* PASO 1 — Credenciales + filtros */}
+          {dmPaso === 1 && (
+            <div className="buzon-step">
+              <h2 className="buzon-step-title">Descarga automática de comprobantes del SRI</h2>
+              <p className="buzon-step-hint">
+                Ingresa tus credenciales del portal <strong>srienlinea.sri.gob.ec</strong> y el período a consultar.
+                El sistema obtendrá automáticamente las claves de todos los comprobantes recibidos.
+              </p>
+
+              <div className="buzon-credentials-note">
+                🔒 Tus credenciales se usan únicamente para consultar el portal SRI y no se almacenan.
+              </div>
+
+              <div className="buzon-form-grid">
+                <div className="buzon-form-field">
+                  <label>RUC / Cédula (portal SRI)</label>
+                  <input
+                    type="text"
+                    className="buzon-input"
+                    placeholder="Ej: 1713175071001"
+                    value={dmIdentificacion}
+                    onChange={(e) => setDmIdentificacion(e.target.value)}
+                    maxLength={13}
+                  />
+                </div>
+                <div className="buzon-form-field">
+                  <label>Clave del portal SRI</label>
+                  <input
+                    type="password"
+                    className="buzon-input"
+                    placeholder="Contraseña de srienlinea.sri.gob.ec"
+                    value={dmPassword}
+                    onChange={(e) => setDmPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                </div>
+                <div className="buzon-form-field">
+                  <label>Fecha desde</label>
+                  <input type="date" className="buzon-input" value={dmFechaDesde} onChange={(e) => setDmFechaDesde(e.target.value)} />
+                </div>
+                <div className="buzon-form-field">
+                  <label>Fecha hasta</label>
+                  <input type="date" className="buzon-input" value={dmFechaHasta} onChange={(e) => setDmFechaHasta(e.target.value)} />
+                </div>
+                <div className="buzon-form-field buzon-form-field--full">
+                  <label>Tipo de comprobante</label>
+                  <select className="buzon-input" value={dmTipo} onChange={(e) => setDmTipo(e.target.value)}>
+                    {TIPOS_COMP_SRI.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="buzon-step-actions">
+                <button
+                  className="btn-primary"
+                  onClick={dmConsultar}
+                  disabled={dmConsultando || !dmIdentificacion.trim() || !dmPassword.trim()}
+                >
+                  {dmConsultando ? '⏳ Consultando portal SRI...' : 'Consultar portal SRI →'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* PASO 2 — Revisión y selección */}
+          {dmPaso === 2 && (
+            <div className="buzon-step">
+              <h2 className="buzon-step-title">Paso 2 — Selecciona los comprobantes a importar</h2>
+              <p className="buzon-step-hint">
+                Se encontraron <strong>{dmResultados.length}</strong> comprobante(s).
+                Los marcados como <span style={{ color: '#22C55E', fontWeight: 600 }}>Nuevo</span> no están en el sistema aún.
+              </p>
+
+              {dmResultados.some((r) => r.tipoCod === '01' || r.tipoCod === '03') && (
+                <div className="buzon-opciones">
+                  <strong>Opciones para facturas:</strong>
+                  <label><input type="checkbox" checked={opciones.registraInventario} onChange={(e) => setOpciones((p) => ({ ...p, registraInventario: e.target.checked }))} /> Registrar entrada de inventario</label>
+                  <label><input type="checkbox" checked={opciones.creaProductos} onChange={(e) => setOpciones((p) => ({ ...p, creaProductos: e.target.checked }))} /> Crear productos faltantes</label>
+                  <label><input type="checkbox" checked={opciones.registraCaja} onChange={(e) => setOpciones((p) => ({ ...p, registraCaja: e.target.checked }))} /> Registrar egreso en caja</label>
+                </div>
+              )}
+
+              <div className="buzon-table-wrap">
+                <table className="buzon-table">
+                  <thead>
+                    <tr>
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={dmSeleccionados.size === dmResultados.filter((r) => r.estado === 'nuevo').length && dmResultados.some((r) => r.estado === 'nuevo')}
+                          onChange={dmToggleTodos}
+                        />
+                      </th>
+                      <th>Tipo</th>
+                      <th>Emisor / Agente</th>
+                      <th>Fecha</th>
+                      <th>Total</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dmResultados.map((r) => {
+                      const estadoInfo = ESTADO_LABELS[r.estado] || { label: r.estado, cls: '' };
+                      const tipoColor  = TIPO_COLORES[r.tipo] || '';
+                      return (
+                        <tr key={r.clave} className={r.estado === 'nuevo' && dmSeleccionados.has(r.clave) ? 'row-selected' : ''}>
+                          <td>
+                            {r.estado === 'nuevo' && (
+                              <input type="checkbox" checked={dmSeleccionados.has(r.clave)} onChange={() => dmToggle(r.clave)} />
+                            )}
+                          </td>
+                          <td><span className={`buzon-tipo-chip ${tipoColor}`}>{r.tipo || r.preview?.tipo || '—'}</span></td>
+                          <td>
+                            <div className="buzon-emisor">
+                              <span>{r.preview?.emisorNombre || '—'}</span>
+                              <small>{r.preview?.emisorRuc || ''}</small>
+                            </div>
+                          </td>
+                          <td>{formatFechaEc(r.preview?.fecha)}</td>
+                          <td className="buzon-total">
+                            {r.preview?.total != null ? `$${Number(r.preview.total).toFixed(2)}` : '—'}
+                          </td>
+                          <td>
+                            <span className={`buzon-estado-chip ${estadoInfo.cls}`}>{estadoInfo.label}</span>
+                            {r.error && <small className="buzon-error-msg"> {r.error}</small>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="buzon-step-actions">
+                <button className="btn-secondary" onClick={dmReiniciar}>← Volver</button>
+                <span className="buzon-count-hint">{dmSeleccionados.size} seleccionado(s)</span>
+                <button
+                  className="btn-primary"
+                  onClick={dmImportar}
+                  disabled={dmImportando || dmSeleccionados.size === 0}
+                >
+                  {dmImportando ? 'Importando...' : `Importar ${dmSeleccionados.size} documento(s)`}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* PASO 3 — Resultado importación */}
+          {dmPaso === 3 && dmResumen && (
+            <div className="buzon-step">
+              <h2 className="buzon-step-title">✅ Importación completada</h2>
+              <div className="buzon-resumen">
+                <div className="buzon-resumen-card buzon-resumen--verde"><span>{dmResumen.resumen?.creados || 0}</span><small>Importados</small></div>
+                <div className="buzon-resumen-card buzon-resumen--gris"><span>{dmResumen.resumen?.omitidos || 0}</span><small>Ya existían</small></div>
+                <div className="buzon-resumen-card buzon-resumen--rojo"><span>{dmResumen.resumen?.errores || 0}</span><small>Con error</small></div>
+              </div>
+              {dmResumen.resultados?.some((r) => r.estado === 'error') && (
+                <div className="buzon-errores-list">
+                  <strong>Documentos con error:</strong>
+                  {dmResumen.resultados.filter((r) => r.estado === 'error').map((r) => (
+                    <div key={r.clave} className="buzon-error-item"><code>{r.clave}</code> — {r.error}</div>
+                  ))}
+                </div>
+              )}
+              <div className="buzon-step-actions">
+                <button className="btn-secondary" onClick={dmReiniciar}>Nueva descarga</button>
+                <button className="btn-primary" onClick={() => navigate('/compras')}>Ver en Compras</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── TAB CLAVES ────────────────────────────────────── */}
       {tab === 'claves' && (
