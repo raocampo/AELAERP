@@ -5,12 +5,14 @@
 
 [build]
 builder = "NIXPACKS"
-# Instalar dependencias del backend y generar Prisma clients
-buildCommand = "cd backend && npm install && npx prisma generate && npx prisma generate --schema=./prisma/schema-master.prisma"
+# PUPPETEER_CACHE_DIR dentro del proyecto para que el Chrome descargado
+# durante npm install sea accesible al arrancar el servidor (mismo /app).
+buildCommand = "cd backend && PUPPETEER_CACHE_DIR=/app/.puppeteer-cache npm install && npx prisma generate && npx prisma generate --schema=./prisma/schema-master.prisma"
 
 [deploy]
-# Ejecutar migraciones antes de arrancar el servidor
-startCommand = "cd backend && npm run db:migrate:safe && node server.js"
+# prisma migrate deploy aplica migraciones pendientes sin necesitar pg_dump.
+# npm run db:migrate:safe (que usa pg_dump) puede fallar en Railway y bloquea el arranque.
+startCommand = "cd backend && npx prisma migrate deploy && node server.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
@@ -19,6 +21,7 @@ restartPolicyMaxRetries = 3
 [env]
 PORT = "5600"
 NODE_ENV = "production"
-# Puppeteer descarga su propio Chrome durante npm install (más confiable en Railway).
-# nixpacks.toml provee las librerías del sistema que Chrome necesita.
 DB_BACKUP_DIR = "/tmp/aela-backups"
+# Chrome descargado por Puppeteer durante npm install.
+# CACHE_DIR fijo en /app para que build y runtime usen la misma ruta.
+PUPPETEER_CACHE_DIR = "/app/.puppeteer-cache"
