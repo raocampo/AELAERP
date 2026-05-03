@@ -11,7 +11,7 @@
   // La URL de Vercel se encuentra en: vercel.com → proyecto aelaerp → Domains
   const APP_URL = window.location.hostname === 'localhost'
     ? 'http://localhost:5174'
-    : 'https://aelaerp.vercel.app';  // ← reemplazar con URL real de Vercel
+    : 'https://aelaerp.vercel.app';
 
   // Enlazar todos los botones "Acceder"
   ['btn-acceder', 'btn-acceder-mobile', 'btn-acceder-hero'].forEach((id) => {
