@@ -8,22 +8,24 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/useAuth';
 import { tienePermiso } from '../../utils/roles';
+import './GestionEmpresas.css';
 
 const FORM_VACIO = {
   ruc: '', razonSocial: '', nombreComercial: '', direccion: '',
   email: '', telefono: '', plan: 'full', crearConfiguracionSri: true,
+  esMatriz: false, parentEmpresaId: '',
 };
 
 export default function GestionEmpresas() {
   const { modoMulti, usuario } = useAuth();
-  const [empresas,    setEmpresas]    = useState([]);
-  const [cargando,    setCargando]    = useState(true);
-  const [form,        setForm]        = useState(FORM_VACIO);
-  const [editando,    setEditando]    = useState(null); // id empresa en edición
-  const [mostrarForm, setMostrarForm] = useState(false);
-  const [guardando,   setGuardando]   = useState(false);
-  const [consultandoSri, setConsultandoSri] = useState(false);
-  const [mensajeSri, setMensajeSri] = useState('');
+  const [empresas,        setEmpresas]        = useState([]);
+  const [cargando,        setCargando]        = useState(true);
+  const [form,            setForm]            = useState(FORM_VACIO);
+  const [editando,        setEditando]        = useState(null);
+  const [mostrarForm,     setMostrarForm]     = useState(false);
+  const [guardando,       setGuardando]       = useState(false);
+  const [consultandoSri,  setConsultandoSri]  = useState(false);
+  const [mensajeSri,      setMensajeSri]      = useState('');
 
   useEffect(() => { cargar(); }, []);
 
@@ -42,17 +44,25 @@ export default function GestionEmpresas() {
   const abrirNueva = () => {
     setForm(FORM_VACIO);
     setEditando(null);
+    setMensajeSri('');
     setMostrarForm(true);
   };
 
   const abrirEditar = (e) => {
     setForm({
-      ruc: e.ruc, razonSocial: e.razonSocial,
+      ruc: e.ruc,
+      razonSocial: e.razonSocial,
       nombreComercial: e.nombreComercial || '',
-      direccion: e.direccion || '', email: e.email || '',
-      telefono: e.telefono || '', plan: e.plan, crearConfiguracionSri: true,
+      direccion: e.direccion || '',
+      email: e.email || '',
+      telefono: e.telefono || '',
+      plan: e.plan,
+      crearConfiguracionSri: true,
+      esMatriz: e.esMatriz || false,
+      parentEmpresaId: e.parentEmpresaId || '',
     });
     setEditando(e.id);
+    setMensajeSri('');
     setMostrarForm(true);
   };
 
@@ -63,28 +73,24 @@ export default function GestionEmpresas() {
 
   const consultarSri = async (rucIngresado = form.ruc) => {
     const rucLimpio = String(rucIngresado || '').replace(/\D/g, '');
-    if (!/^\d{13}$/.test(rucLimpio) || editando) {
-      setMensajeSri('');
-      return;
-    }
+    if (!/^\d{13}$/.test(rucLimpio) || editando) { setMensajeSri(''); return; }
 
     setConsultandoSri(true);
     setMensajeSri('');
     try {
       const res = await api.get(`/empresas/consultar-sri/${rucLimpio}`);
       if (res.data?.encontrado && res.data?.data) {
-        const empresaSri = res.data.data;
-        setForm((prev) => ({
+        const s = res.data.data;
+        setForm(prev => ({
           ...prev,
-          ruc: empresaSri.ruc || prev.ruc,
-          razonSocial: empresaSri.razonSocial || prev.razonSocial,
-          nombreComercial: empresaSri.nombreComercial || prev.nombreComercial,
-          direccion: empresaSri.direccion || prev.direccion,
+          ruc: s.ruc || prev.ruc,
+          razonSocial: s.razonSocial || prev.razonSocial,
+          nombreComercial: s.nombreComercial || prev.nombreComercial,
+          direccion: s.direccion || prev.direccion,
         }));
-        setMensajeSri(`✓ Empresa encontrada en SRI: ${empresaSri.razonSocial}`);
+        setMensajeSri(`✓ Empresa encontrada en SRI: ${s.razonSocial}`);
         return;
       }
-
       setMensajeSri('No se encontró la empresa en SRI. Puedes crearla solo para control interno.');
     } catch (err) {
       setMensajeSri(err.response?.data?.mensaje || 'No se pudo consultar el SRI.');
@@ -95,17 +101,19 @@ export default function GestionEmpresas() {
 
   const handleGuardar = async (e) => {
     e.preventDefault();
-    if (!form.ruc || !form.razonSocial) {
-      return toast.error('RUC y razón social son requeridos');
-    }
+    if (!form.ruc || !form.razonSocial) return toast.error('RUC y razón social son requeridos');
     setGuardando(true);
     try {
+      const payload = {
+        ...form,
+        parentEmpresaId: form.parentEmpresaId ? parseInt(form.parentEmpresaId, 10) : null,
+      };
       if (editando) {
-        await api.put(`/empresas/${editando}`, form);
-        toast.success('Empresa actualizada');
+        await api.put(`/empresas/${editando}`, payload);
+        toast.success('Empresa actualizada correctamente');
       } else {
-        await api.post('/empresas', form);
-        toast.success('Empresa creada');
+        await api.post('/empresas', payload);
+        toast.success('Empresa creada correctamente');
       }
       setMostrarForm(false);
       cargar();
@@ -128,171 +136,247 @@ export default function GestionEmpresas() {
 
   if (!modoMulti && !tienePermiso(usuario?.rol, 'empresas.gestionar')) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#666' }}>
-        <h2>Gestión de Empresas</h2>
-        <p>Esta funcionalidad está disponible solo en modo multiempresa.</p>
-        <p>Para activarlo, cambia el modo de operación a <code>Multiempresa</code> desde la pantalla de configuración del sistema.</p>
+      <div className="ge-page">
+        <div className="ge-card ge-empty">
+          <p style={{ fontSize: '1.5rem', marginBottom: '.5rem' }}>🏢</p>
+          <strong>Gestión de Empresas</strong>
+          <p style={{ marginTop: '.5rem' }}>
+            Esta funcionalidad está disponible en modo <strong>multiempresa</strong>.<br />
+            Actívalo desde Configuración → Sistema.
+          </p>
+        </div>
       </div>
     );
   }
 
+  // Empresas disponibles para selector de empresa matriz
+  const empresasParent = empresas.filter(e => e.id !== editando);
+
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0 }}>🏢 Gestión de Empresas</h1>
-          <p style={{ color: '#666', margin: '4px 0 0' }}>Administra las empresas/tenants del sistema</p>
+    <div className="ge-page">
+
+      {/* Cabecera */}
+      <div className="ge-header">
+        <div className="ge-header-info">
+          <h1>🏢 Gestión de Empresas</h1>
+          <p>Administra las empresas y subsidiarias del sistema</p>
         </div>
-        <button className="btn-primary" onClick={abrirNueva}>+ Nueva Empresa</button>
+        <button className="ge-btn-primary" onClick={abrirNueva}>+ Nueva Empresa</button>
+      </div>
+
+      {/* Tabla */}
+      <div className="ge-card">
+        {cargando ? (
+          <div className="ge-loading">Cargando empresas...</div>
+        ) : empresas.length === 0 ? (
+          <div className="ge-empty">No hay empresas registradas. Crea la primera con el botón de arriba.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="ge-table">
+              <thead>
+                <tr>
+                  <th>RUC</th>
+                  <th>Razón Social</th>
+                  <th style={{ textAlign: 'center' }}>Plan</th>
+                  <th style={{ textAlign: 'center' }}>Tipo</th>
+                  <th style={{ textAlign: 'center' }}>Estado</th>
+                  <th style={{ textAlign: 'center' }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {empresas.map(e => (
+                  <tr key={e.id}>
+                    <td><span className="ge-ruc">{e.ruc}</span></td>
+                    <td>
+                      <div className="ge-razon">{e.razonSocial}</div>
+                      {e.nombreComercial && <div className="ge-nombre-com">{e.nombreComercial}</div>}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`ge-chip ${e.plan === 'lite' ? 'ge-chip-lite' : 'ge-chip-full'}`}>
+                        {e.plan === 'lite' ? 'LITE' : 'FULL'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {e.esMatriz
+                        ? <span className="ge-chip ge-chip-matriz">MATRIZ</span>
+                        : e.parentEmpresaId
+                          ? <span className="ge-chip" style={{ background: '#f0fdf4', color: '#16a34a' }}>FILIAL</span>
+                          : <span style={{ color: '#94a3b8', fontSize: '.8rem' }}>—</span>
+                      }
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`ge-chip ${e.activo ? 'ge-chip-activa' : 'ge-chip-inactiva'}`}>
+                        {e.activo ? 'ACTIVA' : 'INACTIVA'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="ge-acciones">
+                        <button className="ge-btn-sm" onClick={() => abrirEditar(e)}>✏️ Editar</button>
+                        <button
+                          className={`ge-btn-sm ${e.activo ? 'danger' : ''}`}
+                          onClick={() => toggleActivo(e)}
+                        >
+                          {e.activo ? '🔴 Desactivar' : '🟢 Activar'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Modal formulario */}
       {mostrarForm && (
-        <div className="modal-overlay" onClick={() => setMostrarForm(false)}>
-          <div className="modal-content" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ margin: 0 }}>{editando ? 'Editar Empresa' : 'Nueva Empresa'}</h3>
-              <button className="btn-close" onClick={() => setMostrarForm(false)}>✕</button>
+        <div className="ge-modal-overlay" onClick={() => setMostrarForm(false)}>
+          <div className="ge-modal" onClick={e => e.stopPropagation()}>
+
+            <div className="ge-modal-header">
+              <h2>{editando ? '✏️ Editar Empresa' : '🏢 Nueva Empresa'}</h2>
+              <button className="ge-modal-close" onClick={() => setMostrarForm(false)}>✕</button>
             </div>
+
             <form onSubmit={handleGuardar}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="fact-field" style={{ gridColumn: '1/-1' }}>
-                  <label>RUC *</label>
-                  <input name="ruc" value={form.ruc} onChange={handleChange}
-                    placeholder="0000000000001" maxLength={13} required
-                    readOnly={!!editando} onBlur={(e) => consultarSri(e.target.value)} />
-                  {consultandoSri && (
-                    <small style={{ color: '#64748b' }}>Consultando datos en el SRI...</small>
-                  )}
-                  {mensajeSri && !consultandoSri && (
-                    <small style={{ color: mensajeSri.startsWith('✓') ? '#2E7D32' : '#B45309' }}>{mensajeSri}</small>
-                  )}
-                </div>
-                <div className="fact-field" style={{ gridColumn: '1/-1' }}>
-                  <label>Razón Social *</label>
-                  <input name="razonSocial" value={form.razonSocial} onChange={handleChange}
-                    placeholder="Nombre o razón social" required />
-                </div>
-                <div className="fact-field">
-                  <label>Nombre Comercial</label>
-                  <input name="nombreComercial" value={form.nombreComercial} onChange={handleChange}
-                    placeholder="Nombre comercial" />
-                </div>
-                <div className="fact-field">
-                  <label>Teléfono</label>
-                  <input name="telefono" value={form.telefono} onChange={handleChange}
-                    placeholder="02-000-0000" />
-                </div>
-                <div className="fact-field" style={{ gridColumn: '1/-1' }}>
-                  <label>Dirección</label>
-                  <input name="direccion" value={form.direccion} onChange={handleChange}
-                    placeholder="Dirección" />
-                </div>
-                <div className="fact-field">
-                  <label>Email</label>
-                  <input type="email" name="email" value={form.email} onChange={handleChange}
-                    placeholder="empresa@ejemplo.com" />
-                </div>
-                <div className="fact-field">
-                  <label>Plan</label>
-                  <select name="plan" value={form.plan} onChange={handleChange}>
-                    <option value="full">Full (ilimitado)</option>
-                    <option value="lite">Lite (máx 100 comprobantes/año)</option>
-                  </select>
-                </div>
-                {!editando && (
-                  <div className="fact-field" style={{ gridColumn: '1/-1' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        name="crearConfiguracionSri"
-                        checked={form.crearConfiguracionSri}
-                        onChange={handleChange}
-                      />
-                      Preparar también la configuración SRI con los datos de esta empresa
-                    </label>
-                    <small style={{ color: '#64748b' }}>
-                      Si la desmarcas, la empresa se creará solo para control interno y podrás configurar el SRI después.
-                    </small>
+              <div className="ge-modal-body">
+                <div className="ge-grid">
+
+                  {/* RUC */}
+                  <div className="ge-field ge-col-full">
+                    <label>RUC <span className="ge-required">*</span></label>
+                    <input
+                      className="ge-input"
+                      name="ruc"
+                      value={form.ruc}
+                      onChange={handleChange}
+                      placeholder="0000000000001"
+                      maxLength={13}
+                      required
+                      readOnly={!!editando}
+                      onBlur={(e) => consultarSri(e.target.value)}
+                    />
+                    {consultandoSri && (
+                      <span className="ge-sri-msg ge-sri-loading">⏳ Consultando datos en el SRI...</span>
+                    )}
+                    {mensajeSri && !consultandoSri && (
+                      <span className={`ge-sri-msg ${mensajeSri.startsWith('✓') ? 'ge-sri-ok' : 'ge-sri-warn'}`}>
+                        {mensajeSri}
+                      </span>
+                    )}
                   </div>
-                )}
+
+                  {/* Razón Social */}
+                  <div className="ge-field ge-col-full">
+                    <label>Razón Social <span className="ge-required">*</span></label>
+                    <input className="ge-input" name="razonSocial" value={form.razonSocial}
+                      onChange={handleChange} placeholder="Nombre legal de la empresa" required />
+                  </div>
+
+                  {/* Nombre Comercial */}
+                  <div className="ge-field">
+                    <label>Nombre Comercial</label>
+                    <input className="ge-input" name="nombreComercial" value={form.nombreComercial}
+                      onChange={handleChange} placeholder="Nombre comercial" />
+                  </div>
+
+                  {/* Teléfono */}
+                  <div className="ge-field">
+                    <label>Teléfono</label>
+                    <input className="ge-input" name="telefono" value={form.telefono}
+                      onChange={handleChange} placeholder="02-000-0000" />
+                  </div>
+
+                  {/* Dirección */}
+                  <div className="ge-field ge-col-full">
+                    <label>Dirección</label>
+                    <input className="ge-input" name="direccion" value={form.direccion}
+                      onChange={handleChange} placeholder="Calle, número, ciudad" />
+                  </div>
+
+                  {/* Email */}
+                  <div className="ge-field">
+                    <label>Email</label>
+                    <input className="ge-input" type="email" name="email" value={form.email}
+                      onChange={handleChange} placeholder="empresa@ejemplo.com" />
+                  </div>
+
+                  {/* Plan */}
+                  <div className="ge-field">
+                    <label>Plan</label>
+                    <select className="ge-input" name="plan" value={form.plan} onChange={handleChange}>
+                      <option value="full">Full (ilimitado)</option>
+                      <option value="lite">Lite (máx 100 comprobantes/año)</option>
+                    </select>
+                  </div>
+
+                  {/* Tipo / jerarquía macro empresa */}
+                  <div className="ge-field">
+                    <label>Tipo de empresa</label>
+                    <select className="ge-input" name="esMatriz"
+                      value={form.esMatriz ? 'true' : 'false'}
+                      onChange={e => setForm(prev => ({ ...prev, esMatriz: e.target.value === 'true' }))}>
+                      <option value="false">Empresa independiente</option>
+                      <option value="true">Empresa matriz</option>
+                    </select>
+                  </div>
+
+                  {/* Empresa matriz (si es filial) */}
+                  {!form.esMatriz && empresasParent.length > 0 && (
+                    <div className="ge-field">
+                      <label>Empresa matriz (opcional)</label>
+                      <select className="ge-input" name="parentEmpresaId"
+                        value={form.parentEmpresaId} onChange={handleChange}>
+                        <option value="">— Sin empresa matriz —</option>
+                        {empresasParent.map(ep => (
+                          <option key={ep.id} value={ep.id}>
+                            {ep.nombreComercial || ep.razonSocial}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Checkbox configurar SRI */}
+                  {!editando && (
+                    <div className="ge-field ge-col-full">
+                      <div className="ge-checkbox-field">
+                        <input
+                          type="checkbox"
+                          name="crearConfiguracionSri"
+                          id="chk-sri"
+                          checked={form.crearConfiguracionSri}
+                          onChange={handleChange}
+                        />
+                        <div>
+                          <label className="ge-checkbox-label" htmlFor="chk-sri">
+                            Preparar configuración SRI con los datos de esta empresa
+                          </label>
+                          <small>
+                            Si lo desmarcas, la empresa se creará solo para control interno y podrás configurar el SRI después.
+                          </small>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
-                <button type="button" className="btn-secondary" onClick={() => setMostrarForm(false)}>
+
+              <div className="ge-modal-footer">
+                <button type="button" className="ge-btn-secondary" onClick={() => setMostrarForm(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn-primary" disabled={guardando}>
-                  {guardando ? 'Guardando...' : 'Guardar'}
+                <button type="submit" className="ge-btn-primary" disabled={guardando}>
+                  {guardando ? 'Guardando...' : editando ? 'Guardar cambios' : 'Crear empresa'}
                 </button>
               </div>
             </form>
+
           </div>
         </div>
       )}
 
-      {/* Tabla */}
-      {cargando ? (
-        <div style={{ textAlign: 'center', padding: 40 }}>Cargando...</div>
-      ) : (
-        <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-            <thead>
-              <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #e2e8f0' }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left' }}>RUC</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left' }}>Razón Social</th>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>Plan</th>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>Estado</th>
-                <th style={{ padding: '12px 16px', textAlign: 'center' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {empresas.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 32, color: '#999' }}>
-                  No hay empresas registradas
-                </td></tr>
-              ) : empresas.map(e => (
-                <tr key={e.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '10px 16px', fontFamily: 'monospace' }}>{e.ruc}</td>
-                  <td style={{ padding: '10px 16px' }}>
-                    <div style={{ fontWeight: 600 }}>{e.razonSocial}</div>
-                    {e.nombreComercial && (
-                      <div style={{ fontSize: 12, color: '#888' }}>{e.nombreComercial}</div>
-                    )}
-                  </td>
-                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                    <span style={{
-                      padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700,
-                      background: e.plan === 'lite' ? '#FFF8E1' : '#E3F2FD',
-                      color: e.plan === 'lite' ? '#F57F17' : '#1565C0',
-                    }}>
-                      {e.plan === 'lite' ? 'LITE' : 'FULL'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                    <span style={{
-                      padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700,
-                      background: e.activo ? '#E8F5E9' : '#FFEBEE',
-                      color: e.activo ? '#2E7D32' : '#C62828',
-                    }}>
-                      {e.activo ? 'ACTIVA' : 'INACTIVA'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 16px', textAlign: 'center' }}>
-                    <button className="btn-secondary" style={{ fontSize: 12, padding: '4px 10px', marginRight: 6 }}
-                      onClick={() => abrirEditar(e)}>
-                      Editar
-                    </button>
-                    <button className="btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
-                      onClick={() => toggleActivo(e)}>
-                      {e.activo ? 'Desactivar' : 'Activar'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }
