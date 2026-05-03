@@ -6,11 +6,12 @@
 (function () {
   'use strict';
 
-  // ── URL del sistema (cambiar en producción) ──────────────
-  // Ejemplos:
-  //   Desarrollo local:  'http://localhost:5174'
-  //   Producción Vercel: 'https://aela.vercel.app'
-  const APP_URL = 'http://localhost:5174';
+  // ── URL del sistema ──────────────────────────────────────
+  // Cambiar por la URL de Vercel una vez desplegado.
+  // La URL de Vercel se encuentra en: vercel.com → proyecto aelaerp → Domains
+  const APP_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:5174'
+    : 'https://aelaerp.vercel.app';  // ← reemplazar con URL real de Vercel
 
   // Enlazar todos los botones "Acceder"
   ['btn-acceder', 'btn-acceder-mobile', 'btn-acceder-hero'].forEach((id) => {
