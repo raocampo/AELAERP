@@ -65,8 +65,17 @@ async function autenticarSriPortal(identificacion, password) {
     throw new Error('Demasiados intentos. Espera unos minutos antes de volver a intentar.');
   }
   if (!resp.ok) {
+    const contentType = resp.headers.get('content-type') || '';
     const txt = await resp.text().catch(() => '');
-    throw new Error(`Error del portal SRI al autenticar (${resp.status}): ${txt.slice(0, 200)}`);
+    // El SRI devuelve HTML cuando el endpoint no existe — evitar mostrar HTML crudo
+    if (resp.status === 404 || contentType.includes('text/html') || txt.trim().startsWith('<')) {
+      throw new Error(
+        'El servicio de consulta automática del portal SRI no está disponible ' +
+        `(HTTP ${resp.status}). El SRI no expone una API pública para esta operación. ` +
+        'Usa la pestaña "Importar ZIP" para importar comprobantes descargados manualmente desde srienlinea.sri.gob.ec.'
+      );
+    }
+    throw new Error(`Error del portal SRI al autenticar (${resp.status}): ${txt.slice(0, 150)}`);
   }
 
   const data = await resp.json().catch(() => null);

@@ -251,6 +251,13 @@ export default function BuzonSRI() {
                 🔒 Tus credenciales se usan únicamente para consultar el portal SRI y no se almacenan.
               </div>
 
+              <div className="buzon-sri-aviso">
+                <strong>⚠ Nota:</strong> El SRI no ofrece una API pública estable para esta función.
+                Si falla, descarga el ZIP manualmente desde{' '}
+                <strong>srienlinea.sri.gob.ec → Comprobantes electrónicos → Recibidos → Descargar XML</strong>{' '}
+                e impórtalo en la pestaña <strong>Importar ZIP</strong>.
+              </div>
+
               <div className="buzon-form-grid">
                 <div className="buzon-form-field">
                   <label>RUC / Cédula (portal SRI)</label>
