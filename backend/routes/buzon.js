@@ -342,11 +342,13 @@ router.post('/sri-portal/consultar', async (req, res) => {
     const empresaId = req.empresa.id;
 
     // Autenticar en el portal SRI
+    // IMPORTANTE: usar 422, NO 401. El 401 dispara el interceptor axios
+    // de la app y desloguea al usuario de AELA.
     let token;
     try {
       token = await autenticarSriPortal(identificacion, password);
     } catch (err) {
-      return res.status(401).json({ success: false, mensaje: err.message });
+      return res.status(422).json({ success: false, mensaje: err.message });
     }
 
     // Convertir fechas de yyyy-mm-dd a dd/mm/yyyy si vienen en formato ISO
