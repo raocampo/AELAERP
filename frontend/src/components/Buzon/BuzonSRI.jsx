@@ -156,13 +156,32 @@ export default function BuzonSRI() {
     if (!dmFechaDesde || !dmFechaHasta) { toast.error('Selecciona el rango de fechas'); return; }
     setDmConsultando(true);
     try {
-      const res = await api.post('/buzon/sri-portal/consultar', {
-        identificacion: dmIdentificacion.trim(),
-        password:       dmPassword,
-        fechaDesde:     dmFechaDesde,
-        fechaHasta:     dmFechaHasta,
-        tipoComprobante: dmTipo,
-      });
+      // Intenta primero con el scraper (navegador automático).
+      // Si falla, cae al endpoint REST como respaldo.
+      let res;
+      try {
+        res = await api.post('/buzon/sri-scraper/consultar', {
+          identificacion: dmIdentificacion.trim(),
+          password:       dmPassword,
+          fechaDesde:     dmFechaDesde,
+          fechaHasta:     dmFechaHasta,
+          tipoComprobante: dmTipo,
+        });
+      } catch (scraperErr) {
+        // Si el scraper falla (browser no disponible, etc.) usamos REST
+        const scraperMsg = scraperErr.response?.data?.mensaje || '';
+        if (scraperMsg.includes('navegador') || scraperMsg.includes('Chromium') || scraperMsg.includes('Chrome')) {
+          res = await api.post('/buzon/sri-portal/consultar', {
+            identificacion: dmIdentificacion.trim(),
+            password:       dmPassword,
+            fechaDesde:     dmFechaDesde,
+            fechaHasta:     dmFechaHasta,
+            tipoComprobante: dmTipo,
+          });
+        } else {
+          throw scraperErr;
+        }
+      }
       const resultados = res.data?.resultados || [];
       setDmResultados(resultados);
       setDmSeleccionados(new Set(resultados.filter((r) => r.estado === 'nuevo').map((r) => r.clave)));
@@ -252,7 +271,7 @@ export default function BuzonSRI() {
               </div>
 
               <div className="buzon-sri-aviso">
-                <strong>⚠ Nota:</strong> El SRI no ofrece una API pública estable para esta función.
+                <strong>🤖 Modo automático:</strong> El sistema navega el portal SRI en segundo plano con un navegador automático (Puppeteer/Chromium). El proceso puede tardar entre 30 y 90 segundos.
                 Si falla, descarga el ZIP manualmente desde{' '}
                 <strong>srienlinea.sri.gob.ec → Comprobantes electrónicos → Recibidos → Descargar XML</strong>{' '}
                 e impórtalo en la pestaña <strong>Importar ZIP</strong>.
@@ -305,7 +324,7 @@ export default function BuzonSRI() {
                   onClick={dmConsultar}
                   disabled={dmConsultando || !dmIdentificacion.trim() || !dmPassword.trim()}
                 >
-                  {dmConsultando ? '⏳ Consultando portal SRI...' : 'Consultar portal SRI →'}
+                  {dmConsultando ? '🤖 Navegando el portal SRI... (puede tardar ~60 s)' : 'Consultar portal SRI →'}
                 </button>
               </div>
             </div>

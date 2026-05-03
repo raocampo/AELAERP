@@ -127,7 +127,7 @@ const Departamentos = () => {
       )}
 
       {modal && (
-        <div className="th-modal-overlay" onClick={e => e.target === e.currentTarget && cerrar()}>
+        <div className="th-modal-overlay" >
           <div className="th-modal">
             <h2>{form.id ? 'Editar Departamento' : 'Nuevo Departamento'}</h2>
             <form onSubmit={guardar}>

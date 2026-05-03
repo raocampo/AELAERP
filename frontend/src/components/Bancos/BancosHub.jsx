@@ -59,7 +59,7 @@ function ModalCuenta({ cuenta, onClose, onSaved }) {
   };
 
   return (
-    <div className="bancos-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="bancos-modal-overlay" >
       <div className="bancos-modal">
         <h2>{cuenta?.id ? 'Editar Cuenta Bancaria' : 'Nueva Cuenta Bancaria'}</h2>
         <form onSubmit={handleSubmit}>
@@ -132,7 +132,7 @@ function ModalMovimiento({ bancoId, onClose, onSaved }) {
   };
 
   return (
-    <div className="bancos-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="bancos-modal-overlay" >
       <div className="bancos-modal">
         <h2>Registrar Movimiento</h2>
         <form onSubmit={handleSubmit}>
@@ -212,7 +212,7 @@ function ModalCheque({ bancoId, onClose, onSaved }) {
   };
 
   return (
-    <div className="bancos-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="bancos-modal-overlay" >
       <div className="bancos-modal">
         <h2>Emitir Cheque</h2>
         <form onSubmit={handleSubmit}>

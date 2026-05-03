@@ -255,7 +255,7 @@ export default function ListaLiquidaciones() {
 
       {/* Modal anulación */}
       {modalAnular && (
-        <div className="liq-modal-overlay" onClick={() => setModalAnular(null)}>
+        <div className="liq-modal-overlay">
           <div className="liq-modal" onClick={e => e.stopPropagation()}>
             <h3>Anular Liquidación</h3>
             <p>Ingrese el motivo de anulación:</p>

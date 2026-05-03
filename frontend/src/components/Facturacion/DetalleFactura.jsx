@@ -299,7 +299,7 @@ const DetalleFactura = () => {
 
       {/* Modal Nota de Crédito */}
       {modalNC && (
-        <div className="modal-overlay" onClick={() => setModalNC(false)}>
+        <div className="modal-overlay">
           <div className="modal-content nc-modal" onClick={e => e.stopPropagation()}>
             <h3>📝 Emitir Nota de Crédito</h3>
             <p className="nc-desc">

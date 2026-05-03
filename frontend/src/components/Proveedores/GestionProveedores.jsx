@@ -318,7 +318,7 @@ export default function GestionProveedores() {
       </div>
 
       {modalAbierto && (
-        <div className="modal-overlay" onClick={cerrarModal}>
+        <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{form.id ? 'Editar proveedor' : 'Nuevo proveedor'}</h2>

@@ -586,7 +586,7 @@ export default function PuntoVenta() {
 
     {/* Modal de completar datos del cliente */}
     {showModalCliente && (
-      <div className="pos-recibo-overlay" onClick={() => setShowModalCliente(false)}>
+      <div className="pos-recibo-overlay">
         <div className="pos-recibo-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
           <div className="recibo-icono">👤</div>
           <h2 style={{ marginBottom: 4 }}>Datos del cliente</h2>
@@ -653,7 +653,10 @@ export default function PuntoVenta() {
           <div className="pos-recibo-acciones">
             <button
               className="btn-recibo-print"
-              onClick={() => imprimirReciboDoc(docEmitido.id, docEmitido.tipo)}
+              onClick={async () => {
+                await imprimirReciboDoc(docEmitido.id, docEmitido.tipo);
+                setDocEmitido(null);
+              }}
             >
               🖨️ Imprimir recibo POS
             </button>

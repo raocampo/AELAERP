@@ -1,0 +1,33 @@
+# ============================================================
+#  nixpacks.toml — AELA ERP (Railway)
+#  Instala Chromium del sistema para que Puppeteer lo use
+#  sin necesidad de descargar Chrome en cada build.
+# ============================================================
+
+[phases.setup]
+# chromium: navegador headless para scraping del portal SRI
+# Los demás paquetes son dependencias del sistema que Chromium necesita en nixpkgs
+nixPkgs = [
+  "chromium",
+  "nss",
+  "nspr",
+  "alsa-lib",
+  "atk",
+  "at-spi2-atk",
+  "cups",
+  "libdrm",
+  "expat",
+  "xorg.libX11",
+  "xorg.libXcomposite",
+  "xorg.libXdamage",
+  "xorg.libXext",
+  "xorg.libXfixes",
+  "xorg.libXrandr",
+  "pango",
+  "cairo",
+  "mesa",
+  "glib",
+  "dbus",
+  "gdk-pixbuf",
+  "gtk3",
+]

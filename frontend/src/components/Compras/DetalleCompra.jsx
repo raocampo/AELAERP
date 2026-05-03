@@ -144,7 +144,7 @@ export default function DetalleCompra() {
     <div className="detalle-compra-page">
       {/* MODAL EDITAR */}
       {modalEditar && (
-        <div className="dc-modal-overlay" onClick={() => setModalEditar(false)}>
+        <div className="dc-modal-overlay">
           <div className="dc-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Editar compra {compra.numeroFactura}</h3>
             <label className="dc-modal-label">
@@ -169,7 +169,7 @@ export default function DetalleCompra() {
 
       {/* MODAL ANULAR */}
       {modalAnular && (
-        <div className="dc-modal-overlay" onClick={() => setModalAnular(false)}>
+        <div className="dc-modal-overlay">
           <div className="dc-modal dc-modal--danger" onClick={(e) => e.stopPropagation()}>
             <h3>⚠️ Anular compra {compra.numeroFactura}</h3>
             <p className="dc-modal-warn">

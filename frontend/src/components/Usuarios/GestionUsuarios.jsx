@@ -159,7 +159,7 @@ export default function GestionUsuarios() {
 
       {/* Modal */}
       {mostrarForm && (
-        <div className="usu-modal-overlay" onClick={() => setMostrarForm(false)}>
+        <div className="usu-modal-overlay">
           <div className="usu-modal" onClick={(e) => e.stopPropagation()}>
             <div className="usu-modal-header">
               <div className="usu-modal-header-left">

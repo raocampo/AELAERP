@@ -19,3 +19,6 @@ restartPolicyMaxRetries = 3
 [env]
 PORT = "5600"
 NODE_ENV = "production"
+# Puppeteer usará el chromium instalado por nixpacks (no descarga el suyo)
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+PUPPETEER_EXECUTABLE_PATH = "chromium"

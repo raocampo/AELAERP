@@ -193,7 +193,7 @@ const Ausencias = () => {
       )}
 
       {modal && (
-        <div className="th-modal-overlay" onClick={e => e.target === e.currentTarget && setModal(false)}>
+        <div className="th-modal-overlay" >
           <div className="th-modal">
             <h2>Registrar Ausencia / Vacación</h2>
             <form onSubmit={guardar}>

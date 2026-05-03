@@ -231,7 +231,7 @@ const TabFacturas = ({ navigate }) => {
 
       {/* Modal anular */}
       {modalAnular && (
-        <div className="modal-overlay" onClick={() => setModalAnular(null)}>
+        <div className="modal-overlay">
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3>Anular Factura {modalAnular.numeroFactura}</h3>
             <p style={{ color: '#64748b', fontSize: '0.88rem', margin: '8px 0 16px' }}>

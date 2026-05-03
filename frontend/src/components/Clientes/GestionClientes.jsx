@@ -267,7 +267,7 @@ export default function GestionClientes() {
 
       {/* MODAL */}
       {modalAbierto && (
-        <div className="modal-overlay" onClick={cerrarModal}>
+        <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{form.id ? 'Editar cliente' : 'Nuevo cliente'}</h2>

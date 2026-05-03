@@ -230,7 +230,7 @@ export default function GestionEmpresas() {
 
       {/* Modal formulario */}
       {mostrarForm && (
-        <div className="ge-modal-overlay" onClick={() => setMostrarForm(false)}>
+        <div className="ge-modal-overlay">
           <div className="ge-modal" onClick={e => e.stopPropagation()}>
 
             <div className="ge-modal-header">

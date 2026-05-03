@@ -150,7 +150,7 @@ const ModalPago = ({ inicial, onGuardar, onCerrar }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={onCerrar}>
+    <div className="modal-overlay">
       <div className="modal-content modal-pago" onClick={e => e.stopPropagation()}>
         <div className="modal-pago-header">
           <h3>Detalle forma de pago</h3>

@@ -344,7 +344,7 @@ const Nomina = () => {
 
       {/* Modal nueva nómina */}
       {modalNueva && (
-        <div className="th-modal-overlay" onClick={e => e.target === e.currentTarget && setModalNueva(false)}>
+        <div className="th-modal-overlay" >
           <div className="th-modal">
             <h2>Nueva Nómina</h2>
             <p style={{ fontSize:'0.85rem', color:'#718096', marginTop:'-0.5rem', marginBottom:'1rem' }}>
@@ -432,7 +432,7 @@ const DetalleEditModal = ({ detalle, nominaId, onClose, onSaved }) => {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   return (
-    <div className="th-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="th-modal-overlay" >
       <div className="th-modal th-modal-lg">
         <h2>Editar detalle: {detalle.empleado?.apellidos}, {detalle.empleado?.nombres}</h2>
         <p style={{ fontSize:'0.8rem', color:'#718096', marginTop:'-0.5rem', marginBottom:'1rem' }}>

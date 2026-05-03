@@ -2,9 +2,12 @@
 //  AELA — Buzón SRI: rutas de importación en lote
 //  backend/routes/buzon.js
 //
-//  POST /api/buzon/consultar   → preview de N claves
-//  POST /api/buzon/importar    → importación confirmada
-//  POST /api/buzon/importar-zip → ZIP de XMLs
+//  POST /api/buzon/consultar             → preview de N claves
+//  POST /api/buzon/importar              → importación confirmada
+//  POST /api/buzon/importar-zip          → ZIP de XMLs
+//  POST /api/buzon/sri-portal/consultar  → portal REST (API móvil)
+//  POST /api/buzon/sri-scraper/consultar → portal via Puppeteer
+//  POST /api/buzon/sri-scraper/importar  → scraper + importar directo
 // ============================================================
 
 const express = require('express');
@@ -24,6 +27,7 @@ const {
   obtenerTodosLosRecibidos,
   isoAFormatoSri,
 } = require('../utils/sriPortal');
+const { obtenerRecibidosScraper } = require('../utils/sriScraper');
 
 const router  = express.Router();
 const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -422,6 +426,169 @@ router.post('/sri-portal/consultar', async (req, res) => {
   } catch (error) {
     console.error('Error en /buzon/sri-portal/consultar:', error);
     res.status(500).json({ success: false, mensaje: 'Error al consultar el portal SRI' });
+  }
+});
+
+// ─── POST /sri-scraper/consultar ────────────────────────────
+// Usa Puppeteer para autenticarse en el portal SRI y devolver
+// la lista de comprobantes recibidos en el rango de fechas.
+// NO importa — solo hace preview para confirmación.
+router.post('/sri-scraper/consultar', async (req, res) => {
+  try {
+    const {
+      identificacion,
+      password,
+      fechaDesde,
+      fechaHasta,
+      tipoComprobante = 'TODOS',
+    } = req.body || {};
+
+    if (!identificacion || !password) {
+      return res.status(400).json({ success: false, mensaje: 'Se requiere identificación y contraseña del portal SRI' });
+    }
+    if (!fechaDesde || !fechaHasta) {
+      return res.status(400).json({ success: false, mensaje: 'Se requiere rango de fechas (fechaDesde, fechaHasta)' });
+    }
+
+    const empresaId = req.empresa.id;
+
+    let docsPortal;
+    try {
+      docsPortal = await obtenerRecibidosScraper({ identificacion, password, fechaDesde, fechaHasta, tipoComprobante });
+    } catch (err) {
+      return res.status(422).json({ success: false, mensaje: err.message });
+    }
+
+    if (docsPortal.length === 0) {
+      return res.json({ success: true, total: 0, resultados: [] });
+    }
+
+    const resultados = [];
+    for (const doc of docsPortal) {
+      const clave = doc.claveAcceso;
+      const tipo  = detectarTipoDesdeClaveAcceso(clave);
+
+      if (!tipo) {
+        resultados.push({
+          clave,
+          estado: 'error',
+          error: 'Tipo de documento no reconocido en la clave',
+          preview: { emisorNombre: doc.razonSocialEmisor, fecha: doc.fechaEmision, total: doc.importeTotal },
+        });
+        continue;
+      }
+
+      const idExistente = await yaExisteEnBd(empresaId, clave, tipo.cod);
+      resultados.push({
+        clave,
+        estado:    idExistente ? 'existe' : 'nuevo',
+        tipo:      tipo.nombre,
+        tipoCod:   tipo.cod,
+        destino:   tipo.destino,
+        idExistente: idExistente || undefined,
+        preview: {
+          emisorNombre: doc.razonSocialEmisor,
+          fecha:        doc.fechaEmision,
+          total:        doc.importeTotal,
+          tipo:         tipo.nombre,
+        },
+      });
+    }
+
+    res.json({
+      success:  true,
+      total:    docsPortal.length,
+      nuevos:   resultados.filter((r) => r.estado === 'nuevo').length,
+      resultados,
+    });
+  } catch (error) {
+    console.error('Error en /buzon/sri-scraper/consultar:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al consultar el portal SRI vía scraper' });
+  }
+});
+
+// ─── POST /sri-scraper/importar ──────────────────────────────
+// Scraping + importación directa en un solo paso.
+// Autentica en SRI, obtiene los docs del rango, descarga XMLs e importa.
+router.post('/sri-scraper/importar', async (req, res) => {
+  try {
+    const {
+      identificacion,
+      password,
+      fechaDesde,
+      fechaHasta,
+      tipoComprobante = 'TODOS',
+      opciones = {},
+    } = req.body || {};
+
+    if (!identificacion || !password) {
+      return res.status(400).json({ success: false, mensaje: 'Se requiere identificación y contraseña del portal SRI' });
+    }
+    if (!fechaDesde || !fechaHasta) {
+      return res.status(400).json({ success: false, mensaje: 'Se requiere rango de fechas' });
+    }
+
+    const empresaId = req.empresa.id;
+    const usuarioId = req.usuario?.id || null;
+
+    // 1. Obtener lista de claves via scraper
+    let docsPortal;
+    try {
+      docsPortal = await obtenerRecibidosScraper({ identificacion, password, fechaDesde, fechaHasta, tipoComprobante });
+    } catch (err) {
+      return res.status(422).json({ success: false, mensaje: err.message });
+    }
+
+    if (docsPortal.length === 0) {
+      return res.json({ success: true, resumen: { creados: 0, omitidos: 0, errores: 0 }, resultados: [] });
+    }
+
+    // 2. Filtrar los que ya existen
+    const porImportar = [];
+    for (const doc of docsPortal) {
+      const tipo = detectarTipoDesdeClaveAcceso(doc.claveAcceso);
+      if (!tipo) continue;
+      const existe = await yaExisteEnBd(empresaId, doc.claveAcceso, tipo.cod);
+      if (!existe) porImportar.push({ clave: doc.claveAcceso, tipo });
+    }
+
+    // 3. Importar cada documento
+    const resultados = [];
+    for (const { clave, tipo } of porImportar) {
+      try {
+        const respSRI = await obtenerXmlDesdeAutorizacion(clave);
+        const resultado = await prisma.$transaction(async (tx) =>
+          importarDocumentoRecibido({
+            tx, empresaId, usuarioId,
+            tipoDoc: tipo.cod,
+            xmlAutorizado: respSRI.xml,
+            xmlEnvuelto: respSRI.xml,
+            claveAcceso: clave,
+            numeroAutorizacion: respSRI.numeroAutorizacion || clave,
+            fechaAutorizacion: null,
+            opcionesFactura: opciones,
+          })
+        );
+        resultados.push({ clave, tipo: tipo.nombre, estado: resultado.accion, id: resultado.id });
+      } catch (err) {
+        console.error(`[Scraper importar] Error en ${clave}:`, err.message);
+        resultados.push({ clave, tipo: tipo.nombre, estado: 'error', error: err.message });
+      }
+    }
+
+    // Omitidos = los que ya existían (total - los que intentamos importar)
+    const omitidos = docsPortal.length - porImportar.length;
+    const creados  = resultados.filter((r) => r.estado === 'creado').length;
+    const errores  = resultados.filter((r) => r.estado === 'error').length;
+
+    res.json({
+      success: true,
+      resumen: { total: docsPortal.length, creados, omitidos, errores },
+      resultados,
+    });
+  } catch (error) {
+    console.error('Error en /buzon/sri-scraper/importar:', error);
+    res.status(500).json({ success: false, mensaje: 'Error en la importación automática desde el SRI' });
   }
 });
 

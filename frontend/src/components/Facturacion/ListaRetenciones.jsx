@@ -250,7 +250,7 @@ export default function ListaRetenciones() {
 
       {/* Modal anulación */}
       {modalAnular && (
-        <div className="ret-modal-overlay" onClick={() => setModalAnular(null)}>
+        <div className="ret-modal-overlay">
           <div className="ret-modal" onClick={e => e.stopPropagation()}>
             <h3>Anular Retención</h3>
             <p>Ingrese el motivo de anulación:</p>
