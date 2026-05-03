@@ -41,6 +41,39 @@ const TIPOS_COMP_SRI = [
   { value: '07',                      label: 'Comprobantes de retención' },
 ];
 
+function esErrorCredencialesSri(err) {
+  const msg = err.response?.data?.mensaje || err.message || '';
+  return /credenciales|contraseña|password|clave.*incorrect/i.test(msg);
+}
+
+function puedeUsarRespaldoSri(err) {
+  const status = err.response?.status;
+  const msg = err.response?.data?.mensaje || err.message || '';
+  if (esErrorCredencialesSri(err)) return false;
+  return (
+    status === 404 ||
+    status === 405 ||
+    /navegador|chromium|chrome|selector|estructura|no se encontró el campo|no se pudo iniciar|timeout|tiempo/i.test(msg)
+  );
+}
+
+async function consultarSriAutomatico(payload) {
+  try {
+    return await api.post('/buzon/sri/consultar', payload);
+  } catch (err) {
+    const status = err.response?.status;
+    if (status !== 404 && status !== 405) throw err;
+  }
+
+  try {
+    return await api.post('/buzon/sri-scraper/consultar', payload);
+  } catch (scraperErr) {
+    if (!puedeUsarRespaldoSri(scraperErr)) throw scraperErr;
+  }
+
+  return api.post('/buzon/sri-portal/consultar', payload);
+}
+
 export default function BuzonSRI() {
   const navigate = useNavigate();
   const { empresa } = useContext(AuthContext);
@@ -156,32 +189,13 @@ export default function BuzonSRI() {
     if (!dmFechaDesde || !dmFechaHasta) { toast.error('Selecciona el rango de fechas'); return; }
     setDmConsultando(true);
     try {
-      // Intenta primero con el scraper (navegador automático).
-      // Si falla, cae al endpoint REST como respaldo.
-      let res;
-      try {
-        res = await api.post('/buzon/sri-scraper/consultar', {
-          identificacion: dmIdentificacion.trim(),
-          password:       dmPassword,
-          fechaDesde:     dmFechaDesde,
-          fechaHasta:     dmFechaHasta,
-          tipoComprobante: dmTipo,
-        });
-      } catch (scraperErr) {
-        // Si el scraper falla (browser no disponible, etc.) usamos REST
-        const scraperMsg = scraperErr.response?.data?.mensaje || '';
-        if (scraperMsg.includes('navegador') || scraperMsg.includes('Chromium') || scraperMsg.includes('Chrome')) {
-          res = await api.post('/buzon/sri-portal/consultar', {
-            identificacion: dmIdentificacion.trim(),
-            password:       dmPassword,
-            fechaDesde:     dmFechaDesde,
-            fechaHasta:     dmFechaHasta,
-            tipoComprobante: dmTipo,
-          });
-        } else {
-          throw scraperErr;
-        }
-      }
+      const res = await consultarSriAutomatico({
+        identificacion: dmIdentificacion.trim(),
+        password:       dmPassword,
+        fechaDesde:     dmFechaDesde,
+        fechaHasta:     dmFechaHasta,
+        tipoComprobante: dmTipo,
+      });
       const resultados = res.data?.resultados || [];
       setDmResultados(resultados);
       setDmSeleccionados(new Set(resultados.filter((r) => r.estado === 'nuevo').map((r) => r.clave)));

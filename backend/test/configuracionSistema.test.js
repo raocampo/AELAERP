@@ -29,6 +29,7 @@ test('capacidadesPlan aplica restricciones correctas por plan', () => {
     retencionesHabilitadas: false,
     liquidacionesHabilitadas: false,
     atsHabilitado: false,
+    talentoHumanoHabilitado: false,
   });
 
   assert.deepEqual(capacidadesPlan('medium'), {
@@ -40,6 +41,7 @@ test('capacidadesPlan aplica restricciones correctas por plan', () => {
     retencionesHabilitadas: false,
     liquidacionesHabilitadas: false,
     atsHabilitado: false,
+    talentoHumanoHabilitado: true,
   });
 });
 

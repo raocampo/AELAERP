@@ -80,6 +80,99 @@ function previewDeXml(xmlEnvuelto, tipoDoc) {
   };
 }
 
+// ─── Helpers descarga automática SRI ─────────────────────────
+function validarPayloadConsultaSri({
+  identificacion,
+  password,
+  fechaDesde,
+  fechaHasta,
+} = {}) {
+  if (!identificacion || !password) {
+    return 'Se requiere identificación y contraseña del portal SRI';
+  }
+  if (!fechaDesde || !fechaHasta) {
+    return 'Se requiere rango de fechas (fechaDesde, fechaHasta)';
+  }
+  return null;
+}
+
+async function obtenerRecibidosPortalRest({
+  identificacion,
+  password,
+  fechaDesde,
+  fechaHasta,
+  tipoComprobante = 'TODOS',
+}) {
+  const token = await autenticarSriPortal(identificacion, password);
+  return obtenerTodosLosRecibidos(token, {
+    ruc: identificacion,
+    fechaDesde: isoAFormatoSri(fechaDesde) || fechaDesde,
+    fechaHasta: isoAFormatoSri(fechaHasta) || fechaHasta,
+    tipoComprobante,
+  });
+}
+
+async function armarRespuestaConsultaRecibidos(empresaId, docsPortal = []) {
+  const resultados = [];
+
+  for (const doc of docsPortal) {
+    const clave = limpiarClave(doc.claveAcceso);
+    const tipo  = detectarTipoDesdeClaveAcceso(clave);
+
+    if (!tipo) {
+      resultados.push({
+        clave,
+        estado: 'error',
+        error:  'Tipo de documento no reconocido en la clave',
+        preview: {
+          emisorNombre: doc.razonSocialEmisor,
+          emisorRuc:    doc.rucEmisor,
+          fecha:        doc.fechaEmision,
+          total:        doc.importeTotal,
+          tipo:         doc.tipoComprobante,
+        },
+      });
+      continue;
+    }
+
+    const idExistente = await yaExisteEnBd(empresaId, clave, tipo.cod);
+    resultados.push({
+      clave,
+      estado:   idExistente ? 'existe' : 'nuevo',
+      tipo:     tipo.nombre,
+      tipoCod:  tipo.cod,
+      destino:  tipo.destino,
+      idExistente: idExistente || undefined,
+      preview: {
+        emisorNombre: doc.razonSocialEmisor,
+        emisorRuc:    doc.rucEmisor,
+        fecha:        doc.fechaEmision,
+        total:        doc.importeTotal,
+        tipo:         tipo.nombre,
+      },
+    });
+  }
+
+  return {
+    success:  true,
+    total:    docsPortal.length,
+    nuevos:   resultados.filter((r) => r.estado === 'nuevo').length,
+    resultados,
+  };
+}
+
+function statusErrorConsultaSri(err) {
+  const msg = err?.message || '';
+  if (/credenciales|contraseña|password|incorrectas/i.test(msg)) return 422;
+  if (/no disponible|HTTP|conectar|tiempo|timeout|SRI/i.test(msg)) return 502;
+  return 422;
+}
+
+function esErrorCredencialesSri(err) {
+  const msg = err?.message || '';
+  return /credenciales|contraseña|password|incorrectas/i.test(msg);
+}
+
 // ─── POST /consultar ─────────────────────────────────────────
 router.post('/consultar', async (req, res) => {
   try {
@@ -323,6 +416,59 @@ router.get('/historial', async (req, res) => {
   }
 });
 
+// ─── POST /sri/consultar ────────────────────────────────────
+// Endpoint estable para descarga automática:
+// 1) intenta Puppeteer/Chromium; 2) si falla, intenta API móvil del portal.
+router.post('/sri/consultar', async (req, res) => {
+  const {
+    identificacion,
+    password,
+    fechaDesde,
+    fechaHasta,
+    tipoComprobante = 'TODOS',
+    metodo = 'auto',
+  } = req.body || {};
+
+  const errorValidacion = validarPayloadConsultaSri({ identificacion, password, fechaDesde, fechaHasta });
+  if (errorValidacion) {
+    return res.status(400).json({ success: false, mensaje: errorValidacion });
+  }
+
+  const empresaId = req.empresa.id;
+  const payload = { identificacion, password, fechaDesde, fechaHasta, tipoComprobante };
+  const metodos = metodo === 'portal'
+    ? ['portal']
+    : metodo === 'scraper'
+      ? ['scraper']
+      : ['scraper', 'portal'];
+  const erroresConsulta = [];
+
+  for (const metodoConsulta of metodos) {
+    try {
+      const docsPortal = metodoConsulta === 'scraper'
+        ? await obtenerRecibidosScraper(payload)
+        : await obtenerRecibidosPortalRest(payload);
+      const respuesta = await armarRespuestaConsultaRecibidos(empresaId, docsPortal);
+      return res.json({ ...respuesta, metodo: metodoConsulta });
+    } catch (err) {
+      erroresConsulta.push({ metodo: metodoConsulta, mensaje: err.message });
+      if (esErrorCredencialesSri(err)) break;
+    }
+  }
+
+  const ultimoError = erroresConsulta[erroresConsulta.length - 1];
+  const mensajeBase = ultimoError?.mensaje || 'No se pudo consultar el portal SRI';
+  const mensajeFallback = erroresConsulta.length > 1
+    ? `${mensajeBase} También falló el respaldo automático (${erroresConsulta[0].metodo}: ${erroresConsulta[0].mensaje}).`
+    : mensajeBase;
+
+  return res.status(statusErrorConsultaSri(new Error(mensajeBase))).json({
+    success: false,
+    mensaje: mensajeFallback,
+    erroresConsulta,
+  });
+});
+
 // ─── POST /sri-portal/consultar ─────────────────────────────
 // Autentica en el portal SRI y devuelve los comprobantes
 // recibidos en el rango de fechas indicado, sin importarlos.
@@ -336,93 +482,26 @@ router.post('/sri-portal/consultar', async (req, res) => {
       tipoComprobante = 'TODOS',
     } = req.body || {};
 
-    if (!identificacion || !password) {
-      return res.status(400).json({ success: false, mensaje: 'Se requiere identificación y contraseña del portal SRI' });
-    }
-    if (!fechaDesde || !fechaHasta) {
-      return res.status(400).json({ success: false, mensaje: 'Se requiere rango de fechas (fechaDesde, fechaHasta)' });
-    }
+    const errorValidacion = validarPayloadConsultaSri({ identificacion, password, fechaDesde, fechaHasta });
+    if (errorValidacion) return res.status(400).json({ success: false, mensaje: errorValidacion });
 
     const empresaId = req.empresa.id;
 
-    // Autenticar en el portal SRI
-    // IMPORTANTE: usar 422, NO 401. El 401 dispara el interceptor axios
-    // de la app y desloguea al usuario de AELA.
-    let token;
-    try {
-      token = await autenticarSriPortal(identificacion, password);
-    } catch (err) {
-      return res.status(422).json({ success: false, mensaje: err.message });
-    }
-
-    // Convertir fechas de yyyy-mm-dd a dd/mm/yyyy si vienen en formato ISO
-    const fDesde = isoAFormatoSri(fechaDesde) || fechaDesde;
-    const fHasta = isoAFormatoSri(fechaHasta) || fechaHasta;
-
-    // Consultar todos los comprobantes recibidos (paginado)
     let docsPortal;
     try {
-      docsPortal = await obtenerTodosLosRecibidos(token, {
-        ruc: identificacion,
-        fechaDesde: fDesde,
-        fechaHasta: fHasta,
-        tipoComprobante,
-      });
+      docsPortal = await obtenerRecibidosPortalRest({ identificacion, password, fechaDesde, fechaHasta, tipoComprobante });
     } catch (err) {
-      return res.status(502).json({ success: false, mensaje: err.message });
+      // IMPORTANTE: usar 422/502, NO 401. El 401 dispara el interceptor axios
+      // de la app y desloguea al usuario de AELA.
+      return res.status(statusErrorConsultaSri(err)).json({ success: false, mensaje: err.message });
     }
 
     if (docsPortal.length === 0) {
       return res.json({ success: true, total: 0, resultados: [] });
     }
 
-    // Verificar cuáles ya están en BD
-    const resultados = [];
-
-    for (const doc of docsPortal) {
-      const clave = doc.claveAcceso;
-      const tipo  = detectarTipoDesdeClaveAcceso(clave);
-
-      if (!tipo) {
-        resultados.push({
-          clave,
-          estado: 'error',
-          error:  'Tipo de documento no reconocido en la clave',
-          preview: {
-            emisorNombre: doc.razonSocialEmisor,
-            emisorRuc:    doc.rucEmisor,
-            fecha:        doc.fechaEmision,
-            total:        doc.importeTotal,
-            tipo:         doc.tipoComprobante,
-          },
-        });
-        continue;
-      }
-
-      const idExistente = await yaExisteEnBd(empresaId, clave, tipo.cod);
-      resultados.push({
-        clave,
-        estado:   idExistente ? 'existe' : 'nuevo',
-        tipo:     tipo.nombre,
-        tipoCod:  tipo.cod,
-        destino:  tipo.destino,
-        idExistente: idExistente || undefined,
-        preview: {
-          emisorNombre: doc.razonSocialEmisor,
-          emisorRuc:    doc.rucEmisor,
-          fecha:        doc.fechaEmision,
-          total:        doc.importeTotal,
-          tipo:         tipo.nombre,
-        },
-      });
-    }
-
-    res.json({
-      success:  true,
-      total:    docsPortal.length,
-      nuevos:   resultados.filter((r) => r.estado === 'nuevo').length,
-      resultados,
-    });
+    const respuesta = await armarRespuestaConsultaRecibidos(empresaId, docsPortal);
+    res.json({ ...respuesta, metodo: 'portal' });
   } catch (error) {
     console.error('Error en /buzon/sri-portal/consultar:', error);
     res.status(500).json({ success: false, mensaje: 'Error al consultar el portal SRI' });
@@ -443,12 +522,8 @@ router.post('/sri-scraper/consultar', async (req, res) => {
       tipoComprobante = 'TODOS',
     } = req.body || {};
 
-    if (!identificacion || !password) {
-      return res.status(400).json({ success: false, mensaje: 'Se requiere identificación y contraseña del portal SRI' });
-    }
-    if (!fechaDesde || !fechaHasta) {
-      return res.status(400).json({ success: false, mensaje: 'Se requiere rango de fechas (fechaDesde, fechaHasta)' });
-    }
+    const errorValidacion = validarPayloadConsultaSri({ identificacion, password, fechaDesde, fechaHasta });
+    if (errorValidacion) return res.status(400).json({ success: false, mensaje: errorValidacion });
 
     const empresaId = req.empresa.id;
 
@@ -463,44 +538,8 @@ router.post('/sri-scraper/consultar', async (req, res) => {
       return res.json({ success: true, total: 0, resultados: [] });
     }
 
-    const resultados = [];
-    for (const doc of docsPortal) {
-      const clave = doc.claveAcceso;
-      const tipo  = detectarTipoDesdeClaveAcceso(clave);
-
-      if (!tipo) {
-        resultados.push({
-          clave,
-          estado: 'error',
-          error: 'Tipo de documento no reconocido en la clave',
-          preview: { emisorNombre: doc.razonSocialEmisor, fecha: doc.fechaEmision, total: doc.importeTotal },
-        });
-        continue;
-      }
-
-      const idExistente = await yaExisteEnBd(empresaId, clave, tipo.cod);
-      resultados.push({
-        clave,
-        estado:    idExistente ? 'existe' : 'nuevo',
-        tipo:      tipo.nombre,
-        tipoCod:   tipo.cod,
-        destino:   tipo.destino,
-        idExistente: idExistente || undefined,
-        preview: {
-          emisorNombre: doc.razonSocialEmisor,
-          fecha:        doc.fechaEmision,
-          total:        doc.importeTotal,
-          tipo:         tipo.nombre,
-        },
-      });
-    }
-
-    res.json({
-      success:  true,
-      total:    docsPortal.length,
-      nuevos:   resultados.filter((r) => r.estado === 'nuevo').length,
-      resultados,
-    });
+    const respuesta = await armarRespuestaConsultaRecibidos(empresaId, docsPortal);
+    res.json({ ...respuesta, metodo: 'scraper' });
   } catch (error) {
     console.error('Error en /buzon/sri-scraper/consultar:', error);
     res.status(500).json({ success: false, mensaje: 'Error al consultar el portal SRI vía scraper' });

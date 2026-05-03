@@ -12,6 +12,7 @@
 | 4 | Vercel — fix "cd frontend: No such file or directory" | ✅ |
 | 5 | Buzón SRI — fix logout involuntario (401→422) | ✅ |
 | 6 | Landing page — URL dinámica localhost/producción | ✅ |
+| 7 | Buzón SRI — endpoint estable + fallback automático scraper/portal | ✅ |
 
 ---
 
@@ -334,7 +335,7 @@ if (res.data.tenantSlug) {
 | 8 | **Manual de usuario** | Módulos: POS, Caja, Facturación, Inventario, Clientes, Contabilidad, Bancos, Declaraciones |
 | 9 | **Modal cliente incompleto en POS** | Actualmente muestra ⚠ — propuesta: abrir modal para crear cliente |
 | 10 | **Teléfono en notas_venta** | Agregar campo al schema Prisma |
-| 11 | **Descarga masiva SRI automática** | El SRI no tiene API pública documentada; feature lista para cuando se encuentre el endpoint correcto |
+| 11 | **Monitorear descarga masiva SRI automática** | Resuelta con scraper + fallback; mantener `Importar ZIP` como respaldo si el SRI cambia portal/API |
 | 12 | **Plan de cuentas** | Verificar que no quede texto "SCFI" en tabla `plan_cuentas` de BD |
 | 13 | **PWA — verificar manifest** | Probar instalación como app en móvil en producción |
 

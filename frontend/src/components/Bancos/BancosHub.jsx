@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import './Bancos.css';
 
@@ -488,7 +487,6 @@ function TabCheques({ cuenta }) {
 
 // ─── BancosHub — componente principal ────────────────────────
 export default function BancosHub() {
-  const navigate = useNavigate();
   const [cuentas, setCuentas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);

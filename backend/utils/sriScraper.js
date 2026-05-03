@@ -59,6 +59,33 @@ async function _lanzarNavegador() {
   }
 }
 
+async function _buscarPrimerSelector(page, selectors) {
+  for (const sel of selectors) {
+    try {
+      const el = await page.$(sel);
+      if (el) return el;
+    } catch {
+      // Algunos selectores pueden dejar de ser válidos si cambia el portal.
+    }
+  }
+  return null;
+}
+
+async function _clickControlPorTexto(page, textos = []) {
+  return page.evaluate((labels) => {
+    const normalizar = (txt) => String(txt || '').trim().toLowerCase();
+    const buscados = labels.map(normalizar);
+    const controles = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a'));
+    const encontrado = controles.find((el) => {
+      const texto = normalizar(el.textContent || el.value || el.getAttribute('aria-label'));
+      return buscados.some((label) => texto.includes(label));
+    });
+    if (!encontrado) return false;
+    encontrado.click();
+    return true;
+  }, textos).catch(() => false);
+}
+
 // ─── Autenticación ───────────────────────────────────────────
 /**
  * Autenticar en el portal SRI y retornar cookies de sesión.
@@ -99,11 +126,7 @@ async function scraperSriLogin(identificacion, password) {
       'input[type="password"]',
     ];
 
-    let userField = null;
-    for (const sel of SELECTORS_USER) {
-      userField = await page.$(sel);
-      if (userField) break;
-    }
+    const userField = await _buscarPrimerSelector(page, SELECTORS_USER);
     if (!userField) {
       await browser.close();
       throw new Error(
@@ -112,11 +135,7 @@ async function scraperSriLogin(identificacion, password) {
       );
     }
 
-    let passField = null;
-    for (const sel of SELECTORS_PASS) {
-      passField = await page.$(sel);
-      if (passField) break;
-    }
+    const passField = await _buscarPrimerSelector(page, SELECTORS_PASS);
     if (!passField) {
       await browser.close();
       throw new Error('No se encontró el campo de contraseña en el portal SRI.');
@@ -134,22 +153,23 @@ async function scraperSriLogin(identificacion, password) {
       'button[type="submit"]',
       'input[type="submit"]',
       '#btnIngresar',
-      'button:contains("Ingresar")',
       '[id*="btnIngresar"]',
       '[id*="ingresar"]',
     ];
 
     let submitted = false;
-    for (const sel of SELECTORS_SUBMIT) {
-      const btn = await page.$(sel);
-      if (btn) {
-        await Promise.all([
-          page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }),
-          btn.click(),
-        ]).catch(() => {}); // ignora timeout de navegación; revisamos URL después
-        submitted = true;
-        break;
-      }
+    const btn = await _buscarPrimerSelector(page, SELECTORS_SUBMIT);
+    if (btn) {
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }),
+        btn.click(),
+      ]).catch(() => {}); // ignora timeout de navegación; revisamos URL después
+      submitted = true;
+    } else {
+      submitted = await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }).catch(() => {}),
+        _clickControlPorTexto(page, ['Ingresar', 'Entrar', 'Acceder']),
+      ]).then(([, clicked]) => Boolean(clicked)).catch(() => false);
     }
 
     if (!submitted) {
@@ -286,43 +306,44 @@ async function _llenarFiltroFechas(page, fechaDesde, fechaHasta, tipoComprobante
     '#btnBuscar',
     '[id*="btnBuscar"]',
     '[id*="buscar"]',
-    'button:contains("Buscar")',
     'input[value*="Buscar"]',
   ];
 
-  for (const sel of SEL_DESDE) {
-    const el = await page.$(sel);
-    if (el) { await el.click({ clickCount: 3 }); await el.type(fechaDesde); break; }
-  }
-  for (const sel of SEL_HASTA) {
-    const el = await page.$(sel);
-    if (el) { await el.click({ clickCount: 3 }); await el.type(fechaHasta); break; }
-  }
+  const desde = await _buscarPrimerSelector(page, SEL_DESDE);
+  if (desde) { await desde.click({ clickCount: 3 }); await desde.type(fechaDesde); }
+
+  const hasta = await _buscarPrimerSelector(page, SEL_HASTA);
+  if (hasta) { await hasta.click({ clickCount: 3 }); await hasta.type(fechaHasta); }
 
   // Tipo de comprobante si aplica
   if (tipoComprobante && tipoComprobante !== 'TODOS') {
     const SEL_TIPO = ['#tipoComprobante', '[id*="tipoCom"]', 'select[name*="tipo"]'];
     for (const sel of SEL_TIPO) {
-      const el = await page.$(sel);
-      if (el) {
+      try {
+        const el = await page.$(sel);
+        if (!el) continue;
         await page.select(sel, tipoComprobante).catch(() => {});
         break;
+      } catch {
+        // Continuar con el siguiente selector si el portal cambió.
       }
     }
   }
 
   // Click en Buscar y esperar resultado
   let buscado = false;
-  for (const sel of SEL_BUSCAR) {
-    const btn = await page.$(sel);
-    if (btn) {
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }).catch(() => {}),
-        btn.click(),
-      ]);
-      buscado = true;
-      break;
-    }
+  const buscar = await _buscarPrimerSelector(page, SEL_BUSCAR);
+  if (buscar) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }).catch(() => {}),
+      buscar.click(),
+    ]);
+    buscado = true;
+  } else {
+    buscado = await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }).catch(() => {}),
+      _clickControlPorTexto(page, ['Buscar', 'Consultar']),
+    ]).then(([, clicked]) => Boolean(clicked)).catch(() => false);
   }
 
   if (!buscado) {
