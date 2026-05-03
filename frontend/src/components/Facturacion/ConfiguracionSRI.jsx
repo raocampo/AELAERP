@@ -9,9 +9,8 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import './ConfiguracionSRI.css';
 
-const API_BASE    = import.meta.env.VITE_API_URL || 'http://localhost:5600';
-// Para archivos estáticos (/uploads) se usa el servidor sin el sufijo /api
-const SERVER_BASE = API_BASE.replace(/\/api$/, '');
+// El logo ahora se guarda como data URI en la BD (no requiere URL del servidor)
+const SERVER_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5600').replace(/\/api$/, '');
 
 const ConfiguracionSRI = () => {
   const navigate  = useNavigate();
@@ -340,7 +339,11 @@ const ConfiguracionSRI = () => {
             <div className="sri-logo-body">
               {logoUrl ? (
                 <div className="sri-logo-preview">
-                  <img src={`${SERVER_BASE}${logoUrl}`} alt="Logo actual" className="sri-logo-img" />
+                  <img
+                    src={logoUrl.startsWith('data:') ? logoUrl : `${SERVER_BASE}${logoUrl}`}
+                    alt="Logo actual"
+                    className="sri-logo-img"
+                  />
                   <span className="field-hint">Logo actual — sube uno nuevo para reemplazarlo</span>
                 </div>
               ) : (

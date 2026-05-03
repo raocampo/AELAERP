@@ -53,16 +53,9 @@ const uploadCert = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
 });
 
-// ─── Multer para logo ────────────────────────────────────────────────────────
-const storageLogo = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, DIR_LOGOS),
-  filename:    (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `logo-${Date.now()}${ext}`);
-  },
-});
+// ─── Multer para logo (memoria → base64 en BD, sin escribir a disco) ─────────
 const uploadLogo = multer({
-  storage: storageLogo,
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) cb(null, true);
@@ -259,17 +252,19 @@ router.put('/configuracion', permitirConfigurarSri, async (req, res) => {
 });
 
 // POST /api/facturas/configuracion/logo
+// Convierte la imagen a data URI (base64) y la guarda en la BD.
+// Así el logo persiste aunque el servidor se reinicie o redeploy (Railway).
 router.post('/configuracion/logo', permitirConfigurarSri, uploadLogo.single('logo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió imagen' });
   try {
     const config = await getConfigSRI(req.empresa.id);
     if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
-    // Eliminar logo anterior
-    if (config.logoUrl) {
-      const oldPath = path.join(__dirname, '..', config.logoUrl.replace(/^\//, ''));
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-    }
-    const logoUrl = `/uploads/logos/${req.file.filename}`;
+
+    // Construir data URI directamente desde el buffer en memoria
+    const mime    = req.file.mimetype || 'image/png';
+    const b64     = req.file.buffer.toString('base64');
+    const logoUrl = `data:${mime};base64,${b64}`;
+
     await prisma.configuracion_sri.update({ where: { id: config.id }, data: { logoUrl } });
     res.json({ ok: true, data: { logoUrl } });
   } catch (err) {

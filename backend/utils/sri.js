@@ -60,6 +60,26 @@ const FORMAS_PAGO = {
 const VALID_SRI_FORMA_PAGO = new Set(['01','15','16','17','18','19','20','21']);
 
 /**
+ * Resuelve el logo de la configuración SRI para uso en PDFKit.
+ * Soporta data URIs base64 (nuevo formato) y rutas de archivo (legado).
+ * @returns {{ logoData: Buffer|string|null, tienelogo: boolean }}
+ */
+function _resolverLogo(logoUrl) {
+  if (!logoUrl) return { logoData: null, tienelogo: false };
+  // Nuevo formato: data URI base64
+  if (logoUrl.startsWith('data:')) {
+    try {
+      const b64 = logoUrl.replace(/^data:image\/\w+;base64,/, '');
+      return { logoData: Buffer.from(b64, 'base64'), tienelogo: true };
+    } catch { return { logoData: null, tienelogo: false }; }
+  }
+  // Formato legado: ruta de archivo (/uploads/logos/...)
+  const logoPath = path.join(__dirname, '..', logoUrl.replace(/^\//, ''));
+  const existe   = fs.existsSync(logoPath);
+  return { logoData: existe ? logoPath : null, tienelogo: existe };
+}
+
+/**
  * Resuelve el código SRI de forma de pago.
  * Acepta el código directamente ('01','19', etc.) o el nombre en español.
  */
@@ -946,12 +966,7 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     const detalles = typeof factura.detalles === 'string' ? JSON.parse(factura.detalles) : (factura.detalles || []);
     const pagos    = typeof factura.pagos    === 'string' ? JSON.parse(factura.pagos)    : (factura.pagos    || []);
 
-    // Resolver la ruta del logo en el sistema de archivos
-    // logoUrl en BD es una ruta web como "/uploads/logos/logo-xxx.png"
-    const logoPath  = config.logoUrl
-      ? path.join(__dirname, '..', config.logoUrl.replace(/^\//, ''))
-      : null;
-    const tienelogo = logoPath && fs.existsSync(logoPath);
+    const { logoData, tienelogo } = _resolverLogo(config.logoUrl);
 
     // ── HEADER ────────────────────────────────────────────────────────────────
     // Panel izquierdo (~44%): logo grande + datos emisor
@@ -968,7 +983,7 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
 
     if (tienelogo) {
       try {
-        doc.image(logoPath, ML, yL, { fit: [LP - 4, 65] });
+        doc.image(logoData, ML, yL, { fit: [LP - 4, 65] });
         yL += 70;
       } catch(e) { /* logo corrupto → omitir */ }
     }
@@ -1785,10 +1800,7 @@ async function generarRIDERetencion(retencion, configSri, outputPath) {
       ? JSON.parse(retencion.impuestos)
       : (retencion.impuestos || []);
 
-    const logoPath  = config.logoUrl
-      ? path.join(__dirname, '..', config.logoUrl.replace(/^\//, ''))
-      : null;
-    const tienelogo = logoPath && fs.existsSync(logoPath);
+    const { logoData, tienelogo } = _resolverLogo(config.logoUrl);
 
     let y = 20;
 
@@ -1800,7 +1812,7 @@ async function generarRIDERetencion(retencion, configSri, outputPath) {
 
     let yL = y;
     if (tienelogo) {
-      try { doc.image(logoPath, ML, yL, { fit: [LP - 4, 65] }); yL += 70; } catch(e) {}
+      try { doc.image(logoData, ML, yL, { fit: [LP - 4, 65] }); yL += 70; } catch(e) {}
     }
 
     doc.fontSize(8.5).font('Helvetica-Bold').fillColor(NEGRO)
@@ -2221,8 +2233,7 @@ async function generarRIDELiquidacionCompra(liq, configSri, outputPath) {
     const detalles = typeof liq.detalles === 'string' ? JSON.parse(liq.detalles) : (liq.detalles || []);
     const pagos    = typeof liq.pagos    === 'string' ? JSON.parse(liq.pagos)    : (liq.pagos    || []);
 
-    const logoPath  = config.logoUrl ? path.join(__dirname, '..', config.logoUrl.replace(/^\//, '')) : null;
-    const tienelogo = logoPath && fs.existsSync(logoPath);
+    const { logoData, tienelogo } = _resolverLogo(config.logoUrl);
 
     let y = 20;
     const LP   = Math.floor(W * 0.44);
@@ -2233,7 +2244,7 @@ async function generarRIDELiquidacionCompra(liq, configSri, outputPath) {
     // Panel izquierdo: logo + datos emisor
     let yL = y;
     if (tienelogo) {
-      try { doc.image(logoPath, ML, yL, { fit: [LP - 4, 65] }); yL += 70; } catch(e) {}
+      try { doc.image(logoData, ML, yL, { fit: [LP - 4, 65] }); yL += 70; } catch(e) {}
     }
     doc.fontSize(8.5).font('Helvetica-Bold').fillColor(NEGRO)
        .text((config.razonSocial || '').toUpperCase(), ML, yL, { width: LP - 4, lineBreak: false });
