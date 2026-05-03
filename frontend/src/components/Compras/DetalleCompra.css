@@ -257,7 +257,7 @@
     flex-direction: column;
     align-items: stretch;
   }
-
+}
 
 /* ── Modal editar / anular ── */
 .dc-modal-overlay {
