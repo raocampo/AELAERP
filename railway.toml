@@ -12,7 +12,7 @@ buildCommand = "cd backend && PUPPETEER_CACHE_DIR=/app/.puppeteer-cache npm inst
 [deploy]
 # prisma migrate deploy aplica migraciones pendientes sin necesitar pg_dump.
 # npm run db:migrate:safe (que usa pg_dump) puede fallar en Railway y bloquea el arranque.
-startCommand = "cd backend && npx prisma db push --skip-generate --accept-data-loss && node server.js"
+startCommand = "cd backend && sh start.sh"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
