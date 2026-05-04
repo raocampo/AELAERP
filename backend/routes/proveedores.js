@@ -1,4 +1,5 @@
 const express = require('express');
+const multer  = require('multer');
 const router = express.Router();
 const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
@@ -9,6 +10,13 @@ const {
   parsearContribuyenteSri,
   consultarCatastroLocal,
 } = require('../utils/sriContribuyente');
+const {
+  parsearBuffer,
+  parsearProveedores,
+  generarPlantillaProveedores,
+} = require('../utils/importarExcel');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function limpiarTexto(valor) {
   return String(valor || '').trim();
@@ -402,6 +410,80 @@ router.get('/:id/compras', async (req, res) => {
   } catch (error) {
     console.error('Error al obtener compras del proveedor:', error);
     res.status(500).json({ success: false, mensaje: 'Error al obtener compras del proveedor' });
+  }
+});
+
+// GET /api/proveedores/plantilla-excel
+router.get('/plantilla-excel', proteger, (req, res) => {
+  const buffer = generarPlantillaProveedores();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="plantilla_proveedores.xlsx"');
+  res.send(buffer);
+});
+
+// POST /api/proveedores/importar-excel
+router.post('/importar-excel', proteger, upload.single('archivo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, mensaje: 'No se recibió ningún archivo' });
+    }
+
+    const empresaId = req.empresa.id;
+    let rows;
+    try {
+      rows = parsearBuffer(req.file.buffer);
+    } catch {
+      return res.status(400).json({ success: false, mensaje: 'El archivo no es un Excel válido (.xlsx o .xls)' });
+    }
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'El archivo está vacío o no tiene datos' });
+    }
+
+    const parsed = parsearProveedores(rows);
+    const validos  = parsed.filter((r) => r.estado === 'ok');
+    const omitidos = parsed.filter((r) => r.estado === 'omitido');
+
+    const resultados = [];
+
+    for (const item of validos) {
+      try {
+        const existe = await prisma.proveedores.findFirst({
+          where: { empresaId, identificacion: item.data.identificacion },
+          select: { id: true },
+        });
+
+        if (existe) {
+          resultados.push({ fila: item.fila, identificacion: item.data.identificacion, razonSocial: item.data.razonSocial, estado: 'omitido', motivo: 'Ya existe' });
+          continue;
+        }
+
+        await prisma.proveedores.create({ data: { ...item.data, empresaId } });
+        resultados.push({ fila: item.fila, identificacion: item.data.identificacion, razonSocial: item.data.razonSocial, estado: 'creado' });
+      } catch (err) {
+        resultados.push({ fila: item.fila, identificacion: item.data.identificacion, razonSocial: item.data.razonSocial, estado: 'error', motivo: err.message });
+      }
+    }
+
+    for (const om of omitidos) {
+      resultados.push({ fila: om.fila, identificacion: om.id || '', estado: 'omitido', motivo: om.motivo });
+    }
+
+    resultados.sort((a, b) => a.fila - b.fila);
+
+    res.json({
+      success: true,
+      resumen: {
+        total: rows.length,
+        creados: resultados.filter((r) => r.estado === 'creado').length,
+        omitidos: resultados.filter((r) => r.estado === 'omitido').length,
+        errores: resultados.filter((r) => r.estado === 'error').length,
+      },
+      resultados,
+    });
+  } catch (error) {
+    console.error('Error importar-excel proveedores:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al procesar el archivo' });
   }
 });
 

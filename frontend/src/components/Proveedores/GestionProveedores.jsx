@@ -188,6 +188,42 @@ export default function GestionProveedores() {
   const conCompras = proveedores.filter((p) => Number(p.comprasCount || 0) > 0).length;
   const conContacto = proveedores.filter((p) => p.email || p.telefono).length;
 
+  // ─── Importar Excel ──────────────────────────────────────────────────────────
+  const [modalImport, setModalImport] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+
+  const abrirImport = () => { setImportResult(null); setModalImport(true); };
+  const cerrarImport = () => { setModalImport(false); setImportResult(null); };
+
+  const handleImportExcel = async (e) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = '';
+    if (!archivo) return;
+    setImportando(true);
+    setImportResult(null);
+    try {
+      const fd = new FormData();
+      fd.append('archivo', archivo);
+      const res = await api.post('/proveedores/importar-excel', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setImportResult(res.data);
+      if (res.data.resumen?.creados > 0) cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al importar el archivo');
+    } finally {
+      setImportando(false);
+    }
+  };
+
+  const descargarPlantilla = () => {
+    window.open(
+      `${import.meta.env.VITE_API_URL || '/api'}/proveedores/plantilla-excel`,
+      '_blank'
+    );
+  };
+
   return (
     <div className="proveedores-page">
       <div className="proveedores-header">
@@ -196,6 +232,7 @@ export default function GestionProveedores() {
           <p>Administra tu maestro de proveedores y reutilizalo en compras con consulta opcional al SRI.</p>
         </div>
         <div className="proveedores-header-actions">
+          <button className="btn-secondary" onClick={abrirImport}>Importar Excel</button>
           <button className="btn-secondary" onClick={() => navigate('/compras/nueva')}>Nueva compra</button>
           <button className="btn-primary" onClick={abrirNuevo}>Nuevo proveedor</button>
         </div>
@@ -316,6 +353,99 @@ export default function GestionProveedores() {
           </div>
         )}
       </div>
+
+      {/* MODAL IMPORTAR EXCEL */}
+      {modalImport && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{ maxWidth: '660px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Importar proveedores desde Excel</h2>
+              <button className="modal-close" onClick={cerrarImport}>✕</button>
+            </div>
+
+            <div style={{ padding: '16px 0' }}>
+              <p style={{ marginBottom: '12px', color: '#555' }}>
+                Columnas obligatorias: <strong>identificacion</strong>, <strong>razonSocial</strong>.
+                Opcionales: nombreComercial, email, telefono, direccion, ciudad, provincia, contactoNombre, banco, cuentaBancaria, observaciones.
+              </p>
+              <button className="btn-secondary" onClick={descargarPlantilla} style={{ marginBottom: '16px' }}>
+                Descargar plantilla Excel
+              </button>
+
+              {!importResult && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                    Seleccionar archivo (.xlsx / .xls):
+                  </label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleImportExcel}
+                    disabled={importando}
+                    style={{ display: 'block', width: '100%' }}
+                  />
+                  {importando && <p style={{ marginTop: '10px', color: '#666' }}>Procesando archivo...</p>}
+                </div>
+              )}
+
+              {importResult && (
+                <div>
+                  <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                    <span style={{ background: '#e8f5e9', padding: '6px 12px', borderRadius: '6px', fontWeight: 600 }}>
+                      Creados: {importResult.resumen.creados}
+                    </span>
+                    <span style={{ background: '#fff3e0', padding: '6px 12px', borderRadius: '6px', fontWeight: 600 }}>
+                      Omitidos: {importResult.resumen.omitidos}
+                    </span>
+                    {importResult.resumen.errores > 0 && (
+                      <span style={{ background: '#ffebee', padding: '6px 12px', borderRadius: '6px', fontWeight: 600 }}>
+                        Errores: {importResult.resumen.errores}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ maxHeight: '280px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '6px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                      <thead>
+                        <tr style={{ background: '#f5f5f5', position: 'sticky', top: 0 }}>
+                          <th style={{ padding: '6px 10px', textAlign: 'left' }}>Fila</th>
+                          <th style={{ padding: '6px 10px', textAlign: 'left' }}>Identificación</th>
+                          <th style={{ padding: '6px 10px', textAlign: 'left' }}>Razón Social</th>
+                          <th style={{ padding: '6px 10px', textAlign: 'left' }}>Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importResult.resultados.map((r, i) => (
+                          <tr key={i} style={{ borderTop: '1px solid #eee', background: r.estado === 'error' ? '#fff8f8' : 'white' }}>
+                            <td style={{ padding: '5px 10px', color: '#888' }}>{r.fila}</td>
+                            <td style={{ padding: '5px 10px' }}>{r.identificacion}</td>
+                            <td style={{ padding: '5px 10px' }}>{r.razonSocial || '—'}</td>
+                            <td style={{ padding: '5px 10px' }}>
+                              <span style={{
+                                padding: '2px 8px', borderRadius: '4px', fontWeight: 500,
+                                background: r.estado === 'creado' ? '#e8f5e9' : r.estado === 'error' ? '#ffebee' : '#f5f5f5',
+                                color: r.estado === 'creado' ? '#2e7d32' : r.estado === 'error' ? '#c62828' : '#666',
+                              }}>
+                                {r.estado === 'creado' ? 'Creado' : r.estado === 'error' ? `Error: ${r.motivo}` : `Omitido: ${r.motivo}`}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <button className="btn-secondary" onClick={() => setImportResult(null)} style={{ marginTop: '12px' }}>
+                    Importar otro archivo
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={cerrarImport}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalAbierto && (
         <div className="modal-overlay">
