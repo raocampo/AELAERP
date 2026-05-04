@@ -190,11 +190,18 @@ export default function GestionClientes() {
     }
   };
 
-  const descargarPlantilla = () => {
-    window.open(
-      `${import.meta.env.VITE_API_URL || '/api'}/clientes/plantilla-excel`,
-      '_blank'
-    );
+  const descargarPlantilla = async () => {
+    try {
+      const res = await api.get('/clientes/plantilla-excel', { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'plantilla_clientes.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('No se pudo descargar la plantilla');
+    }
   };
 
   return (
@@ -307,75 +314,80 @@ export default function GestionClientes() {
       {/* MODAL IMPORTAR EXCEL */}
       {modalImport && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-box" style={{ maxWidth: '660px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Importar clientes desde Excel</h2>
               <button className="modal-close" onClick={cerrarImport}>✕</button>
             </div>
 
-            <div style={{ padding: '16px 0' }}>
-              <p style={{ marginBottom: '12px', color: '#555' }}>
-                El archivo debe tener las columnas: <strong>identificacion</strong>, <strong>razonSocial</strong> (obligatorias)
-                y opcionalmente: nombreComercial, email, telefono, direccion.
+            <div className="modal-form">
+              <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>
+                Columnas <strong>obligatorias</strong>: identificacion, razonSocial.
+                Opcionales: nombreComercial, email, telefono, direccion.
               </p>
-              <button className="btn-secondary" onClick={descargarPlantilla} style={{ marginBottom: '16px' }}>
-                Descargar plantilla Excel
-              </button>
 
-              {!importResult && (
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
-                    Seleccionar archivo (.xlsx / .xls):
-                  </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b', marginBottom: '2px' }}>Paso 1 — Descarga la plantilla</div>
+                  <div style={{ fontSize: '0.82rem', color: '#64748b' }}>Incluye ejemplos de formato para RUC, cédula y pasaporte</div>
+                </div>
+                <button className="btn-secondary" onClick={descargarPlantilla}>
+                  Descargar plantilla
+                </button>
+              </div>
+
+              {!importResult ? (
+                <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b', marginBottom: '10px' }}>Paso 2 — Sube tu archivo Excel</div>
                   <input
                     type="file"
                     accept=".xlsx,.xls"
                     onChange={handleImportExcel}
                     disabled={importando}
-                    style={{ display: 'block', width: '100%' }}
+                    style={{ display: 'block', width: '100%', cursor: 'pointer' }}
                   />
-                  {importando && <p style={{ marginTop: '10px', color: '#666' }}>Procesando archivo...</p>}
+                  {importando && (
+                    <p style={{ marginTop: '10px', color: '#64748b', fontSize: '0.9rem' }}>Procesando archivo...</p>
+                  )}
                 </div>
-              )}
-
-              {importResult && (
+              ) : (
                 <div>
-                  <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                    <span style={{ background: '#e8f5e9', padding: '6px 12px', borderRadius: '6px', fontWeight: 600 }}>
-                      Creados: {importResult.resumen.creados}
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                    <span style={{ background: '#dcfce7', color: '#166534', padding: '5px 14px', borderRadius: '20px', fontWeight: 600, fontSize: '0.9rem' }}>
+                      ✓ Creados: {importResult.resumen.creados}
                     </span>
-                    <span style={{ background: '#fff3e0', padding: '6px 12px', borderRadius: '6px', fontWeight: 600 }}>
+                    <span style={{ background: '#fef3c7', color: '#92400e', padding: '5px 14px', borderRadius: '20px', fontWeight: 600, fontSize: '0.9rem' }}>
                       Omitidos: {importResult.resumen.omitidos}
                     </span>
                     {importResult.resumen.errores > 0 && (
-                      <span style={{ background: '#ffebee', padding: '6px 12px', borderRadius: '6px', fontWeight: 600 }}>
+                      <span style={{ background: '#fee2e2', color: '#991b1b', padding: '5px 14px', borderRadius: '20px', fontWeight: 600, fontSize: '0.9rem' }}>
                         Errores: {importResult.resumen.errores}
                       </span>
                     )}
                   </div>
-                  <div style={{ maxHeight: '280px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '6px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
                       <thead>
-                        <tr style={{ background: '#f5f5f5', position: 'sticky', top: 0 }}>
-                          <th style={{ padding: '6px 10px', textAlign: 'left' }}>Fila</th>
-                          <th style={{ padding: '6px 10px', textAlign: 'left' }}>Identificación</th>
-                          <th style={{ padding: '6px 10px', textAlign: 'left' }}>Razón Social</th>
-                          <th style={{ padding: '6px 10px', textAlign: 'left' }}>Estado</th>
+                        <tr style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
+                          <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Fila</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Identificación</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Razón Social</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Estado</th>
                         </tr>
                       </thead>
                       <tbody>
                         {importResult.resultados.map((r, i) => (
-                          <tr key={i} style={{ borderTop: '1px solid #eee', background: r.estado === 'error' ? '#fff8f8' : 'white' }}>
-                            <td style={{ padding: '5px 10px', color: '#888' }}>{r.fila}</td>
-                            <td style={{ padding: '5px 10px' }}>{r.identificacion}</td>
-                            <td style={{ padding: '5px 10px' }}>{r.razonSocial || '—'}</td>
-                            <td style={{ padding: '5px 10px' }}>
+                          <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '6px 10px', color: '#94a3b8' }}>{r.fila}</td>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace' }}>{r.identificacion}</td>
+                            <td style={{ padding: '6px 10px' }}>{r.razonSocial || '—'}</td>
+                            <td style={{ padding: '6px 10px' }}>
                               <span style={{
-                                padding: '2px 8px', borderRadius: '4px', fontWeight: 500,
-                                background: r.estado === 'creado' ? '#e8f5e9' : r.estado === 'error' ? '#ffebee' : '#f5f5f5',
-                                color: r.estado === 'creado' ? '#2e7d32' : r.estado === 'error' ? '#c62828' : '#666',
+                                padding: '2px 8px', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 600,
+                                background: r.estado === 'creado' ? '#dcfce7' : r.estado === 'error' ? '#fee2e2' : '#f1f5f9',
+                                color: r.estado === 'creado' ? '#166534' : r.estado === 'error' ? '#991b1b' : '#475569',
                               }}>
-                                {r.estado === 'creado' ? 'Creado' : r.estado === 'error' ? `Error: ${r.motivo}` : `Omitido: ${r.motivo}`}
+                                {r.estado === 'creado' ? 'Creado' : r.estado === 'error' ? `Error: ${r.motivo}` : r.motivo || 'Omitido'}
                               </span>
                             </td>
                           </tr>
@@ -383,7 +395,7 @@ export default function GestionClientes() {
                       </tbody>
                     </table>
                   </div>
-                  <button className="btn-secondary" onClick={() => setImportResult(null)} style={{ marginTop: '12px' }}>
+                  <button className="btn-secondary" onClick={() => setImportResult(null)} style={{ marginTop: '10px' }}>
                     Importar otro archivo
                   </button>
                 </div>
