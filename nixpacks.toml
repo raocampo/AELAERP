@@ -6,6 +6,8 @@
 
 [phases.setup]
 nixPkgs = [
+  # Node.js debe incluirse explícitamente al usar setup personalizado
+  "nodejs_20",
   "postgresql",
   "nss",
   "nspr",
