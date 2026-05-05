@@ -227,6 +227,14 @@ router.get('/sri/:identificacion', proteger, async (req, res) => {
   }
 });
 
+// GET /api/clientes/plantilla-excel
+router.get('/plantilla-excel', proteger, (req, res) => {
+  const buffer = generarPlantillaClientes();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="plantilla_clientes.xlsx"');
+  res.send(buffer);
+});
+
 // GET /api/clientes/:id
 router.get('/:id', proteger, async (req, res) => {
   try {
@@ -299,14 +307,6 @@ router.put('/:id', proteger, async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, mensaje: 'Error al actualizar cliente' });
   }
-});
-
-// GET /api/clientes/plantilla-excel
-router.get('/plantilla-excel', proteger, (req, res) => {
-  const buffer = generarPlantillaClientes();
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', 'attachment; filename="plantilla_clientes.xlsx"');
-  res.send(buffer);
 });
 
 // POST /api/clientes/importar-excel

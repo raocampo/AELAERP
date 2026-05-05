@@ -239,6 +239,14 @@ router.get('/sri/:identificacion', async (req, res) => {
   }
 });
 
+// GET /api/proveedores/plantilla-excel
+router.get('/plantilla-excel', proteger, (req, res) => {
+  const buffer = generarPlantillaProveedores();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="plantilla_proveedores.xlsx"');
+  res.send(buffer);
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const proveedor = await prisma.proveedores.findFirst({
@@ -411,14 +419,6 @@ router.get('/:id/compras', async (req, res) => {
     console.error('Error al obtener compras del proveedor:', error);
     res.status(500).json({ success: false, mensaje: 'Error al obtener compras del proveedor' });
   }
-});
-
-// GET /api/proveedores/plantilla-excel
-router.get('/plantilla-excel', proteger, (req, res) => {
-  const buffer = generarPlantillaProveedores();
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', 'attachment; filename="plantilla_proveedores.xlsx"');
-  res.send(buffer);
 });
 
 // POST /api/proveedores/importar-excel
