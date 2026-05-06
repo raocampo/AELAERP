@@ -31,7 +31,9 @@ function parsearBuffer(buffer) {
 // ─── Normalizar encabezados (ignora mayúsculas, tildes, espacios) ──
 const NORM_MAP = {
   identificacion:    ['identificacion', 'ruc', 'cedula', 'id', 'nro'],
-  razonSocial:       ['razonsocial', 'nombre', 'razon social', 'razon_social'],
+  razonSocial:       ['razonsocial', 'razon social', 'razon_social', 'empresa', 'compania'],
+  nombres:           ['nombres', 'nombre', 'primer nombre', 'nombres propios', 'name'],
+  apellidos:         ['apellidos', 'apellido', 'primer apellido', 'surname', 'lastname'],
   nombreComercial:   ['nombrecomercial', 'nombre comercial', 'comercial', 'nombre_comercial'],
   tipoIdentificacion:['tipoidentificacion', 'tipo', 'tipo_identificacion'],
   direccion:         ['direccion', 'dirección', 'address'],
@@ -61,6 +63,18 @@ function mapearCampo(columna) {
   return null;
 }
 
+// ─── Construir razonSocial desde apellidos + nombres (personas naturales) ──
+function construirRazonSocial(datos) {
+  const rs = str(datos.razonSocial, 300);
+  if (rs) return rs;
+  const apellidos = str(datos.apellidos, 150);
+  const nombres   = str(datos.nombres, 150);
+  if (apellidos || nombres) {
+    return [apellidos, nombres].filter(Boolean).join(' ').trim();
+  }
+  return '';
+}
+
 // ─── Parsear filas → clientes ────────────────────────────────
 function parsearClientes(rows) {
   const resultado = [];
@@ -79,9 +93,9 @@ function parsearClientes(rows) {
       continue;
     }
 
-    const razonSocial = str(datos.razonSocial, 300);
+    const razonSocial = construirRazonSocial(datos);
     if (!razonSocial) {
-      resultado.push({ fila: i + 2, estado: 'omitido', motivo: 'Sin razón social', id });
+      resultado.push({ fila: i + 2, estado: 'omitido', motivo: 'Sin razón social ni nombres/apellidos', id });
       continue;
     }
 
@@ -121,9 +135,9 @@ function parsearProveedores(rows) {
       continue;
     }
 
-    const razonSocial = str(datos.razonSocial, 300);
+    const razonSocial = construirRazonSocial(datos);
     if (!razonSocial) {
-      resultado.push({ fila: i + 2, estado: 'omitido', motivo: 'Sin razón social', id });
+      resultado.push({ fila: i + 2, estado: 'omitido', motivo: 'Sin razón social ni nombres/apellidos', id });
       continue;
     }
 
@@ -154,19 +168,22 @@ function parsearProveedores(rows) {
 // ─── Generar plantilla Excel de Clientes ─────────────────────
 function generarPlantillaClientes() {
   const encabezados = [
-    'identificacion', 'razonSocial', 'nombreComercial',
+    'identificacion', 'razonSocial', 'apellidos', 'nombres',
     'email', 'telefono', 'direccion',
   ];
   const ejemplos = [
-    ['0912345678001', 'EMPRESA EJEMPLO S.A.', 'EJEMPLO', 'info@ejemplo.com', '0991234567', 'Av. Principal 123'],
-    ['0987654321', 'JUAN PEREZ', '', '', '0987654321', ''],
+    // Empresa / RUC → usa razonSocial, deja apellidos/nombres vacíos
+    ['0912345678001', 'EMPRESA EJEMPLO S.A.', '', '', 'info@ejemplo.com', '022345678', 'Av. Principal 123'],
+    // Persona natural / Cédula → usa apellidos + nombres, deja razonSocial vacío
+    ['0987654321',    '', 'PEREZ GOMEZ', 'JUAN CARLOS', 'juan@email.com', '0991234567', ''],
+    // Pasaporte extranjero → usa razonSocial directamente
+    ['PA123456',     'JOHN DOE', '', '', '', '', ''],
   ];
 
   const ws = XLSX.utils.aoa_to_sheet([encabezados, ...ejemplos]);
 
-  // Ancho de columnas
   ws['!cols'] = [
-    { wch: 16 }, { wch: 35 }, { wch: 25 },
+    { wch: 16 }, { wch: 35 }, { wch: 22 }, { wch: 22 },
     { wch: 28 }, { wch: 14 }, { wch: 35 },
   ];
 
@@ -178,20 +195,24 @@ function generarPlantillaClientes() {
 // ─── Generar plantilla Excel de Proveedores ───────────────────
 function generarPlantillaProveedores() {
   const encabezados = [
-    'identificacion', 'razonSocial', 'nombreComercial',
+    'identificacion', 'razonSocial', 'apellidos', 'nombres',
     'email', 'telefono', 'direccion', 'ciudad', 'provincia',
     'contactoNombre', 'banco', 'cuentaBancaria', 'observaciones',
   ];
   const ejemplos = [
-    ['0912345678001', 'PROVEEDOR EJEMPLO S.A.', 'PROVEEDOR', 'ventas@proveedor.com',
+    // Empresa / RUC
+    ['0912345678001', 'PROVEEDOR EJEMPLO S.A.', '', '', 'ventas@proveedor.com',
      '022345678', 'Calle 10 y Av. 5', 'Guayaquil', 'Guayas',
      'Carlos López', 'Banco Pichincha', '2200123456', ''],
+    // Persona natural / Cédula
+    ['0987654321', '', 'LOPEZ VERA', 'MARIA JOSE', 'maria@email.com',
+     '0991234567', '', '', '', '', '', '', ''],
   ];
 
   const ws = XLSX.utils.aoa_to_sheet([encabezados, ...ejemplos]);
 
   ws['!cols'] = [
-    { wch: 16 }, { wch: 35 }, { wch: 25 }, { wch: 28 },
+    { wch: 16 }, { wch: 35 }, { wch: 22 }, { wch: 22 }, { wch: 28 },
     { wch: 14 }, { wch: 35 }, { wch: 14 }, { wch: 14 },
     { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 25 },
   ];

@@ -322,8 +322,10 @@ export default function GestionClientes() {
 
             <div className="modal-form">
               <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>
-                Columnas <strong>obligatorias</strong>: identificacion, razonSocial.
-                Opcionales: nombreComercial, email, telefono, direccion.
+                Columnas <strong>obligatorias</strong>: <code>identificacion</code> +{' '}
+                <code>razonSocial</code> <em>(empresas)</em> ó{' '}
+                <code>apellidos</code> y <code>nombres</code> <em>(personas naturales)</em>.{' '}
+                Opcionales: email, telefono, direccion.
               </p>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
