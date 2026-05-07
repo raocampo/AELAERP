@@ -838,6 +838,35 @@ model contribuyentes_sri {
   @@map("contribuyentes_sri")
 }
 
+// ====================================
+// DIRECTORIO GLOBAL DE CONTRIBUYENTES
+// Tabla maestra acumulativa — NUNCA se borra, solo se enriquece.
+// Almacena toda identificación conocida: RUC, cédula, pasaporte, exterior.
+// Se enriquece desde:
+//   - Importación Excel de clientes/proveedores
+//   - Creación manual de clientes/proveedores
+//   - Consultas al SRI (API online y catastro local)
+// Permite que nuevas instancias del sistema partan con datos precargados.
+// ====================================
+model directorio_global {
+  id                  Int      @id @default(autoincrement())
+  identificacion      String   @unique @db.VarChar(20)
+  tipoIdentificacion  String   @db.VarChar(2)
+  // 04=RUC, 05=Cédula, 06=Pasaporte, 07=Cons.Final, 08=Exterior
+  razonSocial         String   @db.VarChar(300)
+  nombreComercial     String?  @db.VarChar(300)
+  direccion           String?  @db.VarChar(300)
+  email               String?  @db.VarChar(150)
+  telefono            String?  @db.VarChar(20)
+  fuente              String   @default("manual") @db.VarChar(15)
+  // sri_csv | sri_api | importacion | manual
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([identificacion])
+  @@map("directorio_global")
+}
+
 model auditoria {
   id          Int       @id @default(autoincrement())
   empresaId   Int       @default(1)

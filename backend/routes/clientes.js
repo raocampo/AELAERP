@@ -20,6 +20,7 @@ const {
   parsearClientes,
   generarPlantillaClientes,
 } = require('../utils/importarExcel');
+const { upsertDirectorio } = require('../utils/directorioGlobal');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -117,10 +118,17 @@ router.get('/sri/:identificacion', proteger, async (req, res) => {
           identificacion:     id,
           razonSocial:        catastroLocal.razonSocial,
           nombreComercial:    catastroLocal.nombreComercial,
-          direccion:          null,
-          email:              null,
-          telefono:           null,
+          direccion:          catastroLocal.direccion || null,
+          email:              catastroLocal.email || null,
+          telefono:           catastroLocal.telefono || null,
         },
+      });
+      upsertDirectorio({
+        identificacion:     id,
+        tipoIdentificacion: catastroLocal.tipoIdentificacion,
+        razonSocial:        catastroLocal.razonSocial,
+        nombreComercial:    catastroLocal.nombreComercial,
+        fuente:             catastroLocal.fuenteLocal ? 'sri_csv' : 'manual',
       });
       return res.json({
         success: true,
@@ -148,6 +156,16 @@ router.get('/sri/:identificacion', proteger, async (req, res) => {
           telefono:           parsed.telefono,
         },
       });
+      upsertDirectorio({
+        identificacion:     id,
+        tipoIdentificacion: parsed.tipoIdentificacion,
+        razonSocial:        parsed.razonSocial,
+        nombreComercial:    parsed.nombreComercial,
+        direccion:          parsed.direccion,
+        email:              parsed.email,
+        telefono:           parsed.telefono,
+        fuente:             'sri_api',
+      });
       return res.json({ success: true, fuente: 'sri', data: cliente, estadoSRI: parsed.estado });
     }
 
@@ -174,6 +192,16 @@ router.get('/sri/:identificacion', proteger, async (req, res) => {
           email:              empresaConocida.email || null,
           telefono:           empresaConocida.telefono || null,
         },
+      });
+      upsertDirectorio({
+        identificacion:     id,
+        tipoIdentificacion: '04',
+        razonSocial:        empresaConocida.razonSocial,
+        nombreComercial:    empresaConocida.nombreComercial,
+        direccion:          empresaConocida.direccion,
+        email:              empresaConocida.email,
+        telefono:           empresaConocida.telefono,
+        fuente:             'manual',
       });
       return res.json({
         success: true,
@@ -273,6 +301,17 @@ router.post('/', proteger, async (req, res) => {
       },
     });
 
+    upsertDirectorio({
+      identificacion:     cliente.identificacion,
+      tipoIdentificacion: cliente.tipoIdentificacion,
+      razonSocial:        cliente.razonSocial,
+      nombreComercial:    cliente.nombreComercial,
+      direccion:          cliente.direccion,
+      email:              cliente.email,
+      telefono:           cliente.telefono,
+      fuente:             'manual',
+    });
+
     res.status(201).json({ success: true, data: cliente });
   } catch (error) {
     if (error.code === 'P2002') {
@@ -335,6 +374,10 @@ router.post('/importar-excel', proteger, upload.single('archivo'), async (req, r
     const resultados = [];
 
     for (const item of validos) {
+      // Siempre enriquecer el directorio global, independientemente de si el
+      // cliente ya existe en esta empresa o no.
+      upsertDirectorio({ ...item.data, fuente: 'importacion' });
+
       try {
         const existe = await prisma.clientes.findFirst({
           where: { empresaId, identificacion: item.data.identificacion },

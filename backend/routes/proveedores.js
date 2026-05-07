@@ -15,6 +15,7 @@ const {
   parsearProveedores,
   generarPlantillaProveedores,
 } = require('../utils/importarExcel');
+const { upsertDirectorio } = require('../utils/directorioGlobal');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -316,6 +317,17 @@ router.post('/', async (req, res) => {
       },
     });
 
+    upsertDirectorio({
+      identificacion:     proveedor.identificacion,
+      tipoIdentificacion: proveedor.tipoIdentificacion,
+      razonSocial:        proveedor.razonSocial,
+      nombreComercial:    proveedor.nombreComercial,
+      direccion:          proveedor.direccion,
+      email:              proveedor.email,
+      telefono:           proveedor.telefono,
+      fuente:             'manual',
+    });
+
     res.status(201).json({ success: true, data: proveedor });
   } catch (error) {
     if (error.code === 'P2002') {
@@ -447,6 +459,9 @@ router.post('/importar-excel', proteger, upload.single('archivo'), async (req, r
     const resultados = [];
 
     for (const item of validos) {
+      // Siempre enriquecer el directorio global
+      upsertDirectorio({ ...item.data, fuente: 'importacion' });
+
       try {
         const existe = await prisma.proveedores.findFirst({
           where: { empresaId, identificacion: item.data.identificacion },

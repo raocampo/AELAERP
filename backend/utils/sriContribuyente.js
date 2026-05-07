@@ -108,9 +108,11 @@ function parsearContribuyenteSri(datos, identificacionOriginal) {
 
 // ─── Consulta catastro local (BD PostgreSQL) ─────────────────────────────────
 // Retorna objeto compatible con parsearContribuyenteSri, o null si no existe.
-// El catastro se carga con: node scripts/importarCatastroSRI.js
+// Busca primero en contribuyentes_sri (CSVs del SRI), luego en directorio_global
+// (catálogo acumulado de importaciones y creaciones manuales).
 async function consultarCatastroLocal(identificacion) {
   try {
+    // 1. Buscar en contribuyentes_sri (RUCs del SRI — solo 13 dígitos)
     // Para cédulas (10 dígitos), el RUC en el catastro es cédula + "001"
     const rucBusqueda = identificacion.length === 10
       ? `${identificacion}001`
@@ -120,25 +122,53 @@ async function consultarCatastroLocal(identificacion) {
       where: { ruc: rucBusqueda },
     });
 
-    if (!row) return null;
+    if (row) {
+      return {
+        tipoIdentificacion:    identificacion.length === 10 ? '05' : '04',
+        identificacion,
+        ruc:                   row.ruc,
+        razonSocial:           row.razonSocial,
+        nombreComercial:       row.nombreComercial || null,
+        direccion:             null, // los CSVs del SRI no incluyen dirección detallada
+        estado:                row.estado,
+        contribuyenteEspecial: row.claseContribuyente === 'ESPECIAL' ? 'SI' : null,
+        contribuyenteRimpe:    (row.claseContribuyente || '').toLowerCase().includes('rimpe'),
+        negocioPopular:        (row.claseContribuyente || '').toLowerCase().includes('negocio popular'),
+        obligadoContabilidad:  row.obligadoContabilidad,
+        agenteRetencion:       null,
+        email:                 null,
+        telefono:              null,
+        fuenteLocal:           true,
+      };
+    }
 
-    return {
-      tipoIdentificacion:   identificacion.length === 10 ? '05' : '04',
-      identificacion,
-      ruc:                  row.ruc,
-      razonSocial:          row.razonSocial,
-      nombreComercial:      row.nombreComercial || null,
-      direccion:            null, // los CSVs del SRI no incluyen dirección detallada
-      estado:               row.estado,
-      contribuyenteEspecial: row.claseContribuyente === 'ESPECIAL' ? 'SI' : null,
-      contribuyenteRimpe:   (row.claseContribuyente || '').toLowerCase().includes('rimpe'),
-      negocioPopular:       (row.claseContribuyente || '').toLowerCase().includes('negocio popular'),
-      obligadoContabilidad: row.obligadoContabilidad,
-      agenteRetencion:      null,
-      email:                null,
-      telefono:             null,
-      fuenteLocal:          true, // marca que viene del catastro local
-    };
+    // 2. Fallback: directorio_global (acumula importaciones + creaciones manuales)
+    //    Cubre cédulas, pasaportes e IDs que no están en el catastro SRI.
+    const dir = await prisma.directorio_global.findUnique({
+      where: { identificacion },
+    });
+
+    if (dir) {
+      return {
+        tipoIdentificacion:    dir.tipoIdentificacion,
+        identificacion,
+        ruc:                   null,
+        razonSocial:           dir.razonSocial,
+        nombreComercial:       dir.nombreComercial || null,
+        direccion:             dir.direccion || null,
+        estado:                'ACTIVO',
+        contribuyenteEspecial: null,
+        contribuyenteRimpe:    false,
+        negocioPopular:        false,
+        obligadoContabilidad:  false,
+        agenteRetencion:       null,
+        email:                 dir.email || null,
+        telefono:              dir.telefono || null,
+        fuenteLocal:           true,
+      };
+    }
+
+    return null;
   } catch {
     return null;
   }
