@@ -151,7 +151,7 @@ const GRUPOS_MENU = [
     label: 'Administración',
     items: [
       { to: '/usuarios', icon: '👤', label: 'Usuarios', permiso: 'usuarios.gestionar' },
-      { to: '/empresas', icon: '🏢', label: 'Empresas', permiso: 'empresas.gestionar', soloMulti: true },
+      { to: '/empresas', icon: '🏢', label: 'Empresas', permiso: 'empresas.gestionar' },
     ],
   },
 ];

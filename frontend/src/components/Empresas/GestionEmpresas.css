@@ -235,3 +235,29 @@ select.ge-input { cursor: pointer; }
   .ge-col-full { grid-column: 1; }
   .ge-header { flex-direction: column; align-items: flex-start; }
 }
+
+/* ── Panel usuarios por empresa ────────────────────────────── */
+.ge-usuarios-panel {
+  padding: 1rem;
+  border: 1px solid #e0e7ff;
+  border-radius: .75rem;
+  background: #f8fafc;
+  margin: .25rem 0 .5rem;
+}
+.ge-usuarios-panel h4 { margin: 0 0 .75rem; color: #1e293b; font-size: .95rem; }
+
+.ge-asignar-form {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: .75rem;
+  padding-bottom: .75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ge-btn-sm.active {
+  background: #ede9fe;
+  color: #7C3AED;
+  border-color: #c4b5fd;
+}

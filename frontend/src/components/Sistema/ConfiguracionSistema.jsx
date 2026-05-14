@@ -61,6 +61,7 @@ export default function ConfiguracionSistema() {
   const [form, setForm] = useState(FORM_INICIAL);
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [probandoSmtp, setProbandoSmtp] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -121,6 +122,18 @@ export default function ConfiguracionSistema() {
       toast.error(error.response?.data?.mensaje || 'No se pudo guardar la configuración');
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const handleProbarSmtp = async () => {
+    setProbandoSmtp(true);
+    try {
+      const res = await api.post('/configuracion-sistema/test-email');
+      toast.success(res.data.mensaje || 'Email de prueba enviado');
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al enviar email de prueba');
+    } finally {
+      setProbandoSmtp(false);
     }
   };
 
@@ -376,6 +389,40 @@ export default function ConfiguracionSistema() {
               </div>
               <small className="syscfg-hint">
                 Se usa para calcular el décimo cuarto proporcional en la nómina. Actualizar cada año según resolución ministerial.
+              </small>
+            </div>
+          </div>
+        </section>
+
+        {/* ── SMTP / Correo electrónico ────────────────────────────────────── */}
+        <section className="syscfg-card syscfg-card-wide">
+          <h2>📧 Correo Electrónico (SMTP)</h2>
+          <div className="syscfg-grid">
+            <div className="syscfg-field">
+              <p style={{ margin: '0 0 .5rem', fontSize: '.9rem', color: '#475569', lineHeight: '1.5' }}>
+                Configura las variables de entorno en Railway para habilitar el envío de correos:
+                <code style={{ display: 'block', background: '#f1f5f9', padding: '.5rem .75rem', borderRadius: '.4rem', marginTop: '.4rem', fontSize: '.82rem', lineHeight: '1.7' }}>
+                  SMTP_HOST = smtp.gmail.com<br />
+                  SMTP_PORT = 587<br />
+                  SMTP_SECURE = false<br />
+                  SMTP_USER = tucorreo@gmail.com<br />
+                  SMTP_PASS = contraseña-de-app<br />
+                  SMTP_FROM = AELA ERP &lt;tucorreo@gmail.com&gt;<br />
+                  SMTP_SOPORTE = soporte@tudominio.com
+                </code>
+              </p>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleProbarSmtp}
+                disabled={probandoSmtp}
+                style={{ marginTop: '.75rem' }}
+              >
+                {probandoSmtp ? '⏳ Enviando...' : '✉️ Enviar email de prueba'}
+              </button>
+              <small className="syscfg-hint" style={{ display: 'block', marginTop: '.4rem' }}>
+                Si SMTP no está configurado, el botón te indicará qué variables agregar.
+                El email de prueba se envía a tu correo registrado en el sistema.
               </small>
             </div>
           </div>

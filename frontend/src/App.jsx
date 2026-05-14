@@ -107,9 +107,11 @@ function ModuleRoute({ moduleKey, children }) {
   return children;
 }
 
-function AdminMultiRoute({ children }) {
-  const { usuario, modoMulti } = useAuth();
-  if (!modoMulti || !tienePermiso(usuario?.rol, 'empresas.gestionar')) return <Navigate to="/dashboard" replace />;
+// Ruta de gestión de empresas — accesible para el admin en cualquier modo
+// (mono con subsidiarias = Macro Empresa, multi = SaaS)
+function AdminEmpresasRoute({ children }) {
+  const { usuario } = useAuth();
+  if (!tienePermiso(usuario?.rol, 'empresas.gestionar')) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
@@ -221,7 +223,7 @@ function App() {
                 <Route path="usuarios" element={<AdminRoute><GestionUsuarios /></AdminRoute>} />
 
                 {/* Gestión de Empresas — admin + multiempresa */}
-                <Route path="empresas" element={<AdminMultiRoute><GestionEmpresas /></AdminMultiRoute>} />
+                <Route path="empresas" element={<AdminEmpresasRoute><GestionEmpresas /></AdminEmpresasRoute>} />
               </Route>
 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

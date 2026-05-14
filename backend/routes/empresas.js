@@ -14,7 +14,6 @@ const {
 } = require('../utils/sriContribuyente');
 const {
   asegurarConfiguracionSistemaEmpresa,
-  obtenerModoOperacionGlobal,
 } = require('../utils/configuracionSistema');
 const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
 
@@ -242,14 +241,11 @@ router.get('/estadisticas', proteger, async (req, res) => {
   }
 });
 
-// POST /api/empresas — crear empresa (solo admin, modo multi)
+// POST /api/empresas — crear empresa (solo admin; en modo multi o para subsidiarias en modo mono)
 router.post('/', proteger, soloAdmin, async (req, res) => {
   try {
-    const modoOperacion = await obtenerModoOperacionGlobal(prisma);
-    if (modoOperacion !== 'multiempresa') {
-      return res.status(403).json({ success: false, mensaje: 'Crear empresas solo disponible en modo multiempresa' });
-    }
-    const { ruc, razonSocial, nombreComercial, direccion, email, telefono, plan, crearConfiguracionSri } = req.body;
+    const { ruc, razonSocial, nombreComercial, direccion, email, telefono, plan, crearConfiguracionSri,
+            esMatriz, parentEmpresaId } = req.body;
     if (!ruc || !razonSocial) {
       return res.status(400).json({ success: false, mensaje: 'RUC y razón social son requeridos' });
     }
@@ -273,6 +269,8 @@ router.post('/', proteger, soloAdmin, async (req, res) => {
           telefono: telefono?.trim() || empresaSri?.telefono || null,
           plan: planFinal,
           factAnualesMax: planFinal === 'lite' ? 100 : null,
+          esMatriz: esMatriz === true || esMatriz === 'true',
+          parentEmpresaId: parentEmpresaId ? parseInt(parentEmpresaId, 10) : null,
         },
       });
 
@@ -335,4 +333,108 @@ router.put('/:id', proteger, soloAdmin, async (req, res) => {
   }
 });
 
+// ─── Gestión de usuarios asignados a una empresa (Macro Empresa) ──────────────
+
+// GET /api/empresas/:id/usuarios — listar usuarios con acceso a esta empresa
+router.get('/:id/usuarios', proteger, soloAdmin, async (req, res) => {
+  try {
+    const empresaId = parseInt(req.params.id, 10);
+    const empresa = await prisma.empresas.findUnique({ where: { id: empresaId } });
+    if (!empresa) return res.status(404).json({ success: false, mensaje: 'Empresa no encontrada' });
+
+    // Usuarios con acceso extra (usuario_empresas)
+    const accesos = await prisma.usuario_empresas.findMany({
+      where: { empresaId },
+      include: {
+        usuario: { select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, empresaId: true } },
+      },
+    });
+
+    // Usuarios que tienen esta empresa como empresa por defecto
+    const usuariosDefault = await prisma.usuarios.findMany({
+      where: { empresaId },
+      select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, empresaId: true },
+    });
+
+    // Combinar: default + acceso extra (sin duplicados)
+    const mapa = new Map();
+    usuariosDefault.forEach(u => mapa.set(u.id, { ...u, tipoAcceso: 'default' }));
+    accesos.forEach(a => {
+      if (!mapa.has(a.usuarioId)) {
+        mapa.set(a.usuarioId, { ...a.usuario, tipoAcceso: 'asignado', rolAsignado: a.rol });
+      }
+    });
+
+    res.json({ success: true, data: Array.from(mapa.values()) });
+  } catch (err) {
+    console.error('Error GET empresa usuarios:', err);
+    res.status(500).json({ success: false, mensaje: 'Error al obtener usuarios de la empresa' });
+  }
+});
+
+// POST /api/empresas/:id/usuarios — asignar usuario a empresa
+router.post('/:id/usuarios', proteger, soloAdmin, async (req, res) => {
+  try {
+    const empresaId = parseInt(req.params.id, 10);
+    const usuarioId = parseInt(req.body.usuarioId, 10);
+    const rol       = req.body.rol || 'operador';
+
+    if (!empresaId || !usuarioId) {
+      return res.status(400).json({ success: false, mensaje: 'empresaId y usuarioId requeridos' });
+    }
+
+    const [empresa, usuario] = await Promise.all([
+      prisma.empresas.findUnique({ where: { id: empresaId } }),
+      prisma.usuarios.findUnique({ where: { id: usuarioId } }),
+    ]);
+    if (!empresa) return res.status(404).json({ success: false, mensaje: 'Empresa no encontrada' });
+    if (!usuario) return res.status(404).json({ success: false, mensaje: 'Usuario no encontrado' });
+
+    // Si es la empresa default del usuario no necesita registro extra
+    if (usuario.empresaId === empresaId) {
+      return res.status(409).json({ success: false, mensaje: 'El usuario ya pertenece a esta empresa por defecto' });
+    }
+
+    const acceso = await prisma.usuario_empresas.upsert({
+      where: { usuarioId_empresaId: { usuarioId, empresaId } },
+      create: { usuarioId, empresaId, rol },
+      update: { rol },
+    });
+
+    res.status(201).json({ success: true, data: acceso, mensaje: 'Usuario asignado a la empresa' });
+  } catch (err) {
+    console.error('Error POST empresa usuario:', err);
+    res.status(500).json({ success: false, mensaje: 'Error al asignar usuario' });
+  }
+});
+
+// DELETE /api/empresas/:id/usuarios/:usuarioId — quitar acceso de usuario a empresa
+router.delete('/:id/usuarios/:usuarioId', proteger, soloAdmin, async (req, res) => {
+  try {
+    const empresaId = parseInt(req.params.id, 10);
+    const usuarioId = parseInt(req.params.usuarioId, 10);
+
+    const usuario = await prisma.usuarios.findUnique({ where: { id: usuarioId } });
+    if (usuario?.empresaId === empresaId) {
+      return res.status(400).json({
+        success: false,
+        mensaje: 'No se puede quitar el acceso a la empresa principal del usuario. Cambia su empresa por defecto primero.',
+      });
+    }
+
+    await prisma.usuario_empresas.delete({
+      where: { usuarioId_empresaId: { usuarioId, empresaId } },
+    });
+
+    res.json({ success: true, mensaje: 'Acceso removido correctamente' });
+  } catch (err) {
+    if (err.code === 'P2025') {
+      return res.status(404).json({ success: false, mensaje: 'El usuario no tiene acceso asignado a esta empresa' });
+    }
+    console.error('Error DELETE empresa usuario:', err);
+    res.status(500).json({ success: false, mensaje: 'Error al remover acceso' });
+  }
+});
+
 module.exports = router;
+

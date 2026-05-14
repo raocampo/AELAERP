@@ -3,7 +3,7 @@
 // frontend/src/components/Empresas/GestionEmpresas.jsx
 // ====================================
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/useAuth';
@@ -17,7 +17,7 @@ const FORM_VACIO = {
 };
 
 export default function GestionEmpresas() {
-  const { modoMulti, usuario } = useAuth();
+  const { usuario } = useAuth();
   const [empresas,        setEmpresas]        = useState([]);
   const [cargando,        setCargando]        = useState(true);
   const [form,            setForm]            = useState(FORM_VACIO);
@@ -26,18 +26,80 @@ export default function GestionEmpresas() {
   const [guardando,       setGuardando]       = useState(false);
   const [consultandoSri,  setConsultandoSri]  = useState(false);
   const [mensajeSri,      setMensajeSri]      = useState('');
+  // Panel de usuarios por empresa
+  const [empresaUsuarios, setEmpresaUsuarios] = useState(null);  // id empresa expandida
+  const [usuariosEmpresa, setUsuariosEmpresa] = useState([]);
+  const [cargandoUsuarios,setCargandoUsuarios]= useState(false);
+  const [todosUsuarios,   setTodosUsuarios]   = useState([]);    // para selector
+  const [asignarId,       setAsignarId]       = useState('');
+  const [asignarRol,      setAsignarRol]      = useState('operador');
+  const [asignando,       setAsignando]       = useState(false);
 
   useEffect(() => { cargar(); }, []);
 
   const cargar = async () => {
     setCargando(true);
     try {
-      const res = await api.get('/empresas');
-      setEmpresas(res.data.data || []);
+      const [resEmp, resUsr] = await Promise.all([
+        api.get('/empresas'),
+        api.get('/usuarios').catch(() => ({ data: { data: [] } })),
+      ]);
+      setEmpresas(resEmp.data.data || []);
+      setTodosUsuarios(resUsr.data.data || []);
     } catch {
       toast.error('Error al cargar empresas');
     } finally {
       setCargando(false);
+    }
+  };
+
+  const cargarUsuariosEmpresa = useCallback(async (empresaId) => {
+    setCargandoUsuarios(true);
+    try {
+      const res = await api.get(`/empresas/${empresaId}/usuarios`);
+      setUsuariosEmpresa(res.data.data || []);
+    } catch {
+      toast.error('Error al cargar usuarios de la empresa');
+    } finally {
+      setCargandoUsuarios(false);
+    }
+  }, []);
+
+  const togglePanelUsuarios = (empresaId) => {
+    if (empresaUsuarios === empresaId) {
+      setEmpresaUsuarios(null);
+    } else {
+      setEmpresaUsuarios(empresaId);
+      setAsignarId('');
+      setAsignarRol('operador');
+      cargarUsuariosEmpresa(empresaId);
+    }
+  };
+
+  const handleAsignarUsuario = async (e) => {
+    e.preventDefault();
+    if (!asignarId) return toast.error('Selecciona un usuario');
+    setAsignando(true);
+    try {
+      await api.post(`/empresas/${empresaUsuarios}/usuarios`, { usuarioId: asignarId, rol: asignarRol });
+      toast.success('Usuario asignado');
+      setAsignarId('');
+      cargarUsuariosEmpresa(empresaUsuarios);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al asignar usuario');
+    } finally {
+      setAsignando(false);
+    }
+  };
+
+  const handleQuitarUsuario = async (usuarioId) => {
+    if (!confirm('¿Quitar acceso de este usuario a la empresa?')) return;
+    try {
+      await api.delete(`/empresas/${empresaUsuarios}/usuarios/${usuarioId}`);
+      toast.success('Acceso removido');
+      cargarUsuariosEmpresa(empresaUsuarios);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al remover acceso');
     }
   };
 
@@ -134,15 +196,14 @@ export default function GestionEmpresas() {
     }
   };
 
-  if (!modoMulti && !tienePermiso(usuario?.rol, 'empresas.gestionar')) {
+  if (!tienePermiso(usuario?.rol, 'empresas.gestionar')) {
     return (
       <div className="ge-page">
         <div className="ge-card ge-empty">
-          <p style={{ fontSize: '1.5rem', marginBottom: '.5rem' }}>🏢</p>
-          <strong>Gestión de Empresas</strong>
+          <p style={{ fontSize: '1.5rem', marginBottom: '.5rem' }}>🔒</p>
+          <strong>Acceso denegado</strong>
           <p style={{ marginTop: '.5rem' }}>
-            Esta funcionalidad está disponible en modo <strong>multiempresa</strong>.<br />
-            Actívalo desde Configuración → Sistema.
+            Solo los administradores pueden gestionar empresas.
           </p>
         </div>
       </div>
@@ -185,7 +246,8 @@ export default function GestionEmpresas() {
               </thead>
               <tbody>
                 {empresas.map(e => (
-                  <tr key={e.id}>
+                  <React.Fragment key={e.id}>
+                  <tr>
                     <td><span className="ge-ruc">{e.ruc}</span></td>
                     <td>
                       <div className="ge-razon">{e.razonSocial}</div>
@@ -213,6 +275,13 @@ export default function GestionEmpresas() {
                       <div className="ge-acciones">
                         <button className="ge-btn-sm" onClick={() => abrirEditar(e)}>✏️ Editar</button>
                         <button
+                          className={`ge-btn-sm ${empresaUsuarios === e.id ? 'active' : ''}`}
+                          onClick={() => togglePanelUsuarios(e.id)}
+                          title="Gestionar usuarios con acceso a esta empresa"
+                        >
+                          👥 Usuarios
+                        </button>
+                        <button
                           className={`ge-btn-sm ${e.activo ? 'danger' : ''}`}
                           onClick={() => toggleActivo(e)}
                         >
@@ -221,6 +290,103 @@ export default function GestionEmpresas() {
                       </div>
                     </td>
                   </tr>
+                  {/* Panel de usuarios por empresa */}
+                  {empresaUsuarios === e.id && (
+                    <tr key={`${e.id}-usuarios`}>
+                      <td colSpan={6} style={{ padding: '0 1rem 1rem', background: '#f8fafc' }}>
+                        <div className="ge-usuarios-panel">
+                          <h4>👥 Usuarios con acceso a: {e.nombreComercial || e.razonSocial}</h4>
+
+                          {/* Asignar nuevo usuario */}
+                          <form className="ge-asignar-form" onSubmit={handleAsignarUsuario}>
+                            <select
+                              className="ge-input"
+                              value={asignarId}
+                              onChange={ev => setAsignarId(ev.target.value)}
+                              style={{ flex: 2 }}
+                            >
+                              <option value="">— Seleccionar usuario —</option>
+                              {todosUsuarios
+                                .filter(u => !usuariosEmpresa.find(eu => eu.id === u.id))
+                                .map(u => (
+                                  <option key={u.id} value={u.id}>
+                                    {u.nombre} ({u.username})
+                                  </option>
+                                ))}
+                            </select>
+                            <select
+                              className="ge-input"
+                              value={asignarRol}
+                              onChange={ev => setAsignarRol(ev.target.value)}
+                              style={{ flex: 1 }}
+                            >
+                              <option value="operador">Operador</option>
+                              <option value="admin">Admin</option>
+                              <option value="contador">Contador</option>
+                              <option value="vendedor">Vendedor</option>
+                            </select>
+                            <button
+                              type="submit"
+                              className="ge-btn-primary"
+                              disabled={asignando || !asignarId}
+                              style={{ whiteSpace: 'nowrap' }}
+                            >
+                              {asignando ? 'Asignando...' : '+ Asignar'}
+                            </button>
+                          </form>
+
+                          {/* Lista de usuarios actuales */}
+                          {cargandoUsuarios ? (
+                            <p style={{ color: '#64748b', padding: '.5rem 0' }}>Cargando usuarios...</p>
+                          ) : usuariosEmpresa.length === 0 ? (
+                            <p style={{ color: '#94a3b8', padding: '.5rem 0' }}>No hay usuarios asignados aún.</p>
+                          ) : (
+                            <table className="ge-table" style={{ marginTop: '.5rem' }}>
+                              <thead>
+                                <tr>
+                                  <th>Usuario</th>
+                                  <th>Email</th>
+                                  <th style={{ textAlign: 'center' }}>Rol</th>
+                                  <th style={{ textAlign: 'center' }}>Tipo acceso</th>
+                                  <th style={{ textAlign: 'center' }}>Acciones</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {usuariosEmpresa.map(u => (
+                                  <tr key={u.id}>
+                                    <td><strong>{u.nombre}</strong><br /><small>{u.username}</small></td>
+                                    <td>{u.email || '—'}</td>
+                                    <td style={{ textAlign: 'center' }}>
+                                      <span className="ge-chip">{u.rolAsignado || u.rol}</span>
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                      {u.tipoAcceso === 'default'
+                                        ? <span className="ge-chip ge-chip-matriz" title="Esta es su empresa principal">Empresa base</span>
+                                        : <span className="ge-chip" style={{ background: '#f0fdf4', color: '#16a34a' }}>Asignado</span>
+                                      }
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                      {u.tipoAcceso === 'asignado' ? (
+                                        <button
+                                          className="ge-btn-sm danger"
+                                          onClick={() => handleQuitarUsuario(u.id)}
+                                        >
+                                          🗑️ Quitar
+                                        </button>
+                                      ) : (
+                                        <span style={{ color: '#94a3b8', fontSize: '.8rem' }}>—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
