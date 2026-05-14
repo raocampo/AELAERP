@@ -232,6 +232,8 @@ model configuracion_sistema {
   cierreCajaObligatorio Boolean   @default(false)
   posHabilitado         Boolean   @default(false)
   documentoPosDefault   String    @default("factura") @db.VarChar(20)
+  impresionAutoReciboPos Boolean  @default(false)
+  impresoraKiosko       String?   @db.VarChar(120)
   inventarioHabilitado  Boolean   @default(false)
   permitirStockNegativo Boolean   @default(false)
   comprasHabilitadas    Boolean   @default(true)

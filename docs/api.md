@@ -17,6 +17,9 @@ Campos principales:
 - `modoOperacion`
 - `cajaDiariaHabilitada`
 - `posHabilitado`
+- `documentoPosDefault`
+- `impresionAutoReciboPos`
+- `impresoraKiosko`
 - `inventarioHabilitado`
 - `comprasHabilitadas`
 - `contabilidadHabilitada`

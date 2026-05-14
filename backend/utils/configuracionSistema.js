@@ -88,6 +88,8 @@ function construirConfiguracionSistemaBase(empresa = {}) {
     cajaNombre:              'Caja General',
     cierreCajaObligatorio:   false,
     documentoPosDefault:     tipoSistema === 'lite' ? 'nota_venta' : 'factura',
+    impresionAutoReciboPos:  false,
+    impresoraKiosko:         '',
     permitirStockNegativo:   false,
     sbuEcuador:              460.00,
     ...caps,
@@ -136,6 +138,8 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
     empresaId:   empresa.id,
     tipoSistema,
     modoOperacion: normalizarModoOperacion(config?.modoOperacion || await obtenerModoOperacionGlobal(tx)),
+    impresionAutoReciboPos:  Boolean(config?.impresionAutoReciboPos ?? false),
+    impresoraKiosko:         String(config?.impresoraKiosko || '').trim(),
     // Forzar a false los módulos que el plan no permite
     cajaDiariaHabilitada:     caps.cajaDiariaHabilitada     && Boolean(config?.cajaDiariaHabilitada     ?? true),
     posHabilitado:            caps.posHabilitado            && Boolean(config?.posHabilitado            ?? false),
@@ -180,6 +184,8 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
     documentoPosDefault:      ['factura', 'nota_venta'].includes(reqBody.documentoPosDefault)
                                 ? reqBody.documentoPosDefault
                                 : (actual.documentoPosDefault || (tipoSistema === 'lite' ? 'nota_venta' : 'factura')),
+    impresionAutoReciboPos:   Boolean(reqBody.impresionAutoReciboPos !== undefined ? reqBody.impresionAutoReciboPos : actual.impresionAutoReciboPos),
+    impresoraKiosko:          reqBody.impresoraKiosko?.trim() || actual.impresoraKiosko || '',
     inventarioHabilitado:     flag('inventarioHabilitado', false),
     permitirStockNegativo:    Boolean(reqBody.permitirStockNegativo !== undefined ? reqBody.permitirStockNegativo : actual.permitirStockNegativo),
     comprasHabilitadas:       flag('comprasHabilitadas', true),

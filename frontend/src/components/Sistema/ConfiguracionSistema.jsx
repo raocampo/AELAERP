@@ -43,6 +43,8 @@ const FORM_INICIAL = {
   cierreCajaObligatorio: false,
   posHabilitado: false,
   documentoPosDefault: 'factura',
+  impresionAutoReciboPos: false,
+  impresoraKiosko: '',
   inventarioHabilitado: false,
   permitirStockNegativo: false,
   comprasHabilitadas: true,
@@ -249,6 +251,31 @@ export default function ConfiguracionSistema() {
               <option value="factura">Factura</option>
               <option value="nota_venta">Nota de Venta</option>
             </select>
+          </label>
+        </section>
+
+        {/* ── Impresión y kiosko ─────────────────────────────────────────── */}
+        <section className="syscfg-card">
+          <h2>Impresión y kiosko</h2>
+          <p className="syscfg-note">
+            El navegador no detecta impresoras automáticamente. Esta sección define cómo debe comportarse la impresión
+            del POS en almacenamiento, kiosko o dispositivos móviles.
+          </p>
+          <label className="syscfg-check">
+            <input
+              type="checkbox"
+              checked={form.impresionAutoReciboPos}
+              onChange={(e) => actualizar('impresionAutoReciboPos', e.target.checked)}
+            />
+            <span>Autoabrir el recibo POS al emitir</span>
+          </label>
+          <label className="syscfg-field">
+            <span>Impresora sugerida para kiosko</span>
+            <input
+              value={form.impresoraKiosko || ''}
+              onChange={(e) => actualizar('impresoraKiosko', e.target.value)}
+              placeholder="EPSON TM-T20 / impresora del kiosko"
+            />
           </label>
         </section>
 

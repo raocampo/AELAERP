@@ -250,6 +250,10 @@ export default function PuntoVenta() {
     setCarrito((prev) => prev.filter((item) => item.codigoPrincipal !== codigoPrincipal));
   };
 
+  const abrirReciboEmitido = async (id, tipo) => {
+    await imprimirReciboDoc(id, tipo);
+  };
+
   const imprimirReciboDoc = async (id, tipo) => {
     const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
     const base = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
@@ -340,6 +344,9 @@ export default function PuntoVenta() {
           numero: res.data?.data?.numeroNota || '—',
           total: res.data?.data?.total ?? subtotal,
         });
+        if (sistema?.impresionAutoReciboPos && res.data?.data?.id) {
+          void abrirReciboEmitido(res.data.data.id, 'nota_venta');
+        }
       } else {
         const res = await api.post('/facturas', {
           tipoIdentificacionComprador: tipoId,
@@ -375,6 +382,9 @@ export default function PuntoVenta() {
           numero: res.data?.data?.numeroFactura || '—',
           total: res.data?.data?.importeTotal ?? totalConIva,
         });
+        if (sistema?.impresionAutoReciboPos && res.data?.data?.id) {
+          void abrirReciboEmitido(res.data.data.id, 'factura');
+        }
       }
     } catch (error) {
       toast.error(error.response?.data?.mensaje || error.response?.data?.error || 'No se pudo emitir el documento');
@@ -649,6 +659,11 @@ export default function PuntoVenta() {
             {docEmitido.tipo === 'nota_venta'
               ? 'Comprobante RIMPE. El cliente puede solicitar copia.'
               : 'El RIDE electrónico se enviará al correo del cliente.'}
+          </p>
+          <p style={{ color: '#64748b', marginTop: 0 }}>
+            {sistema?.impresoraKiosko
+              ? `Impresora sugerida: ${sistema.impresoraKiosko}`
+              : 'La impresión se controla desde el navegador; el sistema no detecta impresoras automáticamente.'}
           </p>
           <div className="pos-recibo-acciones">
             <button

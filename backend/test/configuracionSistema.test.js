@@ -54,6 +54,8 @@ test('construirPayloadConfiguracionSistema no permite activar módulos bloqueado
     cierreCajaObligatorio: false,
     posHabilitado: true,
     documentoPosDefault: 'factura',
+    impresionAutoReciboPos: false,
+    impresoraKiosko: '',
     inventarioHabilitado: true,
     permitirStockNegativo: false,
     comprasHabilitadas: true,
@@ -80,4 +82,21 @@ test('construirPayloadConfiguracionSistema no permite activar módulos bloqueado
   assert.equal(payload.atsHabilitado, false);
   assert.equal(payload.inventarioHabilitado, false);
   assert.equal(payload.posHabilitado, false);
+  assert.equal(payload.impresionAutoReciboPos, false);
+  assert.equal(payload.impresoraKiosko, '');
+});
+
+test('construirPayloadConfiguracionSistema normaliza datos de impresión para kiosko', () => {
+  const payload = construirPayloadConfiguracionSistema({
+    tipoSistema: 'pro',
+    modoOperacion: 'monoempresa',
+    impresoraKiosko: '  Epson TM-T20  ',
+    impresionAutoReciboPos: false,
+  }, {
+    impresoraKiosko: '  Cocina / Caja  ',
+    impresionAutoReciboPos: true,
+  });
+
+  assert.equal(payload.impresoraKiosko, 'Cocina / Caja');
+  assert.equal(payload.impresionAutoReciboPos, true);
 });

@@ -390,6 +390,10 @@ Tras la confirmación del documento:
 2. El sistema abre una ventana optimizada para impresión en papel de 80 mm (rollo térmico de POS) o en papel A4/carta.
 3. Confirme la impresión en el diálogo del navegador.
 
+> 💡 En **Configuración del Sistema → Impresión y kiosko** puede activar **Autoabrir el recibo POS al emitir** para que el sistema abra la impresión automáticamente después de guardar la venta.
+
+> ⚠ El navegador no puede reconocer ni seleccionar una impresora física por sí solo. Si trabaja en kiosko o con móvil, use la **Impresora sugerida para kiosko** como referencia operativa en ese dispositivo.
+
 > 💡 Si necesita reimprimir un comprobante, búsquelo en el listado del módulo de Facturas o Notas de Venta y use la opción de impresión desde el detalle del documento.
 
 ### 5.9 Iniciar nueva venta
