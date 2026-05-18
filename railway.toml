@@ -25,3 +25,6 @@ DB_BACKUP_DIR = "/tmp/aela-backups"
 # Chrome descargado por Puppeteer durante npm install.
 # CACHE_DIR fijo en /app para que build y runtime usen la misma ruta.
 PUPPETEER_CACHE_DIR = "/app/.puppeteer-cache"
+# Dominios personalizados adicionales permitidos por CORS (aparte de FRONTEND_URL)
+# Separar con coma si hay más de uno
+CORS_EXTRA_ORIGINS = "https://aela.corpsimtelec.com"

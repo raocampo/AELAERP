@@ -12,7 +12,10 @@ const app = express();
 
 app.use(cors({
   origin: (origin, callback) => {
-    const allowed = (process.env.FRONTEND_URL || 'http://localhost:5174').split(',').map(s => s.trim());
+    // Combina FRONTEND_URL y CORS_EXTRA_ORIGINS para facilitar dominios personalizados
+    const base   = (process.env.FRONTEND_URL       || 'http://localhost:5174').split(',').map(s => s.trim());
+    const extra  = (process.env.CORS_EXTRA_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+    const allowed = [...new Set([...base, ...extra])];
     // En desarrollo permitir cualquier origen localhost/127.0.0.1
     if (!origin || process.env.NODE_ENV !== 'production') return callback(null, true);
     if (allowed.includes(origin)) return callback(null, true);
