@@ -80,7 +80,10 @@ export default function GestionClientes() {
     const t = setTimeout(async () => {
       try {
         const res = await api.get('/clientes/buscar-catastro', { params: { q, limit: 20 } });
-        setCatastroResultados(res.data?.data || []);
+        const data = res.data?.data || [];
+        setCatastroResultados(data);
+        // Auto-expandir si hay resultados
+        if (data.length > 0) setMostrarCatastro(true);
       } catch {
         setCatastroResultados([]);
       } finally {
@@ -287,6 +290,67 @@ export default function GestionClientes() {
         />
       </div>
 
+      {/* CATASTRO SRI — aparece inmediatamente debajo del buscador al escribir un nombre */}
+      {busqueda.trim().length >= 3 && !/^\d+$/.test(busqueda.trim()) && (
+        <div className="clientes-card" style={{ marginBottom: '12px', border: '1px solid #6366f1', borderRadius: '10px', overflow: 'hidden' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                     padding: '10px 16px', background: '#eef2ff', cursor: 'pointer' }}
+            onClick={() => setMostrarCatastro((v) => !v)}
+          >
+            <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#4338ca' }}>
+              🗂 Catastro SRI
+              {buscandoCatastro
+                ? ' — buscando...'
+                : catastroResultados.length > 0
+                  ? ` — ${catastroResultados.length} resultados para "${busqueda.trim().toUpperCase()}"`
+                  : ' — sin resultados'}
+            </span>
+            <span style={{ color: '#6366f1', fontSize: '0.82rem' }}>
+              {mostrarCatastro ? '▲ ocultar' : '▼ ver'}
+            </span>
+          </div>
+
+          {mostrarCatastro && catastroResultados.length > 0 && (
+            <div className="clientes-table-wrap">
+              <table className="clientes-table">
+                <thead>
+                  <tr>
+                    <th>RUC</th>
+                    <th>Razón Social</th>
+                    <th>Tipo</th>
+                    <th>Provincia</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catastroResultados.map((c) => (
+                    <tr key={c.ruc}>
+                      <td><span className="tipo-badge">RUC</span> {c.ruc}</td>
+                      <td>{c.razonSocial}</td>
+                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                        {c.tipoContribuyente === 'PERSONAS NATURALES' ? 'Natural' : 'Sociedad'}
+                      </td>
+                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.provincia || '—'}</td>
+                      <td className="acciones">
+                        <button className="btn-sm-edit" onClick={() => agregarDesdeCatastro(c)}>
+                          + Agregar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {mostrarCatastro && !buscandoCatastro && catastroResultados.length === 0 && (
+            <div className="clientes-empty" style={{ padding: '14px' }}>
+              No se encontraron contribuyentes activos en el catastro SRI.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TABLA */}
       <div className="clientes-card">
         {cargando ? (
@@ -352,67 +416,6 @@ export default function GestionClientes() {
           </div>
         )}
       </div>
-
-      {/* CATASTRO SRI — resultados por nombre */}
-      {busqueda.trim().length >= 3 && !/^\d+$/.test(busqueda.trim()) && (
-        <div className="clientes-card" style={{ marginTop: '16px' }}>
-          <div
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                     padding: '12px 16px', borderBottom: '1px solid #e2e8f0', cursor: 'pointer' }}
-            onClick={() => setMostrarCatastro((v) => !v)}
-          >
-            <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b' }}>
-              🗂 Catastro SRI
-              {buscandoCatastro
-                ? ' — buscando...'
-                : catastroResultados.length > 0
-                  ? ` — ${catastroResultados.length} contribuyentes con "${busqueda.trim().toUpperCase()}"`
-                  : ' — sin resultados'}
-            </span>
-            <span style={{ color: '#6366f1', fontSize: '0.82rem' }}>
-              {mostrarCatastro ? '▲ ocultar' : '▼ ver resultados'}
-            </span>
-          </div>
-
-          {mostrarCatastro && catastroResultados.length > 0 && (
-            <div className="clientes-table-wrap">
-              <table className="clientes-table">
-                <thead>
-                  <tr>
-                    <th>RUC</th>
-                    <th>Razón Social</th>
-                    <th>Tipo</th>
-                    <th>Provincia</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {catastroResultados.map((c) => (
-                    <tr key={c.ruc}>
-                      <td><span className="tipo-badge">RUC</span> {c.ruc}</td>
-                      <td>{c.razonSocial}</td>
-                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                        {c.tipoContribuyente === 'PERSONAS NATURALES' ? 'Natural' : 'Sociedad'}
-                      </td>
-                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.provincia || '—'}</td>
-                      <td className="acciones">
-                        <button className="btn-sm-edit" onClick={() => agregarDesdeCatastro(c)}>
-                          + Agregar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {mostrarCatastro && !buscandoCatastro && catastroResultados.length === 0 && (
-            <div className="clientes-empty" style={{ padding: '16px' }}>
-              No se encontraron contribuyentes activos con ese nombre en el catastro SRI.
-            </div>
-          )}
-        </div>
-      )}
 
       {/* MODAL IMPORTAR EXCEL */}
       {modalImport && (
