@@ -177,6 +177,17 @@ export default function Layout() {
   const [swUpdate, setSwUpdate]   = useState(false);
   const pendientesSRI = usePendientesSRI();
 
+  // ── Sidebar colapsable — persiste en localStorage ──────────────────────────
+  const [sidebarColapsado, setSidebarColapsado] = useState(() => {
+    return localStorage.getItem('aela_sidebar_colapsado') === 'true';
+  });
+  const toggleSidebar = () => {
+    setSidebarColapsado((prev) => {
+      localStorage.setItem('aela_sidebar_colapsado', String(!prev));
+      return !prev;
+    });
+  };
+
   // Estado de apertura por grupo; abre el grupo activo al cargar (null si es ítem suelto)
   const [gruposAbiertos, setGruposAbiertos] = useState(() => {
     const activo = grupoDeRuta(location.pathname);
@@ -212,10 +223,19 @@ export default function Layout() {
   };
 
   return (
-    <div className="layout-root">
+    <div className={`layout-root${sidebarColapsado ? ' sidebar-is-colapsado' : ''}`}>
 
       {/* ── SIDEBAR ── */}
-      <aside className="sidebar">
+      <aside className={`sidebar${sidebarColapsado ? ' colapsado' : ''}`}>
+
+        {/* Botón toggle colapsar/expandir */}
+        <button
+          className="sidebar-toggle-btn"
+          onClick={toggleSidebar}
+          title={sidebarColapsado ? 'Expandir menú' : 'Colapsar menú'}
+        >
+          {sidebarColapsado ? '▶' : '◀'}
+        </button>
 
         {/* Brand */}
         <div className="sidebar-brand">
@@ -226,34 +246,43 @@ export default function Layout() {
               <rect x="22" y="35" width="20" height="16" rx="4" fill="white" opacity="0.95"/>
               <circle cx="32" cy="29" r="4.5" fill="white"/>
             </svg>
-            <div>
-              <span className="sidebar-sigla">AELA</span>
-              <span className="sidebar-sub">ERP Ecuador</span>
-            </div>
+            {!sidebarColapsado && (
+              <div>
+                <span className="sidebar-sigla">AELA</span>
+                <span className="sidebar-sub">ERP Ecuador</span>
+              </div>
+            )}
           </div>
-          <span className={`sidebar-plan-badge ${esLite ? 'lite' : esMedium ? 'medium' : 'pro'}`}>
-            {planLabel}
-          </span>
+          {!sidebarColapsado && (
+            <span className={`sidebar-plan-badge ${esLite ? 'lite' : esMedium ? 'medium' : 'pro'}`}>
+              {planLabel}
+            </span>
+          )}
         </div>
 
         {/* Empresa */}
-        <div className="sidebar-empresa">
-          {empresa?.razonSocial || 'Empresa activa'}
-          <small style={{ display: 'block', color: '#94a3b8', marginTop: 4 }}>
-            {modoMulti ? 'Modo multiempresa' : 'Modo monoempresa'}
-          </small>
-        </div>
+        {!sidebarColapsado && (
+          <div className="sidebar-empresa">
+            {empresa?.razonSocial || 'Empresa activa'}
+            <small style={{ display: 'block', color: '#94a3b8', marginTop: 4 }}>
+              {modoMulti ? 'Modo multiempresa' : 'Modo monoempresa'}
+            </small>
+          </div>
+        )}
 
         {/* Selector de empresa activa (macro empresa — solo si hay ≥2 empresas) */}
-        <EmpresaSwitcher />
+        {!sidebarColapsado && <EmpresaSwitcher />}
 
         {/* Badge: comprobantes pendientes de envío al SRI */}
-        {pendientesSRI > 0 && (
+        {pendientesSRI > 0 && !sidebarColapsado && (
           <div className="sidebar-cola-sri-badge" title="Comprobantes firmados esperando envío al SRI (sin internet)">
             <span className="cola-sri-icon">⏳</span>
             <span>{pendientesSRI} pendiente{pendientesSRI !== 1 ? 's' : ''} SRI</span>
             <span className="cola-sri-hint">Se enviarán cuando vuelva el internet</span>
           </div>
+        )}
+        {pendientesSRI > 0 && sidebarColapsado && (
+          <div className="sidebar-cola-sri-dot" title={`${pendientesSRI} comprobantes pendientes SRI`}>⏳</div>
         )}
 
         {/* Nav con ítems sueltos + grupos colapsables */}
@@ -268,8 +297,10 @@ export default function Layout() {
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) => `sidebar-link sidebar-link-solo ${isActive ? 'active' : ''}`}
+                title={sidebarColapsado ? item.label : undefined}
               >
-                {item.icon} {item.label}
+                <span className="sidebar-item-icon">{item.icon}</span>
+                {!sidebarColapsado && <span>{item.label}</span>}
               </NavLink>
             );
           })}
@@ -304,6 +335,20 @@ export default function Layout() {
             const isActive = itemsProcesados.some(
               (item) => location.pathname === item.to || location.pathname.startsWith(item.to + '/')
             );
+
+            // En modo colapsado: mostrar solo el icono del grupo; clic expande el sidebar
+            if (sidebarColapsado) {
+              return (
+                <button
+                  key={grupo.id}
+                  className={`sidebar-group-header sidebar-group-icon-only ${isActive ? 'active' : ''}`}
+                  onClick={toggleSidebar}
+                  title={grupo.label}
+                >
+                  <span className="sidebar-group-icon">{grupo.icon}</span>
+                </button>
+              );
+            }
 
             return (
               <div key={grupo.id} className="sidebar-group">
@@ -348,23 +393,35 @@ export default function Layout() {
         </nav>
 
         {/* Banner límite Lite */}
-        {esLite && empresa?.factAnualesMax && (
+        {esLite && empresa?.factAnualesMax && !sidebarColapsado && (
           <LimiteBanner empresa={empresa} />
         )}
 
         {/* Footer usuario */}
         <div className="sidebar-footer">
-          <div className="sidebar-usuario">{usuario?.nombre}</div>
-          <div className="sidebar-rol">{obtenerRolLabel(usuario?.rol)}</div>
-          <button className="sidebar-cambiar-pass" onClick={() => setMostrarCambiarPassword(true)}>
-            🔑 Cambiar contraseña
-          </button>
-          <button className="sidebar-logout" onClick={handleLogout}>Cerrar sesión</button>
+          {!sidebarColapsado ? (
+            <>
+              <div className="sidebar-usuario">{usuario?.nombre}</div>
+              <div className="sidebar-rol">{obtenerRolLabel(usuario?.rol)}</div>
+              <button className="sidebar-cambiar-pass" onClick={() => setMostrarCambiarPassword(true)}>
+                🔑 Cambiar contraseña
+              </button>
+              <button className="sidebar-logout" onClick={handleLogout}>Cerrar sesión</button>
+            </>
+          ) : (
+            <button
+              className="sidebar-logout sidebar-logout-icon"
+              onClick={handleLogout}
+              title="Cerrar sesión"
+            >
+              🚪
+            </button>
+          )}
         </div>
       </aside>
 
       {/* ── CONTENIDO ── */}
-      <main className="layout-main">
+      <main className={`layout-main${sidebarColapsado ? ' sidebar-main-colapsado' : ''}`}>
         <QuickBar />
         <Outlet />
       </main>

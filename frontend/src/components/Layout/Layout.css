@@ -9,6 +9,7 @@
   position: fixed;
   top: 0; left: 0; bottom: 0;
   z-index: 100;
+  transition: width 0.25s ease;
 }
 
 .sidebar-brand {
@@ -390,4 +391,119 @@
 .sidebar-sublink-locked:hover {
   background: rgba(255,255,255,0.04);
   color: rgba(255,255,255,0.55);
+}
+
+/* ── Sidebar: botón toggle colapsar/expandir ── */
+.sidebar-toggle-btn {
+  position: absolute;
+  top: 12px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  background: #7C3AED;
+  border: 2px solid #0F0A1E;
+  border-radius: 50%;
+  color: white;
+  font-size: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  transition: background 0.2s, transform 0.2s;
+  line-height: 1;
+}
+.sidebar-toggle-btn:hover {
+  background: #6D28D9;
+  transform: scale(1.1);
+}
+
+/* ── Sidebar colapsado (solo iconos, 56px) ── */
+.sidebar.colapsado {
+  width: 56px;
+  overflow: hidden;
+}
+
+.sidebar.colapsado .sidebar-brand {
+  padding: 14px 0;
+  display: flex;
+  justify-content: center;
+  border-bottom: 1px solid rgba(124,58,237,0.2);
+}
+
+.sidebar.colapsado .sidebar-brand-logo {
+  margin-bottom: 0;
+  justify-content: center;
+}
+
+.sidebar.colapsado .sidebar-link,
+.sidebar.colapsado .sidebar-link-solo {
+  padding: 11px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-left: 3px solid transparent;
+}
+
+.sidebar-item-icon {
+  font-size: 16px;
+}
+
+.sidebar.colapsado .sidebar-group-icon-only {
+  width: 100%;
+  padding: 11px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.75);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.sidebar.colapsado .sidebar-group-icon-only:hover,
+.sidebar.colapsado .sidebar-group-icon-only.active {
+  background: rgba(124,58,237,0.2);
+  color: white;
+  border-left-color: #7C3AED;
+}
+
+.sidebar.colapsado .sidebar-group-icon {
+  font-size: 18px;
+}
+
+.sidebar.colapsado .sidebar-footer {
+  padding: 10px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar-cola-sri-dot {
+  text-align: center;
+  font-size: 16px;
+  padding: 4px 0;
+  cursor: default;
+}
+
+.sidebar-logout-icon {
+  padding: 8px;
+  width: auto;
+  font-size: 18px;
+}
+
+/* ── Layout: ajuste main cuando sidebar está colapsado ── */
+.layout-main.sidebar-main-colapsado {
+  margin-left: 56px;
+  transition: margin-left 0.25s ease;
+}
+
+.layout-main {
+  transition: margin-left 0.25s ease;
+}
+
+.sidebar {
+  transition: width 0.25s ease;
 }
