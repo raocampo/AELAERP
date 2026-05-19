@@ -5,7 +5,7 @@
 // y al hacer click abren el UpgradeModal con comparativo de planes.
 // ====================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
 import { obtenerRolLabel, tienePermiso } from '../../utils/roles';
@@ -18,6 +18,32 @@ import CambiarPassword from '../Auth/CambiarPassword';
 import QuickBar from './QuickBar';
 import EmpresaSwitcher from './EmpresaSwitcher';
 import './Layout.css';
+
+/** ErrorBoundary local para el Outlet — captura errores de módulos sin romper el layout */
+class OutletErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(err, info) { console.error('[AELA Outlet]', err, info?.componentStack); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 32, textAlign: 'center', color: '#ef4444' }}>
+          <p style={{ fontWeight: 700 }}>⚠️ Error al cargar el módulo</p>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '8px 0 16px' }}>
+            {this.state.error?.message || 'Error inesperado'}
+          </p>
+          <button
+            className="btn-primary"
+            onClick={() => { this.setState({ error: null }); window.location.reload(); }}
+          >
+            Recargar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 
@@ -177,8 +203,9 @@ export default function Layout() {
   const [swUpdate, setSwUpdate]   = useState(false);
   const pendientesSRI = usePendientesSRI();
 
-  // ── Sidebar colapsable — persiste en localStorage ──────────────────────────
+  // ── Sidebar colapsable — persiste en localStorage (mobile siempre expandido) ─
   const [sidebarColapsado, setSidebarColapsado] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) return false;
     return localStorage.getItem('aela_sidebar_colapsado') === 'true';
   });
   const toggleSidebar = () => {
@@ -196,6 +223,18 @@ export default function Layout() {
   useEffect(() => {
     cerrarSidebarMobile();
   }, [location.pathname]);
+
+  // Al redimensionar a mobile, forzar sidebar expandido y cerrar drawer
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth <= 768) {
+        setSidebarColapsado(false);
+        setSidebarMobileAbierto(false);
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Estado de apertura por grupo; abre el grupo activo al cargar (null si es ítem suelto)
   const [gruposAbiertos, setGruposAbiertos] = useState(() => {
@@ -440,7 +479,9 @@ export default function Layout() {
           <span /><span /><span />
         </button>
         <QuickBar />
-        <Outlet />
+        <OutletErrorBoundary>
+          <Outlet />
+        </OutletErrorBoundary>
       </main>
 
       {/* ── MODAL UPGRADE ── */}

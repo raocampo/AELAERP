@@ -1,4 +1,4 @@
-.layout-root { display: flex; min-height: 100vh; }
+.layout-root { display: flex; min-height: 100vh; overflow-x: clip; }
 
 .sidebar {
   width: 240px;
@@ -129,6 +129,7 @@
 .layout-main {
   margin-left: 240px;
   flex: 1;
+  min-width: 0;
   padding: 28px;
   background: #f8fafc;
   min-height: 100vh;
