@@ -272,8 +272,32 @@
 }
 
 @media (max-width: 768px) {
-  .sidebar { display: none; }
-  .layout-main { margin-left: 0; padding: 16px; }
+  /* Sidebar oculto por defecto en mobile, se muestra como drawer al abrirse */
+  .sidebar {
+    display: flex;
+    transform: translateX(-100%);
+    transition: transform 0.28s ease, width 0.25s ease;
+    width: 240px !important;
+    z-index: 500;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .sidebar.mobile-abierto {
+    transform: translateX(0);
+  }
+  /* En mobile ignorar estado colapsado */
+  .sidebar.colapsado {
+    width: 240px !important;
+  }
+  .sidebar.colapsado .sidebar-brand-logo { justify-content: flex-start; }
+  .sidebar.colapsado .sidebar-brand { padding: 18px 20px 16px; }
+
+  .layout-main { margin-left: 0 !important; padding: 12px; padding-top: 54px; }
+  .layout-main.sidebar-main-colapsado { margin-left: 0 !important; }
+
+  /* Hamburguesa visible solo en mobile */
+  .sidebar-hamburger {
+    display: flex !important;
+  }
 }
 
 /* ── Ítems sueltos (Dashboard, POS) ── */
@@ -489,5 +513,47 @@
 }
 
 .sidebar {
-  transition: width 0.25s ease;
+  transition: width 0.25s ease, transform 0.28s ease;
+}
+
+/* ── Hamburguesa (oculta en desktop) ── */
+.sidebar-hamburger {
+  display: none;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 600;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 38px;
+  height: 30px;
+  background: #0F0A1E;
+  border: 1px solid rgba(124,58,237,0.5);
+  border-radius: 7px;
+  padding: 7px 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.sidebar-hamburger span {
+  display: block;
+  height: 2px;
+  background: #A78BFA;
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+.sidebar-hamburger:hover span {
+  background: white;
+}
+
+/* ── Backdrop mobile ── */
+.sidebar-mobile-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 490;
+}
+
+@media (max-width: 768px) {
+  .sidebar-mobile-backdrop { display: block; }
 }

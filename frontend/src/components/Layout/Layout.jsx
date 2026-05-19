@@ -188,6 +188,15 @@ export default function Layout() {
     });
   };
 
+  // ── Sidebar mobile (drawer overlay) ─────────────────────────────────────────
+  const [sidebarMobileAbierto, setSidebarMobileAbierto] = useState(false);
+  const cerrarSidebarMobile = () => setSidebarMobileAbierto(false);
+
+  // Cerrar sidebar mobile al navegar
+  useEffect(() => {
+    cerrarSidebarMobile();
+  }, [location.pathname]);
+
   // Estado de apertura por grupo; abre el grupo activo al cargar (null si es ítem suelto)
   const [gruposAbiertos, setGruposAbiertos] = useState(() => {
     const activo = grupoDeRuta(location.pathname);
@@ -225,8 +234,13 @@ export default function Layout() {
   return (
     <div className={`layout-root${sidebarColapsado ? ' sidebar-is-colapsado' : ''}`}>
 
+      {/* ── BACKDROP MOBILE (cierra el sidebar al tocar fuera) ── */}
+      {sidebarMobileAbierto && (
+        <div className="sidebar-mobile-backdrop" onClick={cerrarSidebarMobile} />
+      )}
+
       {/* ── SIDEBAR ── */}
-      <aside className={`sidebar${sidebarColapsado ? ' colapsado' : ''}`}>
+      <aside className={`sidebar${sidebarColapsado ? ' colapsado' : ''}${sidebarMobileAbierto ? ' mobile-abierto' : ''}`}>
 
         {/* Brand — clic colapsa/expande según estado */}
         <div
@@ -417,6 +431,14 @@ export default function Layout() {
 
       {/* ── CONTENIDO ── */}
       <main className={`layout-main${sidebarColapsado ? ' sidebar-main-colapsado' : ''}`}>
+        {/* Hamburguesa — solo visible en mobile */}
+        <button
+          className="sidebar-hamburger"
+          onClick={() => setSidebarMobileAbierto(true)}
+          aria-label="Abrir menú"
+        >
+          <span /><span /><span />
+        </button>
         <QuickBar />
         <Outlet />
       </main>
