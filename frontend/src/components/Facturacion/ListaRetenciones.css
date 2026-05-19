@@ -267,3 +267,22 @@
   transition: background 0.2s;
 }
 .btn-confirm-anular:hover { background: #b91c1c; }
+
+/* ─── RESPONSIVE ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ret-container { padding: 12px; }
+
+  .ret-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ret-title { font-size: 1.3rem; }
+  .btn-nuevo-ret { width: 100%; }
+
+  .ret-filtros {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ret-filtros input,
+  .ret-filtros select { width: 100%; }
+}

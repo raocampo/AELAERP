@@ -245,9 +245,10 @@
   flex-shrink: 0;
 }
 
-/* ─── Contenedor externo de la tabla (clip horizontal) ────────────────────── */
+/* ─── Contenedor externo de la tabla ────────────────────────────────────── */
 .fact-tabla-outer {
-  overflow: hidden;   /* evita que la tabla ensanche la página */
+  overflow-x: auto;   /* permite scroll horizontal en mobile */
+  -webkit-overflow-scrolling: touch;
   width: 100%;
 }
 

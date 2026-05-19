@@ -331,3 +331,39 @@
   padding: 60px;
   color: #64748b;
 }
+
+/* ─── RESPONSIVE ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .lista-facturas-container { padding: 12px; }
+
+  .fact-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .fact-header h1 { font-size: 1.3rem; }
+
+  .fact-header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fact-header-actions .btn-primary,
+  .fact-header-actions .btn-secondary {
+    width: 100%;
+    text-align: center;
+  }
+
+  .fact-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    gap: 0;
+  }
+  .fact-tab { white-space: nowrap; font-size: 0.82rem; padding: 8px 14px; }
+
+  .fact-filtros {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fact-busqueda, .fact-select { width: 100%; }
+}

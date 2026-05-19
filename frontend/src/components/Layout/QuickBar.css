@@ -52,3 +52,22 @@
   font-size: 14px;
   line-height: 1;
 }
+
+@media (max-width: 768px) {
+  .quickbar {
+    padding: 6px 0 10px;
+    margin-bottom: 14px;
+    /* desplazar para no quedar bajo el botón hamburguesa */
+    padding-left: 44px;
+  }
+  .quickbar-label { display: none; }
+  .quickbar-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 400px) {
+  .quickbar-btn span:not(.quickbar-icon) { display: none; }
+  .quickbar-btn { padding: 6px 8px; }
+}

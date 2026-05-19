@@ -289,3 +289,17 @@
   transition: background 0.2s;
 }
 .btn-confirm-anular:hover { background: #b91c1c; }
+
+/* ─── RESPONSIVE ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .liq-container { padding: 12px; }
+
+  .liq-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .liq-title { font-size: 1.3rem; }
+  .liq-header-actions { flex-direction: column; gap: 8px; }
+  .liq-header-actions button,
+  .btn-nueva-liq { width: 100%; }
+}

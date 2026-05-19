@@ -412,6 +412,13 @@
   }
 }
 
+@media (max-width: 600px) {
+  .proveedores-header button { width: 100%; }
+  .proveedores-busqueda { max-width: 100%; }
+  .proveedores-pagination { flex-wrap: wrap; gap: 0.5rem; }
+  .prov-historial-resumen { flex-direction: column; gap: 0.5rem; }
+}
+
 .prov-historial {
   border-top: 1px solid #e2e8f0;
   padding: 1.25rem 1.5rem;

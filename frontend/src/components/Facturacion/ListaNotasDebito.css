@@ -185,3 +185,22 @@
   color: #fff;
   border-color: #192C4A;
 }
+
+/* ─── RESPONSIVE ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .lista-container { padding: 12px; }
+
+  .lista-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lista-header h2 { font-size: 1.3rem; }
+  .lista-header button { width: 100%; }
+
+  .filtros-bar {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .filtros-bar input,
+  .filtros-bar select { width: 100%; }
+}

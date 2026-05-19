@@ -224,3 +224,9 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+@media (max-width: 480px) {
+  .dash-titulo { font-size: 1.5rem; }
+  .dash-metrics { grid-template-columns: 1fr; }
+  .dash-grid { grid-template-columns: 1fr; }
+}

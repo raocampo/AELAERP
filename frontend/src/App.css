@@ -39,6 +39,25 @@
   .app-main { margin-left: 0; padding: 16px; }
 }
 
+/* ─── Modales globales — responsivos en mobile ───────────────────────────── */
+@media (max-width: 600px) {
+  .modal-overlay { padding: 8px; align-items: flex-end; }
+  .modal-box,
+  .modal-content {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-radius: 16px 16px 0 0;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+  .modal-form { padding: 1rem; }
+  .modal-header { padding: 1rem; }
+  .modal-footer { flex-direction: column; gap: 8px; }
+  .modal-footer button { width: 100%; }
+  .modal-actions { flex-direction: column; }
+  .modal-actions button { width: 100%; }
+}
+
 /* ═══════════════════════════════════════════════════════
    SISTEMA GLOBAL DE BOTONES — única fuente de verdad
    Usar: btn-primary / btn-secondary (la clase base se
