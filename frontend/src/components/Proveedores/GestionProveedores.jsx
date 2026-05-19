@@ -45,6 +45,16 @@ export default function GestionProveedores() {
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const LIMIT = 50;
 
+  // ─── Catastro SRI — búsqueda por nombre ──────────────────────────────────────
+  const [catastroResultados, setCatastroResultados] = useState([]);
+  const [buscandoCatastro, setBuscandoCatastro] = useState(false);
+  const [mostrarCatastro, setMostrarCatastro] = useState(false);
+
+  // ─── Clientes — búsqueda para cargar como proveedor ──────────────────────────
+  const [clientesResultados, setClientesResultados] = useState([]);
+  const [buscandoClientes, setBuscandoClientes] = useState(false);
+  const [mostrarClientes, setMostrarClientes] = useState(false);
+
   const cargar = async () => {
     setCargando(true);
     try {
@@ -65,6 +75,87 @@ export default function GestionProveedores() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busqueda, filtroCiudad, filtroProvincia, page]);
+
+  // Búsqueda en catastro SRI (6.8M contribuyentes) al escribir nombre
+  useEffect(() => {
+    const q = busqueda.trim();
+    if (q.length < 3 || /^\d+$/.test(q)) {
+      setCatastroResultados([]);
+      setMostrarCatastro(false);
+      return;
+    }
+    setBuscandoCatastro(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.get('/clientes/buscar-catastro', { params: { q, limit: 20 } });
+        const data = res.data?.data || [];
+        setCatastroResultados(data);
+        if (data.length > 0) setMostrarCatastro(true);
+      } catch {
+        setCatastroResultados([]);
+      } finally {
+        setBuscandoCatastro(false);
+      }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
+  // Búsqueda en tabla clientes (reusar como proveedor)
+  useEffect(() => {
+    const q = busqueda.trim();
+    if (q.length < 3) {
+      setClientesResultados([]);
+      setMostrarClientes(false);
+      return;
+    }
+    setBuscandoClientes(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.get('/clientes', { params: { q, limit: 10, page: 1 } });
+        const data = res.data?.data || [];
+        setClientesResultados(data);
+        if (data.length > 0) setMostrarClientes(true);
+      } catch {
+        setClientesResultados([]);
+      } finally {
+        setBuscandoClientes(false);
+      }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
+  // Pre-llenar formulario desde catastro SRI
+  const agregarDesdeCatastro = (c) => {
+    const tipoId = c.tipoContribuyente === 'PERSONAS NATURALES' ? '05' : '04';
+    setForm({
+      ...FORM_INICIAL,
+      tipoIdentificacion: tipoId,
+      identificacion: c.ruc,
+      razonSocial: c.razonSocial,
+      nombreComercial: c.nombreComercial || '',
+      provincia: c.provincia || '',
+    });
+    setMostrarCatastro(false);
+    setMostrarClientes(false);
+    setModalAbierto(true);
+  };
+
+  // Pre-llenar formulario desde tabla clientes
+  const agregarDesdeClientes = (c) => {
+    setForm({
+      ...FORM_INICIAL,
+      tipoIdentificacion: c.tipoIdentificacion,
+      identificacion: c.identificacion,
+      razonSocial: c.razonSocial,
+      nombreComercial: c.nombreComercial || '',
+      direccion: c.direccion || '',
+      email: c.email || '',
+      telefono: c.telefono || '',
+    });
+    setMostrarCatastro(false);
+    setMostrarClientes(false);
+    setModalAbierto(true);
+  };
 
   const handleIdentificacionBlur = async () => {
     const id = form.identificacion.trim();
@@ -291,6 +382,125 @@ export default function GestionProveedores() {
           </button>
         )}
       </div>
+
+      {/* CATASTRO SRI — aparece al escribir un nombre en el buscador */}
+      {busqueda.trim().length >= 3 && !/^\d+$/.test(busqueda.trim()) && (
+        <div className="proveedores-card" style={{ marginBottom: '10px', border: '1px solid #6366f1', borderRadius: '10px', overflow: 'hidden' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                     padding: '10px 16px', background: '#eef2ff', cursor: 'pointer' }}
+            onClick={() => setMostrarCatastro((v) => !v)}
+          >
+            <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#4338ca' }}>
+              🗂 Catastro SRI
+              {buscandoCatastro
+                ? ' — buscando...'
+                : catastroResultados.length > 0
+                  ? ` — ${catastroResultados.length} resultados para "${busqueda.trim().toUpperCase()}"`
+                  : ' — sin resultados'}
+            </span>
+            <span style={{ color: '#6366f1', fontSize: '0.82rem' }}>
+              {mostrarCatastro ? '▲ ocultar' : '▼ ver'}
+            </span>
+          </div>
+          {mostrarCatastro && catastroResultados.length > 0 && (
+            <div className="proveedores-table-wrap">
+              <table className="proveedores-table">
+                <thead>
+                  <tr>
+                    <th>RUC</th>
+                    <th>Razón Social</th>
+                    <th>Tipo</th>
+                    <th>Provincia</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catastroResultados.map((c) => (
+                    <tr key={c.ruc}>
+                      <td><span className="tipo-badge">RUC</span> {c.ruc}</td>
+                      <td>{c.razonSocial}</td>
+                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                        {c.tipoContribuyente === 'PERSONAS NATURALES' ? 'Natural' : 'Sociedad'}
+                      </td>
+                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.provincia || '—'}</td>
+                      <td className="acciones">
+                        <button className="btn-sm-edit" onClick={() => agregarDesdeCatastro(c)}>
+                          + Usar como proveedor
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {mostrarCatastro && !buscandoCatastro && catastroResultados.length === 0 && (
+            <div className="proveedores-empty" style={{ padding: '14px' }}>
+              No se encontraron contribuyentes activos en el catastro SRI.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CLIENTES EXISTENTES — reusar como proveedor */}
+      {busqueda.trim().length >= 3 && (
+        <div className="proveedores-card" style={{ marginBottom: '10px', border: '1px solid #10b981', borderRadius: '10px', overflow: 'hidden' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                     padding: '10px 16px', background: '#ecfdf5', cursor: 'pointer' }}
+            onClick={() => setMostrarClientes((v) => !v)}
+          >
+            <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#065f46' }}>
+              👤 Clientes existentes
+              {buscandoClientes
+                ? ' — buscando...'
+                : clientesResultados.length > 0
+                  ? ` — ${clientesResultados.length} clientes con "${busqueda.trim()}"`
+                  : ' — sin resultados'}
+            </span>
+            <span style={{ color: '#10b981', fontSize: '0.82rem' }}>
+              {mostrarClientes ? '▲ ocultar' : '▼ ver'}
+            </span>
+          </div>
+          {mostrarClientes && clientesResultados.length > 0 && (
+            <div className="proveedores-table-wrap">
+              <table className="proveedores-table">
+                <thead>
+                  <tr>
+                    <th>Identificación</th>
+                    <th>Razón Social</th>
+                    <th>Email</th>
+                    <th>Teléfono</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientesResultados.map((c) => (
+                    <tr key={c.id}>
+                      <td>{c.identificacion}</td>
+                      <td>{c.razonSocial}</td>
+                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.email || '—'}</td>
+                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.telefono || '—'}</td>
+                      <td className="acciones">
+                        <button className="btn-sm-edit" style={{ background: '#10b981', color: '#fff', border: 'none' }}
+                          onClick={() => agregarDesdeClientes(c)}>
+                          + Usar como proveedor
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {mostrarClientes && !buscandoClientes && clientesResultados.length === 0 && (
+            <div className="proveedores-empty" style={{ padding: '14px' }}>
+              No hay clientes registrados con ese nombre.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="proveedores-card">
         {cargando ? (

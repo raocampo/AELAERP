@@ -375,7 +375,12 @@ export default function GestionClientes() {
               </thead>
               <tbody>
                 {clientes.map((c) => (
-                  <tr key={c.id} className={!c.activo ? 'row-inactivo' : ''}>
+                  <tr
+                    key={c.id}
+                    className={!c.activo ? 'row-inactivo' : ''}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => abrirEditar(c)}
+                  >
                     <td>
                       <span className="tipo-badge">
                         {TIPOS_IDENTIFICACION.find((t) => t.valor === c.tipoIdentificacion)?.label || c.tipoIdentificacion}
@@ -391,7 +396,7 @@ export default function GestionClientes() {
                         {c.activo ? 'Activo' : 'Inactivo'}
                       </span>
                     </td>
-                    <td className="acciones">
+                    <td className="acciones" onClick={(e) => e.stopPropagation()}>
                       <button className="btn-sm-edit" onClick={() => abrirEditar(c)}>Editar</button>
                       <button
                         className={`btn-sm-toggle ${c.activo ? 'desactivar' : 'activar'}`}
@@ -522,7 +527,7 @@ export default function GestionClientes() {
         <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{form.id ? 'Editar cliente' : 'Nuevo cliente'}</h2>
+              <h2>{form.id ? 'Ver / Editar cliente' : 'Nuevo cliente'}</h2>
               <button className="modal-close" onClick={cerrarModal}>✕</button>
             </div>
 
