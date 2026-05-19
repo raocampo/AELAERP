@@ -837,6 +837,7 @@ model contribuyentes_sri {
   updatedAt           DateTime @updatedAt
 
   @@index([ruc])
+  @@index([razonSocial])
   @@map("contribuyentes_sri")
 }
 

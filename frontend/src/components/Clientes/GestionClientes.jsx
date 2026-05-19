@@ -38,6 +38,11 @@ export default function GestionClientes() {
   const [page, setPage] = useState(1);
   const LIMIT = 50;
 
+  // ─── Catastro SRI — búsqueda por nombre ──────────────────────────────────────
+  const [catastroResultados, setCatastroResultados] = useState([]);
+  const [buscandoCatastro, setBuscandoCatastro] = useState(false);
+  const [mostrarCatastro, setMostrarCatastro] = useState(false);
+
   // ─── Importar Excel ──────────────────────────────────────────────────────────
   const [modalImport, setModalImport] = useState(false);
   const [importando, setImportando] = useState(false);
@@ -62,7 +67,44 @@ export default function GestionClientes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busqueda, page]);
 
-  // ─── SRI lookup al salir del campo identificación ───────────────────────────
+  // Búsqueda en catastro SRI cuando la query es alfabética y >= 3 chars
+  useEffect(() => {
+    const q = busqueda.trim();
+    // Solo búsqueda alfabética (no RUC/cédula)
+    if (q.length < 3 || /^\d+$/.test(q)) {
+      setCatastroResultados([]);
+      setMostrarCatastro(false);
+      return;
+    }
+    setBuscandoCatastro(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.get('/clientes/buscar-catastro', { params: { q, limit: 20 } });
+        setCatastroResultados(res.data?.data || []);
+      } catch {
+        setCatastroResultados([]);
+      } finally {
+        setBuscandoCatastro(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
+  // Pre-llenar formulario desde un resultado del catastro
+  const agregarDesdeCatastro = (c) => {
+    const tipoId = c.tipoContribuyente === 'PERSONAS NATURALES' ? '05' : '04';
+    setForm({
+      ...FORM_INICIAL,
+      tipoIdentificacion: tipoId,
+      identificacion:     c.ruc,
+      razonSocial:        c.razonSocial,
+      nombreComercial:    c.nombreComercial || '',
+    });
+    setMostrarCatastro(false);
+    setModalAbierto(true);
+  };
+
+
   const handleIdentificacionBlur = async () => {
     const id = form.identificacion.trim();
     if (!id || form.id) return; // No buscar al editar
@@ -310,6 +352,67 @@ export default function GestionClientes() {
           </div>
         )}
       </div>
+
+      {/* CATASTRO SRI — resultados por nombre */}
+      {busqueda.trim().length >= 3 && !/^\d+$/.test(busqueda.trim()) && (
+        <div className="clientes-card" style={{ marginTop: '16px' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                     padding: '12px 16px', borderBottom: '1px solid #e2e8f0', cursor: 'pointer' }}
+            onClick={() => setMostrarCatastro((v) => !v)}
+          >
+            <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b' }}>
+              🗂 Catastro SRI
+              {buscandoCatastro
+                ? ' — buscando...'
+                : catastroResultados.length > 0
+                  ? ` — ${catastroResultados.length} contribuyentes con "${busqueda.trim().toUpperCase()}"`
+                  : ' — sin resultados'}
+            </span>
+            <span style={{ color: '#6366f1', fontSize: '0.82rem' }}>
+              {mostrarCatastro ? '▲ ocultar' : '▼ ver resultados'}
+            </span>
+          </div>
+
+          {mostrarCatastro && catastroResultados.length > 0 && (
+            <div className="clientes-table-wrap">
+              <table className="clientes-table">
+                <thead>
+                  <tr>
+                    <th>RUC</th>
+                    <th>Razón Social</th>
+                    <th>Tipo</th>
+                    <th>Provincia</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catastroResultados.map((c) => (
+                    <tr key={c.ruc}>
+                      <td><span className="tipo-badge">RUC</span> {c.ruc}</td>
+                      <td>{c.razonSocial}</td>
+                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                        {c.tipoContribuyente === 'PERSONAS NATURALES' ? 'Natural' : 'Sociedad'}
+                      </td>
+                      <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.provincia || '—'}</td>
+                      <td className="acciones">
+                        <button className="btn-sm-edit" onClick={() => agregarDesdeCatastro(c)}>
+                          + Agregar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {mostrarCatastro && !buscandoCatastro && catastroResultados.length === 0 && (
+            <div className="clientes-empty" style={{ padding: '16px' }}>
+              No se encontraron contribuyentes activos con ese nombre en el catastro SRI.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* MODAL IMPORTAR EXCEL */}
       {modalImport && (

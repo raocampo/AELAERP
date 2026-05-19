@@ -8,6 +8,7 @@ const express = require('express');
 const multer  = require('multer');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
+const { Prisma } = require('@prisma/client');
 const { proteger } = require('../middleware/auth');
 const {
   consultarContribuyenteSri,
@@ -29,26 +30,58 @@ router.get('/', proteger, async (req, res) => {
   try {
     const { q, page = 1, limit = 50 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
 
-    const where = {
-      empresaId: req.empresa.id,
-      ...(q ? {
-        OR: [
-          { identificacion:  { contains: q, mode: 'insensitive' } },
-          { razonSocial:     { contains: q, mode: 'insensitive' } },
-          { nombreComercial: { contains: q, mode: 'insensitive' } },
-        ],
-      } : {}),
-    };
+    if (q && q.trim()) {
+      // Con búsqueda: ORDER BY prioriza startsWith antes que contains
+      const pattern     = `%${q.trim()}%`;
+      const startsUpper = `${q.trim().toUpperCase()}%`;
 
+      const [clientes, countResult] = await Promise.all([
+        prisma.$queryRaw`
+          SELECT id, "tipoIdentificacion", identificacion, "razonSocial", "nombreComercial",
+                 email, telefono, activo, "createdAt", "updatedAt", "empresaId"
+          FROM   clientes
+          WHERE  "empresaId" = ${req.empresa.id}
+            AND (
+              identificacion   ILIKE ${pattern}
+              OR "razonSocial"     ILIKE ${pattern}
+              OR "nombreComercial" ILIKE ${pattern}
+            )
+          ORDER BY
+            CASE WHEN UPPER("razonSocial") LIKE ${startsUpper} THEN 0 ELSE 1 END,
+            "razonSocial" ASC
+          LIMIT  ${Prisma.raw(String(take))}
+          OFFSET ${Prisma.raw(String(skip))}
+        `,
+        prisma.$queryRaw`
+          SELECT COUNT(*) AS count
+          FROM   clientes
+          WHERE  "empresaId" = ${req.empresa.id}
+            AND (
+              identificacion   ILIKE ${pattern}
+              OR "razonSocial"     ILIKE ${pattern}
+              OR "nombreComercial" ILIKE ${pattern}
+            )
+        `,
+      ]);
+
+      return res.json({
+        success: true,
+        data:    clientes,
+        total:   Number(countResult[0].count),
+      });
+    }
+
+    // Sin búsqueda: listado paginado normal
     const [clientes, total] = await Promise.all([
       prisma.clientes.findMany({
-        where,
+        where:   { empresaId: req.empresa.id },
         orderBy: { razonSocial: 'asc' },
         skip,
-        take: parseInt(limit),
+        take,
       }),
-      prisma.clientes.count({ where }),
+      prisma.clientes.count({ where: { empresaId: req.empresa.id } }),
     ]);
 
     res.json({ success: true, data: clientes, total });
@@ -58,29 +91,82 @@ router.get('/', proteger, async (req, res) => {
   }
 });
 
-// GET /api/clientes/buscar?q=texto  (autocomplete)
+// GET /api/clientes/buscar?q=texto  (autocomplete — startsWith tiene prioridad)
 router.get('/buscar', proteger, async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || q.length < 2) return res.json({ success: true, data: [] });
 
-    const clientes = await prisma.clientes.findMany({
+    const empresaId = req.empresa.id;
+
+    // 1. Resultados que empiezan con el término (máx 10)
+    const starts = await prisma.clientes.findMany({
       where: {
-        empresaId: req.empresa.id,
+        empresaId,
         activo: true,
         OR: [
-          { identificacion:  { contains: q, mode: 'insensitive' } },
-          { razonSocial:     { contains: q, mode: 'insensitive' } },
-          { nombreComercial: { contains: q, mode: 'insensitive' } },
+          { razonSocial:     { startsWith: q, mode: 'insensitive' } },
+          { identificacion:  { startsWith: q, mode: 'insensitive' } },
+          { nombreComercial: { startsWith: q, mode: 'insensitive' } },
         ],
       },
       take: 10,
       orderBy: { razonSocial: 'asc' },
     });
 
-    res.json({ success: true, data: clientes });
+    // 2. Completar con "contains" si no llegamos a 10
+    let resultado = starts;
+    if (starts.length < 10) {
+      const startsIds = starts.map((c) => c.id);
+      const extra = await prisma.clientes.findMany({
+        where: {
+          empresaId,
+          activo: true,
+          id: { notIn: startsIds },
+          OR: [
+            { razonSocial:     { contains: q, mode: 'insensitive' } },
+            { identificacion:  { contains: q, mode: 'insensitive' } },
+            { nombreComercial: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        take: 10 - starts.length,
+        orderBy: { razonSocial: 'asc' },
+      });
+      resultado = [...starts, ...extra];
+    }
+
+    res.json({ success: true, data: resultado });
   } catch (error) {
     res.status(500).json({ success: false, mensaje: 'Error en búsqueda' });
+  }
+});
+
+// GET /api/clientes/buscar-catastro?q=nombre  (búsqueda por nombre en catastro SRI 6.8M)
+// Usa índice varchar_pattern_ops — solo startsWith para velocidad máxima
+router.get('/buscar-catastro', proteger, async (req, res) => {
+  try {
+    const { q, limit: lim = 20 } = req.query;
+    if (!q || q.trim().length < 2) return res.json({ success: true, data: [] });
+
+    const qUpper  = q.trim().toUpperCase();
+    const pattern = `${qUpper}%`;
+    const take    = Math.min(parseInt(lim) || 20, 50);
+
+    // Busca en contribuyentes_sri usando el índice varchar_pattern_ops (LIKE 'PREFIX%')
+    const resultados = await prisma.$queryRaw`
+      SELECT ruc, "razonSocial", "nombreComercial", estado, "tipoContribuyente",
+             "claseContribuyente", "obligadoContabilidad", provincia, canton
+      FROM   contribuyentes_sri
+      WHERE  "razonSocial" LIKE ${pattern}
+        AND  estado = 'ACTIVO'
+      ORDER BY "razonSocial"
+      LIMIT  ${Prisma.raw(String(take))}
+    `;
+
+    res.json({ success: true, data: resultados, total: resultados.length });
+  } catch (error) {
+    console.error('Error buscar-catastro:', error);
+    res.status(500).json({ success: false, mensaje: 'Error en búsqueda de catastro' });
   }
 });
 
