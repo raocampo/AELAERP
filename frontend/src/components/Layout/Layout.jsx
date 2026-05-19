@@ -164,11 +164,11 @@ const GRUPOS_MENU = [
     modulo: 'talentoHumanoHabilitado',
     items: [
       { to: '/talento-humano',               icon: '👔', label: 'Resumen',       planMin: 'medium', permiso: 'rrhh.ver',      modulo: 'talentoHumanoHabilitado' },
-      { to: '/talento-humano/empleados',     icon: '👤', label: 'Empleados',     planMin: 'medium', permiso: 'rrhh.ver',      modulo: 'talentoHumanoHabilitado' },
       { to: '/talento-humano/departamentos', icon: '🏢', label: 'Departamentos', planMin: 'medium', permiso: 'rrhh.gestionar', modulo: 'talentoHumanoHabilitado' },
       { to: '/talento-humano/cargos',        icon: '📋', label: 'Cargos',        planMin: 'medium', permiso: 'rrhh.gestionar', modulo: 'talentoHumanoHabilitado' },
-      { to: '/talento-humano/nomina',        icon: '💰', label: 'Nómina',        planMin: 'medium', permiso: 'rrhh.nomina',    modulo: 'talentoHumanoHabilitado' },
+      { to: '/talento-humano/empleados',     icon: '👤', label: 'Empleados',     planMin: 'medium', permiso: 'rrhh.ver',      modulo: 'talentoHumanoHabilitado' },
       { to: '/talento-humano/ausencias',     icon: '📅', label: 'Ausencias',     planMin: 'medium', permiso: 'rrhh.ver',      modulo: 'talentoHumanoHabilitado' },
+      { to: '/talento-humano/nomina',        icon: '💰', label: 'Nómina / Rol de Pagos', planMin: 'medium', permiso: 'rrhh.nomina', modulo: 'talentoHumanoHabilitado' },
     ],
   },
   {
