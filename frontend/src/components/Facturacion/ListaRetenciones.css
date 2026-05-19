@@ -31,7 +31,7 @@
 }
 
 .btn-nuevo-ret {
-  background: #2E7D32;
+  background: #7C3AED;
   color: #fff;
   border: none;
   padding: 10px 20px;
@@ -42,7 +42,7 @@
   white-space: nowrap;
   transition: background 0.2s;
 }
-.btn-nuevo-ret:hover { background: #1b5e20; }
+.btn-nuevo-ret:hover { background: #6D28D9; }
 
 /* Filtros */
 .ret-filtros {
@@ -63,7 +63,7 @@
 .ret-input:focus { outline: none; border-color: #192C4A; box-shadow: 0 0 0 2px rgba(25,44,74,0.1); }
 
 .btn-buscar-ret {
-  background: #2E7D32;
+  background: #7C3AED;
   color: #fff;
   border: none;
   padding: 8px 18px;
@@ -73,7 +73,7 @@
   cursor: pointer;
   transition: background 0.2s;
 }
-.btn-buscar-ret:hover { background: #1b5e20; }
+.btn-buscar-ret:hover { background: #6D28D9; }
 
 .ret-error {
   background: #fef2f2;

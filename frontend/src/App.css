@@ -195,3 +195,16 @@
   border-color: #ef4444;
   color: #c62828;
 }
+
+/* ─── Mobile: texto centrado en todos los botones estándar ──────────────── */
+@media (max-width: 768px) {
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-success,
+  .btn-danger,
+  .btn-warning,
+  .btn-ghost {
+    justify-content: center;
+  }
+}

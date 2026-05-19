@@ -457,14 +457,14 @@
   padding: 10px 28px;
   border: none;
   border-radius: 8px;
-  background: #192C4A;
+  background: #22C55E;
   color: #fff;
   font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s;
 }
-.btn-emitir-ret:hover { background: #14305a; }
+.btn-emitir-ret:hover { background: #16a34a; }
 .btn-emitir-ret:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* ── Pantalla de Éxito ─────────────────────────────────────────────────────── */
@@ -516,7 +516,7 @@
 }
 
 .btn-exito-pdf {
-  background: #192C4A;
+  background: #7C3AED;
   color: #fff;
   border: none;
   padding: 10px 20px;
@@ -526,7 +526,7 @@
   font-size: 0.95rem;
   transition: background 0.2s;
 }
-.btn-exito-pdf:hover { background: #14305a; }
+.btn-exito-pdf:hover { background: #6D28D9; }
 
 .btn-exito-lista, .btn-exito-nueva {
   background: #f1f5f9;

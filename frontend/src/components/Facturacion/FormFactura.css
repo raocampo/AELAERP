@@ -486,36 +486,8 @@
   gap: 12px;
 }
 
-/* ─── Botones ────────────────────────────────────────────────────────────── */
-.btn-primary {
-  background: linear-gradient(135deg, #2E7D32, #1b5e20);
-  color: white;
-  border: none;
-  padding: 11px 26px;
-  border-radius: 9px;
-  font-size: 0.92rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-  white-space: nowrap;
-}
-
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn-primary:hover:not(:disabled) { opacity: 0.9; }
-
-.btn-secondary {
-  background: white;
-  color: #374151;
-  border: 1.5px solid #e2e8f0;
-  padding: 10px 22px;
-  border-radius: 9px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.btn-secondary:hover { background: #f8fafc; }
+/* ─── Botones: usa los estilos globales de App.css ──────────────────────── */
+/* .btn-primary y .btn-secondary se heredan del sistema global */
 
 .btn-icon {
   background: #f8fafc;

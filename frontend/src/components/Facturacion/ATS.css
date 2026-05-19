@@ -58,7 +58,7 @@
 .ats-select:focus { outline: none; border-color: #2E7D32; }
 
 .btn-generar-ats {
-  background: #2E7D32;
+  background: #22C55E;
   color: #fff;
   border: none;
   padding: 9px 22px;
@@ -68,7 +68,7 @@
   cursor: pointer;
   transition: background 0.2s;
 }
-.btn-generar-ats:hover    { background: #1b5e20; }
+.btn-generar-ats:hover    { background: #16a34a; }
 .btn-generar-ats:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .btn-imprimir-ats {

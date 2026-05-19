@@ -116,33 +116,7 @@
 .badge-danger    { background: #fee2e2; color: #991b1b; }
 .badge-secondary { background: #f1f5f9; color: #475569; }
 
-/* Botones */
-.btn-primary {
-  background: #2E7D32;
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-  white-space: nowrap;
-}
-.btn-primary:hover { background: #1b5e20; }
-
-.btn-secondary {
-  background: #f1f5f9;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  padding: 8px 18px;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.btn-secondary:hover { background: #e2e8f0; }
+/* ─── Botones: usa los estilos globales de App.css ──────────────────────── */
 
 .btn-icon {
   background: none;
