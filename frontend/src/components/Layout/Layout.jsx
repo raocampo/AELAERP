@@ -228,17 +228,12 @@ export default function Layout() {
       {/* ── SIDEBAR ── */}
       <aside className={`sidebar${sidebarColapsado ? ' colapsado' : ''}`}>
 
-        {/* Botón toggle colapsar/expandir */}
-        <button
-          className="sidebar-toggle-btn"
+        {/* Brand — clic colapsa/expande según estado */}
+        <div
+          className="sidebar-brand sidebar-brand-clickable"
           onClick={toggleSidebar}
           title={sidebarColapsado ? 'Expandir menú' : 'Colapsar menú'}
         >
-          {sidebarColapsado ? '▶' : '◀'}
-        </button>
-
-        {/* Brand */}
-        <div className="sidebar-brand">
           <div className="sidebar-brand-logo">
             <svg width="32" height="32" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
               <rect width="64" height="64" rx="14" fill="white" fillOpacity="0.15"/>
