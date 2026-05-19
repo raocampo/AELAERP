@@ -108,6 +108,153 @@ const imprimirRolPagos = (nomina) => {
   w.document.close();
 };
 
+// Imprime el rol de pagos individual (comprobante para el empleado)
+const imprimirRolIndividual = (nomina, det) => {
+  const mes = MESES[nomina.mes - 1];
+  const emp = det.empleado;
+
+  const filaIng = (label, valor) => Number(valor) !== 0
+    ? `<tr><td>${label}</td><td class="num">${fmtN(valor)}</td></tr>` : '';
+  const filaDesc = (label, valor) => Number(valor) !== 0
+    ? `<tr><td>${label}</td><td class="num red">${fmtN(valor)}</td></tr>` : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Comprobante de Pago — ${emp.apellidos} ${emp.nombres}</title>
+  <style>
+    @media print { @page { size: A4; margin: 1.5cm; } body { -webkit-print-color-adjust: exact; } }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 10pt; color: #111; padding: 20px; }
+
+    .comp-wrap { max-width: 720px; margin: 0 auto; border: 2px solid #2563eb; border-radius: 6px; overflow: hidden; }
+
+    /* Cabecera empresa */
+    .comp-header { background: #1e3a5f; color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .comp-header h1 { font-size: 14pt; font-weight: 700; margin-bottom: 2px; }
+    .comp-header p  { font-size: 8.5pt; opacity: 0.85; }
+    .comp-periodo   { text-align: right; }
+    .comp-periodo .mes { font-size: 13pt; font-weight: 700; }
+    .comp-periodo .anio { font-size: 9pt; opacity: 0.8; }
+
+    /* Datos del empleado */
+    .comp-empleado { background: #f0f4ff; padding: 10px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; border-bottom: 1px solid #d1d5db; }
+    .emp-item label { font-size: 7.5pt; text-transform: uppercase; color: #6b7280; display: block; }
+    .emp-item span  { font-size: 9.5pt; font-weight: 600; }
+
+    /* Tablas ingresos/descuentos */
+    .comp-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+    .comp-col { padding: 14px 16px; }
+    .comp-col:first-child { border-right: 1px solid #e5e7eb; }
+    .comp-col h3 { font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 2px solid currentColor; }
+    .col-ing  h3 { color: #1d4ed8; }
+    .col-desc h3 { color: #dc2626; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+    td { padding: 3px 2px; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.red { color: #dc2626; }
+    tr.subtotal td { border-top: 1px solid #d1d5db; font-weight: 700; padding-top: 5px; }
+
+    /* Neto a pagar */
+    .comp-neto { background: #dcfce7; border-top: 2px solid #16a34a; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .comp-neto .label { font-size: 10pt; font-weight: 700; color: #166534; }
+    .comp-neto .valor { font-size: 16pt; font-weight: 800; color: #166534; }
+
+    /* Firmas */
+    .comp-firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; padding: 24px 20px 16px; border-top: 1px solid #e5e7eb; }
+    .firma-box { text-align: center; }
+    .firma-linea { border-top: 1px solid #374151; margin-bottom: 4px; }
+    .firma-label { font-size: 7.5pt; color: #6b7280; }
+    .firma-nombre { font-size: 9pt; font-weight: 600; }
+
+    /* Nota pie */
+    .comp-footer { background: #f8fafc; padding: 8px 20px; font-size: 7.5pt; color: #9ca3af; text-align: center; border-top: 1px solid #e5e7eb; }
+  </style>
+</head>
+<body>
+<div class="comp-wrap">
+
+  <!-- Cabecera -->
+  <div class="comp-header">
+    <div>
+      <h1>COMPROBANTE DE PAGO</h1>
+      <p>Rol de Pagos Individual — Período ${mes} ${nomina.anio}</p>
+    </div>
+    <div class="comp-periodo">
+      <div class="mes">${mes.toUpperCase()}</div>
+      <div class="anio">${nomina.anio}</div>
+    </div>
+  </div>
+
+  <!-- Datos del empleado -->
+  <div class="comp-empleado">
+    <div class="emp-item"><label>Empleado</label><span>${emp.apellidos}, ${emp.nombres}</span></div>
+    <div class="emp-item"><label>Cédula</label><span>${emp.cedula || '—'}</span></div>
+    <div class="emp-item"><label>Cargo</label><span>${emp.cargo?.nombre || '—'}</span></div>
+    <div class="emp-item"><label>Departamento</label><span>${emp.departamento?.nombre || '—'}</span></div>
+  </div>
+
+  <!-- Ingresos y Descuentos -->
+  <div class="comp-body">
+    <div class="comp-col col-ing">
+      <h3>Ingresos</h3>
+      <table>
+        ${filaIng('Sueldo base', det.salarioBase)}
+        ${filaIng('Horas extra suplementarias', det.valorHorasExtraSuplemento)}
+        ${filaIng('Horas extra extraordinarias', det.valorHorasExtraExtraordinario)}
+        ${det.otrosIngresosDetalle ? filaIng(det.otrosIngresosDetalle, det.otrosIngresos) : filaIng('Otros ingresos', det.otrosIngresos)}
+        <tr class="subtotal"><td>TOTAL INGRESOS</td><td class="num">${fmtN(det.totalIngresos)}</td></tr>
+      </table>
+    </div>
+    <div class="comp-col col-desc">
+      <h3>Descuentos</h3>
+      <table>
+        ${filaDesc('Aporte personal IESS (9.45%)', det.aportePersonalIESS)}
+        ${filaDesc('Impuesto a la Renta', det.impuestoRenta)}
+        ${filaDesc('Préstamos IESS', det.prestamosIESS)}
+        ${filaDesc('Anticipos', det.anticipos)}
+        ${det.otrosDescuentosDetalle ? filaDesc(det.otrosDescuentosDetalle, det.otrosDescuentos) : filaDesc('Otros descuentos', det.otrosDescuentos)}
+        <tr class="subtotal"><td>TOTAL DESCUENTOS</td><td class="num red">${fmtN(det.totalDescuentos)}</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Neto a pagar -->
+  <div class="comp-neto">
+    <span class="label">💵 NETO A PAGAR</span>
+    <span class="valor">$${fmtN(det.netoApagar)}</span>
+  </div>
+
+  <!-- Firmas -->
+  <div class="comp-firmas">
+    <div class="firma-box">
+      <div style="height:36px"></div>
+      <div class="firma-linea"></div>
+      <div class="firma-nombre">${emp.apellidos}, ${emp.nombres}</div>
+      <div class="firma-label">Firma del Empleado / Conforme</div>
+    </div>
+    <div class="firma-box">
+      <div style="height:36px"></div>
+      <div class="firma-linea"></div>
+      <div class="firma-label">Autorizado por (Recursos Humanos)</div>
+    </div>
+  </div>
+
+  <div class="comp-footer">
+    Documento generado por AELA ERP — ${mes} ${nomina.anio} — Estado: ${nomina.estado}
+  </div>
+</div>
+<script>window.onload = () => { window.print(); }</script>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank', 'width=800,height=900');
+  w.document.write(html);
+  w.document.close();
+};
+
 const Nomina = () => {
   const hoy = new Date();
   const [nominas, setNominas] = useState([]);
@@ -329,8 +476,14 @@ const Nomina = () => {
                         <td style={{ fontWeight:600 }}>{fmt(det.netoApagar)}</td>
                         <td>
                           {nominaSel.estado !== 'PAGADA' && (
-                            <button className="btn-th-sm" onClick={() => setDetalleEdit(det)}>✏️</button>
+                            <button className="btn-th-sm" onClick={() => setDetalleEdit(det)} title="Editar">✏️</button>
                           )}
+                          <button
+                            className="btn-th-sm"
+                            onClick={() => imprimirRolIndividual(nominaSel, det)}
+                            title="Imprimir comprobante individual"
+                            style={{ marginLeft: 4 }}
+                          >🖨️</button>
                         </td>
                       </tr>
                     ))}
