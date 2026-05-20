@@ -29,15 +29,15 @@ export default function Dashboard() {
 
   // Quick links según plan y permisos
   const accesos = [
-    { to: '/pos',         label: '🛍️ POS',             show: sistema?.posHabilitado && tienePermiso(usuario?.rol, 'pos.usar') },
-    { to: '/caja',        label: '💵 Caja Diaria',     show: sistema?.cajaDiariaHabilitada && tienePermiso(usuario?.rol, 'caja.ver') },
-    { to: '/notas-venta', label: '🗒️ Notas de Venta',  show: tienePermiso(usuario?.rol, 'notasVenta.gestionar') },
-    { to: '/facturas',    label: '🧾 Facturas',         show: !esLite && tienePermiso(usuario?.rol, 'facturacion.ver') },
-    { to: '/inventario',  label: '📚 Inventario',      show: sistema?.inventarioHabilitado && tienePermiso(usuario?.rol, 'inventario.ver') },
-    { to: '/clientes',    label: '👤 Clientes',         show: tienePermiso(usuario?.rol, 'clientes.gestionar') },
-    { to: '/productos',   label: '📦 Productos',        show: tienePermiso(usuario?.rol, 'productos.ver') },
-    { to: '/compras',     label: '🛒 Compras',          show: sistema?.comprasHabilitadas && tienePermiso(usuario?.rol, 'compras.gestionar') },
-    { to: '/retenciones', label: '📋 Retenciones',      show: sistema?.retencionesHabilitadas && tienePermiso(usuario?.rol, 'retenciones.gestionar') },
+    { to: '/pos',         label: '🛍️ POS',             show: sistema?.posHabilitado && tienePermiso(usuario?.rol, 'pos.usar', usuario?.permisosExtra) },
+    { to: '/caja',        label: '💵 Caja Diaria',     show: sistema?.cajaDiariaHabilitada && tienePermiso(usuario?.rol, 'caja.ver', usuario?.permisosExtra) },
+    { to: '/notas-venta', label: '🗒️ Notas de Venta',  show: tienePermiso(usuario?.rol, 'notasVenta.gestionar', usuario?.permisosExtra) },
+    { to: '/facturas',    label: '🧾 Facturas',         show: !esLite && tienePermiso(usuario?.rol, 'facturacion.ver', usuario?.permisosExtra) },
+    { to: '/inventario',  label: '📚 Inventario',      show: sistema?.inventarioHabilitado && tienePermiso(usuario?.rol, 'inventario.ver', usuario?.permisosExtra) },
+    { to: '/clientes',    label: '👤 Clientes',         show: tienePermiso(usuario?.rol, 'clientes.gestionar', usuario?.permisosExtra) },
+    { to: '/productos',   label: '📦 Productos',        show: tienePermiso(usuario?.rol, 'productos.ver', usuario?.permisosExtra) },
+    { to: '/compras',     label: '🛒 Compras',          show: sistema?.comprasHabilitadas && tienePermiso(usuario?.rol, 'compras.gestionar', usuario?.permisosExtra) },
+    { to: '/retenciones', label: '📋 Retenciones',      show: sistema?.retencionesHabilitadas && tienePermiso(usuario?.rol, 'retenciones.gestionar', usuario?.permisosExtra) },
     { to: '/configuracion-sri',    label: '⚙️ Config SRI',     show: tienePermiso(usuario?.rol, 'sri.configurar') },
     { to: '/configuracion-sistema', label: '🛠️ Config Sistema', show: tienePermiso(usuario?.rol, 'sistema.configurar') },
   ].filter((item) => item.show);

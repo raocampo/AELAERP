@@ -99,7 +99,7 @@ export default function QuickBar() {
   const planPeso = esLite ? 0 : esMedium ? 1 : 2;
 
   const links = (QUICK_LINKS[baseKey] || []).filter((l) => {
-    if (l.permiso && !tienePermiso(usuario?.rol, l.permiso)) return false;
+    if (l.permiso && !tienePermiso(usuario?.rol, l.permiso, usuario?.permisosExtra)) return false;
     if (l.planMin && PLAN_PESO[l.planMin] > planPeso) return false;
     return true;
   });

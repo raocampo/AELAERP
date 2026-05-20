@@ -390,3 +390,70 @@
   .usuarios-table th:nth-child(3),
   .usuarios-table td:nth-child(3) { display: none; }
 }
+
+/* ── Panel permisos adicionales ── */
+.usu-permisos-section {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: #fafbff;
+}
+.usu-permisos-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #7C3AED;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.usu-permisos-hint {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #94a3b8;
+}
+.usu-permisos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px 20px;
+}
+.usu-permisos-modulo {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.usu-permisos-modulo-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 3px;
+}
+.usu-perm-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: #374151;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.usu-perm-check input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #7C3AED;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.usu-perm-check:hover { color: #7C3AED; }
+
+/* Modal más ancho para acomodar permisos */
+.usu-modal {
+  max-width: 680px;
+  max-height: 90vh;
+  overflow-y: auto;
+}

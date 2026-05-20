@@ -59,6 +59,7 @@ const Departamentos      = lazy(() => import('./components/TalentoHumano/Departa
 const Cargos             = lazy(() => import('./components/TalentoHumano/Cargos'));
 const Nomina             = lazy(() => import('./components/TalentoHumano/Nomina'));
 const Ausencias          = lazy(() => import('./components/TalentoHumano/Ausencias'));
+const AyudaSistema       = lazy(() => import('./components/Ayuda/AyudaSistema'));
 
 function RouteLoading() {
   return <div style={{ padding: 40 }}>Cargando módulo...</div>;
@@ -94,7 +95,7 @@ function ProRoute({ children }) {
 // ─── Ruta de admin multi ──────────────────────────────────────────────────────
 function PermissionRoute({ permission, children }) {
   const { usuario } = useAuth();
-  if (!tienePermiso(usuario?.rol, permission)) return <Navigate to="/dashboard" replace />;
+  if (!tienePermiso(usuario?.rol, permission, usuario?.permisosExtra)) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
@@ -224,6 +225,9 @@ function App() {
 
                 {/* Gestión de Empresas — admin + multiempresa */}
                 <Route path="empresas" element={<AdminEmpresasRoute><GestionEmpresas /></AdminEmpresasRoute>} />
+
+                {/* Centro de Ayuda — accesible para todos */}
+                <Route path="ayuda" element={<AyudaSistema />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

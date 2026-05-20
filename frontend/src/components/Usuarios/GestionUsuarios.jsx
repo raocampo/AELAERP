@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
-import { ROLE_OPTIONS, obtenerRolLabel, tienePermiso } from '../../utils/roles';
+import { ROLE_OPTIONS, obtenerRolLabel, tienePermiso, PERMISOS_POR_MODULO, PERMISO_LABELS } from '../../utils/roles';
 import './GestionUsuarios.css';
 
 const FORM_VACIO = {
@@ -17,6 +17,7 @@ const FORM_VACIO = {
   rol: 'operador',
   password: '',
   activo: true,
+  permisosExtra: [],
 };
 
 export default function GestionUsuarios() {
@@ -59,6 +60,7 @@ export default function GestionUsuarios() {
       rol: item.rol || 'operador',
       password: '',
       activo: Boolean(item.activo),
+      permisosExtra: Array.isArray(item.permisosExtra) ? item.permisosExtra : [],
     });
     setMostrarForm(true);
   };
@@ -66,6 +68,18 @@ export default function GestionUsuarios() {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const togglePermisoExtra = (permiso) => {
+    setForm((prev) => {
+      const ya = prev.permisosExtra.includes(permiso);
+      return {
+        ...prev,
+        permisosExtra: ya
+          ? prev.permisosExtra.filter((p) => p !== permiso)
+          : [...prev.permisosExtra, permiso],
+      };
+    });
   };
 
   const handleGuardar = async (e) => {
@@ -94,6 +108,7 @@ export default function GestionUsuarios() {
         email: form.email || null,
         rol: form.rol,
         activo: form.activo,
+        permisosExtra: form.permisosExtra,
       };
 
       if (form.password) {
@@ -239,6 +254,35 @@ export default function GestionUsuarios() {
                     </div>
                   </div>
                 )}
+
+                {/* Permisos adicionales — acceso temporal a módulos fuera del rol */}
+                <div className="usu-field full">
+                  <div className="usu-permisos-section">
+                    <div className="usu-permisos-title">
+                      🔑 Permisos adicionales
+                      <span className="usu-permisos-hint">
+                        Acceso temporal a módulos fuera del rol asignado
+                      </span>
+                    </div>
+                    <div className="usu-permisos-grid">
+                      {PERMISOS_POR_MODULO.map(({ modulo, permisos }) => (
+                        <div key={modulo} className="usu-permisos-modulo">
+                          <div className="usu-permisos-modulo-label">{modulo}</div>
+                          {permisos.map((p) => (
+                            <label key={p} className="usu-perm-check">
+                              <input
+                                type="checkbox"
+                                checked={form.permisosExtra.includes(p)}
+                                onChange={() => togglePermisoExtra(p)}
+                              />
+                              <span>{PERMISO_LABELS[p] || p}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="usu-modal-footer">

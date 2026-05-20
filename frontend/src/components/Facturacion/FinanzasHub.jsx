@@ -119,7 +119,7 @@ const FinanzasHub = () => {
   const rol = usuario?.rol;
 
   const modulosVisibles = modulos.filter((m) => {
-    if (!tienePermiso(rol, m.permiso)) return false;
+    if (!tienePermiso(rol, m.permiso, usuario?.permisosExtra)) return false;
     if (!m.modulo) return true;
     return Boolean(sistema?.[m.modulo]);
   });

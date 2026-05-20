@@ -69,7 +69,53 @@ export const normalizarRol = (rol) => {
 
 export const obtenerRolLabel = (rol) => ROLE_LABELS[normalizarRol(rol)] || normalizarRol(rol);
 
-export const tienePermiso = (rol, permiso) => {
+export const tienePermiso = (rol, permiso, permisosExtra = []) => {
   const role = normalizarRol(rol);
-  return (PERMISSIONS[permiso] || []).includes(role);
+  if ((PERMISSIONS[permiso] || []).includes(role)) return true;
+  return Array.isArray(permisosExtra) && permisosExtra.includes(permiso);
+};
+
+// Permisos agrupados por módulo — usados en la UI de asignación de permisos adicionales
+export const PERMISOS_POR_MODULO = [
+  { modulo: 'Facturación',     permisos: ['facturacion.ver', 'facturacion.emitir', 'facturacion.anular'] },
+  { modulo: 'Compras',         permisos: ['compras.gestionar'] },
+  { modulo: 'Retenciones',     permisos: ['retenciones.gestionar', 'liquidaciones.gestionar'] },
+  { modulo: 'Tributario',      permisos: ['tributario.reportes'] },
+  { modulo: 'Contabilidad',    permisos: ['contabilidad.ver', 'contabilidad.gestionar', 'contabilidad.bloquear'] },
+  { modulo: 'Bancos',          permisos: ['bancos.ver', 'bancos.gestionar', 'cheques.gestionar'] },
+  { modulo: 'Clientes',        permisos: ['clientes.gestionar'] },
+  { modulo: 'Productos',       permisos: ['productos.ver', 'productos.gestionar', 'productos.eliminar'] },
+  { modulo: 'Ventas / Caja',   permisos: ['notasVenta.gestionar', 'caja.ver', 'caja.gestionar', 'pos.usar'] },
+  { modulo: 'Inventario',      permisos: ['inventario.ver', 'inventario.gestionar'] },
+  { modulo: 'RRHH / Nómina',   permisos: ['rrhh.ver', 'rrhh.gestionar', 'rrhh.nomina'] },
+];
+
+// Etiquetas legibles para cada permiso individual
+export const PERMISO_LABELS = {
+  'facturacion.ver':       'Ver facturas',
+  'facturacion.emitir':    'Emitir facturas',
+  'facturacion.anular':    'Anular facturas',
+  'compras.gestionar':     'Gestionar compras',
+  'retenciones.gestionar': 'Retenciones',
+  'liquidaciones.gestionar':'Liquidaciones',
+  'tributario.reportes':   'Reportes tributarios',
+  'contabilidad.ver':      'Ver contabilidad',
+  'contabilidad.gestionar':'Gestionar contabilidad',
+  'contabilidad.bloquear': 'Bloquear períodos',
+  'bancos.ver':            'Ver bancos',
+  'bancos.gestionar':      'Gestionar bancos',
+  'cheques.gestionar':     'Cheques',
+  'clientes.gestionar':    'Gestionar clientes',
+  'productos.ver':         'Ver productos',
+  'productos.gestionar':   'Gestionar productos',
+  'productos.eliminar':    'Eliminar productos',
+  'notasVenta.gestionar':  'Notas de venta',
+  'caja.ver':              'Ver caja',
+  'caja.gestionar':        'Gestionar caja',
+  'pos.usar':              'Usar POS',
+  'inventario.ver':        'Ver inventario',
+  'inventario.gestionar':  'Gestionar inventario',
+  'rrhh.ver':              'Ver RRHH',
+  'rrhh.gestionar':        'Gestionar RRHH',
+  'rrhh.nomina':           'Nómina',
 };

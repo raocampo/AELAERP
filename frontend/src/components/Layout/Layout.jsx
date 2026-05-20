@@ -80,6 +80,7 @@ function usePendientesSRI() {
 const ITEMS_SUELTOS = [
   { to: '/dashboard', icon: '🏠', label: 'Dashboard' },
   { to: '/pos',       icon: '🛍️', label: 'POS', permiso: 'pos.usar', modulo: 'posHabilitado' },
+  { to: '/ayuda',     icon: '❓', label: 'Ayuda' },
 ];
 
 // ─── Grupos de menú con subítems ─────────────────────────────────────────────
@@ -339,7 +340,7 @@ export default function Layout() {
           {/* ── Ítems independientes (Dashboard y POS) ── */}
           {ITEMS_SUELTOS.map((item) => {
             if (item.modulo && moduloDeshabilitadoPorConfiguracion(item, sistema)) return null;
-            if (item.permiso && !tienePermiso(usuario?.rol, item.permiso)) return null;
+            if (item.permiso && !tienePermiso(usuario?.rol, item.permiso, usuario?.permisosExtra)) return null;
             return (
               <NavLink
                 key={item.to}
@@ -367,7 +368,7 @@ export default function Layout() {
               .map((item) => {
                 const bloqueado    = planBloqueadoPorRequisito(item.planMin, { esLite, esMedium });
                 const deshabilitado = !bloqueado && moduloDeshabilitadoPorConfiguracion(item, sistema);
-                const sinPermiso   = item.permiso && !tienePermiso(usuario?.rol, item.permiso);
+                const sinPermiso   = item.permiso && !tienePermiso(usuario?.rol, item.permiso, usuario?.permisosExtra);
                 return { ...item, bloqueado, deshabilitado, sinPermiso };
               })
               .filter((item) => {
