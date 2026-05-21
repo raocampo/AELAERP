@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { descargarCsv } from '../../utils/exportCsv';
+import { parseFechaLocal } from '../../utils/fecha';
 import './ListaCompras.css';
 
 const FILTROS_INICIALES = {
@@ -13,7 +14,7 @@ const FILTROS_INICIALES = {
 
 function fmtFecha(valor) {
   if (!valor) return 'Sin fecha';
-  const fecha = new Date(valor);
+  const fecha = parseFechaLocal(valor);
   return Number.isNaN(fecha.getTime()) ? 'Sin fecha' : fecha.toLocaleDateString('es-EC');
 }
 

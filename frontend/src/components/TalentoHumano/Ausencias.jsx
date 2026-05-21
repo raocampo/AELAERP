@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { formatFechaCorta } from '../../utils/fecha';
 import './TalentoHumano.css';
 
 const TIPOS_AUSENCIA = [
@@ -156,8 +157,8 @@ const Ausencias = () => {
                       {aus.empleado.apellidos}, {aus.empleado.nombres}
                     </td>
                     <td>{TIPOS_AUSENCIA.find(t => t.value === aus.tipo)?.label || aus.tipo}</td>
-                    <td>{new Date(aus.fechaInicio).toLocaleDateString('es-EC')}</td>
-                    <td>{new Date(aus.fechaFin).toLocaleDateString('es-EC')}</td>
+                    <td>{formatFechaCorta(aus.fechaInicio)}</td>
+                    <td>{formatFechaCorta(aus.fechaFin)}</td>
                     <td>{aus.dias}</td>
                     <td>
                       <span className={aus.aprobado ? 'badge-aprobado' : 'badge-pendiente'}>

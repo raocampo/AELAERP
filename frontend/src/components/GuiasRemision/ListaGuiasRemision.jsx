@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatFechaCorta } from '../../utils/fecha';
 import './GuiasRemision.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
@@ -98,8 +99,7 @@ export default function ListaGuiasRemision() {
     }
   };
 
-  const fmtFecha = (iso) =>
-    iso ? new Date(iso).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+  const fmtFecha = (iso) => formatFechaCorta(iso);
 
   return (
     <div className="gr-container">

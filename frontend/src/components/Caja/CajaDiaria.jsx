@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { formatFechaCorta } from '../../utils/fecha';
 import './CajaDiaria.css';
 
 const MOVIMIENTO_INICIAL = {
@@ -299,7 +300,7 @@ export default function CajaDiaria() {
                     <tbody>
                       {historial.map((item) => (
                         <tr key={item.id}>
-                          <td>{new Date(item.fechaOperacion).toLocaleDateString('es-EC')}</td>
+                          <td>{formatFechaCorta(item.fechaOperacion)}</td>
                           <td>{item.estado}</td>
                           <td>${Number(item.montoApertura || 0).toFixed(2)}</td>
                           <td>{item.montoCierreReal === null || item.montoCierreReal === undefined ? 'Pendiente' : `$${Number(item.montoCierreReal).toFixed(2)}`}</td>

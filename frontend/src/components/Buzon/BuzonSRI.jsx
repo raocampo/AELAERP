@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import AuthContext from '../../context/auth-context';
+import { parseFechaLocal, formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import './BuzonSRI.css';
 
 const TIPO_COLORES = {
@@ -23,13 +24,14 @@ function formatFechaEc(fechaStr) {
   if (!fechaStr) return '—';
   const partes = String(fechaStr).split('/');
   if (partes.length === 3) return `${partes[0]}/${partes[1]}/${partes[2]}`;
-  try { return new Date(fechaStr).toLocaleDateString('es-EC'); } catch { return fechaStr; }
+  return formatFechaCorta(fechaStr);
 }
 
 // Helper: hoy y hace 30 días en formato yyyy-mm-dd
-function hoyISO() { return new Date().toISOString().slice(0, 10); }
+function hoyISO() { return hoyLocal(); }
 function hace30DiasISO() {
-  const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10);
+  const d = new Date(); d.setDate(d.getDate() - 30);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 const TIPOS_COMP_SRI = [
@@ -614,7 +616,7 @@ export default function BuzonSRI() {
                       <tr key={f.id}>
                         <td>{f.numeroFactura}</td>
                         <td>{f.razonSocialProveedor}</td>
-                        <td>{new Date(f.fechaEmision).toLocaleDateString('es-EC')}</td>
+                        <td>{formatFechaCorta(f.fechaEmision)}</td>
                         <td>${Number(f.importeTotal || 0).toFixed(2)}</td>
                       </tr>
                     ))}</tbody>
@@ -630,7 +632,7 @@ export default function BuzonSRI() {
                     <tbody>{historial.retenciones.map((r) => (
                       <tr key={r.id}>
                         <td>{r.razonSocialAgente}</td>
-                        <td>{new Date(r.fechaEmision).toLocaleDateString('es-EC')}</td>
+                        <td>{formatFechaCorta(r.fechaEmision)}</td>
                         <td>${Number(r.totalRetencionIva || 0).toFixed(2)}</td>
                         <td>${Number(r.totalRetencionRenta || 0).toFixed(2)}</td>
                       </tr>
@@ -648,7 +650,7 @@ export default function BuzonSRI() {
                       <tr key={d.id}>
                         <td>{d.tipoDescripcion}</td>
                         <td>{d.razonSocialEmisor}</td>
-                        <td>{new Date(d.fechaEmision).toLocaleDateString('es-EC')}</td>
+                        <td>{formatFechaCorta(d.fechaEmision)}</td>
                         <td>${Number(d.importeTotal || 0).toFixed(2)}</td>
                       </tr>
                     ))}</tbody>

@@ -6,6 +6,7 @@
 
 import { useState, useCallback } from 'react';
 import axios from 'axios';
+import { formatFechaCorta } from '../../utils/fecha';
 import './ReportesTributarios.css';
 import { buildDataTable, buildKvTable, printHtmlReport } from '../../utils/reportPrint';
 
@@ -45,7 +46,7 @@ export default function ReportesTributarios() {
 
   const anios = Array.from({ length: 5 }, (_, i) => String(hoy.getFullYear() - i));
 
-  const fmtFecha = (f) => f ? new Date(f).toLocaleDateString('es-EC') : '-';
+  const fmtFecha = (f) => f ? formatFechaCorta(f) : '-';
   const fmt = (n) => `$${parseFloat(n || 0).toFixed(2)}`;
 
   const imprimirPDF = () => {

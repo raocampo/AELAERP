@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
+import { formatFechaCorta } from '../../utils/fecha';
 
 export default function ListaNotasVenta() {
   const navigate = useNavigate();
@@ -151,7 +151,7 @@ export default function ListaNotasVenta() {
                     {n.numeroNota}
                   </td>
                   <td style={{ padding: '10px 14px', color: '#555' }}>
-                    {format(new Date(n.fechaEmision), 'dd/MM/yyyy')}
+                    {formatFechaCorta(n.fechaEmision)}
                   </td>
                   <td style={{ padding: '10px 14px' }}>
                     <div style={{ fontWeight: 500 }}>{n.razonSocial}</div>

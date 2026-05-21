@@ -5,10 +5,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { formatFechaLarga, formatFechaHora } from '../../utils/fecha';
 import './DetalleFactura.css';
 
 // ─── Timeline de estado SRI ───────────────────────────────────────────────────
@@ -167,7 +166,7 @@ const DetalleFactura = () => {
         <div>
           <h1>Factura {factura.numeroFactura}</h1>
           <p className="det-fact-fecha">
-            Emitida el {format(new Date(factura.fechaEmision), "dd 'de' MMMM 'de' yyyy", { locale: es })}
+            Emitida el {formatFechaLarga(factura.fechaEmision)}
             {factura.anulada && <span className="badge-anulada">ANULADA</span>}
           </p>
         </div>
@@ -200,7 +199,7 @@ const DetalleFactura = () => {
         {factura.fechaAutorizacion && (
           <div className="det-autorizacion">
             <span className="det-label">Fecha Autorización:</span>
-            <span>{format(new Date(factura.fechaAutorizacion), "dd/MM/yyyy HH:mm")}</span>
+            <span>{formatFechaHora(factura.fechaAutorizacion)}</span>
           </div>
         )}
         {factura.estadoSri === 'RECHAZADO' && mensajes && (

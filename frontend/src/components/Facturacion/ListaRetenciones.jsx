@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { formatFechaCorta } from '../../utils/fecha';
 import './ListaRetenciones.css';
 
 const API = `${import.meta.env.VITE_API_URL || 'http://localhost:5600'}/api`;
@@ -128,7 +129,7 @@ export default function ListaRetenciones() {
     }
   };
 
-  const fmtFecha = (f) => f ? new Date(f).toLocaleDateString('es-EC') : '-';
+  const fmtFecha = (f) => f ? formatFechaCorta(f) : '-';
 
   return (
     <div className="ret-container">

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
+import { parseFechaLocal, formatFechaHora } from '../../utils/fecha';
 import './DetalleCompra.css';
 
 const FORMAS_PAGO = {
@@ -26,11 +27,10 @@ function parseJsonField(valor, fallback = []) {
 
 function fmtFecha(valor, withTime = false) {
   if (!valor) return 'Sin fecha';
-  const fecha = new Date(valor);
+  const fecha = parseFechaLocal(valor);
   if (Number.isNaN(fecha.getTime())) return 'Sin fecha';
-  return fecha.toLocaleString('es-EC', withTime
-    ? { dateStyle: 'medium', timeStyle: 'short' }
-    : { dateStyle: 'medium' });
+  if (withTime) return formatFechaHora(valor);
+  return fecha.toLocaleString('es-EC', { dateStyle: 'medium' });
 }
 
 function fmtMoneda(valor) {

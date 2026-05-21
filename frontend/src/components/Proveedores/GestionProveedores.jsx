@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { formatFechaCorta } from '../../utils/fecha';
 import './GestionProveedores.css';
 
 const TIPOS_IDENTIFICACION = [
@@ -858,7 +859,7 @@ export default function GestionProveedores() {
                           {historialCompras.data.map((c) => (
                             <tr key={c.id} className={c.anulada ? 'row-anulada' : ''}>
                               <td>{c.numero}</td>
-                              <td>{new Date(c.fechaEmision).toLocaleDateString('es-EC')}</td>
+                              <td>{formatFechaCorta(c.fechaEmision)}</td>
                               <td>${Number(c.importeTotal || 0).toFixed(2)}</td>
                               <td>{c.anulada ? 'Anulada' : (c.estado || 'Registrada')}</td>
                             </tr>

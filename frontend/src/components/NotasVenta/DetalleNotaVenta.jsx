@@ -6,10 +6,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { formatFechaLarga } from '../../utils/fecha';
 
 const DetalleNotaVenta = () => {
   const { id }       = useParams();
@@ -175,7 +174,7 @@ const DetalleNotaVenta = () => {
             </div>
             <div style={{ fontSize: 13, color: '#666', marginTop: 6 }}>
               {nota.fechaEmision
-                ? format(new Date(nota.fechaEmision), "dd 'de' MMMM yyyy", { locale: es })
+                ? formatFechaLarga(nota.fechaEmision)
                 : '—'}
             </div>
           </div>

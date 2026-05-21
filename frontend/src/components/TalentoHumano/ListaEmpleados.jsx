@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { formatFechaCorta } from '../../utils/fecha';
 import './TalentoHumano.css';
 
 const ListaEmpleados = () => {
@@ -103,7 +104,7 @@ const ListaEmpleados = () => {
                     <td>{emp.cargo?.nombre || <span style={{ color:'#a0aec0' }}>—</span>}</td>
                     <td>{emp.departamento?.nombre || <span style={{ color:'#a0aec0' }}>—</span>}</td>
                     <td>${Number(emp.salarioBase).toLocaleString('es-EC', { minimumFractionDigits: 2 })}</td>
-                    <td>{emp.fechaIngreso ? new Date(emp.fechaIngreso).toLocaleDateString('es-EC') : '—'}</td>
+                    <td>{emp.fechaIngreso ? formatFechaCorta(emp.fechaIngreso) : '—'}</td>
                     <td>
                       <span className={emp.activo ? 'badge-activo' : 'badge-inactivo'}>
                         {emp.activo ? 'Activo' : 'Inactivo'}

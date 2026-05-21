@@ -5,10 +5,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { formatFechaCorta } from '../../utils/fecha';
 import './ListaFacturas.css';
 
 // ─── Badge de estado SRI ─────────────────────────────────────────────────────
@@ -174,7 +173,7 @@ const TabFacturas = ({ navigate }) => {
                       {f.numeroFactura}
                     </button>
                   </td>
-                  <td>{format(new Date(f.fechaEmision), 'dd/MM/yyyy', { locale: es })}</td>
+                  <td>{formatFechaCorta(f.fechaEmision)}</td>
                   <td className="fact-cliente">{f.razonSocialComprador}</td>
                   <td>{f.identificacionComprador}</td>
                   <td className="text-right">
@@ -185,7 +184,7 @@ const TabFacturas = ({ navigate }) => {
                     {f.cobrada && (
                       <span
                         className="sri-badge cobrada"
-                        title={f.fechaCobro ? `Cobrada el ${new Date(f.fechaCobro).toLocaleDateString('es-EC')}` : 'Cobrada'}
+                        title={f.fechaCobro ? `Cobrada el ${formatFechaCorta(f.fechaCobro)}` : 'Cobrada'}
                         style={{ marginLeft: 4 }}
                       >
                         💰 Cobrada
@@ -302,7 +301,7 @@ const TabNotasCredito = ({ navigate }) => {
             {ncs.map(nc => (
               <tr key={nc.id}>
                 <td>{nc.numeroNC}</td>
-                <td>{format(new Date(nc.fechaEmision), 'dd/MM/yyyy', { locale: es })}</td>
+                <td>{formatFechaCorta(nc.fechaEmision)}</td>
                 <td>
                   <button className="fact-link" onClick={() => navigate(`/facturas/${nc.facturaId}`)}>
                     {nc.numeroFacturaAfectada}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
+import { toInputFecha, hoyLocal } from '../../utils/fecha';
 import './FormCompra.css';
 
 const FORMAS_PAGO = [
@@ -16,10 +17,7 @@ const FORMAS_PAGO = [
   { codigo: '21', label: 'Endoso de títulos' },
 ];
 
-const hoy = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
+const hoy = () => hoyLocal();
 
 const detalleVacio = () => ({
   codigoPrincipal: '',
@@ -35,9 +33,8 @@ const detalleVacio = () => ({
 
 function fmtFechaInput(valor) {
   if (!valor) return hoy();
-  const fecha = new Date(valor);
-  if (Number.isNaN(fecha.getTime())) return hoy();
-  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+  const result = toInputFecha(valor);
+  return result || hoy();
 }
 
 function calcularLinea(detalle) {

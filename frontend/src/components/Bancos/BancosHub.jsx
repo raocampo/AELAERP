@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
+import { formatFechaCorta } from '../../utils/fecha';
 import './Bancos.css';
 
 const TIPOS_CUENTA = ['CORRIENTE', 'AHORROS'];
@@ -12,7 +13,7 @@ function formatMoney(v) {
 
 function formatDate(d) {
   if (!d) return '';
-  return new Date(d).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return formatFechaCorta(d);
 }
 
 // ─── Modal Cuenta ───────────────────────────────────────────

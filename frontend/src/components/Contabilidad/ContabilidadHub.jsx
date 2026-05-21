@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { normalizarPeriodoMMYYYY } from '../../utils/periodo';
+import { formatFechaCorta } from '../../utils/fecha';
 import './ContabilidadHub.css';
 
 const toMoney = (n) => Number(n || 0).toLocaleString('es-EC', { style: 'currency', currency: 'USD' });
@@ -660,7 +661,7 @@ const ContabilidadHub = () => {
                   {asientos.map((a) => (
                     <tr key={a.id}>
                       <td>{a.numero}</td>
-                      <td>{new Date(a.fecha).toLocaleDateString('es-EC')}</td>
+                      <td>{formatFechaCorta(a.fecha)}</td>
                       <td>{a.tipo}</td>
                       <td>{a.descripcion}</td>
                     </tr>
@@ -695,7 +696,7 @@ const ContabilidadHub = () => {
                 <option value="">Seleccione asiento abierto (MANUAL/AJUSTE)...</option>
                 {asientosCorregibles.map((a) => (
                   <option key={a.id} value={a.id}>
-                    #{a.numero} | {new Date(a.fecha).toLocaleDateString('es-EC')} | {a.tipo} | {a.descripcion}
+                    #{a.numero} | {formatFechaCorta(a.fecha)} | {a.tipo} | {a.descripcion}
                   </option>
                 ))}
               </select>
@@ -860,7 +861,7 @@ const ContabilidadHub = () => {
                   {diarioAsientos.map((a) => (
                     <tr key={a.id}>
                       <td>{a.numero}</td>
-                      <td>{new Date(a.fecha).toLocaleDateString('es-EC')}</td>
+                      <td>{formatFechaCorta(a.fecha)}</td>
                       <td>{a.tipo}</td>
                       <td>{a.descripcion}</td>
                       <td>{toMoney(a.totalDebe)}</td>
@@ -971,8 +972,8 @@ const ContabilidadHub = () => {
                   {periodos.map((item) => (
                     <tr key={item.id}>
                       <td>{item.codigo}</td>
-                      <td>{new Date(item.fechaInicio).toLocaleDateString('es-EC')}</td>
-                      <td>{new Date(item.fechaFin).toLocaleDateString('es-EC')}</td>
+                      <td>{formatFechaCorta(item.fechaInicio)}</td>
+                      <td>{formatFechaCorta(item.fechaFin)}</td>
                       <td>
                         <span className={`conta-badge ${item.estado === 'ABIERTO' ? 'ok' : 'warn'}`}>{item.estado}</span>
                       </td>
@@ -1044,7 +1045,7 @@ const ContabilidadHub = () => {
                   <tbody>
                     {(mayorDetalle.movimientos || []).map((m) => (
                       <tr key={m.id}>
-                        <td>{new Date(m.fecha).toLocaleDateString('es-EC')}</td>
+                        <td>{formatFechaCorta(m.fecha)}</td>
                         <td>{m.numero}</td>
                         <td>{m.tipo}</td>
                         <td>{m.descripcionDetalle || m.descripcionAsiento}</td>
