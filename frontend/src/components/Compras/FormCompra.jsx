@@ -82,6 +82,7 @@ export default function FormCompra() {
     fechaEmision: hoy(),
     formaPago: '20',
     observaciones: '',
+    tipoGasto: '',
     origenRegistro: 'MANUAL',
     xmlOrigen: '',
     crearProductosFaltantes: true,
@@ -357,6 +358,7 @@ export default function FormCompra() {
         claveAcceso: form.claveAcceso.trim(),
         fechaEmision: form.fechaEmision,
         observaciones: form.observaciones.trim(),
+        tipoGasto: form.tipoGasto || null,
         origenRegistro: form.origenRegistro,
         xmlOrigen: form.xmlOrigen,
         crearProductosFaltantes: form.crearProductosFaltantes,
@@ -584,6 +586,19 @@ export default function FormCompra() {
                 {FORMAS_PAGO.map((item) => (
                   <option key={item.codigo} value={item.codigo}>{item.codigo} - {item.label}</option>
                 ))}
+              </select>
+            </label>
+            <label className="wide">
+              <span>Tipo de gasto (deducción SRI)</span>
+              <select value={form.tipoGasto} onChange={(e) => actualizarForm('tipoGasto', e.target.value)}>
+                <option value="">— Sin clasificar —</option>
+                <option value="SALUD">🏥 Salud</option>
+                <option value="EDUCACION">📚 Educación</option>
+                <option value="ALIMENTACION">🍽 Alimentación</option>
+                <option value="VIVIENDA">🏠 Vivienda</option>
+                <option value="VESTIMENTA">👔 Vestimenta</option>
+                <option value="TURISMO">✈ Turismo</option>
+                <option value="OTROS">📦 Otros deducibles</option>
               </select>
             </label>
             <label className="wide">

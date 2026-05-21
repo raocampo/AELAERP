@@ -587,11 +587,21 @@ export default function BuzonSRI() {
                   <div className="buzon-resumen-card buzon-resumen--gris"><span>{resumenZip.resumen?.omitidos || 0}</span><small>Ya existían</small></div>
                   <div className="buzon-resumen-card buzon-resumen--rojo"><span>{resumenZip.resumen?.errores || 0}</span><small>Con error</small></div>
                 </div>
-                {resumenZip.resultados?.some((r) => r.estado === 'error') && (
-                  <div className="buzon-errores-list">
-                    {resumenZip.resultados.filter((r) => r.estado === 'error').map((r) => (
-                      <div key={r.clave || r.archivo} className="buzon-error-item"><code>{r.archivo}</code> — {r.error}</div>
-                    ))}
+                {resumenZip.resultados?.length > 0 && (
+                  <div className="buzon-errores-list" style={{ marginTop: '.75rem' }}>
+                    <strong style={{ fontSize: '.82rem', color: '#475569' }}>Detalle por archivo:</strong>
+                    {resumenZip.resultados.map((r) => {
+                      const color = r.estado === 'creado' ? '#16a34a' : r.estado === 'omitido' ? '#64748b' : '#dc2626';
+                      const icon  = r.estado === 'creado' ? '✅' : r.estado === 'omitido' ? '⏭' : '❌';
+                      return (
+                        <div key={r.clave || r.archivo} className="buzon-error-item" style={{ color }}>
+                          {icon} <code>{r.archivo}</code>
+                          {r.tipo && <span style={{ marginLeft: 6, fontStyle: 'italic' }}>{r.tipo}</span>}
+                          {r.estado === 'omitido' && <span style={{ marginLeft: 6 }}>— Ya existía</span>}
+                          {r.estado === 'error' && <span style={{ marginLeft: 6 }}>— {r.error}</span>}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

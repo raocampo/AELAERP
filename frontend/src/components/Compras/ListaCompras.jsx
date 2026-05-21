@@ -10,7 +10,20 @@ const FILTROS_INICIALES = {
   busqueda: '',
   fechaDesde: '',
   fechaHasta: '',
+  tipoGasto: '',
 };
+
+const TIPO_GASTO_OPCIONES = [
+  { value: '', label: 'Todos los tipos' },
+  { value: 'SALUD', label: '🏥 Salud' },
+  { value: 'EDUCACION', label: '📚 Educación' },
+  { value: 'ALIMENTACION', label: '🍽 Alimentación' },
+  { value: 'VIVIENDA', label: '🏠 Vivienda' },
+  { value: 'VESTIMENTA', label: '👔 Vestimenta' },
+  { value: 'TURISMO', label: '✈ Turismo' },
+  { value: 'OTROS', label: '📦 Otros deducibles' },
+  { value: 'SIN_CLASIFICAR', label: '⚠ Sin clasificar' },
+];
 
 function fmtFecha(valor) {
   if (!valor) return 'Sin fecha';
@@ -123,6 +136,14 @@ export default function ListaCompras() {
           value={filtros.fechaHasta}
           onChange={(e) => actualizarFiltro('fechaHasta', e.target.value)}
         />
+        <select
+          value={filtros.tipoGasto}
+          onChange={(e) => actualizarFiltro('tipoGasto', e.target.value)}
+        >
+          {TIPO_GASTO_OPCIONES.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
         <button className="btn-secondary" onClick={() => setFiltros(FILTROS_INICIALES)}>Limpiar</button>
       </section>
 
@@ -143,6 +164,7 @@ export default function ListaCompras() {
                   <th>Proveedor</th>
                   <th>Autorización</th>
                   <th>Total</th>
+                  <th>Tipo Gasto</th>
                   <th>Origen</th>
                   <th>Operación</th>
                 </tr>
@@ -167,6 +189,11 @@ export default function ListaCompras() {
                     </td>
                     <td>{item.numeroAutorizacion || 'Sin autorización'}</td>
                     <td>{fmtMoneda(item.importeTotal)}</td>
+                    <td>
+                      {item.tipoGasto
+                        ? <span className={`compras-chip tipo-gasto-${item.tipoGasto.toLowerCase()}`}>{item.tipoGasto}</span>
+                        : <span className="compras-chip sin-clasificar">—</span>}
+                    </td>
                     <td>
                       <span className={`compras-chip ${String(item.origenRegistro || '').toLowerCase()}`}>
                         {item.origenRegistro || 'MANUAL'}

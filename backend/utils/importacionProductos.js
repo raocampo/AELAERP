@@ -293,7 +293,7 @@ function parsearFacturaCompraDesdeXml(xmlString) {
   const xmlPrincipal = extraerXmlPrincipal(xmlString);
   const parsed = parser.parse(xmlPrincipal);
   const factura = parsed?.factura || parsed?.liquidacionCompra || parsed;
-  const infoTrib = factura?.infoTrib || {};
+  const infoTrib = factura?.infoTributaria || factura?.infoTrib || {};
   const infoFactura = factura?.infoFactura || factura?.infoLiquidacionCompra || {};
   const detallesXml = ensureArray(factura?.detalles?.detalle);
 

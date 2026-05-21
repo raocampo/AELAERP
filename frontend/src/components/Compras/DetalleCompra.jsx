@@ -58,6 +58,7 @@ export default function DetalleCompra() {
   // Modal editar
   const [modalEditar, setModalEditar] = useState(false);
   const [editObs, setEditObs] = useState('');
+  const [editTipoGasto, setEditTipoGasto] = useState('');
   const [guardando, setGuardando] = useState(false);
 
   // Modal anular
@@ -89,13 +90,14 @@ export default function DetalleCompra() {
 
   const abrirEditar = () => {
     setEditObs(compra?.observaciones || '');
+    setEditTipoGasto(compra?.tipoGasto || '');
     setModalEditar(true);
   };
 
   const guardarEdicion = async () => {
     setGuardando(true);
     try {
-      await api.put(`/compras/${id}`, { observaciones: editObs });
+      await api.put(`/compras/${id}`, { observaciones: editObs, tipoGasto: editTipoGasto || null });
       toast.success('Compra actualizada');
       setModalEditar(false);
       cargar();
@@ -147,6 +149,23 @@ export default function DetalleCompra() {
         <div className="dc-modal-overlay">
           <div className="dc-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Editar compra {compra.numeroFactura}</h3>
+            <label className="dc-modal-label">
+              Tipo de gasto SRI
+              <select
+                style={{ width: '100%', padding: '.45rem .6rem', borderRadius: '.45rem', border: '1.5px solid #e2e8f0', fontSize: '.9rem', marginTop: '.25rem' }}
+                value={editTipoGasto}
+                onChange={(e) => setEditTipoGasto(e.target.value)}
+              >
+                <option value="">— Sin clasificar —</option>
+                <option value="SALUD">🏥 Salud</option>
+                <option value="EDUCACION">📚 Educación</option>
+                <option value="ALIMENTACION">🍽 Alimentación</option>
+                <option value="VIVIENDA">🏠 Vivienda</option>
+                <option value="VESTIMENTA">👔 Vestimenta</option>
+                <option value="TURISMO">✈ Turismo</option>
+                <option value="OTROS">📦 Otros deducibles</option>
+              </select>
+            </label>
             <label className="dc-modal-label">
               Observaciones
               <textarea
@@ -345,6 +364,12 @@ export default function DetalleCompra() {
             </div>
           )}
 
+          {compra.tipoGasto && (
+            <div className="detalle-compra-note">
+              <span>Tipo de gasto SRI</span>
+              <p><strong>{compra.tipoGasto}</strong></p>
+            </div>
+          )}
           {compra.observaciones ? (
             <div className="detalle-compra-note">
               <span>Observaciones</span>

@@ -341,7 +341,7 @@ router.get('/exportar/csv', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 15, fechaDesde, fechaHasta, proveedor, busqueda } = req.query;
+    const { page = 1, limit = 15, fechaDesde, fechaHasta, proveedor, busqueda, tipoGasto } = req.query;
     const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const where = { empresaId: req.empresa.id };
 
@@ -364,6 +364,14 @@ router.get('/', async (req, res) => {
       ];
     }
 
+    if (tipoGasto) {
+      if (tipoGasto === 'SIN_CLASIFICAR') {
+        where.tipoGasto = null;
+      } else {
+        where.tipoGasto = tipoGasto;
+      }
+    }
+
     const [total, items] = await Promise.all([
       prisma.facturas_compra.count({ where }),
       prisma.facturas_compra.findMany({
@@ -384,6 +392,9 @@ router.get('/', async (req, res) => {
           egresoCajaRegistrado: true,
           movimientosInventario: true,
           origenRegistro: true,
+          tipoGasto: true,
+          anulada: true,
+          motivoAnulacion: true,
           createdAt: true,
         },
       }),
@@ -503,6 +514,7 @@ router.post('/', async (req, res) => {
       claveAcceso,
       fechaEmision,
       observaciones,
+      tipoGasto,
       detalles,
       pagos,
       origenRegistro,
@@ -614,6 +626,7 @@ router.post('/', async (req, res) => {
           creaProductos: toBoolean(crearProductosFaltantes, false),
           xmlOrigen: limpiarTexto(xmlOrigen) || null,
           observaciones: limpiarTexto(observaciones) || null,
+          tipoGasto: limpiarTexto(tipoGasto) || null,
         },
       });
 
@@ -730,11 +743,12 @@ router.put('/:id', async (req, res) => {
     if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
     if (compra.anulada) return res.status(400).json({ success: false, mensaje: 'No se puede editar una compra anulada' });
 
-    const { observaciones, proveedorId, fechaEmision } = req.body || {};
+    const { observaciones, proveedorId, fechaEmision, tipoGasto } = req.body || {};
 
     const data = {};
     if (observaciones !== undefined) data.observaciones = limpiarTexto(observaciones) || null;
     if (proveedorId !== undefined) data.proveedorId = proveedorId ? parseInt(proveedorId, 10) : null;
+    if (tipoGasto !== undefined) data.tipoGasto = limpiarTexto(tipoGasto) || null;
 
     // Fecha solo si no tiene movimientos de inventario aplicados
     if (fechaEmision !== undefined && compra.movimientosInventario === 0) {
