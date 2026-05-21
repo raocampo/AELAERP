@@ -25,13 +25,15 @@ const BadgeEstado = ({ estado }) => {
 };
 
 // ─── Tab: Facturas ────────────────────────────────────────────────────────────
-const TabFacturas = ({ navigate }) => {
+const TabFacturas = ({ navigate, onIrNC }) => {
   const [facturas, setFacturas]   = useState([]);
   const [loading,  setLoading]    = useState(true);
   const [busqueda, setBusqueda]   = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
   const [modalAnular, setModalAnular]   = useState(null);
   const [motivoAnul,  setMotivoAnul]    = useState('');
+  const [anulandoId,  setAnulandoId]    = useState(null);
+  const [ncResultado, setNcResultado]   = useState(null);
 
   const cargar = useCallback(async ({ termino = busqueda, estado = filtroEstado } = {}) => {
     setLoading(true);
@@ -107,14 +109,21 @@ const TabFacturas = ({ navigate }) => {
   };
 
   const confirmarAnular = async () => {
+    if (!motivoAnul.trim()) return toast.error('Escribe el motivo de anulación');
+    setAnulandoId(modalAnular.id);
     try {
-      await api.post(`/facturas/${modalAnular.id}/anular`, { motivo: motivoAnul });
-      toast.success('Factura anulada');
+      const res = await api.post(`/facturas/${modalAnular.id}/anular`, { motivo: motivoAnul });
+      toast.success(res.data.mensaje || 'Factura anulada');
+      if (res.data.ncAnulacion) {
+        setNcResultado({ factura: modalAnular, nc: res.data.ncAnulacion });
+      }
       setModalAnular(null);
       setMotivoAnul('');
       await cargar();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al anular');
+    } finally {
+      setAnulandoId(null);
     }
   };
 
@@ -230,25 +239,74 @@ const TabFacturas = ({ navigate }) => {
 
       {/* Modal anular */}
       {modalAnular && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" onClick={() => setModalAnular(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h3>Anular Factura {modalAnular.numeroFactura}</h3>
-            <p style={{ color: '#64748b', fontSize: '0.88rem', margin: '8px 0 16px' }}>
-              Esta acción marcará la factura como <strong>ANULADA</strong>. Si necesita reembolsar,
-              emita una Nota de Crédito desde el detalle de la factura.
-            </p>
-            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>
-              Motivo de anulación
+            <h3>🚫 Anular Factura {modalAnular.numeroFactura}</h3>
+
+            {modalAnular.estadoSri === 'AUTORIZADO' ? (
+              <div className="anular-warning">
+                <p>⚠️ <strong>Esta factura ya fue autorizada por el SRI.</strong></p>
+                <p style={{ marginTop: 8 }}>
+                  Según el procedimiento fiscal ecuatoriano, no es posible cancelar
+                  directamente un comprobante autorizado. El sistema emitirá
+                  automáticamente una <strong>Nota de Crédito al 100%</strong> con el
+                  motivo indicado, la cual será enviada al SRI para compensar la factura.
+                </p>
+              </div>
+            ) : (
+              <p style={{ color: '#64748b', fontSize: '0.88rem', margin: '8px 0 4px' }}>
+                La factura no está autorizada por el SRI, se marcará como
+                <strong> ANULADA</strong> internamente y se revertirán los movimientos
+                de inventario y caja correspondientes.
+              </p>
+            )}
+
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, margin: '14px 0 6px' }}>
+              Motivo de anulación *
             </label>
             <input
               className="modal-input"
               value={motivoAnul}
               onChange={e => setMotivoAnul(e.target.value)}
-              placeholder="Ej: Error en datos del cliente"
+              placeholder="Ej: Error en datos del cliente, duplicada, etc."
             />
+
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setModalAnular(null)}>Cancelar</button>
-              <button className="btn-danger" onClick={confirmarAnular}>Anular factura</button>
+              <button className="btn-secondary" onClick={() => { setModalAnular(null); setMotivoAnul(''); }}>
+                Cancelar
+              </button>
+              <button
+                className="btn-danger"
+                onClick={confirmarAnular}
+                disabled={!!anulandoId || !motivoAnul.trim()}
+              >
+                {anulandoId ? 'Anulando...' : (modalAnular.estadoSri === 'AUTORIZADO' ? '🚫 Anular + emitir NC' : '🚫 Anular factura')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal resultado NC de anulación */}
+      {ncResultado && (
+        <div className="modal-overlay" onClick={() => setNcResultado(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3>✅ Anulación procesada</h3>
+            <p>
+              La factura <strong>{ncResultado.factura.numeroFactura}</strong> fue anulada.
+            </p>
+            <div className="anular-nc-info">
+              <p>📄 Nota de Crédito generada: <strong>{ncResultado.nc.numeroNC}</strong></p>
+              <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: 6 }}>
+                La NC está pendiente de firma y envío al SRI. Ve a la pestaña
+                <em> Notas de Crédito</em> o al buzón SRI para enviarla.
+              </p>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setNcResultado(null)}>Cerrar</button>
+              <button className="btn-primary" onClick={() => { setNcResultado(null); onIrNC(); }}>
+                Ver Notas de Crédito
+              </button>
             </div>
           </div>
         </div>
@@ -366,7 +424,7 @@ const ListaFacturas = () => {
       </div>
 
       {tab === 'facturas'
-        ? <TabFacturas navigate={navigate} />
+        ? <TabFacturas navigate={navigate} onIrNC={() => setTab('nc')} />
         : <TabNotasCredito navigate={navigate} />
       }
     </div>

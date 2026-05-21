@@ -9,7 +9,6 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaLarga, formatFechaHora } from '../../utils/fecha';
 import './DetalleFactura.css';
-
 // ─── Timeline de estado SRI ───────────────────────────────────────────────────
 const PASOS_SRI = [
   { key: 'PENDIENTE_FIRMA', label: 'Generado',  icon: '📄' },
@@ -53,6 +52,12 @@ const DetalleFactura = () => {
   const [ncMotivo,   setNcMotivo]   = useState('');
   const [ncDetalles, setNcDetalles] = useState([]);
   const [enviandoNC, setEnviandoNC] = useState(false);
+
+  // Modal Anular
+  const [modalAnular,  setModalAnular]  = useState(false);
+  const [motivoAnular, setMotivoAnular] = useState('');
+  const [anulando,     setAnulando]     = useState(false);
+  const [ncAnulacion,  setNcAnulacion]  = useState(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -152,6 +157,23 @@ const DetalleFactura = () => {
     }
   };
 
+  const anularFactura = async () => {
+    if (!motivoAnular.trim()) return toast.error('Escribe el motivo de anulación');
+    setAnulando(true);
+    try {
+      const res = await api.post(`/facturas/${id}/anular`, { motivo: motivoAnular });
+      toast.success(res.data.mensaje || 'Factura anulada');
+      setModalAnular(false);
+      setMotivoAnular('');
+      if (res.data.ncAnulacion) setNcAnulacion(res.data.ncAnulacion);
+      await cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al anular');
+    } finally {
+      setAnulando(false);
+    }
+  };
+
   if (loading) return <div className="loading">Cargando factura...</div>;
   if (!factura) return <div className="error">Factura no encontrada</div>;
 
@@ -177,6 +199,11 @@ const DetalleFactura = () => {
           <button className="btn-secondary" onClick={descargarXML}>📥 XML</button>
           {['PENDIENTE_FIRMA', 'RECHAZADO'].includes(factura.estadoSri) && !factura.anulada && (
             <button className="btn-secondary" onClick={reenviar}>🔄 Reenviar SRI</button>
+          )}
+          {!factura.anulada && factura.estadoSri !== 'ANULADO' && (
+            <button className="btn-danger-outline" onClick={() => setModalAnular(true)}>
+              🚫 Anular factura
+            </button>
           )}
           {!factura.anulada && factura.estadoSri !== 'ANULADO' && (
             <button className="btn-nc" onClick={() => setModalNC(true)}>
@@ -295,6 +322,76 @@ const DetalleFactura = () => {
           </div>
         ))}
       </div>
+
+      {/* Modal Anular factura */}
+      {modalAnular && (
+        <div className="modal-overlay" onClick={() => setModalAnular(false)}>
+          <div className="modal-content nc-modal" onClick={e => e.stopPropagation()}>
+            <h3>🚫 Anular Factura {factura.numeroFactura}</h3>
+
+            {factura.estadoSri === 'AUTORIZADO' ? (
+              <div className="anular-warning">
+                <p>⚠️ <strong>Esta factura ya fue autorizada por el SRI.</strong></p>
+                <p style={{ marginTop: 8 }}>
+                  El sistema generará automáticamente una <strong>Nota de Crédito al 100%</strong>
+                  {' '}con el motivo indicado. La NC quedará pendiente de envío al SRI y
+                  compensará esta factura en el registro tributario.
+                </p>
+              </div>
+            ) : (
+              <p style={{ color: '#64748b', fontSize: '0.88rem', margin: '8px 0 12px' }}>
+                La factura no está autorizada por el SRI. Se marcará como
+                <strong> ANULADA</strong> localmente y se revertirán los movimientos
+                de inventario y caja.
+              </p>
+            )}
+
+            <div className="nc-field">
+              <label>Motivo de anulación *</label>
+              <input
+                value={motivoAnular}
+                onChange={e => setMotivoAnular(e.target.value)}
+                placeholder="Ej: Error en datos del cliente, factura duplicada..."
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => { setModalAnular(false); setMotivoAnular(''); }}>
+                Cancelar
+              </button>
+              <button
+                className="btn-danger"
+                onClick={anularFactura}
+                disabled={anulando || !motivoAnular.trim()}
+              >
+                {anulando ? 'Anulando...' : (factura.estadoSri === 'AUTORIZADO' ? '🚫 Anular + emitir NC' : '🚫 Anular factura')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resultado NC de anulación */}
+      {ncAnulacion && (
+        <div className="modal-overlay" onClick={() => setNcAnulacion(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3>✅ Anulación procesada</h3>
+            <div className="anular-nc-info">
+              <p>📄 Nota de Crédito emitida: <strong>{ncAnulacion.numeroNC}</strong></p>
+              <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: 6 }}>
+                La NC está pendiente de firma y envío al SRI.
+                Ve al <strong>Buzón SRI</strong> para enviarla y obtener la autorización.
+              </p>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setNcAnulacion(null)}>Cerrar</button>
+              <button className="btn-primary" onClick={() => navigate('/buzon-sri')}>
+                📤 Ir al Buzón SRI
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Nota de Crédito */}
       {modalNC && (

@@ -547,6 +547,12 @@ router.post('/:id/reenviar', permitirEmitirFacturacion, async (req, res) => {
 });
 
 // POST /api/facturas/:id/anular
+// ─── Lógica SRI para anulación ────────────────────────────────────────────────
+// El SRI Ecuador NO dispone de un endpoint de "anulación directa".
+// Para facturas AUTORIZADAS: el procedimiento fiscal correcto es emitir una
+// Nota de Crédito al 100% del valor. Esta NC se envía al SRI y compensa la factura.
+// Para facturas NO autorizadas (PENDIENTE_FIRMA, RECHAZADO, ENVIADO, etc.):
+// basta con marcarlas como ANULADO localmente (nunca fueron aceptadas por el SRI).
 router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
   try {
     const factura = await prisma.facturas.findFirst({
@@ -555,13 +561,109 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
     if (!factura) return res.status(404).json({ ok: false, error: 'Factura no encontrada' });
     if (factura.anulada) return res.status(400).json({ ok: false, error: 'La factura ya está anulada' });
 
+    const motivo = req.body.motivo || 'Anulada por el emisor';
+    let ncCreada = null;
+
+    // ── Para facturas AUTORIZADAS: emitir NC total como mecanismo SRI ───────
+    if (factura.estadoSri === 'AUTORIZADO') {
+      const config = await getConfigSRI(req.empresa.id);
+      if (!config) {
+        return res.status(400).json({ ok: false, error: 'Configure primero el SRI para emitir la Nota de Crédito de anulación' });
+      }
+
+      // Obtener detalles y construir items de NC
+      const detallesFact = Array.isArray(factura.detalles)
+        ? factura.detalles
+        : (typeof factura.detalles === 'string' ? JSON.parse(factura.detalles) : []);
+
+      const detallesNC = detallesFact.map(d => ({
+        descripcion:    d.descripcion,
+        cantidad:       Number(d.cantidad)        || 1,
+        precioUnitario: Number(d.precioUnitario)  || 0,
+        ivaPorcentaje:  Number(d.ivaPorcentaje ?? d.porcentajeIva) || 0,
+      }));
+
+      if (!detallesNC.length) {
+        return res.status(400).json({ ok: false, error: 'La factura no tiene detalles para incluir en la Nota de Crédito' });
+      }
+
+      // Siguiente secuencial de NC
+      const lastNC = await prisma.notas_credito.findFirst({
+        where: { empresaId: req.empresa.id },
+        orderBy: { secuencial: 'desc' },
+      });
+      const maxEnBD_nc = lastNC ? (parseInt(String(lastNC.secuencial), 10) || 0) : 0;
+      const secuencialNum_nc = await siguienteSecuencial(
+        prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+        maxEnBD_nc, 'secInicialNotaCredito'
+      );
+      const secuencial = String(secuencialNum_nc).padStart(9, '0');
+
+      const fecha = new Date();
+      const claveAcceso = sri.generarClaveAcceso({
+        fecha,
+        tipoCod:    '04',
+        ruc:        config.ruc,
+        ambiente:   config.ambiente,
+        estab:      config.establecimiento,
+        ptoEmi:     config.puntoEmision,
+        secuencial,
+      });
+      const numeroNC = sri.formatearNumeroFactura(config.establecimiento, config.puntoEmision, secuencial);
+
+      const { xml, totales } = sri.generarXMLNotaCredito({
+        claveAcceso, secuencial, fechaEmision: fecha,
+        tipoIdentificacionComprador: factura.tipoIdentificacionComprador,
+        identificacionComprador:     factura.identificacionComprador,
+        razonSocialComprador:        factura.razonSocialComprador,
+        numeroFacturaAfectada:       factura.numeroFactura,
+        fechaEmisionDocSustento:     factura.fechaEmision,
+        motivoModificacion:          motivo,
+        detalles:                    detallesNC,
+      }, config);
+
+      ncCreada = await prisma.notas_credito.create({
+        data: {
+          empresaId:                   req.empresa.id,
+          claveAcceso, numeroNC, secuencial,
+          tipoIdentificacionComprador: factura.tipoIdentificacionComprador,
+          identificacionComprador:     factura.identificacionComprador,
+          razonSocialComprador:        factura.razonSocialComprador,
+          facturaId:                   factura.id,
+          numeroFacturaAfectada:       factura.numeroFactura,
+          fechaEmisionDocSustento:     factura.fechaEmision,
+          motivoModificacion:          motivo,
+          fechaEmision:                fecha,
+          totalSinImpuestos:           totales.totalSinImpuestos,
+          totalIva:                    totales.totalIva,
+          importeTotal:                totales.importeTotal,
+          detalles:                    detallesNC,
+          estadoSri:                   'PENDIENTE_FIRMA',
+          xmlGenerado:                 xml,
+          emisorId:                    req.usuario.id,
+        },
+      });
+
+      // Registrar asiento contable de la NC
+      try {
+        await crearAsientoNotaCreditoEmitida({
+          notaCreditoId: ncCreada.id,
+          usuarioId: req.usuario.id,
+          fecha,
+        });
+      } catch (contErr) {
+        console.error('Error creando asiento de NC por anulación:', contErr.message);
+      }
+    }
+
+    // ── Marcar factura como ANULADO y revertir inventario/caja ──────────────
     const updated = await prisma.$transaction(async (tx) => {
       const anulada = await tx.facturas.update({
         where: { id: factura.id },
         data: {
           anulada: true,
           estadoSri: 'ANULADO',
-          motivoAnulacion: req.body.motivo || 'Anulada por el emisor',
+          motivoAnulacion: motivo,
         },
       });
 
@@ -596,7 +698,7 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
       usuarioId: req.usuario.id, accion: 'UPDATE',
       tabla: 'facturas', registroId: factura.id,
       datosAnteriores: { estadoSri: factura.estadoSri },
-      datosNuevos:     { estadoSri: 'ANULADO' },
+      datosNuevos:     { estadoSri: 'ANULADO', motivoAnulacion: motivo, ncAnulacionId: ncCreada?.id },
       req,
     });
 
@@ -610,8 +712,13 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
       console.error('Error creando asiento reverso por anulación:', contErr.message);
     }
 
-    res.json({ ok: true, data: updated, mensaje: 'Factura anulada y asiento reverso contable generado.' });
+    const mensaje = ncCreada
+      ? `Factura anulada. Se emitió la Nota de Crédito ${ncCreada.numeroNC} (pendiente de autorización SRI).`
+      : 'Factura anulada correctamente (no estaba autorizada en el SRI).';
+
+    res.json({ ok: true, data: updated, ncAnulacion: ncCreada, mensaje });
   } catch (err) {
+    console.error('Error al anular factura:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
