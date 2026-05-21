@@ -63,12 +63,13 @@ router.get('/', proteger, soloAdmin, async (req, res) => {
 // POST /api/usuarios
 router.post('/', proteger, soloAdmin, checkLimiteUsuarios, async (req, res) => {
   try {
-    const { nombre, username, email, password, rol } = req.body;
+    const { nombre, username, email, password, rol, empresaId: empresaIdBody } = req.body;
     const nombreLimpio = String(nombre || '').trim();
     const usernameLimpio = normalizarUsername(username);
     const emailLimpio = normalizarEmail(email);
     const rolNormalizado = normalizarRol(rol || DEFAULT_ROLE);
-    const empresaId = obtenerEmpresaActual(req);
+    // Allow admin to create user for a specific company
+    const empresaId = empresaIdBody ? parseInt(empresaIdBody, 10) : obtenerEmpresaActual(req);
 
     if (!nombreLimpio || !usernameLimpio || !password) {
       return res.status(400).json({ success: false, mensaje: 'Nombre, usuario y contraseña son requeridos' });

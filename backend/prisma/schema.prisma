@@ -33,6 +33,19 @@ model empresas {
   maxUsuarios         Int?
   // null = ilimitado; 1 = Lite; 3 = Medium
   activo              Boolean   @default(true)
+  // ── Tipo de contribuyente ──
+  tipoContribuyente   String?   @default("JURIDICA") @db.VarChar(20)
+  // NATURAL | JURIDICA
+  // ── Representante Legal (para personas jurídicas) ──
+  repLegalNombre      String?   @db.VarChar(200)
+  repLegalCedula      String?   @db.VarChar(13)
+  repLegalCargo       String?   @db.VarChar(100)
+  repLegalEmail       String?   @db.VarChar(150)
+  // ── Contadora / Contador ──
+  contadoraNombre     String?   @db.VarChar(200)
+  contadoraCedula     String?   @db.VarChar(13)
+  contadoraEmail      String?   @db.VarChar(150)
+  contadoraTelefono   String?   @db.VarChar(20)
   // ── Macro Empresa: jerarquía de subsidiarias ──
   parentEmpresaId     Int?
   esMatriz            Boolean   @default(false)

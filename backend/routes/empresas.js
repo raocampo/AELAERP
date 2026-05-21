@@ -80,7 +80,7 @@ router.get('/mi-empresa', proteger, async (req, res) => {
   }
 });
 
-// GET /api/empresas/consultar-sri/:ruc — validar datos de empresa en SRI
+// GET /api/empresas/consultar-sri/:ruc — validar datos de empresa en SRI (local catastro first, then online)
 router.get('/consultar-sri/:ruc', proteger, soloAdmin, async (req, res) => {
   try {
     const ruc = String(req.params.ruc || '').replace(/\D/g, '');
@@ -88,18 +88,26 @@ router.get('/consultar-sri/:ruc', proteger, soloAdmin, async (req, res) => {
       return res.status(400).json({ success: false, mensaje: 'El RUC debe tener 13 dígitos' });
     }
 
+    // Check local catastro first
+    const { consultarCatastroLocal } = require('../utils/sriContribuyente');
+    const local = await consultarCatastroLocal(ruc);
+    if (local) {
+      return res.json({ success: true, encontrado: true, fuente: 'local', data: local });
+    }
+
     const empresaSri = await obtenerEmpresaSri(ruc);
     if (!empresaSri) {
       return res.json({
         success: true,
         encontrado: false,
-        mensaje: 'No se encontró información en el SRI para ese RUC',
+        mensaje: 'No se encontró información en el catastro ni en el SRI para ese RUC',
       });
     }
 
     res.json({
       success: true,
       encontrado: true,
+      fuente: 'sri',
       data: empresaSri,
     });
   } catch (err) {
@@ -245,7 +253,10 @@ router.get('/estadisticas', proteger, async (req, res) => {
 router.post('/', proteger, soloAdmin, async (req, res) => {
   try {
     const { ruc, razonSocial, nombreComercial, direccion, email, telefono, plan, crearConfiguracionSri,
-            esMatriz, parentEmpresaId } = req.body;
+            esMatriz, parentEmpresaId,
+            tipoContribuyente,
+            repLegalNombre, repLegalCedula, repLegalCargo, repLegalEmail,
+            contadoraNombre, contadoraCedula, contadoraEmail, contadoraTelefono } = req.body;
     if (!ruc || !razonSocial) {
       return res.status(400).json({ success: false, mensaje: 'RUC y razón social son requeridos' });
     }
@@ -271,6 +282,15 @@ router.post('/', proteger, soloAdmin, async (req, res) => {
           factAnualesMax: planFinal === 'lite' ? 100 : null,
           esMatriz: esMatriz === true || esMatriz === 'true',
           parentEmpresaId: parentEmpresaId ? parseInt(parentEmpresaId, 10) : null,
+          tipoContribuyente: tipoContribuyente || empresaSri?.tipoContribuyente || 'JURIDICA',
+          repLegalNombre:    repLegalNombre?.trim()  || null,
+          repLegalCedula:    repLegalCedula?.trim()  || null,
+          repLegalCargo:     repLegalCargo?.trim()   || null,
+          repLegalEmail:     repLegalEmail?.trim().toLowerCase() || null,
+          contadoraNombre:   contadoraNombre?.trim() || null,
+          contadoraCedula:   contadoraCedula?.trim() || null,
+          contadoraEmail:    contadoraEmail?.trim().toLowerCase() || null,
+          contadoraTelefono: contadoraTelefono?.trim() || null,
         },
       });
 
@@ -295,7 +315,10 @@ router.post('/', proteger, soloAdmin, async (req, res) => {
 // PUT /api/empresas/:id — actualizar empresa
 router.put('/:id', proteger, soloAdmin, async (req, res) => {
   try {
-    const { razonSocial, nombreComercial, direccion, email, telefono, plan, activo } = req.body;
+    const { razonSocial, nombreComercial, direccion, email, telefono, plan, activo,
+            tipoContribuyente,
+            repLegalNombre, repLegalCedula, repLegalCargo, repLegalEmail,
+            contadoraNombre, contadoraCedula, contadoraEmail, contadoraTelefono } = req.body;
     const data = {};
     if (razonSocial !== undefined)     data.razonSocial     = razonSocial;
     if (nombreComercial !== undefined) data.nombreComercial = nombreComercial;
@@ -303,6 +326,15 @@ router.put('/:id', proteger, soloAdmin, async (req, res) => {
     if (email !== undefined)           data.email           = email?.toLowerCase();
     if (telefono !== undefined)        data.telefono        = telefono;
     if (activo !== undefined)          data.activo          = activo;
+    if (tipoContribuyente !== undefined) data.tipoContribuyente = tipoContribuyente;
+    if (repLegalNombre !== undefined)  data.repLegalNombre  = repLegalNombre || null;
+    if (repLegalCedula !== undefined)  data.repLegalCedula  = repLegalCedula || null;
+    if (repLegalCargo !== undefined)   data.repLegalCargo   = repLegalCargo || null;
+    if (repLegalEmail !== undefined)   data.repLegalEmail   = repLegalEmail?.toLowerCase() || null;
+    if (contadoraNombre !== undefined) data.contadoraNombre = contadoraNombre || null;
+    if (contadoraCedula !== undefined) data.contadoraCedula = contadoraCedula || null;
+    if (contadoraEmail !== undefined)  data.contadoraEmail  = contadoraEmail?.toLowerCase() || null;
+    if (contadoraTelefono !== undefined) data.contadoraTelefono = contadoraTelefono || null;
     if (plan !== undefined) {
       data.plan = plan === 'lite' ? 'lite' : 'full';
       data.factAnualesMax = data.plan === 'lite' ? 100 : null;

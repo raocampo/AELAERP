@@ -88,6 +88,7 @@ function parsearContribuyenteSri(datos, identificacionOriginal) {
     nombreComercial: contribuyente.nombreComercial?.trim() || null,
     direccion,
     estado: contribuyente.estadoContribuyente || null,
+    tipoContribuyente: contribuyente.tipoContribuyente || null, // PERSONAS NATURALES | SOCIEDADES
     contribuyenteEspecial:
       contribuyente.contribuyenteEspecial ||
       contribuyente.numResolucionContribuyenteEspecial ||
@@ -131,6 +132,7 @@ async function consultarCatastroLocal(identificacion) {
         nombreComercial:       row.nombreComercial || null,
         direccion:             null, // los CSVs del SRI no incluyen dirección detallada
         estado:                row.estado,
+        tipoContribuyente:     row.tipoContribuyente || null, // PERSONAS NATURALES | SOCIEDADES
         contribuyenteEspecial: row.claseContribuyente === 'ESPECIAL' ? 'SI' : null,
         contribuyenteRimpe:    (row.claseContribuyente || '').toLowerCase().includes('rimpe'),
         negocioPopular:        (row.claseContribuyente || '').toLowerCase().includes('negocio popular'),
@@ -177,6 +179,10 @@ async function consultarCatastroLocal(identificacion) {
 async function obtenerEmpresaSri(ruc) {
   const rucLimpio = String(ruc || '').replace(/\D/g, '');
   if (!/^\d{13}$/.test(rucLimpio)) return null;
+
+  // Check local catastro first (faster, no network needed)
+  const local = await consultarCatastroLocal(rucLimpio);
+  if (local) return local;
 
   const datos = await consultarContribuyenteSri(rucLimpio);
   return parsearContribuyenteSri(datos, rucLimpio);

@@ -14,6 +14,9 @@ const FORM_VACIO = {
   ruc: '', razonSocial: '', nombreComercial: '', direccion: '',
   email: '', telefono: '', plan: 'full', crearConfiguracionSri: true,
   esMatriz: false, parentEmpresaId: '',
+  tipoContribuyente: 'JURIDICA',
+  repLegalNombre: '', repLegalCedula: '', repLegalCargo: '', repLegalEmail: '',
+  contadoraNombre: '', contadoraCedula: '', contadoraEmail: '', contadoraTelefono: '',
 };
 
 export default function GestionEmpresas() {
@@ -122,6 +125,15 @@ export default function GestionEmpresas() {
       crearConfiguracionSri: true,
       esMatriz: e.esMatriz || false,
       parentEmpresaId: e.parentEmpresaId || '',
+      tipoContribuyente: e.tipoContribuyente || 'JURIDICA',
+      repLegalNombre:    e.repLegalNombre  || '',
+      repLegalCedula:    e.repLegalCedula  || '',
+      repLegalCargo:     e.repLegalCargo   || '',
+      repLegalEmail:     e.repLegalEmail   || '',
+      contadoraNombre:   e.contadoraNombre || '',
+      contadoraCedula:   e.contadoraCedula || '',
+      contadoraEmail:    e.contadoraEmail  || '',
+      contadoraTelefono: e.contadoraTelefono || '',
     });
     setEditando(e.id);
     setMensajeSri('');
@@ -143,17 +155,23 @@ export default function GestionEmpresas() {
       const res = await api.get(`/empresas/consultar-sri/${rucLimpio}`);
       if (res.data?.encontrado && res.data?.data) {
         const s = res.data.data;
+        // Determinar tipo: si tipoContribuyente dice "PERSONAS NATURALES" → NATURAL
+        const tipo = s.tipoContribuyente
+          ? (String(s.tipoContribuyente).toUpperCase().includes('NATURAL') ? 'NATURAL' : 'JURIDICA')
+          : 'JURIDICA';
         setForm(prev => ({
           ...prev,
           ruc: s.ruc || prev.ruc,
           razonSocial: s.razonSocial || prev.razonSocial,
           nombreComercial: s.nombreComercial || prev.nombreComercial,
           direccion: s.direccion || prev.direccion,
+          tipoContribuyente: tipo,
         }));
-        setMensajeSri(`✓ Empresa encontrada en SRI: ${s.razonSocial}`);
+        const fuente = res.data.fuente === 'local' ? '(catastro local)' : '(SRI en línea)';
+        setMensajeSri(`✓ Empresa encontrada ${fuente}: ${s.razonSocial} — ${tipo === 'NATURAL' ? 'Persona Natural' : 'Persona Jurídica'}`);
         return;
       }
-      setMensajeSri('No se encontró la empresa en SRI. Puedes crearla solo para control interno.');
+      setMensajeSri('No se encontró la empresa en el catastro ni en el SRI. Puedes crearla solo para control interno.');
     } catch (err) {
       setMensajeSri(err.response?.data?.mensaje || 'No se pudo consultar el SRI.');
     } finally {
@@ -476,7 +494,7 @@ export default function GestionEmpresas() {
                     </select>
                   </div>
 
-                  {/* Tipo / jerarquía macro empresa */}
+                  {/* Tipo de empresa */}
                   <div className="ge-field">
                     <label>Tipo de empresa</label>
                     <select className="ge-input" name="esMatriz"
@@ -484,6 +502,17 @@ export default function GestionEmpresas() {
                       onChange={e => setForm(prev => ({ ...prev, esMatriz: e.target.value === 'true' }))}>
                       <option value="false">Empresa independiente</option>
                       <option value="true">Empresa matriz</option>
+                    </select>
+                  </div>
+
+                  {/* Tipo de contribuyente */}
+                  <div className="ge-field">
+                    <label>Tipo de contribuyente</label>
+                    <select className="ge-input" name="tipoContribuyente"
+                      value={form.tipoContribuyente}
+                      onChange={handleChange}>
+                      <option value="JURIDICA">Persona Jurídica (Sociedad)</option>
+                      <option value="NATURAL">Persona Natural</option>
                     </select>
                   </div>
 
@@ -501,6 +530,58 @@ export default function GestionEmpresas() {
                         ))}
                       </select>
                     </div>
+                  )}
+
+                  {/* Representante Legal — solo Persona Jurídica */}
+                  {form.tipoContribuyente === 'JURIDICA' && (
+                    <>
+                      <div className="ge-field ge-col-full">
+                        <div className="ge-section-title">👤 Representante Legal</div>
+                      </div>
+                      <div className="ge-field">
+                        <label>Nombre del representante legal</label>
+                        <input className="ge-input" name="repLegalNombre" value={form.repLegalNombre}
+                          onChange={handleChange} placeholder="Nombre completo" />
+                      </div>
+                      <div className="ge-field">
+                        <label>Cédula del representante legal</label>
+                        <input className="ge-input" name="repLegalCedula" value={form.repLegalCedula}
+                          onChange={handleChange} placeholder="0000000000" maxLength={10} />
+                      </div>
+                      <div className="ge-field">
+                        <label>Cargo</label>
+                        <input className="ge-input" name="repLegalCargo" value={form.repLegalCargo}
+                          onChange={handleChange} placeholder="Ej: Gerente General" />
+                      </div>
+                      <div className="ge-field">
+                        <label>Email del representante</label>
+                        <input className="ge-input" type="email" name="repLegalEmail" value={form.repLegalEmail}
+                          onChange={handleChange} placeholder="representante@empresa.com" />
+                      </div>
+                      <div className="ge-field ge-col-full">
+                        <div className="ge-section-title">📊 Contadora / Contador</div>
+                      </div>
+                      <div className="ge-field">
+                        <label>Nombre de la contadora</label>
+                        <input className="ge-input" name="contadoraNombre" value={form.contadoraNombre}
+                          onChange={handleChange} placeholder="Nombre completo" />
+                      </div>
+                      <div className="ge-field">
+                        <label>Cédula de la contadora</label>
+                        <input className="ge-input" name="contadoraCedula" value={form.contadoraCedula}
+                          onChange={handleChange} placeholder="0000000000" maxLength={10} />
+                      </div>
+                      <div className="ge-field">
+                        <label>Email de la contadora</label>
+                        <input className="ge-input" type="email" name="contadoraEmail" value={form.contadoraEmail}
+                          onChange={handleChange} placeholder="contadora@empresa.com" />
+                      </div>
+                      <div className="ge-field">
+                        <label>Teléfono de la contadora</label>
+                        <input className="ge-input" name="contadoraTelefono" value={form.contadoraTelefono}
+                          onChange={handleChange} placeholder="09xxxxxxxx" />
+                      </div>
+                    </>
                   )}
 
                   {/* Checkbox configurar SRI */}

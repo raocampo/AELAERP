@@ -18,11 +18,13 @@ const FORM_VACIO = {
   password: '',
   activo: true,
   permisosExtra: [],
+  empresaId: '',
 };
 
 export default function GestionUsuarios() {
   const { usuario } = useAuth();
   const [usuarios, setUsuarios] = useState([]);
+  const [empresas, setEmpresas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -36,8 +38,12 @@ export default function GestionUsuarios() {
   const cargar = async () => {
     setCargando(true);
     try {
-      const res = await api.get('/usuarios');
-      setUsuarios(res.data?.data || []);
+      const [resUsuarios, resEmpresas] = await Promise.all([
+        api.get('/usuarios'),
+        api.get('/empresas').catch(() => ({ data: { data: [] } })),
+      ]);
+      setUsuarios(resUsuarios.data?.data || []);
+      setEmpresas(resEmpresas.data?.data || []);
     } catch (err) {
       toast.error(err.response?.data?.mensaje || 'Error al cargar usuarios');
     } finally {
@@ -47,7 +53,7 @@ export default function GestionUsuarios() {
 
   const abrirNuevo = () => {
     setEditando(null);
-    setForm(FORM_VACIO);
+    setForm({ ...FORM_VACIO, empresaId: usuario?.empresaId || '' });
     setMostrarForm(true);
   };
 
@@ -109,6 +115,7 @@ export default function GestionUsuarios() {
         rol: form.rol,
         activo: form.activo,
         permisosExtra: form.permisosExtra,
+        empresaId: form.empresaId || undefined,
       };
 
       if (form.password) {
@@ -229,6 +236,20 @@ export default function GestionUsuarios() {
                     ))}
                   </select>
                 </div>
+                {/* Empresa — solo al crear, si hay más de una empresa */}
+                {!editando && empresas.length > 1 && (
+                  <div className="usu-field">
+                    <label>Empresa *</label>
+                    <select name="empresaId" value={form.empresaId} onChange={handleChange} required>
+                      <option value="">— Seleccionar empresa —</option>
+                      {empresas.map(e => (
+                        <option key={e.id} value={e.id}>
+                          {e.nombreComercial || e.razonSocial}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="usu-field full">
                   <label>{editando ? 'Nueva contraseña (opcional)' : 'Contraseña *'}</label>
                   <input
