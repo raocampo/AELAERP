@@ -12,6 +12,7 @@ const sri     = require('../utils/sri');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { esErrorConectividad } = require('../utils/colaSRI');
 const { construirConfiguracionSriBase } = require('../utils/sriContribuyente');
+const { getCertBuffer, tieneCertificado } = require('../utils/certUtils');
 
 router.use(proteger);
 router.use(autorizarPermiso('facturacion.emitir'));
@@ -36,9 +37,9 @@ async function getConfigSRI(empresaId) {
 async function procesarNotaDebitoEnSRI(ndId, xmlGenerado, config) {
   try {
     if (config.tipoCertificado === 'token') return;
-    if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+    if (!tieneCertificado(config)) return;
 
-    const p12Buffer = fs.readFileSync(config.certificadoP12);
+    const p12Buffer  = getCertBuffer(config);
     const xmlFirmado = sri.firmarXML(xmlGenerado, p12Buffer, config.claveCertificado || '');
 
     await prisma.notas_debito.update({

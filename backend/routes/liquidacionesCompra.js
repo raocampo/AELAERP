@@ -17,6 +17,7 @@ const {
 } = require('../utils/contabilidad');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { esErrorConectividad } = require('../utils/colaSRI');
+const { getCertBuffer, tieneCertificado } = require('../utils/certUtils');
 
 const REVERSOS_ANULACION_HABILITADOS = process.env.CONTA_REVERSOS_ANULACION !== 'false';
 
@@ -42,9 +43,9 @@ async function getConfigSRI(empresaId) {
 async function procesarLiquidacionEnSRI(liqId, xmlGenerado, config) {
   try {
     if (config.tipoCertificado === 'token') return;
-    if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+    if (!tieneCertificado(config)) return;
 
-    const p12Buffer  = fs.readFileSync(config.certificadoP12);
+    const p12Buffer  = getCertBuffer(config);
     const xmlFirmado = sri.firmarXML(xmlGenerado, p12Buffer, config.claveCertificado || '');
 
     await prisma.liquidaciones_compra.update({

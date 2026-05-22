@@ -12,6 +12,7 @@ const prisma  = require('../config/prisma');
 const sri     = require('../utils/sri');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { registrarAuditoria } = require('../utils/auditoria');
+const { getCertBuffer, tieneCertificado } = require('../utils/certUtils');
 
 router.use(proteger);
 router.use(autorizarPermiso('facturacion.ver'));
@@ -29,12 +30,12 @@ async function getConfigSRI(empresaId) {
 async function procesarGuiaEnSRI(guiaId, xmlGenerado, config) {
   try {
     if (config.tipoCertificado === 'token') return;
-    if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+    if (!tieneCertificado(config)) return;
 
-    const p12Buffer = fs.readFileSync(config.certificadoP12);
+    const p12Buffer  = getCertBuffer(config);
     const xmlFirmado = sri.firmarXML(xmlGenerado, p12Buffer, config.claveCertificado || '');
 
-    await prisma.guias_remision.update({ where: { id: guiaId }, data: { xmlFirmado, estadoSRI: 'PENDIENTE' } });
+    await prisma.guias_remision.update({where: { id: guiaId }, data: { xmlFirmado, estadoSRI: 'PENDIENTE' } });
 
     const recepcion = await sri.enviarComprobanteSRI(xmlFirmado, config.ambiente);
     if (recepcion.estado !== 'RECIBIDA') {
