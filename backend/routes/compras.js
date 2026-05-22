@@ -365,10 +365,10 @@ router.get('/', async (req, res) => {
     }
 
     // ─── Cache de columnas disponibles para evitar errores por migración pendiente ──
-    // Se verifica una sola vez por startup del servidor y se cachea en memoria.
     if (!router._tipoGastoChecked) {
       try {
-        await prisma.$queryRaw`SELECT "tipoGasto" FROM "facturas_compra" LIMIT 0`;
+        // Usar $queryRawUnsafe para no depender del schema de Prisma
+        await prisma.$queryRawUnsafe('SELECT "tipoGasto" FROM "facturas_compra" LIMIT 0');
         router._tipoGastoDisponible = true;
       } catch {
         router._tipoGastoDisponible = false;
