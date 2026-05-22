@@ -1027,21 +1027,12 @@ router.post('/notas-credito/:id/reenviar', permitirEmitirFacturacion, async (req
     }
 
     const config = await getConfigSRI(req.empresa.id);
-    if (!config) return res.status(400).json({ ok: false, error: 'Configure primero el SRI' });
-    if (config.tipoCertificado === 'token') {
-      return res.status(400).json({ ok: false, error: 'Con certificado TOKEN la firma es manual. Sube el XML firmado.' });
-    }
-    if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) {
-      return res.status(400).json({ ok: false, error: 'Certificado P12 no disponible en el servidor' });
-    }
+    if (!config) return res.status(400).json({ ok: false, error: 'Sin configuración SRI' });
 
-    const xmlParaFirmar = nc.xmlGenerado;
-    if (!xmlParaFirmar) {
-      return res.status(400).json({ ok: false, error: 'La NC no tiene XML para firmar' });
-    }
-
-    res.json({ ok: true, mensaje: 'Enviando Nota de Crédito al SRI…' });
-    setImmediate(() => procesarNCEnSRI(nc.id, xmlParaFirmar, config));
+    // Procesar de forma síncrona (igual que factura reenviar) para devolver el estado real
+    await procesarNCEnSRI(nc.id, nc.xmlGenerado || nc.xmlFirmado, config);
+    const updated = await prisma.notas_credito.findUnique({ where: { id: nc.id } });
+    res.json({ ok: true, data: updated, mensaje: `Estado actual: ${updated.estadoSri}` });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

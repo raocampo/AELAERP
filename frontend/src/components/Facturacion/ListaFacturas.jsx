@@ -344,9 +344,10 @@ const TabNotasCredito = ({ navigate }) => {
     if (!window.confirm(`¿Reenviar la Nota de Crédito ${nc.numeroNC} al SRI para firma y autorización?`)) return;
     setEnviando(nc.id);
     try {
-      await api.post(`/facturas/notas-credito/${nc.id}/reenviar`);
-      toast.success('Enviando al SRI… el estado se actualizará en unos momentos.');
-      setTimeout(recargar, 6000);
+      const res = await api.post(`/facturas/notas-credito/${nc.id}/reenviar`);
+      const estado = res.data?.data?.estadoSri || '';
+      toast.success(`NC procesada. Estado: ${estado || 'actualizado'}`);
+      recargar();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al reenviar al SRI');
     } finally {
