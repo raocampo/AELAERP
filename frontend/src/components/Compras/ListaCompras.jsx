@@ -25,6 +25,18 @@ const TIPO_GASTO_OPCIONES = [
   { value: 'SIN_CLASIFICAR', label: '⚠ Sin clasificar' },
 ];
 
+// Opciones para el quick-edit inline (sin la opción "Todos")
+const TIPO_GASTO_EDIT = [
+  { value: '', label: '— Sin clasificar —' },
+  { value: 'SALUD', label: '🏥 Salud' },
+  { value: 'EDUCACION', label: '📚 Educación' },
+  { value: 'ALIMENTACION', label: '🍽 Alimentación' },
+  { value: 'VIVIENDA', label: '🏠 Vivienda' },
+  { value: 'VESTIMENTA', label: '👔 Vestimenta' },
+  { value: 'TURISMO', label: '✈ Turismo' },
+  { value: 'OTROS', label: '📦 Otros deducibles' },
+];
+
 function fmtFecha(valor) {
   if (!valor) return 'Sin fecha';
   const fecha = parseFechaLocal(valor);
@@ -46,6 +58,8 @@ export default function ListaCompras() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [exportando, setExportando] = useState(false);
+  const [quickEdit, setQuickEdit] = useState(null); // { id, tipoGasto }
+  const [guardandoGasto, setGuardandoGasto] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -71,6 +85,23 @@ export default function ListaCompras() {
 
   const actualizarFiltro = (campo, valor) => {
     setFiltros((prev) => ({ ...prev, [campo]: valor }));
+  };
+
+  const guardarTipoGasto = async () => {
+    if (!quickEdit) return;
+    setGuardandoGasto(true);
+    try {
+      await api.put(`/compras/${quickEdit.id}`, { tipoGasto: quickEdit.tipoGasto || null });
+      setItems((prev) => prev.map((it) =>
+        it.id === quickEdit.id ? { ...it, tipoGasto: quickEdit.tipoGasto || null } : it
+      ));
+      toast.success('Tipo de gasto actualizado');
+      setQuickEdit(null);
+    } catch {
+      toast.error('No se pudo actualizar el tipo de gasto');
+    } finally {
+      setGuardandoGasto(false);
+    }
   };
 
   const exportarCsv = async () => {
@@ -152,7 +183,12 @@ export default function ListaCompras() {
           <div className="compras-empty">Cargando compras...</div>
         ) : items.length === 0 ? (
           <div className="compras-empty">
-            No hay facturas de compra registradas todavía. Puedes empezar con una carga manual, XML o autorización SRI.
+            {filtros.tipoGasto && filtros.tipoGasto !== 'SIN_CLASIFICAR'
+              ? `No hay facturas clasificadas como "${TIPO_GASTO_OPCIONES.find(o => o.value === filtros.tipoGasto)?.label || filtros.tipoGasto}". Haz clic en el ícono ✏ de la columna Tipo Gasto para clasificar las facturas.`
+              : filtros.tipoGasto === 'SIN_CLASIFICAR'
+              ? 'No hay facturas sin clasificar. ¡Todo está categorizado!'
+              : 'No hay facturas de compra registradas todavía. Puedes empezar con una carga manual, XML o autorización SRI.'
+            }
           </div>
         ) : (
           <div className="compras-table-wrap">
@@ -190,9 +226,16 @@ export default function ListaCompras() {
                     <td>{item.numeroAutorizacion || 'Sin autorización'}</td>
                     <td>{fmtMoneda(item.importeTotal)}</td>
                     <td>
-                      {item.tipoGasto
-                        ? <span className={`compras-chip tipo-gasto-${item.tipoGasto.toLowerCase()}`}>{item.tipoGasto}</span>
-                        : <span className="compras-chip sin-clasificar">—</span>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {item.tipoGasto
+                          ? <span className={`compras-chip tipo-gasto-${item.tipoGasto.toLowerCase()}`}>{item.tipoGasto}</span>
+                          : <span className="compras-chip sin-clasificar">—</span>}
+                        <button
+                          title="Clasificar tipo de gasto"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '.8rem', padding: '2px 4px', color: '#64748b' }}
+                          onClick={() => setQuickEdit({ id: item.id, tipoGasto: item.tipoGasto || '' })}
+                        >✏</button>
+                      </div>
                     </td>
                     <td>
                       <span className={`compras-chip ${String(item.origenRegistro || '').toLowerCase()}`}>
@@ -221,6 +264,34 @@ export default function ListaCompras() {
           </div>
         )}
       </section>
+
+      {/* MODAL QUICK-EDIT TIPO GASTO */}
+      {quickEdit && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setQuickEdit(null)}>
+          <div style={{ background: '#fff', borderRadius: '1rem', padding: '1.5rem', minWidth: 320, boxShadow: '0 8px 32px rgba(0,0,0,.2)' }}
+            onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginBottom: '1rem', fontSize: '1rem' }}>Clasificar tipo de gasto SRI</h3>
+            <select
+              style={{ width: '100%', padding: '.5rem .75rem', borderRadius: '.5rem', border: '1.5px solid #e2e8f0', fontSize: '.9rem', marginBottom: '1rem' }}
+              value={quickEdit.tipoGasto}
+              onChange={(e) => setQuickEdit((prev) => ({ ...prev, tipoGasto: e.target.value }))}
+            >
+              {TIPO_GASTO_EDIT.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <div style={{ display: 'flex', gap: '.75rem', justifyContent: 'flex-end' }}>
+              <button style={{ padding: '.45rem 1rem', borderRadius: '.5rem', border: '1.5px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer' }}
+                onClick={() => setQuickEdit(null)} disabled={guardandoGasto}>Cancelar</button>
+              <button style={{ padding: '.45rem 1rem', borderRadius: '.5rem', border: 'none', background: '#6366f1', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
+                onClick={guardarTipoGasto} disabled={guardandoGasto}>
+                {guardandoGasto ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

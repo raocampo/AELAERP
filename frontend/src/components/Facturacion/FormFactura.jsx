@@ -21,15 +21,16 @@ const TIPOS_ID = [
 
 // Formas de pago (uid interno → código SRI oficial → etiqueta amigable)
 const FORMAS_PAGO_SRI = [
-  { uid: '01',  sriCodigo: '01', label: 'Efectivo',                        icon: '💵' },
-  { uid: '16',  sriCodigo: '16', label: 'Tarjeta de Débito',               icon: '💳' },
-  { uid: '19',  sriCodigo: '19', label: 'Tarjeta de Crédito',              icon: '💳' },
-  { uid: 'CHQ', sriCodigo: '20', label: 'Cheque',                         icon: '🧾' },
-  { uid: 'TRF', sriCodigo: '20', label: 'Transferencia / Depósito',       icon: '🏦' },
-  { uid: 'APP', sriCodigo: '17', label: 'Aplicación Móvil',               icon: '📱' },
-  { uid: '15',  sriCodigo: '15', label: 'Compensación de Deudas',         icon: '📄' },
-  { uid: '18',  sriCodigo: '18', label: 'Tarjeta Prepago',                icon: '🎁' },
-  { uid: '21',  sriCodigo: '21', label: 'Endoso de Títulos',              icon: '📜' },
+  { uid: '01',  sriCodigo: '01', label: 'Efectivo / Sin sist. financiero',              icon: '💵' },
+  { uid: '16',  sriCodigo: '16', label: 'Tarjeta de Débito',                             icon: '💳' },
+  { uid: '19',  sriCodigo: '19', label: 'Tarjeta de Crédito',                            icon: '💳' },
+  { uid: 'CHQ', sriCodigo: '20', label: 'Cheque',                                        icon: '🧾' },
+  { uid: 'TRF', sriCodigo: '20', label: 'Transferencia / Depósito',                     icon: '🏦' },
+  { uid: '20',  sriCodigo: '20', label: 'Otros con utilización del sistema financiero',  icon: '🏦' },
+  { uid: 'APP', sriCodigo: '17', label: 'Aplicación Móvil',                              icon: '📱' },
+  { uid: '15',  sriCodigo: '15', label: 'Compensación de Deudas',                       icon: '📄' },
+  { uid: '18',  sriCodigo: '18', label: 'Tarjeta Prepago',                               icon: '🎁' },
+  { uid: '21',  sriCodigo: '21', label: 'Endoso de Títulos',                             icon: '📜' },
 ];
 
 const UNIDADES_TIEMPO = ['dias', 'meses', 'años'];
