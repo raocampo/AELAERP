@@ -261,6 +261,7 @@
 }
 
 .buzon-zip-resultado { margin-top: 0.5rem; display: grid; gap: 1rem; }
+.buzon-xml-lista { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.88rem; color: #475569; }
 
 /* ── Historial ───────────────────────────────────────────── */
 .buzon-historial { padding: 1.5rem; display: grid; gap: 2rem; }

@@ -364,41 +364,54 @@ router.get('/', async (req, res) => {
       ];
     }
 
+    // tipoGasto filter (columna puede estar pendiente de migración en producción)
+    const whereTipoGasto = { ...where };
     if (tipoGasto) {
       if (tipoGasto === 'SIN_CLASIFICAR') {
-        where.tipoGasto = null;
+        whereTipoGasto.tipoGasto = null;
       } else {
-        where.tipoGasto = tipoGasto;
+        whereTipoGasto.tipoGasto = tipoGasto;
       }
     }
 
-    const [total, items] = await Promise.all([
-      prisma.facturas_compra.count({ where }),
-      prisma.facturas_compra.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: parseInt(limit, 10),
-        select: {
-          id: true,
-          proveedorId: true,
-          numeroFactura: true,
-          numeroAutorizacion: true,
-          fechaEmision: true,
-          razonSocialProveedor: true,
-          identificacionProveedor: true,
-          importeTotal: true,
-          registraInventario: true,
-          egresoCajaRegistrado: true,
-          movimientosInventario: true,
-          origenRegistro: true,
-          tipoGasto: true,
-          anulada: true,
-          motivoAnulacion: true,
-          createdAt: true,
-        },
-      }),
-    ]);
+    const selectConTipoGasto = {
+      id: true, proveedorId: true, numeroFactura: true, numeroAutorizacion: true,
+      fechaEmision: true, razonSocialProveedor: true, identificacionProveedor: true,
+      importeTotal: true, registraInventario: true, egresoCajaRegistrado: true,
+      movimientosInventario: true, origenRegistro: true, tipoGasto: true,
+      anulada: true, motivoAnulacion: true, createdAt: true,
+    };
+    const selectSinTipoGasto = { ...selectConTipoGasto };
+    delete selectSinTipoGasto.tipoGasto;
+
+    let total, items;
+    try {
+      [total, items] = await Promise.all([
+        prisma.facturas_compra.count({ where: whereTipoGasto }),
+        prisma.facturas_compra.findMany({
+          where: whereTipoGasto,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: parseInt(limit, 10),
+          select: selectConTipoGasto,
+        }),
+      ]);
+    } catch (errTipoGasto) {
+      // Migración de tipoGasto pendiente — fallback sin esa columna
+      const esMigracionPendiente = /column.*tipogasto|does not exist|P2022/i.test(errTipoGasto?.message || '');
+      if (!esMigracionPendiente) throw errTipoGasto;
+      console.warn('[compras] columna tipoGasto no encontrada, usando consulta sin ella');
+      [total, items] = await Promise.all([
+        prisma.facturas_compra.count({ where }),
+        prisma.facturas_compra.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: parseInt(limit, 10),
+          select: selectSinTipoGasto,
+        }),
+      ]);
+    }
 
     res.json({
       success: true,

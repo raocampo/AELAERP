@@ -96,8 +96,28 @@ export default function BuzonSRI() {
   const [importandoZip, setImportandoZip] = useState(false);
   const [resumenZip, setResumenZip] = useState(null);
 
-  const [historial, setHistorial] = useState(null);
-  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [archivosXml, setArchivosXml]     = useState([]);
+  const [importandoXml, setImportandoXml] = useState(false);
+  const [resumenXml, setResumenXml]       = useState(null);
+
+  const importarXml = async () => {
+    if (archivosXml.length === 0) { toast.error('Selecciona uno o más archivos XML'); return; }
+    setImportandoXml(true);
+    try {
+      const fd = new FormData();
+      archivosXml.forEach((f) => fd.append('archivos', f));
+      fd.append('opciones', JSON.stringify(opciones));
+      const res = await api.post('/buzon/importar-xml', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setResumenXml(res.data);
+      toast.success(`${res.data.resumen?.creados || 0} documento(s) importado(s) desde XML`);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al procesar los XML');
+    } finally {
+      setImportandoXml(false);
+    }
+  };
+
+
 
   const parsearClaves = () => textareaClaves
     .split(/[\n,;]+/)
@@ -258,6 +278,7 @@ export default function BuzonSRI() {
         <button className={`buzon-tab ${tab === 'descarga' ? 'active' : ''}`} onClick={() => handleTabChange('descarga')}>Descarga automática SRI</button>
         <button className={`buzon-tab ${tab === 'claves' ? 'active' : ''}`} onClick={() => handleTabChange('claves')}>Por claves de acceso</button>
         <button className={`buzon-tab ${tab === 'zip' ? 'active' : ''}`} onClick={() => handleTabChange('zip')}>Importar ZIP</button>
+        <button className={`buzon-tab ${tab === 'xml' ? 'active' : ''}`} onClick={() => handleTabChange('xml')}>Importar XML</button>
         <button className={`buzon-tab ${tab === 'historial' ? 'active' : ''}`} onClick={() => handleTabChange('historial')}>Historial</button>
       </div>
 
@@ -595,6 +616,79 @@ export default function BuzonSRI() {
                       const icon  = r.estado === 'creado' ? '✅' : r.estado === 'omitido' ? '⏭' : '❌';
                       return (
                         <div key={r.clave || r.archivo} className="buzon-error-item" style={{ color }}>
+                          {icon} <code>{r.archivo}</code>
+                          {r.tipo && <span style={{ marginLeft: 6, fontStyle: 'italic' }}>{r.tipo}</span>}
+                          {r.estado === 'omitido' && <span style={{ marginLeft: 6 }}>— Ya existía</span>}
+                          {r.estado === 'error' && <span style={{ marginLeft: 6 }}>— {r.error}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB XML ───────────────────────────────────────── */}
+      {tab === 'xml' && (
+        <div className="buzon-card">
+          <div className="buzon-step">
+            <h2 className="buzon-step-title">Importar archivos XML</h2>
+            <p className="buzon-step-hint">
+              Sube uno o varios archivos <strong>.xml</strong> descargados individualmente desde el portal SRI.
+              Admite facturas, liquidaciones, retenciones y notas de crédito/débito. Máximo {50} archivos.
+            </p>
+            <div className="buzon-upload-area">
+              <label className="buzon-upload-label" htmlFor="xml-input">
+                {archivosXml.length > 0
+                  ? `📄 ${archivosXml.length} archivo(s) XML seleccionado(s)`
+                  : '📁 Haz clic para seleccionar archivo(s) XML'}
+              </label>
+              <input
+                id="xml-input"
+                type="file"
+                accept=".xml"
+                multiple
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  setArchivosXml(Array.from(e.target.files || []));
+                  setResumenXml(null);
+                }}
+              />
+            </div>
+            {archivosXml.length > 0 && (
+              <ul className="buzon-xml-lista">
+                {archivosXml.map((f, i) => <li key={i}>📄 {f.name}</li>)}
+              </ul>
+            )}
+            <div className="buzon-opciones">
+              <strong>Opciones para facturas:</strong>
+              <label><input type="checkbox" checked={opciones.registraInventario} onChange={(e) => setOpciones((p) => ({ ...p, registraInventario: e.target.checked }))} /> Registrar entrada de inventario</label>
+              <label><input type="checkbox" checked={opciones.creaProductos} onChange={(e) => setOpciones((p) => ({ ...p, creaProductos: e.target.checked }))} /> Crear productos faltantes</label>
+              <label><input type="checkbox" checked={opciones.registraCaja} onChange={(e) => setOpciones((p) => ({ ...p, registraCaja: e.target.checked }))} /> Registrar egreso en caja</label>
+            </div>
+            <div className="buzon-step-actions">
+              <button className="btn-primary" onClick={importarXml} disabled={importandoXml || archivosXml.length === 0}>
+                {importandoXml ? 'Procesando XML...' : `Importar ${archivosXml.length || ''} XML`}
+              </button>
+            </div>
+            {resumenXml && (
+              <div className="buzon-zip-resultado">
+                <div className="buzon-resumen">
+                  <div className="buzon-resumen-card buzon-resumen--verde"><span>{resumenXml.resumen?.creados || 0}</span><small>Importados</small></div>
+                  <div className="buzon-resumen-card buzon-resumen--gris"><span>{resumenXml.resumen?.omitidos || 0}</span><small>Ya existían</small></div>
+                  <div className="buzon-resumen-card buzon-resumen--rojo"><span>{resumenXml.resumen?.errores || 0}</span><small>Con error</small></div>
+                </div>
+                {resumenXml.resultados?.length > 0 && (
+                  <div className="buzon-errores-list" style={{ marginTop: '.75rem' }}>
+                    <strong style={{ fontSize: '.82rem', color: '#475569' }}>Detalle por archivo:</strong>
+                    {resumenXml.resultados.map((r, i) => {
+                      const color = r.estado === 'creado' ? '#16a34a' : r.estado === 'omitido' ? '#64748b' : '#dc2626';
+                      const icon  = r.estado === 'creado' ? '✅' : r.estado === 'omitido' ? '⏭' : '❌';
+                      return (
+                        <div key={i} className="buzon-error-item" style={{ color }}>
                           {icon} <code>{r.archivo}</code>
                           {r.tipo && <span style={{ marginLeft: 6, fontStyle: 'italic' }}>{r.tipo}</span>}
                           {r.estado === 'omitido' && <span style={{ marginLeft: 6 }}>— Ya existía</span>}

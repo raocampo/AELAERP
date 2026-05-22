@@ -377,6 +377,73 @@ router.post('/importar-zip', upload.single('archivo'), async (req, res) => {
   }
 });
 
+// ─── POST /importar-xml ──────────────────────────────────────
+// Permite subir uno o varios archivos XML directamente (sin ZIP).
+router.post('/importar-xml', upload.array('archivos', MAX_CLAVES_LOTE), async (req, res) => {
+  try {
+    const archivos = req.files || [];
+    if (archivos.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'No se recibieron archivos XML' });
+    }
+    if (archivos.length > MAX_CLAVES_LOTE) {
+      return res.status(400).json({ success: false, mensaje: `Máximo ${MAX_CLAVES_LOTE} archivos XML por lote` });
+    }
+
+    const empresaId = req.empresa.id;
+    const usuarioId = req.usuario?.id || null;
+    const opciones  = req.body?.opciones ? JSON.parse(req.body.opciones || '{}') : {};
+
+    const resultados = [];
+
+    for (const file of archivos) {
+      const filename  = file.originalname;
+      const xmlString = file.buffer.toString('utf8');
+
+      const claveMatch = xmlString.match(/<claveAcceso>([^<]{49})<\/claveAcceso>/i);
+      const clave = claveMatch ? claveMatch[1].trim() : null;
+
+      if (!clave) {
+        resultados.push({ archivo: filename, estado: 'error', error: 'No se encontró clave de acceso (49 dígitos) en el XML' });
+        continue;
+      }
+
+      const tipo = detectarTipoDesdeClaveAcceso(clave);
+      if (!tipo) {
+        resultados.push({ archivo: filename, clave, estado: 'error', error: 'Tipo de documento no reconocido' });
+        continue;
+      }
+
+      try {
+        const resultado = await prisma.$transaction(async (tx) => {
+          return importarDocumentoRecibido({
+            tx, empresaId, usuarioId,
+            tipoDoc: tipo.cod,
+            xmlAutorizado: xmlString,
+            xmlEnvuelto: xmlString,
+            claveAcceso: clave,
+            numeroAutorizacion: clave,
+            fechaAutorizacion: null,
+            opcionesFactura: opciones,
+          });
+        });
+        resultados.push({ archivo: filename, clave, tipo: tipo.nombre, estado: resultado.accion, id: resultado.id, motivo: resultado.motivo });
+      } catch (err) {
+        console.error(`[Buzón XML] Error importando ${filename}:`, err.message);
+        resultados.push({ archivo: filename, clave, tipo: tipo.nombre, estado: 'error', error: err.message });
+      }
+    }
+
+    const creados  = resultados.filter((r) => r.estado === 'creado').length;
+    const omitidos = resultados.filter((r) => r.estado === 'omitido').length;
+    const errores  = resultados.filter((r) => r.estado === 'error').length;
+
+    res.json({ success: true, resumen: { creados, omitidos, errores, totalArchivos: archivos.length }, resultados });
+  } catch (error) {
+    console.error('Error en /buzon/importar-xml:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al procesar los archivos XML' });
+  }
+});
+
 // ─── GET /historial ──────────────────────────────────────────
 router.get('/historial', async (req, res) => {
   try {
