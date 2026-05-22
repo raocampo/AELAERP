@@ -100,6 +100,9 @@ export default function BuzonSRI() {
   const [importandoXml, setImportandoXml] = useState(false);
   const [resumenXml, setResumenXml]       = useState(null);
 
+  const [historial, setHistorial]             = useState(null);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+
   const importarXml = async () => {
     if (archivosXml.length === 0) { toast.error('Selecciona uno o más archivos XML'); return; }
     setImportandoXml(true);

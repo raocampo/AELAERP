@@ -398,7 +398,9 @@ router.get('/', async (req, res) => {
       ]);
     } catch (errTipoGasto) {
       // Migración de tipoGasto pendiente — fallback sin esa columna
-      const esMigracionPendiente = /column.*tipogasto|does not exist|P2022/i.test(errTipoGasto?.message || '');
+      // Capturar cualquier error de BD relacionado a columna desconocida
+      const msg = String(errTipoGasto?.message || errTipoGasto?.meta?.cause || '');
+      const esMigracionPendiente = /tipogasto|does not exist|column.*not.*found|invalid.*column|unknown.*field|P2022|P2010|42703/i.test(msg);
       if (!esMigracionPendiente) throw errTipoGasto;
       console.warn('[compras] columna tipoGasto no encontrada, usando consulta sin ella');
       [total, items] = await Promise.all([
