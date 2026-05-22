@@ -60,6 +60,7 @@ export default function ListaCompras() {
   const [exportando, setExportando] = useState(false);
   const [quickEdit, setQuickEdit] = useState(null); // { id, tipoGasto }
   const [guardandoGasto, setGuardandoGasto] = useState(false);
+  const [autoClasificando, setAutoClasificando] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -104,6 +105,28 @@ export default function ListaCompras() {
     }
   };
 
+  const autoClasificar = async () => {
+    setAutoClasificando(true);
+    try {
+      const res = await api.post('/compras/auto-clasificar');
+      const { clasificadas, noClasificadas, mensaje } = res.data;
+      if (clasificadas > 0) {
+        toast.success(mensaje);
+        // Recargar lista para ver cambios
+        setFiltros((prev) => ({ ...prev }));
+      } else {
+        toast(mensaje || 'No se pudieron clasificar compras automáticamente', { icon: 'ℹ️' });
+      }
+      if (noClasificadas > 0) {
+        toast(`${noClasificadas} factura(s) requieren clasificación manual (✏)`, { icon: '⚠️' });
+      }
+    } catch {
+      toast.error('Error al auto-clasificar');
+    } finally {
+      setAutoClasificando(false);
+    }
+  };
+
   const exportarCsv = async () => {
     setExportando(true);
     try {
@@ -131,6 +154,10 @@ export default function ListaCompras() {
           <button className="btn-secondary" onClick={() => navigate('/dashboard')}>Volver</button>
           <button className="btn-secondary" onClick={exportarCsv} disabled={exportando || items.length === 0}>
             {exportando ? 'Exportando…' : '⬇ CSV'}
+          </button>
+          <button className="btn-secondary" onClick={autoClasificar} disabled={autoClasificando}
+            title="Analiza el nombre del proveedor y productos para asignar categoría SRI automáticamente">
+            {autoClasificando ? 'Clasificando…' : '⚡ Auto-clasificar'}
           </button>
           <button className="btn-primary" onClick={() => navigate('/compras/nueva')}>Nueva compra</button>
         </div>

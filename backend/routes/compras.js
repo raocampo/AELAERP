@@ -758,6 +758,104 @@ router.post('/', async (req, res) => {
   }
 });
 
+// POST /api/compras/auto-clasificar — clasifica automáticamente compras sin tipoGasto
+// usando reglas por palabras clave en proveedor y descripción de productos
+router.post('/auto-clasificar', async (req, res) => {
+  const REGLAS = [
+    {
+      categoria: 'SALUD',
+      patron: /farmac|hospital|clínic|clinic|medic|dental|optic|laboratori|salud|medicina|drogueri|distribuidora.*medic|fluconazol|antibio|analges|vitamina|suero|jeringa|mascarill|quirurg|enferm|fisioterapia|odontolog/i,
+    },
+    {
+      categoria: 'ALIMENTACION',
+      patron: /supermercado|comisariato|aliment|carnic|pollos|fruta|verdura|leche|pan|carne|pescado|mariscos|mercado|minimarket|tienda|abarrotes|comestible|aceite|arroz|azúcar|azucar|harina|papa|chola|zanahoria|espinaca|haba|pansa|distribuidora.*aliment|granja|lácteo|lacteo|bebida|agua.*embotell/i,
+    },
+    {
+      categoria: 'EDUCACION',
+      patron: /escuela|colegio|universidad|librería|libreria|libro|academia|instituto|educación|educacion|capacitación|capacitacion|curso|tutoria|papelería|papeleria|útiles|utiles|cuaderno|mochilas/i,
+    },
+    {
+      categoria: 'VIVIENDA',
+      patron: /ferretería|ferreteria|construcción|construccion|inmobiliaria|arriendo|alquiler|electricidad|plomería|plomeria|pintura|cemento|hardware|mueble|hogar|articulos.*hogar|electrodom/i,
+    },
+    {
+      categoria: 'VESTIMENTA',
+      patron: /ropa|calzado|zapato|boutique|textil|confección|confeccion|moda|vestuario|tela|prendas|calcetín|calcetines|camisa|pantalón|pantalon/i,
+    },
+    {
+      categoria: 'TURISMO',
+      patron: /hotel|hostal|hospedaje|agencia.*viajes|restaurante|turismo|aérea|aerea|aerolínea|aerolinea|transporte.*turistico|crucero|paquete.*viaje/i,
+    },
+  ];
+
+  function clasificar(texto) {
+    const t = (texto || '').toLowerCase();
+    for (const regla of REGLAS) {
+      if (regla.patron.test(t)) return regla.categoria;
+    }
+    return null;
+  }
+
+  try {
+    const empresaId = req.empresa.id;
+
+    // Traer todas las compras sin clasificar de esta empresa
+    const sinClasificar = await prisma.facturas_compra.findMany({
+      where: { empresaId, tipoGasto: null },
+      select: {
+        id: true,
+        razonSocialProveedor: true,
+        nombreComercialProveedor: true,
+        detalles: true,
+      },
+    });
+
+    if (sinClasificar.length === 0) {
+      return res.json({ success: true, clasificadas: 0, mensaje: 'No hay compras sin clasificar.' });
+    }
+
+    const actualizaciones = [];
+    for (const compra of sinClasificar) {
+      // Texto combinado: proveedor + descripciones de productos
+      const detallesArr = Array.isArray(compra.detalles)
+        ? compra.detalles
+        : (typeof compra.detalles === 'string' ? (() => { try { return JSON.parse(compra.detalles); } catch { return []; } })() : []);
+
+      const textosProductos = detallesArr.map((d) => d?.descripcion || '').join(' ');
+      const textoCompleto = [
+        compra.razonSocialProveedor,
+        compra.nombreComercialProveedor,
+        textosProductos,
+      ].join(' ');
+
+      const categoria = clasificar(textoCompleto);
+      if (categoria) {
+        actualizaciones.push({ id: compra.id, categoria });
+      }
+    }
+
+    // Actualizar en lotes
+    let clasificadas = 0;
+    for (const { id, categoria } of actualizaciones) {
+      await prisma.facturas_compra.update({
+        where: { id },
+        data: { tipoGasto: categoria },
+      });
+      clasificadas++;
+    }
+
+    return res.json({
+      success: true,
+      clasificadas,
+      noClasificadas: sinClasificar.length - clasificadas,
+      mensaje: `${clasificadas} compra(s) clasificadas automáticamente. ${sinClasificar.length - clasificadas} requieren clasificación manual.`,
+    });
+  } catch (error) {
+    console.error('POST /compras/auto-clasificar:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al auto-clasificar compras' });
+  }
+});
+
 // PUT /api/compras/:id — editar campos seguros (observaciones, proveedor, fecha si no tiene inventario)
 router.put('/:id', async (req, res) => {
   try {
