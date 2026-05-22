@@ -11,6 +11,33 @@ import { buildDataTable, buildKvTable, printHtmlReport } from '../../utils/repor
 
 const API = `${import.meta.env.VITE_API_URL || 'http://localhost:5600'}/api`;
 
+async function obtenerEmpresaParaReporte() {
+  const stored = JSON.parse(localStorage.getItem('aela_empresa') || '{}');
+  try {
+    const token = localStorage.getItem('token');
+    const { data: cfg } = await axios.get(`${API}/facturas/configuracion`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return {
+      razonSocial: cfg.data?.razonSocial || stored.razonSocial || '',
+      ruc:         cfg.data?.ruc         || stored.ruc         || '',
+      direccion:   cfg.data?.dirMatriz   || stored.direccion   || '',
+      telefono:    cfg.data?.telefono    || stored.telefono    || '',
+      email:       cfg.data?.emailNotificaciones || stored.email || '',
+      logoUrl:     cfg.data?.logoUrl     || null,
+    };
+  } catch {
+    return {
+      razonSocial: stored.razonSocial || '',
+      ruc:         stored.ruc         || '',
+      direccion:   stored.direccion   || '',
+      telefono:    stored.telefono    || '',
+      email:       stored.email       || '',
+      logoUrl:     null,
+    };
+  }
+}
+
 const MESES = [
   { v: '01', l: 'Enero' },   { v: '02', l: 'Febrero' },  { v: '03', l: 'Marzo' },
   { v: '04', l: 'Abril' },   { v: '05', l: 'Mayo' },      { v: '06', l: 'Junio' },
@@ -74,9 +101,9 @@ export default function ATS() {
   const fmtFecha = (f) => f ? formatFechaCorta(f) : '-';
   const fmt      = (n) => `$${parseFloat(n || 0).toFixed(2)}`;
 
-  const imprimirPDF = () => {
+  const imprimirPDF = async () => {
     if (!data) return;
-
+    const empresa = await obtenerEmpresaParaReporte();
     const resumenRows = [
       ['Período', data.periodo.label],
       ['Facturas', data.facturas.length],
@@ -131,6 +158,7 @@ export default function ATS() {
     printHtmlReport({
       title: 'ATS - Anexo Transaccional Simplificado',
       subtitle: data.periodo.label,
+      empresa,
       sections: [
         { title: 'Resumen', html: buildKvTable(resumenRows) },
         {

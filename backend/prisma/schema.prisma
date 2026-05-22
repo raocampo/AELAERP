@@ -517,6 +517,7 @@ model notas_credito {
   razonSocialComprador          String    @db.VarChar(300)
   direccionComprador            String?   @db.VarChar(300)
   motivoModificacion            String
+  fechaEmision                  DateTime  @default(now())
   fechaEmisionDocSustento       DateTime
   totalSinImpuestos             Decimal   @default(0) @db.Decimal(14, 2)
   totalIva                      Decimal   @default(0) @db.Decimal(14, 2)

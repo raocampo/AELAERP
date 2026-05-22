@@ -47,7 +47,30 @@ export const buildDataTable = (headers = [], rows = []) => {
   `;
 };
 
-export const printHtmlReport = ({ title = 'Reporte', subtitle = '', sections = [] } = {}) => {
+function buildLetterhead(empresa) {
+  if (!empresa) return '';
+
+  const logoHtml = empresa.logoUrl
+    ? `<img src="${escapeHtml(empresa.logoUrl)}" class="lh-logo" alt="Logo" />`
+    : '<div class="lh-logo-placeholder">🏢</div>';
+
+  const dirHtml    = empresa.direccion  ? `<span>${escapeHtml(empresa.direccion)}</span>`  : '';
+  const telHtml    = empresa.telefono   ? `<span>Tel: ${escapeHtml(empresa.telefono)}</span>` : '';
+  const emailHtml  = empresa.email      ? `<span>${escapeHtml(empresa.email)}</span>`      : '';
+
+  return `
+    <div class="lh-wrap">
+      <div class="lh-logo-col">${logoHtml}</div>
+      <div class="lh-info-col">
+        <div class="lh-name">${escapeHtml(empresa.razonSocial || '')}</div>
+        ${empresa.ruc ? `<div class="lh-ruc">RUC: ${escapeHtml(empresa.ruc)}</div>` : ''}
+        <div class="lh-details">${dirHtml}${telHtml}${emailHtml}</div>
+      </div>
+    </div>
+  `;
+}
+
+export const printHtmlReport = ({ title = 'Reporte', subtitle = '', sections = [], empresa = null } = {}) => {
   const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1100,height=800');
 
   if (!printWindow) {
@@ -80,9 +103,7 @@ export const printHtmlReport = ({ title = 'Reporte', subtitle = '', sections = [
             --accent: #0f766e;
           }
 
-          * {
-            box-sizing: border-box;
-          }
+          * { box-sizing: border-box; }
 
           body {
             margin: 0;
@@ -98,32 +119,72 @@ export const printHtmlReport = ({ title = 'Reporte', subtitle = '', sections = [
             background: var(--surface);
           }
 
-          .report-header {
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 2px solid var(--accent);
+          /* ── Letterhead ── */
+          .lh-wrap {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 16px 0 14px;
+            border-bottom: 3px solid var(--accent);
+            margin-bottom: 14px;
+          }
+          .lh-logo-col { flex: 0 0 auto; }
+          .lh-logo {
+            max-height: 72px;
+            max-width: 160px;
+            object-fit: contain;
+          }
+          .lh-logo-placeholder {
+            font-size: 48px;
+            line-height: 1;
+          }
+          .lh-info-col { flex: 1; }
+          .lh-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+          }
+          .lh-ruc {
+            font-size: 13px;
+            color: var(--muted);
+            margin-top: 2px;
+          }
+          .lh-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 18px;
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--muted);
           }
 
+          /* ── Report title ── */
+          .report-header {
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+          }
           .report-header h1 {
             margin: 0;
-            font-size: 28px;
-            line-height: 1.2;
+            font-size: 22px;
+            color: var(--accent);
           }
-
           .report-header p {
-            margin: 8px 0 0;
+            margin: 6px 0 0;
             color: var(--muted);
-            font-size: 14px;
+            font-size: 13px;
           }
 
           .report-section {
             margin-bottom: 24px;
             page-break-inside: avoid;
           }
-
           .report-section h2 {
             margin: 0 0 12px;
-            font-size: 18px;
+            font-size: 16px;
+            color: var(--accent);
+            border-left: 4px solid var(--accent);
+            padding-left: 8px;
           }
 
           .report-table {
@@ -131,26 +192,23 @@ export const printHtmlReport = ({ title = 'Reporte', subtitle = '', sections = [
             border-collapse: collapse;
             background: var(--surface);
           }
-
           .report-table th,
           .report-table td {
-            padding: 10px 12px;
+            padding: 8px 10px;
             border: 1px solid var(--border);
-            font-size: 12px;
+            font-size: 11px;
             text-align: left;
             vertical-align: top;
           }
-
           .report-table thead th {
             background: #ecfeff;
             font-weight: 700;
+            font-size: 11px;
           }
-
           .report-table-kv th {
             width: 220px;
             background: #f8fafc;
           }
-
           .report-empty {
             margin: 12px 0 0;
             color: var(--muted);
@@ -158,23 +216,15 @@ export const printHtmlReport = ({ title = 'Reporte', subtitle = '', sections = [
           }
 
           @media print {
-            body {
-              padding: 0;
-              background: #fff;
-            }
-
-            .report-shell {
-              max-width: none;
-            }
-
-            .report-section {
-              break-inside: avoid;
-            }
+            body { padding: 0; background: #fff; }
+            .report-shell { max-width: none; }
+            .report-section { break-inside: avoid; }
           }
         </style>
       </head>
       <body>
         <main class="report-shell">
+          ${buildLetterhead(empresa)}
           <header class="report-header">
             <h1>${escapeHtml(title)}</h1>
             ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ''}
