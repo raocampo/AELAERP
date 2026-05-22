@@ -9,7 +9,7 @@ import { formatFechaCorta } from '../../utils/fecha';
 import './ATS.css';
 import { buildDataTable, buildKvTable, printHtmlReport } from '../../utils/reportPrint';
 
-const API = `${import.meta.env.VITE_API_URL || 'http://localhost:5600'}/api`;
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 
 async function obtenerEmpresaParaReporte() {
   const stored = JSON.parse(localStorage.getItem('aela_empresa') || '{}');

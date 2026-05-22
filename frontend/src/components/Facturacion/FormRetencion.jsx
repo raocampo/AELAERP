@@ -9,7 +9,7 @@ import axios from 'axios';
 import { normalizarPeriodoMMYYYY, periodoActualMMYYYY } from '../../utils/periodo';
 import './FormRetencion.css';
 
-const API = `${import.meta.env.VITE_API_URL || 'http://localhost:5600'}/api`;
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 
 const hoy = () => {
   const d = new Date();

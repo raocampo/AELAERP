@@ -10,6 +10,9 @@ import toast from 'react-hot-toast';
 import { formatFechaCorta } from '../../utils/fecha';
 import './ListaFacturas.css';
 
+// Base URL del servidor sin /api al final (para fetch directo con Authorization header)
+const SERVER_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
+
 // ─── Badge de estado SRI ─────────────────────────────────────────────────────
 const BadgeEstado = ({ estado }) => {
   const conf = {
@@ -66,7 +69,7 @@ const TabFacturas = ({ navigate, onIrNC }) => {
   const descargarPDF = async (factura) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5600'}/api/facturas/${factura.id}/pdf`, {
+      const res = await fetch(`${SERVER_BASE}/api/facturas/${factura.id}/pdf`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const blob = await res.blob();
@@ -80,7 +83,7 @@ const TabFacturas = ({ navigate, onIrNC }) => {
   const descargarXML = async (factura) => {
     try {
       const token = localStorage.getItem('token');
-      const res   = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5600'}/api/facturas/${factura.id}/xml`, {
+      const res   = await fetch(`${SERVER_BASE}/api/facturas/${factura.id}/xml`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) { toast.error('Sin XML disponible aún'); return; }
@@ -333,7 +336,7 @@ const TabNotasCredito = ({ navigate }) => {
 
   const descargarPDFnc = async (nc) => {
     const token = localStorage.getItem('token');
-    const res   = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5600'}/api/facturas/notas-credito/${nc.id}/pdf`, {
+    const res   = await fetch(`${SERVER_BASE}/api/facturas/notas-credito/${nc.id}/pdf`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const blob = await res.blob();
