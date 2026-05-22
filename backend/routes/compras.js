@@ -16,6 +16,26 @@ const {
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Cache de columnas opcionales en facturas_compra (pueden no existir si migración pendiente)
+let _colsCompra = null;
+async function getColsCompra() {
+  if (_colsCompra) return _colsCompra;
+  const probar = async (col) => {
+    try {
+      await prisma.$queryRawUnsafe(`SELECT "${col}" FROM "facturas_compra" LIMIT 0`);
+      return true;
+    } catch {
+      console.warn(`[compras] columna ${col} no existe — omitida`);
+      return false;
+    }
+  };
+  const [tipoGasto, anulada, motivoAnulacion] = await Promise.all([
+    probar('tipoGasto'), probar('anulada'), probar('motivoAnulacion'),
+  ]);
+  _colsCompra = { tipoGasto, anulada, motivoAnulacion };
+  return _colsCompra;
+}
+
 router.use(proteger);
 router.use(soloFull);
 router.use(requiereModulo('comprasHabilitadas'));
@@ -269,6 +289,7 @@ router.get('/exportar/csv', async (req, res) => {
       ];
     }
 
+    const csvCols = await getColsCompra();
     const items = await prisma.facturas_compra.findMany({
       where,
       orderBy: { fechaEmision: 'desc' },
@@ -294,8 +315,8 @@ router.get('/exportar/csv', async (req, res) => {
         registraInventario: true,
         egresoCajaRegistrado: true,
         movimientosInventario: true,
-        anulada: true,
-        motivoAnulacion: true,
+        ...(csvCols.anulada ? { anulada: true } : {}),
+        ...(csvCols.motivoAnulacion ? { motivoAnulacion: true } : {}),
         observaciones: true,
         createdAt: true,
       },
@@ -365,18 +386,8 @@ router.get('/', async (req, res) => {
     }
 
     // ─── Cache de columnas disponibles para evitar errores por migración pendiente ──
-    if (!router._tipoGastoChecked) {
-      try {
-        // Usar $queryRawUnsafe para no depender del schema de Prisma
-        await prisma.$queryRawUnsafe('SELECT "tipoGasto" FROM "facturas_compra" LIMIT 0');
-        router._tipoGastoDisponible = true;
-      } catch {
-        router._tipoGastoDisponible = false;
-        console.warn('[compras] columna tipoGasto no existe en BD — usando modo compat');
-      }
-      router._tipoGastoChecked = true;
-    }
-    const usarTipoGasto = router._tipoGastoDisponible;
+    const cols = await getColsCompra();
+    const usarTipoGasto = cols.tipoGasto;
 
     // tipoGasto filter (columna puede estar pendiente de migración en producción)
     const whereTipoGasto = { ...where };
@@ -393,8 +404,10 @@ router.get('/', async (req, res) => {
       fechaEmision: true, razonSocialProveedor: true, identificacionProveedor: true,
       importeTotal: true, registraInventario: true, egresoCajaRegistrado: true,
       movimientosInventario: true, origenRegistro: true,
-      ...(usarTipoGasto ? { tipoGasto: true } : {}),
-      anulada: true, motivoAnulacion: true, createdAt: true,
+      ...(cols.tipoGasto ? { tipoGasto: true } : {}),
+      ...(cols.anulada ? { anulada: true } : {}),
+      ...(cols.motivoAnulacion ? { motivoAnulacion: true } : {}),
+      createdAt: true,
     };
 
     const [total, items] = await Promise.all([
