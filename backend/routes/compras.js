@@ -364,9 +364,23 @@ router.get('/', async (req, res) => {
       ];
     }
 
+    // ─── Cache de columnas disponibles para evitar errores por migración pendiente ──
+    // Se verifica una sola vez por startup del servidor y se cachea en memoria.
+    if (!router._tipoGastoChecked) {
+      try {
+        await prisma.$queryRaw`SELECT "tipoGasto" FROM "facturas_compra" LIMIT 0`;
+        router._tipoGastoDisponible = true;
+      } catch {
+        router._tipoGastoDisponible = false;
+        console.warn('[compras] columna tipoGasto no existe en BD — usando modo compat');
+      }
+      router._tipoGastoChecked = true;
+    }
+    const usarTipoGasto = router._tipoGastoDisponible;
+
     // tipoGasto filter (columna puede estar pendiente de migración en producción)
     const whereTipoGasto = { ...where };
-    if (tipoGasto) {
+    if (usarTipoGasto && tipoGasto) {
       if (tipoGasto === 'SIN_CLASIFICAR') {
         whereTipoGasto.tipoGasto = null;
       } else {
@@ -378,42 +392,21 @@ router.get('/', async (req, res) => {
       id: true, proveedorId: true, numeroFactura: true, numeroAutorizacion: true,
       fechaEmision: true, razonSocialProveedor: true, identificacionProveedor: true,
       importeTotal: true, registraInventario: true, egresoCajaRegistrado: true,
-      movimientosInventario: true, origenRegistro: true, tipoGasto: true,
+      movimientosInventario: true, origenRegistro: true,
+      ...(usarTipoGasto ? { tipoGasto: true } : {}),
       anulada: true, motivoAnulacion: true, createdAt: true,
     };
-    const selectSinTipoGasto = { ...selectConTipoGasto };
-    delete selectSinTipoGasto.tipoGasto;
 
-    let total, items;
-    try {
-      [total, items] = await Promise.all([
-        prisma.facturas_compra.count({ where: whereTipoGasto }),
-        prisma.facturas_compra.findMany({
-          where: whereTipoGasto,
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: parseInt(limit, 10),
-          select: selectConTipoGasto,
-        }),
-      ]);
-    } catch (errTipoGasto) {
-      // Migración de tipoGasto pendiente — fallback sin esa columna
-      // Capturar cualquier error de BD relacionado a columna desconocida
-      const msg = String(errTipoGasto?.message || errTipoGasto?.meta?.cause || '');
-      const esMigracionPendiente = /tipogasto|does not exist|column.*not.*found|invalid.*column|unknown.*field|P2022|P2010|42703/i.test(msg);
-      if (!esMigracionPendiente) throw errTipoGasto;
-      console.warn('[compras] columna tipoGasto no encontrada, usando consulta sin ella');
-      [total, items] = await Promise.all([
-        prisma.facturas_compra.count({ where }),
-        prisma.facturas_compra.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: parseInt(limit, 10),
-          select: selectSinTipoGasto,
-        }),
-      ]);
-    }
+    const [total, items] = await Promise.all([
+      prisma.facturas_compra.count({ where: whereTipoGasto }),
+      prisma.facturas_compra.findMany({
+        where: whereTipoGasto,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit, 10),
+        select: selectConTipoGasto,
+      }),
+    ]);
 
     res.json({
       success: true,
@@ -422,8 +415,14 @@ router.get('/', async (req, res) => {
       pages: Math.ceil(total / parseInt(limit, 10)),
     });
   } catch (error) {
-    console.error('GET /compras:', error);
-    res.status(500).json({ success: false, mensaje: 'No se pudo cargar el listado de compras' });
+    // Log completo para diagnóstico en producción
+    console.error('GET /compras error:', {
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+      stack: error?.stack?.split('\n').slice(0, 5).join(' | '),
+    });
+    res.status(500).json({ success: false, mensaje: 'No se pudo cargar el listado de compras', _debug: error?.message });
   }
 });
 
