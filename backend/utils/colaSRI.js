@@ -374,6 +374,80 @@ async function reintentarNotaDebito(nd) {
   }
 }
 
+// ─── Reintento: Nota de Crédito ─────────────────────────────
+async function reintentarNotaCredito(nc) {
+  const config = await getConfigSRI(nc.empresaId);
+  if (!config || config.tipoCertificado === 'token') return;
+  if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+
+  try {
+    let xmlFirmado = nc.xmlFirmado;
+    if (!xmlFirmado) {
+      const p12Buffer = fs.readFileSync(config.certificadoP12);
+      xmlFirmado = sri.firmarXML(nc.xmlGenerado, p12Buffer, config.claveCertificado || '');
+    }
+
+    await prisma.notas_credito.update({
+      where: { id: nc.id },
+      data:  { xmlFirmado, estadoSri: 'ENVIADO' },
+    });
+
+    const recepcion = await sri.enviarComprobanteSRI(xmlFirmado, config.ambiente);
+    if (recepcion.estado !== 'RECIBIDA') {
+      await prisma.notas_credito.update({
+        where: { id: nc.id },
+        data:  { estadoSri: 'RECHAZADO', mensajesSri: recepcion },
+      });
+      return;
+    }
+
+    const autorizacion = await sri.autorizarComprobanteSRI(nc.claveAcceso, config.ambiente);
+    if (autorizacion.autorizado) {
+      const DIR_FACTURAS = path.join(__dirname, '..', 'uploads', 'facturas');
+      const pdfPath = path.join(DIR_FACTURAS, `nc-${nc.id}.pdf`);
+      await sri.generarRIDENotaCredito(
+        { ...nc, xmlAutorizado: autorizacion.xmlAutorizado },
+        config,
+        pdfPath
+      );
+      await prisma.notas_credito.update({
+        where: { id: nc.id },
+        data: {
+          estadoSri:          'AUTORIZADO',
+          numeroAutorizacion: autorizacion.numeroAutorizacion,
+          fechaAutorizacion:  autorizacion.fechaAutorizacion,
+          xmlAutorizado:      autorizacion.xmlAutorizado || xmlFirmado,
+          pdfUrl:             `/uploads/facturas/nc-${nc.id}.pdf`,
+          mensajesSri:        { autorizacion: autorizacion.estado },
+        },
+      });
+      console.log(`[ColaSRI] Nota de Crédito #${nc.id} autorizada OK (reintento)`);
+    } else {
+      const esRechazoReal = autorizacion.mensajes && autorizacion.mensajes.length > 0;
+      await prisma.notas_credito.update({
+        where: { id: nc.id },
+        data: {
+          estadoSri:   esRechazoReal ? 'RECHAZADO' : 'FIRMADO_PENDIENTE_ENVIO',
+          mensajesSri: autorizacion,
+        },
+      });
+    }
+  } catch (err) {
+    if (esErrorConectividad(err)) {
+      await prisma.notas_credito.update({
+        where: { id: nc.id },
+        data:  { estadoSri: 'FIRMADO_PENDIENTE_ENVIO' },
+      }).catch(() => {});
+    } else {
+      await prisma.notas_credito.update({
+        where: { id: nc.id },
+        data:  { estadoSri: 'ERROR', mensajesSri: { error: err.message } },
+      }).catch(() => {});
+      console.error(`[ColaSRI] Error no recuperable en NC #${nc.id}:`, err.message);
+    }
+  }
+}
+
 // ─── Ciclo principal del worker ─────────────────────────────
 let _workerActivo = false;
 
@@ -382,7 +456,7 @@ async function ejecutarCiclo() {
   _workerActivo = true;
 
   try {
-    const [facturas, retenciones, liquidaciones, notasDebito] = await Promise.all([
+    const [facturas, retenciones, liquidaciones, notasDebito, notasCredito] = await Promise.all([
       prisma.facturas.findMany({
         where:   { estadoSri: 'FIRMADO_PENDIENTE_ENVIO' },
         select:  {
@@ -419,9 +493,18 @@ async function ejecutarCiclo() {
         orderBy: { createdAt: 'asc' },
         take:    20,
       }),
+      prisma.notas_credito.findMany({
+        where:   { estadoSri: 'FIRMADO_PENDIENTE_ENVIO' },
+        select:  {
+          id: true, empresaId: true, claveAcceso: true,
+          xmlGenerado: true, xmlFirmado: true,
+        },
+        orderBy: { createdAt: 'asc' },
+        take:    20,
+      }),
     ]);
 
-    const total = facturas.length + retenciones.length + liquidaciones.length + notasDebito.length;
+    const total = facturas.length + retenciones.length + liquidaciones.length + notasDebito.length + notasCredito.length;
     if (total > 0) {
       console.log(`[ColaSRI] Procesando ${total} comprobantes pendientes...`);
     }
@@ -431,6 +514,7 @@ async function ejecutarCiclo() {
     for (const r of retenciones)   await reintentarRetencion(r);
     for (const l of liquidaciones) await reintentarLiquidacion(l);
     for (const n of notasDebito)   await reintentarNotaDebito(n);
+    for (const nc of notasCredito) await reintentarNotaCredito(nc);
 
   } catch (err) {
     console.error('[ColaSRI] Error en ciclo:', err.message);
@@ -446,14 +530,15 @@ async function contarPendientes(empresaId) {
     where.empresaId = empresaId;
   }
 
-  const [facturas, retenciones, liquidaciones, notasDebito] = await Promise.all([
+  const [facturas, retenciones, liquidaciones, notasDebito, notasCredito] = await Promise.all([
     prisma.facturas.count({ where }),
     prisma.retenciones.count({ where }),
     prisma.liquidaciones_compra.count({ where }),
     prisma.notas_debito.count({ where }),
+    prisma.notas_credito.count({ where }),
   ]);
 
-  return { facturas, retenciones, liquidaciones, notasDebito, total: facturas + retenciones + liquidaciones + notasDebito };
+  return { facturas, retenciones, liquidaciones, notasDebito, notasCredito, total: facturas + retenciones + liquidaciones + notasDebito + notasCredito };
 }
 
 // ─── Iniciar worker ─────────────────────────────────────────

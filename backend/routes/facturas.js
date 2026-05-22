@@ -183,6 +183,82 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// FLUJO SRI: NOTA DE CRÉDITO
+// Espejo de procesarFacturaEnSRI pero para el modelo notas_credito.
+// ────────────────────────────────────────────────────────────────────────────
+async function procesarNCEnSRI(ncId, xmlGenerado, config) {
+  try {
+    if (config.tipoCertificado === 'token') return; // firma manual
+    if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+
+    const p12Buffer = fs.readFileSync(config.certificadoP12);
+    const claveP12  = config.claveCertificado || '';
+
+    // Firmar
+    const xmlFirmado = sri.firmarXML(xmlGenerado, p12Buffer, claveP12);
+    await prisma.notas_credito.update({
+      where: { id: ncId },
+      data:  { xmlFirmado, estadoSri: 'ENVIADO' },
+    });
+
+    // Enviar al SRI
+    const recepcion = await sri.enviarComprobanteSRI(xmlFirmado, config.ambiente);
+    if (recepcion.estado !== 'RECIBIDA') {
+      await prisma.notas_credito.update({
+        where: { id: ncId },
+        data:  { estadoSri: 'RECHAZADO', mensajesSri: recepcion },
+      });
+      return;
+    }
+
+    // Autorizar — hasta 5 reintentos con pausa de 4 s
+    const nc = await prisma.notas_credito.findUnique({ where: { id: ncId } });
+    let autorizacion = null;
+    for (let intento = 0; intento < 5; intento++) {
+      if (intento > 0) await new Promise(r => setTimeout(r, 4000));
+      autorizacion = await sri.autorizarComprobanteSRI(nc.claveAcceso, config.ambiente);
+      if (autorizacion.autorizado || (autorizacion.mensajes && autorizacion.mensajes.length > 0)) break;
+    }
+
+    if (autorizacion.autorizado) {
+      const pdfPath = path.join(DIR_FACTURAS, `nc-${ncId}.pdf`);
+      await sri.generarRIDENotaCredito(
+        { ...nc, xmlAutorizado: autorizacion.xmlAutorizado },
+        config,
+        pdfPath
+      );
+      await prisma.notas_credito.update({
+        where: { id: ncId },
+        data: {
+          estadoSri:          'AUTORIZADO',
+          numeroAutorizacion: autorizacion.numeroAutorizacion,
+          fechaAutorizacion:  autorizacion.fechaAutorizacion,
+          xmlAutorizado:      autorizacion.xmlAutorizado,
+          mensajesSri:        { autorizacion: autorizacion.estado },
+          pdfUrl:             `/uploads/facturas/nc-${ncId}.pdf`,
+        },
+      });
+    } else {
+      const esRechazoReal = autorizacion.mensajes && autorizacion.mensajes.length > 0;
+      await prisma.notas_credito.update({
+        where: { id: ncId },
+        data: {
+          estadoSri:   esRechazoReal ? 'RECHAZADO' : 'FIRMADO_PENDIENTE_ENVIO',
+          mensajesSri: { recepcion, autorizacion: autorizacion.mensajes },
+        },
+      });
+    }
+  } catch (err) {
+    console.error('Error en flujo SRI (NC):', err.message);
+    const nuevoEstado = esErrorConectividad(err) ? 'FIRMADO_PENDIENTE_ENVIO' : 'RECHAZADO';
+    await prisma.notas_credito.update({
+      where: { id: ncId },
+      data:  { estadoSri: nuevoEstado, mensajesSri: { error: err.message, code: err.code } },
+    }).catch(() => {});
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // CONFIGURACIÓN SRI
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -713,10 +789,15 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
     }
 
     const mensaje = ncCreada
-      ? `Factura anulada. Se emitió la Nota de Crédito ${ncCreada.numeroNC} (pendiente de autorización SRI).`
+      ? `Factura anulada. Se emitió la Nota de Crédito ${ncCreada.numeroNC} (enviando al SRI…).`
       : 'Factura anulada correctamente (no estaba autorizada en el SRI).';
 
     res.json({ ok: true, data: updated, ncAnulacion: ncCreada, mensaje });
+
+    // Firmar y enviar la NC al SRI de forma asíncrona (sin bloquear la respuesta)
+    if (ncCreada && config) {
+      setImmediate(() => procesarNCEnSRI(ncCreada.id, ncCreada.xmlGenerado, config));
+    }
   } catch (err) {
     console.error('Error al anular factura:', err);
     res.status(500).json({ ok: false, error: err.message });
@@ -902,6 +983,9 @@ router.post('/notas-credito', permitirEmitirFacturacion, async (req, res) => {
     }
 
     res.status(201).json({ ok: true, data: nc });
+
+    // Firmar y enviar la NC al SRI de forma asíncrona
+    setImmediate(() => procesarNCEnSRI(nc.id, xml, config));
   } catch (err) {
     console.error('Error al crear NC:', err);
     res.status(500).json({ ok: false, error: err.message });
@@ -926,6 +1010,38 @@ router.get('/notas-credito/:id/pdf', permitirVerFacturacion, async (req, res) =>
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename=nc-${nc.numeroNC}.pdf`);
     fs.createReadStream(pdfPath).pipe(res);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /api/facturas/notas-credito/:id/reenviar — reintento manual de firma/envío al SRI
+router.post('/notas-credito/:id/reenviar', permitirEmitirFacturacion, async (req, res) => {
+  try {
+    const nc = await prisma.notas_credito.findFirst({
+      where: { id: parseInt(req.params.id, 10), empresaId: req.empresa.id },
+    });
+    if (!nc) return res.status(404).json({ ok: false, error: 'NC no encontrada' });
+    if (nc.estadoSri === 'AUTORIZADO') {
+      return res.status(400).json({ ok: false, error: 'La Nota de Crédito ya está autorizada por el SRI' });
+    }
+
+    const config = await getConfigSRI(req.empresa.id);
+    if (!config) return res.status(400).json({ ok: false, error: 'Configure primero el SRI' });
+    if (config.tipoCertificado === 'token') {
+      return res.status(400).json({ ok: false, error: 'Con certificado TOKEN la firma es manual. Sube el XML firmado.' });
+    }
+    if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) {
+      return res.status(400).json({ ok: false, error: 'Certificado P12 no disponible en el servidor' });
+    }
+
+    const xmlParaFirmar = nc.xmlGenerado;
+    if (!xmlParaFirmar) {
+      return res.status(400).json({ ok: false, error: 'La NC no tiene XML para firmar' });
+    }
+
+    res.json({ ok: true, mensaje: 'Enviando Nota de Crédito al SRI…' });
+    setImmediate(() => procesarNCEnSRI(nc.id, xmlParaFirmar, config));
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

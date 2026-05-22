@@ -319,13 +319,17 @@ const TabFacturas = ({ navigate, onIrNC }) => {
 const TabNotasCredito = ({ navigate }) => {
   const [ncs, setNcs]       = useState([]);
   const [loading, setLoading] = useState(true);
+  const [enviando, setEnviando] = useState(null);
 
-  useEffect(() => {
+  const recargar = () => {
+    setLoading(true);
     api.get('/facturas/notas-credito/lista')
       .then(r => setNcs(r.data.data || []))
       .catch(() => toast.error('Error al cargar NC'))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { recargar(); }, []);
 
   const descargarPDFnc = async (nc) => {
     const token = localStorage.getItem('token');
@@ -334,6 +338,20 @@ const TabNotasCredito = ({ navigate }) => {
     });
     const blob = await res.blob();
     window.open(URL.createObjectURL(blob), '_blank');
+  };
+
+  const enviarSRI = async (nc) => {
+    if (!window.confirm(`¿Reenviar la Nota de Crédito ${nc.numeroNC} al SRI para firma y autorización?`)) return;
+    setEnviando(nc.id);
+    try {
+      await api.post(`/facturas/notas-credito/${nc.id}/reenviar`);
+      toast.success('Enviando al SRI… el estado se actualizará en unos momentos.');
+      setTimeout(recargar, 6000);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al reenviar al SRI');
+    } finally {
+      setEnviando(null);
+    }
   };
 
   if (loading) return <div className="loading">Cargando Notas de Crédito...</div>;
@@ -352,7 +370,7 @@ const TabNotasCredito = ({ navigate }) => {
               <th>Cliente</th>
               <th className="text-right">Total</th>
               <th>Estado SRI</th>
-              <th>PDF</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -368,10 +386,21 @@ const TabNotasCredito = ({ navigate }) => {
                 <td>{nc.razonSocialComprador}</td>
                 <td className="text-right"><strong>${parseFloat(nc.importeTotal).toFixed(2)}</strong></td>
                 <td><BadgeEstado estado={nc.estadoSri} /></td>
-                <td>
+                <td style={{ whiteSpace: 'nowrap' }}>
                   <button className="btn-icon" onClick={() => descargarPDFnc(nc)} title="Descargar RIDE NC">
                     📄
                   </button>
+                  {['PENDIENTE_FIRMA', 'RECHAZADO', 'FIRMADO_PENDIENTE_ENVIO'].includes(nc.estadoSri) && (
+                    <button
+                      className="btn-icon"
+                      onClick={() => enviarSRI(nc)}
+                      disabled={enviando === nc.id}
+                      title="Enviar al SRI"
+                      style={{ marginLeft: '4px' }}
+                    >
+                      {enviando === nc.id ? '⏳' : '🚀'}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

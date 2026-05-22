@@ -54,8 +54,8 @@ function esErrorBrowserNoDisponible(err) {
 }
 
 async function consultarSriAutomatico(payload) {
-  // Endpoint principal: scraper Puppeteer
-  return api.post('/buzon/sri-scraper/consultar', payload);
+  // Usa el endpoint unificado: intenta Puppeteer primero, luego portal REST como fallback
+  return api.post('/buzon/sri/consultar', payload);
 }
 
 export default function BuzonSRI() {
