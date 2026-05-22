@@ -11,6 +11,7 @@ const prisma = require('../config/prisma');
 const sri    = require('./sri');
 const fs     = require('fs');
 const path   = require('path');
+const { getCertBuffer, tieneCertificado } = require('./certUtils');
 
 // Errores que indican problema de conectividad (no rechazo SRI)
 const ERRORES_CONECTIVIDAD = new Set([
@@ -55,13 +56,13 @@ async function getConfigSRI(empresaId) {
 async function reintentarFactura(factura) {
   const config = await getConfigSRI(factura.empresaId);
   if (!config || config.tipoCertificado === 'token') return;
-  if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+  if (!tieneCertificado(config)) return;
 
   try {
     // Puede que ya esté firmada (xmlFirmado) o solo generada (xmlGenerado)
     let xmlFirmado = factura.xmlFirmado;
     if (!xmlFirmado) {
-      const p12Buffer = fs.readFileSync(config.certificadoP12);
+      const p12Buffer = getCertBuffer(config);
       xmlFirmado = sri.firmarXML(factura.xmlGenerado, p12Buffer, config.claveCertificado || '');
       await prisma.facturas.update({
         where: { id: factura.id },
@@ -185,12 +186,12 @@ async function reintentarFactura(factura) {
 async function reintentarRetencion(retencion) {
   const config = await getConfigSRI(retencion.empresaId);
   if (!config || config.tipoCertificado === 'token') return;
-  if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+  if (!tieneCertificado(config)) return;
 
   try {
     let xmlFirmado = retencion.xmlFirmado;
     if (!xmlFirmado) {
-      const p12Buffer = fs.readFileSync(config.certificadoP12);
+      const p12Buffer = getCertBuffer(config);
       xmlFirmado = sri.firmarXML(retencion.xmlGenerado, p12Buffer, config.claveCertificado || '');
     }
 
@@ -267,12 +268,12 @@ async function reintentarRetencion(retencion) {
 async function reintentarLiquidacion(liq) {
   const config = await getConfigSRI(liq.empresaId);
   if (!config || config.tipoCertificado === 'token') return;
-  if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+  if (!tieneCertificado(config)) return;
 
   try {
     let xmlFirmado = liq.xmlFirmado;
     if (!xmlFirmado) {
-      const p12Buffer = fs.readFileSync(config.certificadoP12);
+      const p12Buffer = getCertBuffer(config);
       xmlFirmado = sri.firmarXML(liq.xmlGenerado, p12Buffer, config.claveCertificado || '');
     }
 
@@ -328,12 +329,12 @@ async function reintentarLiquidacion(liq) {
 async function reintentarNotaDebito(nd) {
   const config = await getConfigSRI(nd.empresaId);
   if (!config || config.tipoCertificado === 'token') return;
-  if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+  if (!tieneCertificado(config)) return;
 
   try {
     let xmlFirmado = nd.xmlFirmado;
     if (!xmlFirmado) {
-      const p12Buffer = fs.readFileSync(config.certificadoP12);
+      const p12Buffer = getCertBuffer(config);
       xmlFirmado = sri.firmarXML(nd.xmlGenerado, p12Buffer, config.claveCertificado || '');
     }
 
@@ -378,12 +379,12 @@ async function reintentarNotaDebito(nd) {
 async function reintentarNotaCredito(nc) {
   const config = await getConfigSRI(nc.empresaId);
   if (!config || config.tipoCertificado === 'token') return;
-  if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+  if (!tieneCertificado(config)) return;
 
   try {
     let xmlFirmado = nc.xmlFirmado;
     if (!xmlFirmado) {
-      const p12Buffer = fs.readFileSync(config.certificadoP12);
+      const p12Buffer = getCertBuffer(config);
       xmlFirmado = sri.firmarXML(nc.xmlGenerado, p12Buffer, config.claveCertificado || '');
     }
 

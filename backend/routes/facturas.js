@@ -22,6 +22,7 @@ const { siguienteSecuencial } = require('../utils/secuenciales');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
 const { esErrorConectividad } = require('../utils/colaSRI');
+const { getCertBuffer, tieneCertificado } = require('../utils/certUtils');
 
 // Aplicar autenticación JWT a todas las rutas
 router.use(proteger);
@@ -90,12 +91,13 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config) {
     if (config.tipoCertificado === 'token') {
       return; // Queda en PENDIENTE_FIRMA hasta que el usuario suba el XML firmado
     }
-    // Leer certificado P12
-    if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) {
-      return; // Sin certificado → queda en PENDIENTE_FIRMA
+    // Leer certificado P12 (archivo en disco o base64 en BD)
+    if (!tieneCertificado(config)) {
+      console.error(`[SRI] Factura #${facturaId}: certificado P12 no disponible (archivo no existe y sin base64 en BD). Re-suba el certificado en Configuración SRI.`);
+      return; // Queda en PENDIENTE_FIRMA
     }
 
-    const p12Buffer = fs.readFileSync(config.certificadoP12);
+    const p12Buffer = getCertBuffer(config);
     const claveP12  = config.claveCertificado || '';
 
     // Firmar
@@ -189,9 +191,12 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config) {
 async function procesarNCEnSRI(ncId, xmlGenerado, config) {
   try {
     if (config.tipoCertificado === 'token') return; // firma manual
-    if (!config.certificadoP12 || !fs.existsSync(config.certificadoP12)) return;
+    if (!tieneCertificado(config)) {
+      console.error(`[SRI] NC #${ncId}: certificado P12 no disponible. Re-suba el certificado en Configuración SRI.`);
+      return;
+    }
 
-    const p12Buffer = fs.readFileSync(config.certificadoP12);
+    const p12Buffer = getCertBuffer(config);
     const claveP12  = config.claveCertificado || '';
 
     // Firmar
@@ -364,7 +369,11 @@ router.post('/configuracion/certificado', permitirConfigurarSri, uploadCert.sing
     const updated = await prisma.configuracion_sri.update({
       where: { id: config.id },
       data: {
-        certificadoP12:  req.file.path,
+        certificadoP12:     req.file.path,
+        // Guardar base64 en BD para sobrevivir deploys (Railway filesystem efímero)
+        certificadoP12Data: req.file.buffer
+          ? req.file.buffer.toString('base64')
+          : fs.readFileSync(req.file.path).toString('base64'),
         claveCertificado: req.body.clave || '',
       },
     });
@@ -383,7 +392,7 @@ router.delete('/configuracion/certificado', permitirConfigurarSri, async (req, r
     }
     await prisma.configuracion_sri.update({
       where: { id: config.id },
-      data:  { certificadoP12: null, claveCertificado: null },
+      data:  { certificadoP12: null, certificadoP12Data: null, claveCertificado: null },
     });
     res.json({ ok: true });
   } catch (err) {
