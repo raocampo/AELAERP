@@ -56,6 +56,7 @@ async function buscarTenant({ slug, dominio }) {
 
   try {
     const master = getPrismaMaster();
+    if (!master) return null; // BD master no configurada → modo monoinstancia
     let tenant = null;
 
     if (slug) {
