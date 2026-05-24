@@ -204,7 +204,7 @@ export default function Login() {
           <span className="login-logo-sigla">
             {branding.nombre || 'AELA'}
           </span>
-          <span className="login-logo-sub">ERP Ecuador · by CorpSimtelec</span>
+          <span className="login-logo-sub">AELA ERP Ecuador · by CorpSimtelec</span>
         </div>
         {verificandoSetup ? (
           <div className="login-status-box">
