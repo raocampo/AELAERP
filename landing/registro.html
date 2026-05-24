@@ -121,6 +121,22 @@
               placeholder="Ej: 0991234567" maxlength="20" />
           </div>
 
+          <div class="reg-field">
+            <label for="urlAcceso">Tu dirección de acceso *
+              <span style="font-weight:400;font-size:12px;color:#64748b;margin-left:4px">— sin espacios, solo letras y números</span>
+            </label>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="color:#64748b;font-size:14px;white-space:nowrap">aela.corpsimtelec.com/acceso/</span>
+              <input type="text" id="urlAcceso" name="urlAcceso"
+                placeholder="miempresa"
+                maxlength="30" required
+                style="flex:1;min-width:0"
+                autocomplete="off" />
+            </div>
+            <div id="urlAcceso-preview" style="margin-top:6px;font-size:12px;color:#7C3AED;display:none"></div>
+            <div id="urlAcceso-error" style="margin-top:4px;font-size:12px;color:#ef4444;display:none"></div>
+          </div>
+
           <label class="reg-terms">
             <input type="checkbox" id="terminosAceptados" name="terminosAceptados" required />
             <span>Acepto los <a href="#" class="reg-link-purple">términos y condiciones</a>
@@ -267,6 +283,52 @@
       });
     });
 
+    // ─── Validación de URL de acceso en tiempo real ──────────────────────────
+    const urlInput    = document.getElementById('urlAcceso');
+    const urlPreview  = document.getElementById('urlAcceso-preview');
+    const urlError    = document.getElementById('urlAcceso-error');
+    const RESERVADAS  = ['admin','app','api','www','mail','aela','corpsimtelec','login','registro','acceso'];
+
+    function slugificar(texto) {
+      return texto.toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 30);
+    }
+
+    function validarSlug(slug) {
+      if (!slug) return 'Elige una URL de acceso para tu empresa.';
+      if (slug.length < 3) return 'Debe tener al menos 3 caracteres.';
+      if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(slug)) return 'Solo letras, números y guiones. No puede empezar ni terminar con guion.';
+      if (RESERVADAS.includes(slug)) return `"${slug}" está reservado. Elige otro nombre.`;
+      return null;
+    }
+
+    // Auto-sugerir slug desde nombre de empresa al salir del campo
+    document.getElementById('nombreEmpresa').addEventListener('blur', () => {
+      if (!urlInput.value.trim()) {
+        urlInput.value = slugificar(document.getElementById('nombreEmpresa').value);
+        urlInput.dispatchEvent(new Event('input'));
+      }
+    });
+
+    urlInput.addEventListener('input', () => {
+      const raw  = urlInput.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      if (urlInput.value !== raw) urlInput.value = raw;
+      const slug = raw;
+      const err  = validarSlug(slug);
+      if (err) {
+        urlError.textContent = err;
+        urlError.style.display = 'block';
+        urlPreview.style.display = 'none';
+      } else {
+        urlError.style.display = 'none';
+        urlPreview.textContent = `✓ Tu dirección será: aela.corpsimtelec.com/acceso/${slug}`;
+        urlPreview.style.display = 'block';
+      }
+    });
+
     // ─── Formulario ───────────────────────────────────────────────────────────
     const form      = document.getElementById('reg-form');
     const btnSubmit = document.getElementById('reg-btn');
@@ -292,13 +354,18 @@
 
       const planElegido = getPlanSeleccionado();
 
+      const slugElegido = (form.urlAcceso?.value || '').trim().toLowerCase();
+      const slugErr     = validarSlug(slugElegido);
+      if (slugErr) return showError(slugErr);
+
       const data = {
         nombreEmpresa:     form.nombreEmpresa.value.trim(),
         nombreContacto:    form.nombreContacto.value.trim(),
         emailContacto:     form.emailContacto.value.trim(),
         telefonoContacto:  form.telefonoContacto.value.trim() || null,
         terminosAceptados: form.terminosAceptados.checked,
-        plan: planElegido,
+        plan:              planElegido,
+        urlAcceso:         slugElegido,
       };
 
       if (!data.nombreEmpresa)     return showError('Ingresa el nombre de la empresa.');

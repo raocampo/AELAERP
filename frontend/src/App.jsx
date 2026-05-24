@@ -77,6 +77,7 @@ const Cargos             = lazy(() => import('./components/TalentoHumano/Cargos'
 const Nomina             = lazy(() => import('./components/TalentoHumano/Nomina'));
 const Ausencias          = lazy(() => import('./components/TalentoHumano/Ausencias'));
 const AyudaSistema       = lazy(() => import('./components/Ayuda/AyudaSistema'));
+const AccesoTenant       = lazy(() => import('./components/Tenant/AccesoTenant'));
 
 function RouteLoading() {
   return <div style={{ padding: 40 }}>Cargando módulo...</div>;
@@ -146,6 +147,9 @@ function App() {
         <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
         <Suspense fallback={<RouteLoading />}>
           <Routes>
+              {/* Acceso tenant — URL limpia sin ?tenant= */}
+              <Route path="/acceso/:slug" element={<AccesoTenant />} />
+
               {/* Pública */}
               <Route path="/login" element={<Login />} />
 

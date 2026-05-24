@@ -58,6 +58,7 @@ router.post('/', async (req, res) => {
       nombreContacto,
       plan = 'lite',
       terminosAceptados,
+      urlAcceso,          // slug elegido por el cliente (ej: "torneosloja")
     } = req.body;
 
     // ── Validaciones básicas ──
@@ -74,6 +75,46 @@ router.post('/', async (req, res) => {
     const planesValidos = ['lite', 'medium', 'pro'];
     if (!planesValidos.includes(plan)) {
       return res.status(400).json({ success: false, mensaje: 'Plan inválido.' });
+    }
+
+    // ── Validar y reservar slug personalizado ──
+    let slugForzado = null;
+    if (urlAcceso?.trim()) {
+      const slugLimpio = urlAcceso.trim().toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+
+      if (!/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(slugLimpio)) {
+        return res.status(400).json({
+          success: false,
+          mensaje: 'La URL de acceso debe tener entre 3 y 30 caracteres, usar solo letras, números y guiones, y no empezar ni terminar con guion.',
+        });
+      }
+
+      const reservadas = ['admin', 'app', 'api', 'www', 'mail', 'aela', 'corpsimtelec', 'login', 'registro', 'acceso'];
+      if (reservadas.includes(slugLimpio)) {
+        return res.status(400).json({ success: false, mensaje: `"${slugLimpio}" es una URL reservada. Elige otra.` });
+      }
+
+      try {
+        const master = getPrismaMaster();
+        if (master) {
+          const existeSlug = await master.tenants.findUnique({ where: { slug: slugLimpio } });
+          if (existeSlug) {
+            return res.status(409).json({
+              success: false,
+              mensaje: 'Esa URL de acceso ya está en uso. Por favor elige otra.',
+              codigo: 'SLUG_DUPLICADO',
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[registro] Error verificando slug:', err.message);
+      }
+
+      slugForzado = slugLimpio;
     }
 
     // Lite: activo de por vida (sin trial).
@@ -132,6 +173,7 @@ router.post('/', async (req, res) => {
           emailContacto:    emailContacto.trim().toLowerCase(),
           telefonoContacto: telefonoContacto?.trim() || null,
           nombreContacto:   nombreContacto?.trim() || nombreEmpresa.trim(),
+          slugForzado:      slugForzado || null,
         });
 
         // Enviar email de bienvenida con URL de acceso
@@ -185,7 +227,7 @@ router.get('/estado/:email', async (req, res) => {
 
     const appBase   = process.env.APP_BASE_URL || 'https://aela.corpsimtelec.com';
     const urlAcceso = tenant.estado === 'activo'
-      ? `${appBase}?tenant=${tenant.slug}`
+      ? `${appBase}/acceso/${tenant.slug}`
       : null;
 
     res.json({
