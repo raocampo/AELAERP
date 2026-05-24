@@ -40,5 +40,8 @@ if [ $MASTER_EXIT -ne 0 ]; then
 fi
 
 echo ""
+echo "--- Corrigiendo credenciales de tenants (fixTenantCredentials.js) ---"
+node scripts/fixTenantCredentials.js
+echo ""
 echo "--- Iniciando servidor Node.js ---"
 exec node server.js

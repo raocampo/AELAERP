@@ -132,10 +132,20 @@ async function provisionarTenant({
   // 1. Generar slug y nombre de BD
   const slug   = slugForzado || await generarSlugUnico(nombreEmpresa);
   const dbName = `aela_${slug.replace(/-/g, '_')}`;
-  const dbPass = crypto.randomBytes(20).toString('hex'); // contraseña aleatoria
-  const dbUser = process.env.DB_TENANT_USER || 'postgres';
-  const dbHost = process.env.DB_TENANT_HOST || 'localhost';
-  const dbPort = parseInt(process.env.DB_TENANT_PORT || '5432', 10);
+
+  // En Railway (PostgreSQL compartido) todos los tenants usan las mismas
+  // credenciales del servidor pero cada uno tiene su propia base de datos.
+  // Extraemos host/port/user/pass del URL de admin para guardarlos correctamente.
+  const adminUrlBase  = process.env.DATABASE_ADMIN_URL
+    || process.env.DATABASE_MASTER_URL
+    || process.env.DATABASE_URL;
+  if (!adminUrlBase) throw new Error('No hay URL de admin de BD configurada');
+  const adminConnBase = parsearDbUrl(adminUrlBase);
+
+  const dbUser = process.env.DB_TENANT_USER || adminConnBase.user;
+  const dbHost = process.env.DB_TENANT_HOST || adminConnBase.host;
+  const dbPort = parseInt(process.env.DB_TENANT_PORT || adminConnBase.port || '5432', 10);
+  const dbPass = adminConnBase.password; // mismas credenciales, distinta BD
 
   // 2. Crear registro en BD master con estado "provisioning"
   const tenant = await master.tenants.create({
