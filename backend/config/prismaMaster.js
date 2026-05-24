@@ -18,11 +18,16 @@ let _prismaMaster = null;
 
 function getPrismaMaster() {
   if (!PrismaClientMaster) return null;
+  if (!process.env.DATABASE_MASTER_URL) return null;
   if (!_prismaMaster) {
+    // Forzar esquema aela_master para que Prisma use tablas aisladas del schema público.
+    // Así prisma migrate/db push sobre DATABASE_URL (schema public) nunca las toca.
+    let url = process.env.DATABASE_MASTER_URL;
+    if (!url.includes('schema=')) {
+      url += (url.includes('?') ? '&' : '?') + 'schema=aela_master';
+    }
     _prismaMaster = new PrismaClientMaster({
-      datasources: {
-        db: { url: process.env.DATABASE_MASTER_URL },
-      },
+      datasources: { db: { url } },
       log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
     });
   }

@@ -20,13 +20,13 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
-echo "--- Sincronizando schema tenant con la BD (prisma db push) ---"
-npx prisma db push --skip-generate --accept-data-loss
+echo "--- Aplicando migraciones de schema tenant (prisma migrate deploy) ---"
+npx prisma migrate deploy
 DB_EXIT=$?
 
 if [ $DB_EXIT -ne 0 ]; then
   echo ""
-  echo "ADVERTENCIA: prisma db push falló (exit $DB_EXIT)."
+  echo "ADVERTENCIA: prisma migrate deploy falló (exit $DB_EXIT)."
   echo "El servidor arrancará igual — revisa los Deploy Logs de Railway."
   echo ""
 fi
