@@ -15,6 +15,23 @@ import { obtenerModulosHabilitados, planBloqueadoPorRequisito } from './utils/si
 
 import './App.css';
 
+// Capturar ?tenant=slug al abrir el link de acceso enviado por correo.
+// Se guarda en localStorage para que api.js lo envíe como X-Tenant-Slug en cada petición.
+// Se limpia la URL inmediatamente para que no quede visible en el historial.
+(function capturarTenantSlug() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get('tenant');
+    if (slug && slug.trim()) {
+      localStorage.setItem('aela_tenant_slug', slug.trim());
+      params.delete('tenant');
+      const qs = params.toString();
+      const url = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+      window.history.replaceState({}, '', url);
+    }
+  } catch (_) {}
+})();
+
 const Login = lazy(() => import('./components/Auth/Login'));
 const Layout = lazy(() => import('./components/Layout/Layout'));
 const Dashboard = lazy(() => import('./components/Dashboard/Dashboard'));

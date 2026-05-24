@@ -183,9 +183,9 @@ router.get('/estado/:email', async (req, res) => {
       return res.status(404).json({ success: false, mensaje: 'No se encontró cuenta con ese correo.' });
     }
 
-    const dominioBase = process.env.AELA_DOMINIO_BASE || 'aela.ec';
-    const urlAcceso   = tenant.estado === 'activo'
-      ? `https://${tenant.slug}.${dominioBase}`
+    const appBase   = process.env.APP_BASE_URL || 'https://aelaerp.vercel.app';
+    const urlAcceso = tenant.estado === 'activo'
+      ? `${appBase}?tenant=${tenant.slug}`
       : null;
 
     res.json({
