@@ -32,6 +32,10 @@
   font-weight: 900;
   color: #7C3AED;
   letter-spacing: 3px;
+  max-width: 320px;
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.1;
 }
 
 .login-logo-sub {
@@ -40,6 +44,16 @@
   font-weight: 600;
   letter-spacing: 1px;
   text-transform: uppercase;
+}
+
+.login-logo-cliente {
+  display: block;
+  max-height: 72px;
+  max-width: 200px;
+  width: auto;
+  margin: 0 auto 6px;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .login-titulo {

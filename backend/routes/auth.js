@@ -68,6 +68,27 @@ router.get('/bootstrap-status', async (req, res) => {
   }
 });
 
+// GET /api/auth/branding — branding público (sin auth) para personalizar el login
+router.get('/branding', async (req, res) => {
+  try {
+    const config = await prisma.configuracion_sri.findFirst({
+      where:   { activo: true },
+      orderBy: { empresaId: 'asc' },
+      select:  { razonSocial: true, nombreComercial: true, logoUrl: true },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        nombre:  config?.nombreComercial || config?.razonSocial || null,
+        logoUrl: config?.logoUrl         || null,
+      },
+    });
+  } catch {
+    res.json({ success: true, data: { nombre: null, logoUrl: null } });
+  }
+});
+
 // GET /api/auth/empresa-sri/:ruc
 router.get('/empresa-sri/:ruc', async (req, res) => {
   try {

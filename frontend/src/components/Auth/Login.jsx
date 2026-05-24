@@ -17,6 +17,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);
   const [verificandoSetup, setVerificandoSetup] = useState(true);
+  const [branding, setBranding] = useState({ nombre: null, logoUrl: null });
   const [setupRequired, setSetupRequired] = useState(false);
   const [mostrarOlvidePassword, setMostrarOlvidePassword] = useState(false);
   const [configurando, setConfigurando] = useState(false);
@@ -39,20 +40,29 @@ export default function Login() {
   useEffect(() => {
     let activo = true;
 
-    const verificarSetup = async () => {
-      try {
-        const res = await api.get('/auth/bootstrap-status');
-        if (!activo) return;
-        setSetupRequired(Boolean(res.data?.data?.setupRequired));
-      } catch (err) {
-        if (!activo) return;
-        toast.error(err.response?.data?.mensaje || 'No se pudo verificar la configuración inicial');
-      } finally {
-        if (activo) setVerificandoSetup(false);
+    const init = async () => {
+      // Consultar branding y setup-status en paralelo
+      const [setupRes, brandRes] = await Promise.allSettled([
+        api.get('/auth/bootstrap-status'),
+        api.get('/auth/branding'),
+      ]);
+
+      if (!activo) return;
+
+      if (setupRes.status === 'fulfilled') {
+        setSetupRequired(Boolean(setupRes.value.data?.data?.setupRequired));
+      } else {
+        toast.error(setupRes.reason?.response?.data?.mensaje || 'No se pudo verificar la configuración inicial');
       }
+
+      if (brandRes.status === 'fulfilled' && brandRes.value.data?.data) {
+        setBranding(brandRes.value.data.data);
+      }
+
+      setVerificandoSetup(false);
     };
 
-    verificarSetup();
+    init();
     return () => { activo = false; };
   }, []);
 
@@ -171,19 +181,29 @@ export default function Login() {
     <div className="login-root">
       <div className={cardClassName}>
         <div className="login-logo">
-          <svg width="52" height="52" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style={{display:'block',margin:'0 auto 10px'}}>
-            <defs>
-              <linearGradient id="lg-login" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#7C3AED"/>
-                <stop offset="100%" stopColor="#06B6D4"/>
-              </linearGradient>
-            </defs>
-            <rect width="64" height="64" rx="14" fill="url(#lg-login)"/>
-            <rect x="14" y="18" width="36" height="25" rx="5" fill="none" stroke="white" strokeWidth="2.5"/>
-            <rect x="22" y="35" width="20" height="16" rx="4" fill="white" opacity="0.95"/>
-            <circle cx="32" cy="29" r="4.5" fill="white"/>
-          </svg>
-          <span className="login-logo-sigla">AELA</span>
+          {branding.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt="Logo empresa"
+              className="login-logo-cliente"
+            />
+          ) : (
+            <svg width="52" height="52" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style={{display:'block',margin:'0 auto 10px'}}>
+              <defs>
+                <linearGradient id="lg-login" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#7C3AED"/>
+                  <stop offset="100%" stopColor="#06B6D4"/>
+                </linearGradient>
+              </defs>
+              <rect width="64" height="64" rx="14" fill="url(#lg-login)"/>
+              <rect x="14" y="18" width="36" height="25" rx="5" fill="none" stroke="white" strokeWidth="2.5"/>
+              <rect x="22" y="35" width="20" height="16" rx="4" fill="white" opacity="0.95"/>
+              <circle cx="32" cy="29" r="4.5" fill="white"/>
+            </svg>
+          )}
+          <span className="login-logo-sigla">
+            {branding.nombre || 'AELA'}
+          </span>
           <span className="login-logo-sub">ERP Ecuador · by CorpSimtelec</span>
         </div>
         {verificandoSetup ? (
