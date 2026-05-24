@@ -183,7 +183,7 @@ router.get('/estado/:email', async (req, res) => {
       return res.status(404).json({ success: false, mensaje: 'No se encontró cuenta con ese correo.' });
     }
 
-    const appBase   = process.env.APP_BASE_URL || 'https://aelaerp.vercel.app';
+    const appBase   = process.env.APP_BASE_URL || 'https://aela.corpsimtelec.com';
     const urlAcceso = tenant.estado === 'activo'
       ? `${appBase}?tenant=${tenant.slug}`
       : null;
