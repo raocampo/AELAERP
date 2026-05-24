@@ -11,453 +11,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
-  <style>
-    /* ── Página registro ── */
-    body { background: #f8fafc; }
-
-    .reg-page {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 6rem 1rem 3rem;
-      background:
-        radial-gradient(ellipse at 60% 0%, rgba(124,58,237,.07) 0%, transparent 60%),
-        #f8fafc;
-    }
-
-    .reg-container {
-      width: 100%;
-      max-width: 520px;
-    }
-
-    /* ── Back link ── */
-    .reg-back {
-      display: inline-flex;
-      align-items: center;
-      gap: .4rem;
-      font-size: .85rem;
-      color: #64748b;
-      margin-bottom: 1.75rem;
-      transition: color .15s;
-    }
-    .reg-back:hover { color: #7C3AED; }
-
-    /* ── Card ── */
-    .reg-card {
-      background: #fff;
-      border: 1px solid #e2e8f0;
-      border-radius: 16px;
-      padding: 2.5rem 2rem;
-      box-shadow: 0 4px 24px rgba(0,0,0,.07);
-    }
-
-    /* ── Header ── */
-    .reg-header { text-align: center; margin-bottom: 2rem; }
-    .reg-logo {
-      display: inline-flex;
-      align-items: center;
-      gap: .55rem;
-      margin-bottom: 1rem;
-    }
-    .reg-header h1 {
-      font-size: 1.55rem;
-      font-weight: 800;
-      color: #1e293b;
-      margin-bottom: .4rem;
-    }
-    .reg-header p { font-size: .9rem; color: #64748b; }
-
-    /* ── Badge gratis ── */
-    .reg-badge-free {
-      display: inline-flex;
-      align-items: center;
-      gap: .4rem;
-      background: rgba(22,163,74,.08);
-      border: 1px solid rgba(22,163,74,.3);
-      color: #166534;
-      padding: .3rem .9rem;
-      border-radius: 999px;
-      font-size: .78rem;
-      font-weight: 600;
-      margin-bottom: 1.25rem;
-    }
-
-    /* ── Formulario ── */
-    .reg-form { display: flex; flex-direction: column; gap: 1rem; }
-
-    .reg-field {
-      display: flex;
-      flex-direction: column;
-      gap: .35rem;
-    }
-    .reg-field label {
-      font-size: .82rem;
-      font-weight: 600;
-      color: #374151;
-    }
-    .reg-field input {
-      border: 1.5px solid #e2e8f0;
-      border-radius: 8px;
-      padding: .7rem 1rem;
-      font-size: .95rem;
-      color: #1e293b;
-      font-family: inherit;
-      background: #fff;
-      transition: border-color .15s, box-shadow .15s;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .reg-field input:focus {
-      outline: none;
-      border-color: #7C3AED;
-      box-shadow: 0 0 0 3px rgba(124,58,237,.12);
-    }
-    .reg-field input::placeholder { color: #c0c9d5; }
-
-    /* ── Términos ── */
-    .reg-terms {
-      display: flex;
-      align-items: flex-start;
-      gap: .65rem;
-      font-size: .83rem;
-      color: #475569;
-      line-height: 1.5;
-    }
-    .reg-terms input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      accent-color: #7C3AED;
-      cursor: pointer;
-      flex-shrink: 0;
-      margin-top: .15rem;
-    }
-
-    /* ── Botón submit ── */
-    .reg-submit {
-      background: #16a34a;
-      color: #fff;
-      border: none;
-      border-radius: 9px;
-      padding: .85rem 1.5rem;
-      font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background .2s, transform .15s;
-      width: 100%;
-    }
-    .reg-submit:hover:not(:disabled) { background: #15803d; transform: translateY(-1px); }
-    .reg-submit:disabled { opacity: .6; cursor: not-allowed; transform: none; }
-
-    /* ── Mensaje error ── */
-    .reg-error {
-      background: #fee2e2;
-      border: 1px solid #fecaca;
-      color: #991b1b;
-      border-radius: 8px;
-      padding: .75rem 1rem;
-      font-size: .88rem;
-      display: none;
-    }
-    .reg-error.visible { display: block; }
-
-    /* ── Estado éxito ── */
-    .reg-success {
-      display: none;
-      text-align: center;
-      padding: 2rem 1rem;
-    }
-    .reg-success.visible { display: block; }
-    .reg-success-icon {
-      font-size: 3.5rem;
-      margin-bottom: 1rem;
-      display: block;
-    }
-    .reg-success h2 {
-      font-size: 1.35rem;
-      font-weight: 700;
-      color: #1e293b;
-      margin-bottom: .75rem;
-    }
-    .reg-success p {
-      font-size: .9rem;
-      color: #64748b;
-      line-height: 1.6;
-      margin-bottom: .5rem;
-    }
-    .reg-success-email {
-      display: inline-block;
-      background: rgba(124,58,237,.08);
-      border: 1px solid rgba(124,58,237,.25);
-      color: #7C3AED;
-      font-weight: 600;
-      padding: .25rem .75rem;
-      border-radius: 6px;
-      font-size: .9rem;
-      margin: .5rem 0 1.25rem;
-    }
-    .reg-success-note {
-      background: #f1f5f9;
-      border-radius: 8px;
-      padding: 1rem;
-      font-size: .83rem;
-      color: #64748b;
-      text-align: left;
-      margin-top: 1rem;
-    }
-    .reg-success-note strong { color: #475569; }
-
-    /* ── Polling — barra de progreso y estado ── */
-    .reg-polling {
-      margin: 1.5rem 0 1rem;
-    }
-    .reg-polling-bar-wrap {
-      background: #e2e8f0;
-      border-radius: 999px;
-      height: 6px;
-      overflow: hidden;
-      margin-bottom: .85rem;
-    }
-    .reg-polling-bar {
-      height: 100%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, #7C3AED, #a855f7);
-      width: 15%;
-      transition: width .6s ease;
-      animation: polling-pulse 2s ease-in-out infinite alternate;
-    }
-    @keyframes polling-pulse {
-      from { opacity: .75; }
-      to   { opacity: 1; }
-    }
-    .reg-polling-status {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: .55rem;
-      font-size: .88rem;
-      color: #64748b;
-    }
-    .reg-polling-dot {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #7C3AED;
-      animation: dot-bounce .9s ease-in-out infinite;
-    }
-    .reg-polling-dot:nth-child(2) { animation-delay: .15s; }
-    .reg-polling-dot:nth-child(3) { animation-delay: .30s; }
-    @keyframes dot-bounce {
-      0%, 100% { transform: translateY(0); opacity: .5; }
-      50%       { transform: translateY(-4px); opacity: 1; }
-    }
-
-    /* ── Botón ir al sistema ── */
-    .reg-goto-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: .55rem;
-      background: #7C3AED;
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      padding: .9rem 1.75rem;
-      font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: none;
-      transition: background .2s, transform .15s, box-shadow .2s;
-      box-shadow: 0 4px 14px rgba(124,58,237,.35);
-      margin-top: .75rem;
-    }
-    .reg-goto-btn:hover {
-      background: #6d28d9;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(124,58,237,.45);
-    }
-    .reg-goto-btn-icon { font-size: 1.15rem; }
-
-    /* ── Estado listo ── */
-    .reg-ready-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: .45rem;
-      background: rgba(22,163,74,.1);
-      border: 1px solid rgba(22,163,74,.3);
-      color: #166534;
-      padding: .35rem 1rem;
-      border-radius: 999px;
-      font-size: .83rem;
-      font-weight: 600;
-      margin-bottom: 1rem;
-    }
-
-    /* ── Estado error de provisioning ── */
-    .reg-prov-error {
-      background: #fff7ed;
-      border: 1px solid #fed7aa;
-      color: #9a3412;
-      border-radius: 8px;
-      padding: .9rem 1rem;
-      font-size: .87rem;
-      text-align: left;
-      margin-top: 1rem;
-    }
-
-    /* ── Timeout ── */
-    .reg-timeout-note {
-      background: #fefce8;
-      border: 1px solid #fde68a;
-      color: #92400e;
-      border-radius: 8px;
-      padding: .9rem 1rem;
-      font-size: .87rem;
-      text-align: left;
-      margin-top: 1rem;
-    }
-
-    /* ── Loader spinner ── */
-    .reg-spinner {
-      display: inline-block;
-      width: 18px;
-      height: 18px;
-      border: 2.5px solid rgba(255,255,255,.4);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      vertical-align: middle;
-      margin-right: .5rem;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Separador ── */
-    .reg-sep {
-      text-align: center;
-      font-size: .82rem;
-      color: #94a3b8;
-      margin: .5rem 0;
-    }
-
-    /* ── Ya tiene cuenta ── */
-    .reg-login-link {
-      text-align: center;
-      font-size: .85rem;
-      color: #64748b;
-      margin-top: 1.25rem;
-    }
-    .reg-login-link a {
-      color: #7C3AED;
-      font-weight: 600;
-    }
-
-    /* ── Incluye ── */
-    .reg-includes {
-      margin-top: 1.75rem;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 1.1rem 1.25rem;
-    }
-    .reg-includes-title {
-      font-size: .78rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .6px;
-      color: #94a3b8;
-      margin-bottom: .75rem;
-    }
-    .reg-includes-list {
-      list-style: none;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: .45rem .5rem;
-    }
-    .reg-includes-list li {
-      font-size: .82rem;
-      color: #475569;
-    }
-
-    /* ── Nav mínimo ── */
-    .reg-nav {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 100;
-      background: rgba(255,255,255,.95);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid #e2e8f0;
-      padding: .8rem 1.25rem;
-      display: flex;
-      align-items: center;
-      gap: .55rem;
-    }
-    .reg-nav-brand {
-      display: flex;
-      align-items: center;
-      gap: .5rem;
-      text-decoration: none;
-    }
-    .reg-nav-sigla {
-      font-size: 1.1rem;
-      font-weight: 800;
-      color: #7C3AED;
-      letter-spacing: 2px;
-    }
-    .reg-nav-sub { font-size: .65rem; color: #94a3b8; }
-
-    /* ── Selector de plan ── */
-    .reg-plan-selector {
-      display: flex;
-      flex-direction: column;
-      gap: .5rem;
-    }
-
-    .reg-plan-opt {
-      display: flex;
-      align-items: center;
-      gap: .75rem;
-      padding: .7rem .9rem;
-      border: 1.5px solid #e2e8f0;
-      border-radius: 10px;
-      cursor: pointer;
-      transition: border-color .15s, background .15s;
-      background: #fafafa;
-    }
-
-    .reg-plan-opt input[type="radio"] { display: none; }
-
-    .reg-plan-opt-selected,
-    .reg-plan-opt:has(input:checked) {
-      border-color: #7C3AED;
-      background: rgba(124,58,237,.04);
-    }
-
-    .reg-plan-opt-info {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: .1rem;
-    }
-
-    .reg-plan-opt-info strong { font-size: .9rem; color: #1e293b; }
-    .reg-plan-opt-info span  { font-size: .78rem; color: #64748b; }
-
-    .reg-plan-opt-badge {
-      font-size: .7rem;
-      font-weight: 700;
-      padding: .2rem .55rem;
-      border-radius: 999px;
-      white-space: nowrap;
-    }
-
-    .reg-badge-free-sm  { background: rgba(22,163,74,.1); color: #166534; border: 1px solid rgba(22,163,74,.3); }
-    .reg-badge-paid-sm  { background: rgba(124,58,237,.1); color: #5b21b6; border: 1px solid rgba(124,58,237,.3); }
-
-    @media (max-width: 480px) {
-      .reg-card { padding: 2rem 1.25rem; }
-      .reg-includes-list { grid-template-columns: 1fr; }
-    }
-  </style>
 </head>
 <body>
 
@@ -534,10 +87,10 @@
           </div>
 
           <!-- Aviso plan de pago (oculto por defecto) -->
-          <div id="reg-plan-paid-note" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;font-size:.85rem;color:#1e40af;margin-bottom:8px;line-height:1.5">
+          <div id="reg-plan-paid-note" class="reg-plan-paid-note" style="display:none">
             📋 <strong>Plan de pago seleccionado.</strong> La cuenta se creará con <strong>acceso completo por 15 días</strong> de prueba. Nuestro equipo se comunicará para confirmar la suscripción.<br/>
-            <span style="color:#64748b">¿Prefieres activar directamente? Escríbenos por
-              <a href="https://wa.me/5930978893520" target="_blank" style="color:#16a34a;font-weight:600">WhatsApp</a>.
+            <span class="reg-text-muted">¿Prefieres activar directamente? Escríbenos por
+              <a href="https://wa.me/5930978893520" target="_blank" class="reg-link-green">WhatsApp</a>.
             </span>
           </div>
 
@@ -570,8 +123,8 @@
 
           <label class="reg-terms">
             <input type="checkbox" id="terminosAceptados" name="terminosAceptados" required />
-            <span>Acepto los <a href="#" style="color:#7C3AED;font-weight:600">términos y condiciones</a>
-            y la <a href="#" style="color:#7C3AED;font-weight:600">política de privacidad</a> de AELA ERP.</span>
+            <span>Acepto los <a href="#" class="reg-link-purple">términos y condiciones</a>
+            y la <a href="#" class="reg-link-purple">política de privacidad</a> de AELA ERP.</span>
           </label>
 
           <button type="submit" class="reg-submit" id="reg-btn">
@@ -585,7 +138,7 @@
           <h2 id="reg-success-title">¡Tu cuenta está siendo creada!</h2>
           <p>Configurando el sistema para:</p>
           <span class="reg-success-email" id="reg-success-email">—</span>
-          <span id="reg-success-plan-info" style="display:block;font-size:.8rem;color:#64748b;margin-top:4px"></span>
+          <span id="reg-success-plan-info" class="reg-success-plan-info"></span>
 
           <!-- Polling: barra de progreso + estado -->
           <div class="reg-polling" id="reg-polling">
@@ -614,10 +167,10 @@
           <div id="reg-timeout-note" class="reg-timeout-note" style="display:none">
             ⏳ <strong>Tu cuenta sigue en proceso.</strong> Puede tomar un poco más de lo normal.
             Recibirás un correo cuando esté lista, o escríbenos para asistencia inmediata:<br/>
-            <a href="https://wa.me/5930978893520" target="_blank" style="color:#16a34a;font-weight:600">
+            <a href="https://wa.me/5930978893520" target="_blank" class="reg-link-green">
               WhatsApp 24/7
             </a> &nbsp;·&nbsp;
-            <a href="mailto:info@corpsimtelec.com" style="color:#7C3AED;font-weight:600">
+            <a href="mailto:info@corpsimtelec.com" class="reg-link-purple">
               info@corpsimtelec.com
             </a>
           </div>
@@ -626,18 +179,18 @@
           <div id="reg-prov-error" class="reg-prov-error" style="display:none">
             ⚠️ <strong>Hubo un problema al configurar tu cuenta.</strong> Nuestro equipo ha sido
             notificado. Escríbenos para resolverlo de inmediato:<br/>
-            <a href="https://wa.me/5930978893520" target="_blank" style="color:#16a34a;font-weight:600">
+            <a href="https://wa.me/5930978893520" target="_blank" class="reg-link-green">
               WhatsApp 24/7
             </a> &nbsp;·&nbsp;
-            <a href="mailto:info@corpsimtelec.com" style="color:#7C3AED;font-weight:600">
+            <a href="mailto:info@corpsimtelec.com" class="reg-link-purple">
               info@corpsimtelec.com
             </a>
           </div>
 
           <div class="reg-success-note" id="reg-success-note">
             <strong>¿No llega el correo?</strong> Revisa tu carpeta de spam o escríbenos a
-            <a href="mailto:info@corpsimtelec.com" style="color:#7C3AED">info@corpsimtelec.com</a>
-            o por <a href="https://wa.me/5930978893520" target="_blank" style="color:#16a34a">WhatsApp</a>.
+            <a href="mailto:info@corpsimtelec.com" class="reg-link-purple">info@corpsimtelec.com</a>
+            o por <a href="https://wa.me/5930978893520" target="_blank" class="reg-link-green">WhatsApp</a>.
             Soporte 24/7.
           </div>
         </div>
