@@ -222,9 +222,9 @@
 
   <script>
     // ─── Configuración ─────────────────────────────────────────────────────────
-    // Cambiar en producción al dominio real del backend
-    const API_URL = 'http://localhost:5600';
-    const APP_URL = 'http://localhost:5174';
+    const _isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const API_URL  = _isLocal ? 'http://localhost:5600'  : 'https://aelaerp-production.up.railway.app';
+    const APP_URL  = _isLocal ? 'http://localhost:5174'  : 'https://aelaerp.vercel.app';
 
     // ─── Pre-seleccionar plan desde URL (?plan=lite|medium|pro) ───────────────
     (function () {
