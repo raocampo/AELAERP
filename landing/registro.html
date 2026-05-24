@@ -226,6 +226,23 @@
     const API_URL = 'http://localhost:5600';
     const APP_URL = 'http://localhost:5174';
 
+    // ─── Pre-seleccionar plan desde URL (?plan=lite|medium|pro) ───────────────
+    (function () {
+      const planParam = new URLSearchParams(window.location.search).get('plan');
+      if (!planParam) return;
+      const radio = document.querySelector(`input[name="planElegido"][value="${planParam}"]`);
+      if (!radio) return;
+      radio.checked = true;
+      // Actualizar estilos del selector
+      document.querySelectorAll('.reg-plan-opt').forEach(o => o.classList.remove('reg-plan-opt-selected'));
+      radio.closest('.reg-plan-opt').classList.add('reg-plan-opt-selected');
+      // Mostrar aviso si es plan de pago
+      if (planParam === 'medium' || planParam === 'pro') {
+        const note = document.getElementById('reg-plan-paid-note');
+        if (note) note.style.display = 'block';
+      }
+    })();
+
     // ─── Login link dinámico ───────────────────────────────────────────────────
     const loginLink = document.getElementById('reg-login-link');
     if (loginLink) {
@@ -483,6 +500,9 @@
         actualizarBloqueFeatures(getPlanSeleccionado());
       });
     });
+
+    // Sincronizar bloque features con el plan que llegó por URL (si aplica)
+    actualizarBloqueFeatures(getPlanSeleccionado());
   </script>
 
 </body>

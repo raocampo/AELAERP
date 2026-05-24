@@ -11,6 +11,8 @@
   // La URL de Vercel se encuentra en: vercel.com → proyecto aelaerp → Domains
   const APP_URL = window.location.hostname === 'localhost'
     ? 'http://localhost:5174'
+    : window.location.hostname === 'aela.corpsimtelec.com'
+    ? 'http://aela.corpsimtelec.com'
     : 'https://aelaerp.vercel.app';
 
   // Enlazar todos los botones "Acceder"
@@ -23,12 +25,7 @@
     }
   });
 
-  // Botón plan Lite → página de registro
-  const btnLite = document.getElementById('btn-plan-lite');
-  if (btnLite) {
-    btnLite.href = 'registro.html';
-    btnLite.removeAttribute('target');
-  }
+  // Botón plan Lite → página de registro (el href ya está en el HTML con ?plan=lite)
 
   const nav       = document.getElementById('nav');
   const hamburger = document.getElementById('hamburger');
