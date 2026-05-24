@@ -366,6 +366,56 @@ Durante la implementacion se verifico:
 #### Manual de usuario
 - `docs/manual-usuario.md` creado — cubre todos los módulos del sistema.
 
+### 22. Sesiones 2026-05-20 / 2026-05-24 — SaaS multi-tenant completo en Railway
+
+#### Arquitectura multi-tenant operativa
+- **`resolverTenant` middleware** añadido globalmente en `app.js` → cada request identifica su BD de tenant por el header `X-Tenant-Slug`.
+- **`routes/auth.js`**: todas las rutas usan `req.prisma` en lugar del cliente Prisma global → cada empresa autentica contra su propia BD.
+- **`middleware/auth.js`**: `proteger` usa `req.prisma || prisma` para soportar tanto modo mono como multi-tenant.
+- **`middleware/tenant.js`**: null-guard en `buscarTenant` (cuando master no está disponible), manejo de `estado='error'` con respuesta 503 amigable.
+
+#### Provisioning de tenants sin psql (Railway)
+- **`utils/provisionarTenant.js`**: `crearBaseDatos()` reescrita usando `pg` Client directo en lugar de `execSync('psql ...')` — psql no existe en Railway.
+- Credenciales del tenant: usan las del servidor Railway (`DATABASE_ADMIN_URL`) con diferente nombre de BD, en lugar de usuario/contraseña aleatorios apuntando a localhost.
+- **`scripts/fixTenantCredentials.js`**: corrige registros de tenant existentes que tenían `dbHost='localhost'`.
+
+#### Aislamiento schema aela_master (nunca más destruido por prisma)
+- **`config/prismaMaster.js`**: auto-agrega `?schema=aela_master` a `DATABASE_MASTER_URL` → Prisma Master usa esquema PostgreSQL separado.
+- **`scripts/migrateMaster.js`**: reescrito con `pg` directo — crea esquema `aela_master`, crea tablas de catálogo sin depender del CLI de Prisma.
+- **`start.sh`**: `prisma db push --accept-data-loss` → `prisma migrate deploy` (no destruye las tablas master).
+- **`package.json`**: `postinstall` genera `@prisma/client-master` automáticamente en Railway.
+
+#### URL de acceso sin prefijo — `/:slug`
+- Clientes acceden con URL limpia: `https://aela.corpsimtelec.com/torneosloja` (sin `/acceso/` ni `?tenant=`).
+- **`routes/registro.js`**: campo `urlAcceso` en el formulario → validación de slug (3-30 chars, a-z0-9-), lista completa de palabras reservadas (todas las rutas del sistema + palabras de infraestructura), verificación de unicidad en BD master. El estado devuelve `${APP_BASE_URL}/${slug}`.
+- **`App.jsx`**: ruta `/:slug` como catch-all al final del árbol de rutas — React Router v6 prioriza rutas estáticas sobre segmentos dinámicos, sin colisión con `/login`, `/dashboard`, etc.
+- **`components/Tenant/AccesoTenant.jsx`**: guarda slug en `localStorage('aela_tenant_slug')` y redirige a `/login`.
+- **`utils/email.js`**: URL de bienvenida usa `${APP_BASE_URL}/${slug}` (path-based) en lugar del formato de subdominio anterior.
+- **`landing/registro.html`**: preview en vivo muestra `aela.corpsimtelec.com/slug`; `APP_URL` corregido a `aela.corpsimtelec.com`.
+
+#### Variables de entorno necesarias en Railway
+```
+DATABASE_MASTER_URL   → misma BD que DATABASE_URL con schema=aela_master
+DATABASE_ADMIN_URL    → conexión admin para CREATE DATABASE (puede ser = DATABASE_URL)
+MODO_EMPRESA          → multi
+APP_BASE_URL          → https://aela.corpsimtelec.com
+DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
+```
+
+#### Flujo end-to-end implementado
+```
+1. Cliente llena registro.html → POST /api/registro
+2. Backend responde inmediatamente (200) con mensaje "configurando..."
+3. Background: provisionarTenant() → CREATE DATABASE → prisma migrate deploy → estado='activo'
+4. Frontend hace polling GET /api/registro/estado/:email cada 3s
+5. Al activarse: barra verde 100% + botón "🚀 Ir a mi sistema"
+6. Cliente abre https://aela.corpsimtelec.com/slug
+7. AccesoTenant guarda slug en localStorage → redirige a /login
+8. Login detecta slug → llama /api/auth/bootstrap-status con X-Tenant-Slug
+9. Si no hay usuarios: muestra bootstrap para crear administrador
+10. Administrador se crea → login normal → sistema operativo
+```
+
 ---
 
 ## Pendiente
