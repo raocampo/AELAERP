@@ -52,6 +52,17 @@ const proteger = async (req, res, next) => {
 
     req.empresa = empresa || { id: 1, plan: process.env.AELA_EDITION || 'full', factAnualesMax: null };
 
+    // ── Trial expirado ───────────────────────────────────────────────────────
+    if (req.empresa.esTrial && req.empresa.trialExpiresAt) {
+      if (new Date() > new Date(req.empresa.trialExpiresAt)) {
+        return res.status(402).json({
+          success: false,
+          codigo:  'TRIAL_EXPIRADO',
+          mensaje: 'Tu período de prueba ha terminado. Contacta a soporte para activar tu suscripción.',
+        });
+      }
+    }
+
     next();
   } catch (error) {
     return res.status(401).json({ success: false, mensaje: 'No autorizado — token inválido' });

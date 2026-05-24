@@ -32,6 +32,8 @@ model empresas {
   // null = ilimitado; 100 = Lite; 1000 = Medium
   maxUsuarios         Int?
   // null = ilimitado; 1 = Lite; 3 = Medium
+  esTrial             Boolean   @default(false)
+  trialExpiresAt      DateTime?
   activo              Boolean   @default(true)
   // ── Tipo de contribuyente ──
   tipoContribuyente   String?   @default("JURIDICA") @db.VarChar(20)

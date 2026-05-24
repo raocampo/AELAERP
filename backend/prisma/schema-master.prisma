@@ -39,6 +39,8 @@ model tenants {
   fechaActivacion   DateTime?
   fechaVencimiento  DateTime?
   autoRenovar       Boolean  @default(false)
+  esTrial           Boolean  @default(false)
+  trialExpiresAt    DateTime?
 
   // Branding (white-label)
   brandConfig      Json?    // { dominio, logo, colores, ... }

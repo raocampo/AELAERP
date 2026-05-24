@@ -45,6 +45,10 @@ export function manejarErrorApi(err, {
     limpiarSesion(storage);
     redirigirALogin(location);
   }
+  if (err.response?.status === 402 && err.response?.data?.codigo === 'TRIAL_EXPIRADO') {
+    // Mostrar modal de trial expirado vía evento global
+    window.dispatchEvent(new CustomEvent('aela:trial-expirado'));
+  }
   return Promise.reject(err);
 }
 

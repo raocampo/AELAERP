@@ -121,6 +121,8 @@ function ejecutarMigraciones(dbUrl) {
 async function provisionarTenant({
   nombreEmpresa,
   plan = 'lite',
+  esTrial = false,
+  trialExpiresAt = null,
   emailContacto,
   telefonoContacto,
   nombreContacto,
@@ -152,8 +154,10 @@ async function provisionarTenant({
       telefonoContacto: telefonoContacto || null,
       nombreContacto:   nombreContacto   || nombreEmpresa || null,
       periodoFacturacion: plan === 'lite' ? null : 'mensual',
-      fechaActivacion: plan === 'lite' ? new Date() : null,
+      fechaActivacion: new Date(),
       fechaVencimiento: null,
+      esTrial,
+      trialExpiresAt: trialExpiresAt || null,
     },
   });
 
@@ -177,7 +181,23 @@ async function provisionarTenant({
       },
     });
 
-    console.log(`[provisioning] Tenant '${slug}' (${plan}) listo. BD: ${dbName}`);
+    // 6. Guardar esTrial y trialExpiresAt en la BD del tenant (tabla empresas)
+    try {
+      const prismaT = getTenantPrisma(tenantActivo);
+      await prismaT.empresas.updateMany({
+        data: {
+          plan,
+          factAnualesMax: limites.factAnualesMax,
+          maxUsuarios:    limites.maxUsuarios,
+          esTrial,
+          trialExpiresAt: trialExpiresAt || null,
+        },
+      });
+    } catch (err) {
+      console.warn(`[provisioning] No se pudo actualizar empresas en BD del tenant '${slug}':`, err.message);
+    }
+
+    console.log(`[provisioning] Tenant '${slug}' (${plan}${esTrial ? ' trial 15d' : ''}) listo. BD: ${dbName}`);
     return tenantActivo;
 
   } catch (err) {

@@ -200,8 +200,9 @@ export default function Layout() {
   const location = useLocation();
   const [upgradeTarget, setUpgradeTarget] = useState(null); // { planRequerido, moduloPath }
   const [mostrarCambiarPassword, setMostrarCambiarPassword] = useState(false);
-  const [offline, setOffline]     = useState(!navigator.onLine);
-  const [swUpdate, setSwUpdate]   = useState(false);
+  const [offline, setOffline]       = useState(!navigator.onLine);
+  const [swUpdate, setSwUpdate]     = useState(false);
+  const [trialExpirado, setTrialExpirado] = useState(false);
   const pendientesSRI = usePendientesSRI();
 
   // ── Sidebar colapsable — persiste en localStorage (mobile siempre expandido) ─
@@ -253,16 +254,19 @@ export default function Layout() {
     setGruposAbiertos((prev) => ({ ...prev, [id]: !prev[id] }));
 
   useEffect(() => {
-    const onOnline  = () => setOffline(false);
-    const onOffline = () => setOffline(true);
+    const onOnline   = () => setOffline(false);
+    const onOffline  = () => setOffline(true);
     const onSwUpdate = () => setSwUpdate(true);
-    window.addEventListener('online',   onOnline);
-    window.addEventListener('offline',  onOffline);
-    window.addEventListener('aela:sw-update', onSwUpdate);
+    const onTrialExp = () => setTrialExpirado(true);
+    window.addEventListener('online',             onOnline);
+    window.addEventListener('offline',            onOffline);
+    window.addEventListener('aela:sw-update',     onSwUpdate);
+    window.addEventListener('aela:trial-expirado', onTrialExp);
     return () => {
-      window.removeEventListener('online',  onOnline);
-      window.removeEventListener('offline', onOffline);
-      window.removeEventListener('aela:sw-update', onSwUpdate);
+      window.removeEventListener('online',              onOnline);
+      window.removeEventListener('offline',             onOffline);
+      window.removeEventListener('aela:sw-update',      onSwUpdate);
+      window.removeEventListener('aela:trial-expirado', onTrialExp);
     };
   }, []);
 
@@ -479,6 +483,7 @@ export default function Layout() {
         >
           <span /><span /><span />
         </button>
+        <TrialBanner empresa={empresa} />
         <QuickBar />
         <OutletErrorBoundary>
           <Outlet />
@@ -514,6 +519,27 @@ export default function Layout() {
           <button onClick={() => setSwUpdate(false)}>Después</button>
         </div>
       )}
+
+      {/* ── MODAL TRIAL EXPIRADO ── */}
+      {trialExpirado && (
+        <div className="modal-trial-expirado-overlay">
+          <div className="modal-trial-expirado">
+            <div className="modal-trial-icon">⏰</div>
+            <h2>Tu período de prueba ha terminado</h2>
+            <p>
+              El período de 15 días de prueba de tu plan <strong>{empresa?.plan?.toUpperCase()}</strong> ha vencido.
+              Contacta a soporte para activar tu suscripción y continuar usando AELA.
+            </p>
+            <a
+              href="mailto:soporte@aela.ec?subject=Activar suscripción AELA"
+              className="btn-primary"
+            >
+              Contactar soporte
+            </a>
+            <button className="btn-secondary" onClick={handleLogout}>Cerrar sesión</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -539,6 +565,33 @@ function LimiteBanner({ empresa }) {
       <span>Plan Lite</span>
       <span>Máx {empresa.factAnualesMax} comprobantes/año</span>
       <span>Máx 100 productos</span>
+    </div>
+  );
+}
+
+// ─── Banner de prueba (Medium / Pro en trial) ────────────────────────────────
+function TrialBanner({ empresa }) {
+  if (!empresa?.esTrial || !empresa?.trialExpiresAt) return null;
+
+  const ahora    = new Date();
+  const expira   = new Date(empresa.trialExpiresAt);
+  const diasMs   = expira - ahora;
+  const dias     = Math.max(0, Math.ceil(diasMs / (1000 * 60 * 60 * 24)));
+  const planName = empresa.plan?.toUpperCase() || 'MEDIUM';
+
+  if (dias === 0 && diasMs <= 0) return null; // expirado — el backend devuelve 402
+
+  const urgente = dias <= 3;
+
+  return (
+    <div className={`banner-trial${urgente ? ' banner-trial-urgente' : ''}`}>
+      <span className="banner-trial-icon">⏱</span>
+      <span className="banner-trial-texto">
+        <strong>Prueba {planName}</strong> — {dias > 0
+          ? `${dias} día${dias !== 1 ? 's' : ''} restante${dias !== 1 ? 's' : ''}`
+          : 'último día'}
+        . Contáctanos para activar tu suscripción.
+      </span>
     </div>
   );
 }

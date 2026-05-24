@@ -76,10 +76,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, mensaje: 'Plan inválido.' });
     }
 
-    // Para medium/pro el registro público siempre inicia como lite;
-    // la activación del plan superior ocurre tras el pago.
-    // (El plan real se activa via webhook de pago)
-    const planInicial = 'lite';
+    // Lite: activo de por vida (sin trial).
+    // Medium / Pro: 15 días de prueba completa; pago posterior activa la suscripción real.
+    const esTrial        = plan !== 'lite';
+    const trialExpiresAt = esTrial
+      ? new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
+      : null;
 
     // ── Verificar email único ──
     try {
@@ -101,12 +103,17 @@ router.post('/', async (req, res) => {
 
     // ── Lanzar provisioning en background ──
     // Respondemos inmediatamente; el provisioning puede tardar 5-15 seg.
+    const mensajeBienvenida = esTrial
+      ? `¡Bienvenido! Tu cuenta ${plan.toUpperCase()} con 15 días de prueba está siendo configurada. Recibirás un correo en ${emailContacto} cuando esté lista.`
+      : `¡Bienvenido! Tu cuenta está siendo configurada. Recibirás un correo en ${emailContacto} cuando esté lista.`;
+
     res.json({
       success: true,
-      mensaje: `¡Bienvenido! Tu cuenta está siendo configurada. Recibirás un correo en ${emailContacto} cuando esté lista.`,
+      mensaje: mensajeBienvenida,
       data: {
         nombreEmpresa: nombreEmpresa.trim(),
-        plan:          planInicial,
+        plan,
+        esTrial,
         estado:        'provisioning',
       },
     });
@@ -116,7 +123,9 @@ router.post('/', async (req, res) => {
       try {
         const tenant = await provisionarTenant({
           nombreEmpresa:    nombreEmpresa.trim(),
-          plan:             planInicial,
+          plan,
+          esTrial,
+          trialExpiresAt,
           emailContacto:    emailContacto.trim().toLowerCase(),
           telefonoContacto: telefonoContacto?.trim() || null,
           nombreContacto:   nombreContacto?.trim() || nombreEmpresa.trim(),
