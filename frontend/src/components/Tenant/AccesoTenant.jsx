@@ -1,6 +1,6 @@
-// Ruta de acceso al sistema de un tenant: /acceso/:slug
+// Ruta de acceso al sistema de un tenant: /:slug
 // Guarda el slug en localStorage y redirige al login.
-// URL limpia sin ?tenant= visible.
+// URL limpia: https://aela.corpsimtelec.com/torneosloja
 
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';

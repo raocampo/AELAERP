@@ -147,9 +147,6 @@ function App() {
         <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
         <Suspense fallback={<RouteLoading />}>
           <Routes>
-              {/* Acceso tenant — URL limpia sin ?tenant= */}
-              <Route path="/acceso/:slug" element={<AccesoTenant />} />
-
               {/* Pública */}
               <Route path="/login" element={<Login />} />
 
@@ -250,6 +247,9 @@ function App() {
                 {/* Centro de Ayuda — accesible para todos */}
                 <Route path="ayuda" element={<AyudaSistema />} />
               </Route>
+
+              {/* Acceso tenant: /:slug — guarda slug en localStorage y redirige a /login */}
+              <Route path="/:slug" element={<AccesoTenant />} />
 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

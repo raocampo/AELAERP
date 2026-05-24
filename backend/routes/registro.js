@@ -93,7 +93,18 @@ router.post('/', async (req, res) => {
         });
       }
 
-      const reservadas = ['admin', 'app', 'api', 'www', 'mail', 'aela', 'corpsimtelec', 'login', 'registro', 'acceso'];
+      const reservadas = [
+        // Rutas del sistema frontend
+        'login', 'dashboard', 'facturas', 'clientes', 'proveedores', 'productos',
+        'compras', 'caja', 'pos', 'inventario', 'notas-venta', 'retenciones',
+        'liquidaciones', 'notas-debito', 'buzon', 'guias-remision', 'declaraciones',
+        'ats', 'reportes-tributarios', 'contabilidad', 'bancos', 'finanzas',
+        'configuracion-sri', 'configuracion-sistema', 'talento-humano', 'usuarios',
+        'empresas', 'ayuda', 'acceso',
+        // Palabras reservadas de infraestructura
+        'admin', 'app', 'api', 'www', 'mail', 'aela', 'corpsimtelec',
+        'registro', 'static', 'assets', 'public', 'health', 'status',
+      ];
       if (reservadas.includes(slugLimpio)) {
         return res.status(400).json({ success: false, mensaje: `"${slugLimpio}" es una URL reservada. Elige otra.` });
       }
@@ -227,7 +238,7 @@ router.get('/estado/:email', async (req, res) => {
 
     const appBase   = process.env.APP_BASE_URL || 'https://aela.corpsimtelec.com';
     const urlAcceso = tenant.estado === 'activo'
-      ? `${appBase}/acceso/${tenant.slug}`
+      ? `${appBase}/${tenant.slug}`
       : null;
 
     res.json({

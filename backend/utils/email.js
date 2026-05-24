@@ -121,8 +121,8 @@ async function enviarEmailBienvenida(tenant, email) {
     return;
   }
 
-  const dominioBase = process.env.AELA_DOMINIO_BASE || 'app.aela.ec';
-  const urlAcceso   = `https://${tenant.slug}.${dominioBase}`;
+  const appBase   = process.env.APP_BASE_URL || 'https://aela.corpsimtelec.com';
+  const urlAcceso = `${appBase}/${tenant.slug}`;
 
   const html = templateBienvenida({
     nombreEmpresa:  tenant.nombreContacto || tenant.slug,

@@ -126,7 +126,7 @@
               <span style="font-weight:400;font-size:12px;color:#64748b;margin-left:4px">— sin espacios, solo letras y números</span>
             </label>
             <div style="display:flex;align-items:center;gap:6px">
-              <span style="color:#64748b;font-size:14px;white-space:nowrap">aela.corpsimtelec.com/acceso/</span>
+              <span style="color:#64748b;font-size:14px;white-space:nowrap">aela.corpsimtelec.com/</span>
               <input type="text" id="urlAcceso" name="urlAcceso"
                 placeholder="miempresa"
                 maxlength="30" required
@@ -240,7 +240,7 @@
     // ─── Configuración ─────────────────────────────────────────────────────────
     const _isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const API_URL  = _isLocal ? 'http://localhost:5600'  : 'https://aelaerp-production.up.railway.app';
-    const APP_URL  = _isLocal ? 'http://localhost:5174'  : 'https://aelaerp.vercel.app';
+    const APP_URL  = _isLocal ? 'http://localhost:5174'  : 'https://aela.corpsimtelec.com';
 
     // ─── Pre-seleccionar plan desde URL (?plan=lite|medium|pro) ───────────────
     (function () {
@@ -324,7 +324,7 @@
         urlPreview.style.display = 'none';
       } else {
         urlError.style.display = 'none';
-        urlPreview.textContent = `✓ Tu dirección será: aela.corpsimtelec.com/acceso/${slug}`;
+        urlPreview.textContent = `✓ Tu dirección será: aela.corpsimtelec.com/${slug}`;
         urlPreview.style.display = 'block';
       }
     });
