@@ -405,6 +405,54 @@
     }
     .reg-nav-sub { font-size: .65rem; color: #94a3b8; }
 
+    /* ── Selector de plan ── */
+    .reg-plan-selector {
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+
+    .reg-plan-opt {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .7rem .9rem;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      background: #fafafa;
+    }
+
+    .reg-plan-opt input[type="radio"] { display: none; }
+
+    .reg-plan-opt-selected,
+    .reg-plan-opt:has(input:checked) {
+      border-color: #7C3AED;
+      background: rgba(124,58,237,.04);
+    }
+
+    .reg-plan-opt-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: .1rem;
+    }
+
+    .reg-plan-opt-info strong { font-size: .9rem; color: #1e293b; }
+    .reg-plan-opt-info span  { font-size: .78rem; color: #64748b; }
+
+    .reg-plan-opt-badge {
+      font-size: .7rem;
+      font-weight: 700;
+      padding: .2rem .55rem;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .reg-badge-free-sm  { background: rgba(22,163,74,.1); color: #166534; border: 1px solid rgba(22,163,74,.3); }
+    .reg-badge-paid-sm  { background: rgba(124,58,237,.1); color: #5b21b6; border: 1px solid rgba(124,58,237,.3); }
+
     @media (max-width: 480px) {
       .reg-card { padding: 2rem 1.25rem; }
       .reg-includes-list { grid-template-columns: 1fr; }
@@ -444,9 +492,8 @@
               <path d="M14 5 L22 23 M14 5 L6 23 M9 17 H19" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
             </svg>
           </div>
-          <div class="reg-badge-free">🎁 Plan Lite · Gratis para siempre</div>
-          <h1>Crea tu cuenta AELA</h1>
-          <p>Tu propio sistema ERP en segundos, sin tarjeta de crédito.</p>
+          <h1>Registrar empresa en AELA</h1>
+          <p>Datos de la empresa que usará el sistema. Puede ser tu propia empresa o la de un cliente.</p>
         </div>
 
         <!-- Error -->
@@ -454,6 +501,46 @@
 
         <!-- Formulario -->
         <form class="reg-form" id="reg-form">
+
+          <!-- Selector de plan -->
+          <div class="reg-field">
+            <label>Plan *</label>
+            <div class="reg-plan-selector" id="reg-plan-selector">
+              <label class="reg-plan-opt reg-plan-opt-selected" id="opt-lite">
+                <input type="radio" name="planElegido" value="lite" checked />
+                <div class="reg-plan-opt-info">
+                  <strong>Lite</strong>
+                  <span>Gratis · POS, ventas, inventario, 3 usuarios</span>
+                </div>
+                <span class="reg-plan-opt-badge reg-badge-free-sm">Gratis</span>
+              </label>
+              <label class="reg-plan-opt" id="opt-medium">
+                <input type="radio" name="planElegido" value="medium" />
+                <div class="reg-plan-opt-info">
+                  <strong>Medium</strong>
+                  <span>Facturación SRI + Talento Humano · Usuarios ilimitados</span>
+                </div>
+                <span class="reg-plan-opt-badge reg-badge-paid-sm">De pago</span>
+              </label>
+              <label class="reg-plan-opt" id="opt-pro">
+                <input type="radio" name="planElegido" value="pro" />
+                <div class="reg-plan-opt-info">
+                  <strong>Pro</strong>
+                  <span>Todo incluyendo ATS, contabilidad y multiempresa</span>
+                </div>
+                <span class="reg-plan-opt-badge reg-badge-paid-sm">De pago</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Aviso plan de pago (oculto por defecto) -->
+          <div id="reg-plan-paid-note" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;font-size:.85rem;color:#1e40af;margin-bottom:8px;line-height:1.5">
+            📋 <strong>Plan de pago seleccionado.</strong> La cuenta se creará con <strong>acceso completo por 15 días</strong> de prueba. Nuestro equipo se comunicará para confirmar la suscripción.<br/>
+            <span style="color:#64748b">¿Prefieres activar directamente? Escríbenos por
+              <a href="https://wa.me/5930978893520" target="_blank" style="color:#16a34a;font-weight:600">WhatsApp</a>.
+            </span>
+          </div>
+
           <div class="reg-field">
             <label for="nombreEmpresa">Nombre de la empresa *</label>
             <input type="text" id="nombreEmpresa" name="nombreEmpresa"
@@ -462,16 +549,16 @@
           </div>
 
           <div class="reg-field">
-            <label for="nombreContacto">Tu nombre completo *</label>
+            <label for="nombreContacto">Nombre del administrador *</label>
             <input type="text" id="nombreContacto" name="nombreContacto"
               placeholder="Ej: Carlos Rodríguez"
               maxlength="80" required />
           </div>
 
           <div class="reg-field">
-            <label for="emailContacto">Correo electrónico *</label>
+            <label for="emailContacto">Correo de acceso *</label>
             <input type="email" id="emailContacto" name="emailContacto"
-              placeholder="tu@correo.com"
+              placeholder="correo@empresa.com"
               required />
           </div>
 
@@ -488,7 +575,7 @@
           </label>
 
           <button type="submit" class="reg-submit" id="reg-btn">
-            Crear mi cuenta gratis →
+            Registrar empresa →
           </button>
         </form>
 
@@ -498,6 +585,7 @@
           <h2 id="reg-success-title">¡Tu cuenta está siendo creada!</h2>
           <p>Configurando el sistema para:</p>
           <span class="reg-success-email" id="reg-success-email">—</span>
+          <span id="reg-success-plan-info" style="display:block;font-size:.8rem;color:#64748b;margin-top:4px"></span>
 
           <!-- Polling: barra de progreso + estado -->
           <div class="reg-polling" id="reg-polling">
@@ -561,10 +649,10 @@
 
       </div>
 
-      <!-- Qué incluye -->
-      <div class="reg-includes">
-        <div class="reg-includes-title">El plan Lite incluye</div>
-        <ul class="reg-includes-list">
+      <!-- Qué incluye (dinámico según plan) -->
+      <div class="reg-includes" id="reg-includes-box">
+        <div class="reg-includes-title" id="reg-includes-title">El plan Lite incluye</div>
+        <ul class="reg-includes-list" id="reg-includes-list">
           <li>✅ POS y ventas</li>
           <li>✅ Notas de venta</li>
           <li>✅ Caja diaria</li>
@@ -591,6 +679,24 @@
       loginLink.href = APP_URL;
     }
 
+    // ─── Selector de plan ─────────────────────────────────────────────────────
+    const planOpts   = document.querySelectorAll('.reg-plan-opt');
+    const paidNote   = document.getElementById('reg-plan-paid-note');
+
+    function getPlanSeleccionado() {
+      const checked = document.querySelector('input[name="planElegido"]:checked');
+      return checked ? checked.value : 'lite';
+    }
+
+    planOpts.forEach(opt => {
+      opt.addEventListener('click', () => {
+        planOpts.forEach(o => o.classList.remove('reg-plan-opt-selected'));
+        opt.classList.add('reg-plan-opt-selected');
+        const plan = getPlanSeleccionado();
+        paidNote.style.display = (plan === 'medium' || plan === 'pro') ? 'block' : 'none';
+      });
+    });
+
     // ─── Formulario ───────────────────────────────────────────────────────────
     const form      = document.getElementById('reg-form');
     const btnSubmit = document.getElementById('reg-btn');
@@ -602,7 +708,7 @@
       errDiv.textContent = msg;
       errDiv.classList.add('visible');
       btnSubmit.disabled = false;
-      btnSubmit.innerHTML = 'Crear mi cuenta gratis →';
+      btnSubmit.innerHTML = 'Registrar empresa →';
     }
 
     function clearError() {
@@ -614,22 +720,24 @@
       e.preventDefault();
       clearError();
 
+      const planElegido = getPlanSeleccionado();
+
       const data = {
         nombreEmpresa:     form.nombreEmpresa.value.trim(),
         nombreContacto:    form.nombreContacto.value.trim(),
         emailContacto:     form.emailContacto.value.trim(),
         telefonoContacto:  form.telefonoContacto.value.trim() || null,
         terminosAceptados: form.terminosAceptados.checked,
-        plan: 'lite',
+        plan: planElegido,
       };
 
-      if (!data.nombreEmpresa)    return showError('Ingresa el nombre de tu empresa.');
-      if (!data.nombreContacto)   return showError('Ingresa tu nombre completo.');
-      if (!data.emailContacto)    return showError('Ingresa un correo electrónico válido.');
+      if (!data.nombreEmpresa)     return showError('Ingresa el nombre de la empresa.');
+      if (!data.nombreContacto)    return showError('Ingresa el nombre del administrador.');
+      if (!data.emailContacto)     return showError('Ingresa un correo electrónico válido.');
       if (!data.terminosAceptados) return showError('Debes aceptar los términos y condiciones.');
 
       btnSubmit.disabled = true;
-      btnSubmit.innerHTML = '<span class="reg-spinner"></span>Creando tu cuenta...';
+      btnSubmit.innerHTML = '<span class="reg-spinner"></span>Registrando empresa...';
 
       try {
         const res  = await fetch(`${API_URL}/api/registro`, {
@@ -649,6 +757,10 @@
         form.style.display    = 'none';
         loginRow.style.display = 'none';
         document.getElementById('reg-success-email').textContent = data.emailContacto;
+        // Mostrar plan registrado
+        const planLabel = { lite: 'Plan Lite (gratis)', medium: 'Plan Medium', pro: 'Plan Pro' }[planElegido] || planElegido;
+        const planInfoEl = document.getElementById('reg-success-plan-info');
+        if (planInfoEl) planInfoEl.textContent = `Plan: ${planLabel}`;
         success.classList.add('visible');
         startPolling(data.emailContacto);
 
@@ -781,6 +893,43 @@
       document.getElementById('reg-success-title').textContent = 'Sigue en proceso...';
       document.getElementById('reg-timeout-note').style.display = 'block';
     }
+
+    // ─── Actualizar bloque "qué incluye" según plan ───────────────────────────
+    const PLAN_FEATURES = {
+      lite: {
+        titulo: 'El plan Lite incluye',
+        items: ['✅ POS y ventas', '✅ Notas de venta', '✅ Caja diaria',
+                '✅ Inventario (100 productos)', '✅ Clientes', '✅ 3 usuarios',
+                '✅ Soporte 24/7', '✅ Sin tarjeta de crédito'],
+      },
+      medium: {
+        titulo: 'El plan Medium incluye',
+        items: ['✅ Todo lo de Lite', '✅ Facturación electrónica SRI', '✅ Compras y proveedores',
+                '✅ Retenciones y liquidaciones', '✅ Talento Humano y nómina IESS',
+                '✅ Usuarios ilimitados', '✅ ATS básico', '✅ Soporte prioritario'],
+      },
+      pro: {
+        titulo: 'El plan Pro incluye',
+        items: ['✅ Todo lo de Medium', '✅ Contabilidad completa', '✅ ATS completo',
+                '✅ Declaraciones tributarias', '✅ Multiempresa / filiales',
+                '✅ Reportes avanzados', '✅ Nómina con Imp. a la Renta LORTI',
+                '✅ Soporte 24/7 dedicado'],
+      },
+    };
+
+    function actualizarBloqueFeatures(plan) {
+      const data = PLAN_FEATURES[plan] || PLAN_FEATURES.lite;
+      const titulo = document.getElementById('reg-includes-title');
+      const lista  = document.getElementById('reg-includes-list');
+      if (titulo) titulo.textContent = data.titulo;
+      if (lista)  lista.innerHTML = data.items.map(i => `<li>${i}</li>`).join('');
+    }
+
+    planOpts.forEach(opt => {
+      opt.addEventListener('click', () => {
+        actualizarBloqueFeatures(getPlanSeleccionado());
+      });
+    });
   </script>
 
 </body>

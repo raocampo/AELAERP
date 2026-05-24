@@ -333,14 +333,14 @@ const FormFactura = () => {
         if (!email) setEmail(c.email || '');
         if (!telefono) setTelefono(c.telefono || '');
         if (res.data.requiereDatosManuales) {
-          setMensajeSRI(res.data.mensaje || 'Identificación válida en SRI, completa los datos faltantes manualmente');
+          setMensajeSRI('⚠ RUC válido — el SRI no devolvió datos. Complete razón social, dirección, email y teléfono: se guardarán como nuevo cliente al emitir.');
         } else {
           const fuente = res.data.fuente === 'sri'
             ? 'SRI (guardado en BD)'
             : res.data.fuente === 'empresa-local'
               ? 'datos locales del sistema'
               : 'BD local';
-          setMensajeSRI(`✓ Encontrado en ${fuente}: ${c.razonSocial || limpio}`);
+          setMensajeSRI(`✓ Encontrado en ${fuente}: ${c.razonSocial || limpio}${(!c.email || !c.telefono) ? ' — puede completar email/teléfono, se actualizarán.' : ''}`);
         }
       } else if (res.data.servicioNoDisponible) {
         setMensajeSRI(res.data.mensaje || 'No fue posible consultar el SRI en este momento');

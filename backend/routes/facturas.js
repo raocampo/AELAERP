@@ -84,6 +84,72 @@ async function getConfigSRIEditable(empresaId) {
   return construirConfiguracionSriBase(empresa);
 }
 
+// ─── Helper: enriquecer/crear cliente con datos manuales de la factura ───────
+// Llamado en background después de crear la factura. Garantiza que los datos
+// que el usuario completó manualmente (email, teléfono, dirección) queden en
+// la tabla clientes para futuras búsquedas, y que la factura quede vinculada
+// aunque el clienteId no viniera del formulario (caso requiereDatosManuales).
+async function enriquecerClienteDesdeFactura(empresaId, facturaId, datos) {
+  const { clienteId, tipoIdentificacion, identificacion, razonSocial, email, telefono, direccion } = datos;
+
+  // No aplica a Consumidor Final ni pasaportes sin RUC/cédula
+  if (!identificacion || identificacion === '9999999999999' || tipoIdentificacion === '07') return;
+
+  try {
+    if (clienteId) {
+      // Cliente ya existía: rellenar solo los campos que estén vacíos
+      const existente = await prisma.clientes.findUnique({ where: { id: clienteId } });
+      if (!existente) return;
+
+      const update = {};
+      if (!existente.email    && email)    update.email    = email;
+      if (!existente.telefono && telefono) update.telefono = telefono;
+      if (!existente.direccion&& direccion)update.direccion= direccion;
+
+      if (Object.keys(update).length > 0) {
+        await prisma.clientes.update({ where: { id: clienteId }, data: update });
+      }
+    } else {
+      // Sin clienteId: buscar por identificación o crear nuevo
+      const existente = await prisma.clientes.findFirst({
+        where: { empresaId, identificacion },
+      });
+
+      let guardado;
+      if (existente) {
+        const update = {};
+        if (!existente.email    && email)    update.email    = email;
+        if (!existente.telefono && telefono) update.telefono = telefono;
+        if (!existente.direccion&& direccion)update.direccion= direccion;
+        if (Object.keys(update).length > 0) {
+          await prisma.clientes.update({ where: { id: existente.id }, data: update });
+        }
+        guardado = existente;
+      } else {
+        guardado = await prisma.clientes.create({
+          data: {
+            empresaId,
+            tipoIdentificacion,
+            identificacion,
+            razonSocial,
+            email:    email    || null,
+            telefono: telefono || null,
+            direccion:direccion|| null,
+          },
+        });
+      }
+
+      // Vincular la factura al cliente recién creado/encontrado
+      await prisma.facturas.update({
+        where: { id: facturaId },
+        data: { clienteId: guardado.id },
+      });
+    }
+  } catch (err) {
+    console.error('[Cliente] Error al enriquecer desde factura:', err?.message);
+  }
+}
+
 // ─── Helper: ejecutar flujo SRI completo ────────────────────────────────────
 async function procesarFacturaEnSRI(facturaId, xmlGenerado, config) {
   try {
@@ -596,8 +662,17 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       req,
     });
 
-    // Intentar flujo SRI en segundo plano (no bloquear la respuesta)
+    // Procesar en SRI y enriquecer cliente — ambos en background
     procesarFacturaEnSRI(factura.id, xml, config).catch(err => console.error('SRI background:', err));
+    enriquecerClienteDesdeFactura(req.empresa.id, factura.id, {
+      clienteId:         clienteId ? parseInt(clienteId, 10) : null,
+      tipoIdentificacion:tipoIdentificacionComprador,
+      identificacion:    identificacionComprador,
+      razonSocial:       razonSocialComprador,
+      email:             emailComprador,
+      telefono:          telefonoComprador,
+      direccion:         direccionComprador,
+    });
 
     res.status(201).json({ ok: true, data: factura, mensaje: 'Factura creada. Procesando en SRI...' });
   } catch (err) {
