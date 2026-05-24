@@ -20,7 +20,7 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
-echo "--- Sincronizando schema con la BD (prisma db push) ---"
+echo "--- Sincronizando schema tenant con la BD (prisma db push) ---"
 npx prisma db push --skip-generate --accept-data-loss
 DB_EXIT=$?
 
@@ -29,6 +29,14 @@ if [ $DB_EXIT -ne 0 ]; then
   echo "ADVERTENCIA: prisma db push falló (exit $DB_EXIT)."
   echo "El servidor arrancará igual — revisa los Deploy Logs de Railway."
   echo ""
+fi
+
+echo ""
+echo "--- Inicializando BD master (migrateMaster.js) ---"
+node scripts/migrateMaster.js
+MASTER_EXIT=$?
+if [ $MASTER_EXIT -ne 0 ]; then
+  echo "ADVERTENCIA: migrateMaster.js salió con error $MASTER_EXIT — el servidor arranca igual."
 fi
 
 echo ""

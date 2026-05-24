@@ -86,19 +86,22 @@ router.post('/', async (req, res) => {
     // ── Verificar email único ──
     try {
       const master = getPrismaMaster();
-      const existente = await master.tenants.findFirst({
-        where: { emailContacto: emailContacto.trim().toLowerCase() },
-      });
-      if (existente) {
-        return res.status(409).json({
-          success: false,
-          mensaje: 'Ya existe una cuenta con ese correo electrónico.',
-          codigo: 'EMAIL_DUPLICADO',
+      if (master) {
+        const existente = await master.tenants.findFirst({
+          where: { emailContacto: emailContacto.trim().toLowerCase() },
         });
+        if (existente) {
+          return res.status(409).json({
+            success: false,
+            mensaje: 'Ya existe una cuenta con ese correo electrónico.',
+            codigo: 'EMAIL_DUPLICADO',
+          });
+        }
+      } else {
+        console.warn('[registro] BD master no disponible — omitiendo verificación de duplicados');
       }
-    } catch {
-      // Si la BD master no está disponible aún, continuar en modo degradado
-      console.warn('[registro] BD master no disponible — operando en modo degradado');
+    } catch (err) {
+      console.warn('[registro] Error verificando duplicado en master:', err.message);
     }
 
     // ── Lanzar provisioning en background ──
@@ -156,6 +159,14 @@ router.get('/estado/:email', async (req, res) => {
   try {
     const email = decodeURIComponent(req.params.email).toLowerCase().trim();
     const master = getPrismaMaster();
+
+    if (!master) {
+      // BD master no configurada — responder como "provisioning" para no bloquear al cliente
+      return res.json({
+        success: true,
+        data: { estado: 'provisioning', plan: 'lite', urlAcceso: null },
+      });
+    }
 
     const tenant = await master.tenants.findFirst({
       where: { emailContacto: email },
