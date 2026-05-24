@@ -5,9 +5,14 @@
 
 const express  = require('express');
 const router   = express.Router();
+
 const bcrypt   = require('bcryptjs');
 const jwt      = require('jsonwebtoken');
 const prisma   = require('../config/prisma');
+
+// Garantiza que req.prisma siempre apunte a la BD correcta:
+// la del tenant activo (SaaS) o la BD por defecto (monoinstancia).
+router.use((req, _res, next) => { req.prisma = req.prisma || prisma; next(); });
 const { proteger } = require('../middleware/auth');
 const {
   normalizarLogin,
@@ -50,8 +55,8 @@ const obtenerPlanEmpresa = () => {
 router.get('/bootstrap-status', async (req, res) => {
   try {
     const [totalUsuarios, totalEmpresas] = await Promise.all([
-      prisma.usuarios.count(),
-      prisma.empresas.count(),
+      req.prisma.usuarios.count(),
+      req.prisma.empresas.count(),
     ]);
 
     res.json({
@@ -71,7 +76,7 @@ router.get('/bootstrap-status', async (req, res) => {
 // GET /api/auth/branding — branding público (sin auth) para personalizar el login
 router.get('/branding', async (req, res) => {
   try {
-    const config = await prisma.configuracion_sri.findFirst({
+    const config = await req.prisma.configuracion_sri.findFirst({
       where:   { activo: true },
       orderBy: { empresaId: 'asc' },
       select:  { razonSocial: true, nombreComercial: true, logoUrl: true },
@@ -133,7 +138,7 @@ router.post('/bootstrap', async (req, res) => {
       emailEmpresa,
     } = req.body;
 
-    const totalUsuarios = await prisma.usuarios.count();
+    const totalUsuarios = await req.prisma.usuarios.count();
     if (totalUsuarios > 0) {
       return res.status(409).json({
         success: false,
@@ -177,7 +182,7 @@ router.post('/bootstrap', async (req, res) => {
     const planEmpresa = obtenerPlanEmpresa();
     const empresaSri = await obtenerEmpresaSri(rucLimpio);
 
-    const { empresa, usuario } = await prisma.$transaction(async (tx) => {
+    const { empresa, usuario } = await req.prisma.$transaction(async (tx) => {
       const empresaBase = await tx.empresas.findFirst({ orderBy: { id: 'asc' } });
 
       const empresaData = {
@@ -290,7 +295,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ success: false, mensaje: 'Usuario o correo y contraseña son requeridos' });
     }
 
-    const totalUsuarios = await prisma.usuarios.count();
+    const totalUsuarios = await req.prisma.usuarios.count();
     if (totalUsuarios === 0) {
       return res.status(409).json({
         success: false,
@@ -299,7 +304,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const usuario = await prisma.usuarios.findFirst({
+    const usuario = await req.prisma.usuarios.findFirst({
       where: {
         OR: [
           { username: identificador },
@@ -340,7 +345,7 @@ router.post('/login', async (req, res) => {
 // GET /api/auth/perfil
 router.get('/perfil', proteger, async (req, res) => {
   try {
-    const usuario = await prisma.usuarios.findUnique({
+    const usuario = await req.prisma.usuarios.findUnique({
       where: { id: req.usuario.id },
       select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, createdAt: true },
     });
@@ -366,7 +371,7 @@ router.post('/cambiar-password', proteger, async (req, res) => {
       return res.status(400).json({ success: false, mensaje: 'La nueva contraseña debe tener al menos 8 caracteres' });
     }
 
-    const usuario = await prisma.usuarios.findUnique({ where: { id: req.usuario.id } });
+    const usuario = await req.prisma.usuarios.findUnique({ where: { id: req.usuario.id } });
     if (!usuario) {
       return res.status(404).json({ success: false, mensaje: 'Usuario no encontrado' });
     }
@@ -377,7 +382,7 @@ router.post('/cambiar-password', proteger, async (req, res) => {
     }
 
     const hash = await bcrypt.hash(passwordNuevo, 10);
-    await prisma.usuarios.update({ where: { id: usuario.id }, data: { password: hash } });
+    await req.prisma.usuarios.update({ where: { id: usuario.id }, data: { password: hash } });
 
     res.json({ success: true, mensaje: 'Contraseña actualizada correctamente' });
   } catch (error) {
@@ -399,9 +404,9 @@ router.post('/cambiar-empresa', proteger, async (req, res) => {
     // Verificar acceso: empresa propia del usuario O entrada en usuario_empresas
     const [propiaEmpresa, accesoExtra] = await Promise.all([
       req.usuario.empresaId === empresaId
-        ? prisma.empresas.findUnique({ where: { id: empresaId } })
+        ? req.prisma.empresas.findUnique({ where: { id: empresaId } })
         : Promise.resolve(null),
-      prisma.usuario_empresas.findUnique({
+      req.prisma.usuario_empresas.findUnique({
         where: { usuarioId_empresaId: { usuarioId: req.usuario.id, empresaId } },
         include: { empresa: true },
       }),

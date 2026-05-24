@@ -21,7 +21,8 @@ const proteger = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const usuario = await prisma.usuarios.findUnique({
+    const db = req.prisma || prisma;
+    const usuario = await db.usuarios.findUnique({
       where: { id: decoded.id },
       select: { id: true, nombre: true, username: true, email: true, rol: true, empresaId: true, activo: true },
     });
@@ -36,15 +37,15 @@ const proteger = async (req, res, next) => {
     };
 
     // ── Inyectar empresa ─────────────────────────────────────────────────────
-    const modoOperacion = await obtenerModoOperacionGlobal(prisma);
+    const modoOperacion = await obtenerModoOperacionGlobal(db);
     const modoMulti = modoOperacion === 'multiempresa';
     // decoded.empresaId viene del JWT cuando el usuario cambió de empresa activa (macro empresa)
     const empresaIdActiva = decoded.empresaId || usuario.empresaId;
     const empresaId = modoMulti ? empresaIdActiva : 1;
 
-    let empresa = await prisma.empresas.findUnique({ where: { id: empresaId } });
+    let empresa = await db.empresas.findUnique({ where: { id: empresaId } });
     if (!empresa && !modoMulti) {
-      empresa = await prisma.empresas.findFirst({
+      empresa = await db.empresas.findFirst({
         where: { activo: true },
         orderBy: { id: 'asc' },
       });

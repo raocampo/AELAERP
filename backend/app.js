@@ -57,6 +57,10 @@ const puntosEmisionRoutes = require('./routes/puntosEmision');
 const { soloMediumOPro, soloPro } = require('./middleware/edition');
 const { contarPendientes } = require('./utils/colaSRI');
 const { proteger } = require('./middleware/auth');
+const { resolverTenant } = require('./middleware/tenant');
+
+// Resolver tenant (SaaS multi-tenant) en TODAS las rutas antes de procesarlas
+app.use(resolverTenant);
 
 app.use('/api/registro', registroRoutes);
 app.use('/api/auth', authRoutes);
