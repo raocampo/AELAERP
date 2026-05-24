@@ -19,6 +19,7 @@ export default function Login() {
   const [verificandoSetup, setVerificandoSetup] = useState(true);
   const [branding, setBranding] = useState({ nombre: null, logoUrl: null });
   const [setupRequired, setSetupRequired] = useState(false);
+  const [mensajeTenant, setMensajeTenant] = useState(null);
   const [mostrarOlvidePassword, setMostrarOlvidePassword] = useState(false);
   const [configurando, setConfigurando] = useState(false);
   const [buscandoSriEmpresa, setBuscandoSriEmpresa] = useState(false);
@@ -52,7 +53,20 @@ export default function Login() {
       if (setupRes.status === 'fulfilled') {
         setSetupRequired(Boolean(setupRes.value.data?.data?.setupRequired));
       } else {
-        toast.error(setupRes.reason?.response?.data?.mensaje || 'No se pudo verificar la configuración inicial');
+        const codigo  = setupRes.reason?.response?.data?.codigo;
+        const mensaje = setupRes.reason?.response?.data?.mensaje;
+        const status  = setupRes.reason?.response?.status;
+
+        if (codigo === 'TENANT_PROVISIONING' || codigo === 'TENANT_ERROR' || status === 503) {
+          // Cuenta en proceso de configuración o con error — mostrar mensaje amigable
+          setMensajeTenant(mensaje || 'Tu cuenta está siendo configurada. Intenta en unos minutos.');
+        } else if (status === 404) {
+          // Slug inválido/expirado — limpiar localStorage y mostrar login por defecto
+          localStorage.removeItem('aela_tenant_slug');
+          setMensajeTenant(null);
+        } else {
+          toast.error(mensaje || 'No se pudo verificar la configuración inicial');
+        }
       }
 
       if (brandRes.status === 'fulfilled' && brandRes.value.data?.data) {
@@ -211,6 +225,15 @@ export default function Login() {
             <h2 className="login-titulo">Verificando sistema</h2>
             <p className="login-subtitulo">
               Estamos comprobando si el sistema ya tiene un usuario administrador inicial.
+            </p>
+          </div>
+        ) : mensajeTenant ? (
+          <div className="login-status-box">
+            <h2 className="login-titulo">Cuenta en configuración</h2>
+            <p className="login-subtitulo">{mensajeTenant}</p>
+            <p style={{ marginTop: 16, fontSize: 13, color: '#64748b' }}>
+              Si el problema persiste escríbenos a{' '}
+              <a href="mailto:info@corpsimtelec.com" style={{ color: '#7C3AED' }}>info@corpsimtelec.com</a>
             </p>
           </div>
         ) : setupRequired ? (

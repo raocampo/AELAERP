@@ -141,6 +141,14 @@ async function resolverTenant(req, res, next) {
       });
     }
 
+    if (tenant.estado === 'error') {
+      return res.status(503).json({
+        success: false,
+        mensaje: 'Hubo un problema al configurar tu cuenta. Contacta a soporte en info@corpsimtelec.com.',
+        codigo: 'TENANT_ERROR',
+      });
+    }
+
     // 5. Inyectar en el request
     req.tenant = tenant;
     req.prisma = getTenantPrisma(tenant);

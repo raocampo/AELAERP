@@ -14,6 +14,7 @@
 // ====================================
 
 const { execSync } = require('child_process');
+const { Client }   = require('pg');
 const path         = require('path');
 const crypto       = require('crypto');
 const { getPrismaMaster }  = require('../config/prismaMaster');
@@ -63,31 +64,28 @@ function parsearDbUrl(url) {
   }
 }
 
-// ─── Crea la BD PostgreSQL usando parámetros individuales + PGPASSWORD ────────
-function crearBaseDatos(dbName) {
-  const adminUrl = process.env.DATABASE_ADMIN_URL || process.env.DATABASE_MASTER_URL;
-  if (!adminUrl) throw new Error('DATABASE_ADMIN_URL no configurada');
+// ─── Crea la BD PostgreSQL usando el cliente pg (no requiere psql instalado) ──
+async function crearBaseDatos(dbName) {
+  const adminUrl = process.env.DATABASE_ADMIN_URL
+    || process.env.DATABASE_MASTER_URL
+    || process.env.DATABASE_URL;
+  if (!adminUrl) throw new Error('No hay URL de admin de BD configurada (DATABASE_ADMIN_URL / DATABASE_URL)');
 
   const safeDb = dbName.replace(/[^a-z0-9_]/gi, '_');
-  const conn   = parsearDbUrl(adminUrl);
-
-  // Usar PGPASSWORD evita escapar caracteres especiales en la contraseña
-  const env = {
-    ...process.env,
-    PGPASSWORD: conn.password,
-  };
+  const client = new Client({ connectionString: adminUrl });
 
   try {
-    execSync(
-      `psql -h "${conn.host}" -p "${conn.port}" -U "${conn.user}" -d "${conn.database}" -c "CREATE DATABASE \\"${safeDb}\\";"`
-      , { stdio: 'pipe', env }
+    await client.connect();
+    // Verificar si ya existe para hacer la operación idempotente
+    const existe = await client.query(
+      `SELECT 1 FROM pg_database WHERE datname = $1`, [safeDb]
     );
-  } catch (err) {
-    const stderr = err.stderr?.toString() || err.message;
-    const esExistente = stderr.includes('already exists') || stderr.includes('ya existe');
-    if (!esExistente) {
-      throw new Error(`Error creando BD: ${stderr}`);
+    if (existe.rowCount === 0) {
+      // CREATE DATABASE no puede ejecutarse dentro de una transacción
+      await client.query(`CREATE DATABASE "${safeDb}"`);
     }
+  } finally {
+    await client.end().catch(() => {});
   }
 
   return { dbName: safeDb };
@@ -163,7 +161,7 @@ async function provisionarTenant({
 
   try {
     // 3. Crear BD PostgreSQL
-    crearBaseDatos(dbName);
+    await crearBaseDatos(dbName);
 
     // 4. Correr migraciones Prisma
     // La URL usa las credenciales del admin apuntando a la nueva BD del tenant
