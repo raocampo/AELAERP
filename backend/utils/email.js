@@ -7,19 +7,41 @@ const nodemailer = require('nodemailer');
 const fs         = require('fs');
 
 // ─── Crear transporter según configuración SMTP ───────────────────────────────
-function crearTransporter() {
-  const host = process.env.SMTP_HOST;
+function crearTransporter(backup = false) {
+  const prefix = backup ? 'SMTP_HOST_BACKUP' : 'SMTP_HOST';
+  const host   = process.env[prefix];
   if (!host) return null;
 
+  const sufijo = backup ? '_BACKUP' : '';
   return nodemailer.createTransport({
     host,
-    port:   parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
+    port:   parseInt(process.env[`SMTP_PORT${sufijo}`] || '587', 10),
+    secure: process.env[`SMTP_SECURE${sufijo}`] === 'true',
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      user: process.env[`SMTP_USER${sufijo}`],
+      pass: process.env[`SMTP_PASS${sufijo}`],
     },
   });
+}
+
+// Intenta enviar con el transporter primario; si falla, usa el backup.
+async function enviarConFallback(mailOptions) {
+  const primary = crearTransporter(false);
+  if (primary) {
+    try {
+      const info = await primary.sendMail(mailOptions);
+      return info;
+    } catch (err) {
+      console.warn('[email] Fallo primario, intentando backup:', err.message);
+    }
+  }
+  const backup = crearTransporter(true);
+  if (backup) {
+    // FROM del backup si está configurado
+    const fromBackup = process.env.SMTP_FROM_BACKUP || mailOptions.from;
+    return backup.sendMail({ ...mailOptions, from: fromBackup });
+  }
+  throw new Error('Sin SMTP configurado (ni primario ni backup)');
 }
 
 // ─── Template HTML de bienvenida ─────────────────────────────────────────────
@@ -116,12 +138,6 @@ function templateBienvenida({ nombreEmpresa, nombreContacto, urlAcceso, plan }) 
  * @param {string} email   - Correo del contacto
  */
 async function enviarEmailBienvenida(tenant, email) {
-  const transporter = crearTransporter();
-  if (!transporter) {
-    console.warn('[email] SMTP no configurado — no se envió email de bienvenida');
-    return;
-  }
-
   const appBase   = process.env.APP_BASE_URL || 'https://aela.corpsimtelec.com';
   const urlAcceso = `${appBase}/${tenant.slug}`;
 
@@ -133,7 +149,7 @@ async function enviarEmailBienvenida(tenant, email) {
   });
 
   try {
-    await transporter.sendMail({
+    await enviarConFallback({
       from:    process.env.SMTP_FROM || 'AELA ERP <info@corpsimtelec.com>',
       to:      email,
       subject: `¡Tu sistema AELA ERP está listo! — ${tenant.nombreContacto || tenant.slug}`,
@@ -141,19 +157,16 @@ async function enviarEmailBienvenida(tenant, email) {
     });
     console.log(`[email] Bienvenida enviada a ${email}`);
   } catch (err) {
-    console.error(`[email] Error enviando bienvenida a ${email}:`, err.message);
+    console.warn(`[email] No se pudo enviar bienvenida a ${email}: ${err.message}`);
     // No lanzar — el provisioning ya fue exitoso, el email es opcional
   }
 }
 
 // ─── Enviar alerta interna al equipo de soporte ───────────────────────────────
 async function enviarAlertaSoporte({ asunto, mensaje }) {
-  const transporter = crearTransporter();
-  if (!transporter) return;
-
   const destino = process.env.SMTP_SOPORTE || 'info@corpsimtelec.com';
   try {
-    await transporter.sendMail({
+    await enviarConFallback({
       from:    process.env.SMTP_FROM || 'AELA ERP <info@corpsimtelec.com>',
       to:      destino,
       subject: `[AELA ERP] ${asunto}`,
@@ -354,7 +367,7 @@ async function enviarDocumentoFiscal({
   }
 
   try {
-    await transporter.sendMail({
+    await enviarConFallback({
       from:    process.env.SMTP_FROM || 'AELA ERP <info@corpsimtelec.com>',
       to:      email,
       subject: `${tipoLabel} ${numero} — ${razonSocialEmisor || 'AELA ERP'}`,
