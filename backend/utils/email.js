@@ -4,6 +4,7 @@
 // ====================================
 
 const nodemailer = require('nodemailer');
+const fs         = require('fs');
 
 // ─── Crear transporter según configuración SMTP ───────────────────────────────
 function crearTransporter() {
@@ -163,4 +164,207 @@ async function enviarAlertaSoporte({ asunto, mensaje }) {
   }
 }
 
-module.exports = { enviarEmailBienvenida, enviarAlertaSoporte };
+// ─── Template HTML para documentos fiscales ──────────────────────────────────
+function templateDocumentoFiscal({
+  tipoLabel, numero, razonSocialEmisor, razonSocialComprador,
+  fechaStr, totalStr, claveAcceso, numeroAutorizacion,
+}) {
+  const urlSRI = `https://srienlinea.sri.gob.ec/comprobantes-electronicos-internet/pages/consultaComprobantes/consultarComprobante.jsf`;
+  const colorHeader = tipoLabel === 'Nota de Crédito' ? '#059669'
+    : tipoLabel === 'Nota de Débito'  ? '#d97706'
+    : tipoLabel === 'Nota de Venta'   ? '#2563eb'
+    : '#7C3AED'; // Factura
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${tipoLabel} ${numero}</title>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,${colorHeader},${colorHeader}cc);padding:32px 40px;text-align:center;">
+            <svg width="44" height="44" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:10px">
+              <rect width="28" height="28" rx="7" fill="rgba(255,255,255,.15)"/>
+              <path d="M14 5 L22 23 M14 5 L6 23 M9 17 H19" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800;letter-spacing:-.5px">AELA ERP</h1>
+            <p style="color:rgba(255,255,255,.8);margin:4px 0 0;font-size:13px">by CorpSimtelec</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="color:#475569;margin:0 0 6px;font-size:14px">Estimado/a,</p>
+            <h2 style="color:#1e293b;margin:0 0 4px;font-size:20px;font-weight:700">
+              ${tipoLabel} <span style="color:${colorHeader}">${numero}</span>
+            </h2>
+            <p style="color:#64748b;margin:0 0 28px;font-size:14px">
+              Adjunta a este correo encontrará el comprobante en formato PDF.
+            </p>
+
+            <!-- Datos del comprobante -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;margin-bottom:24px;">
+              <tr>
+                <td style="padding:20px 24px;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="padding:6px 0;border-bottom:1px solid #e2e8f0;">
+                        <span style="color:#94a3b8;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Emisor</span><br/>
+                        <span style="color:#1e293b;font-size:14px;font-weight:600">${razonSocialEmisor || ''}</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:6px 0;border-bottom:1px solid #e2e8f0;">
+                        <span style="color:#94a3b8;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Destinatario</span><br/>
+                        <span style="color:#1e293b;font-size:14px">${razonSocialComprador || ''}</span>
+                      </td>
+                    </tr>
+                    ${fechaStr ? `<tr>
+                      <td style="padding:6px 0;border-bottom:1px solid #e2e8f0;">
+                        <span style="color:#94a3b8;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Fecha de Emisión</span><br/>
+                        <span style="color:#1e293b;font-size:14px">${fechaStr}</span>
+                      </td>
+                    </tr>` : ''}
+                    ${totalStr ? `<tr>
+                      <td style="padding:6px 0;">
+                        <span style="color:#94a3b8;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Valor Total</span><br/>
+                        <span style="color:${colorHeader};font-size:18px;font-weight:800">${totalStr}</span>
+                      </td>
+                    </tr>` : ''}
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Autorización -->
+            ${numeroAutorizacion ? `
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;margin-bottom:24px;">
+              <tr>
+                <td style="padding:16px 20px;">
+                  <p style="margin:0 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#16a34a">
+                    ✅ Autorizado por el SRI
+                  </p>
+                  <p style="margin:0;font-size:12px;color:#166534;word-break:break-all;font-family:monospace">
+                    ${numeroAutorizacion}
+                  </p>
+                </td>
+              </tr>
+            </table>` : ''}
+
+            <!-- CTA verificar -->
+            ${claveAcceso ? `
+            <div style="text-align:center;margin-bottom:28px;">
+              <a href="${urlSRI}" style="display:inline-block;background:${colorHeader};color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:14px;">
+                Verificar en el portal SRI →
+              </a>
+            </div>` : ''}
+
+            <p style="color:#94a3b8;font-size:13px;margin:0;line-height:1.6">
+              Si tiene alguna consulta sobre este comprobante, contáctenos por los medios indicados abajo.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 40px;text-align:center;">
+            <p style="color:#94a3b8;font-size:13px;margin:0 0 6px">
+              ¿Necesitas ayuda? Estamos disponibles <strong>24/7</strong>.
+            </p>
+            <p style="margin:0;font-size:13px">
+              <a href="https://wa.me/5930978893520" style="color:#16a34a;font-weight:600;text-decoration:none">WhatsApp</a>
+              &nbsp;·&nbsp;
+              <a href="mailto:info@corpsimtelec.com" style="color:#7C3AED;font-weight:600;text-decoration:none">info@corpsimtelec.com</a>
+            </p>
+            <p style="color:#cbd5e1;font-size:12px;margin:14px 0 0">
+              AELA ERP © ${new Date().getFullYear()} CorpSimtelec · Ecuador
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+// ─── Enviar documento fiscal al cliente (factura, NC, ND, NV) ─────────────────
+/**
+ * @param {object} params
+ * @param {string} params.tipo              - 'FACTURA' | 'NOTA_CREDITO' | 'NOTA_DEBITO' | 'NOTA_VENTA'
+ * @param {string} params.numero            - Número del comprobante (ej: "001-001-000000001")
+ * @param {string} params.email             - Correo del destinatario
+ * @param {string} [params.pdfPath]         - Ruta absoluta al PDF (se adjunta si existe)
+ * @param {string} [params.razonSocialEmisor]
+ * @param {string} [params.razonSocialComprador]
+ * @param {Date|string} [params.fecha]
+ * @param {number|string} [params.total]
+ * @param {string} [params.claveAcceso]
+ * @param {string} [params.numeroAutorizacion]
+ */
+async function enviarDocumentoFiscal({
+  tipo, numero, email, pdfPath,
+  razonSocialEmisor, razonSocialComprador,
+  fecha, total, claveAcceso, numeroAutorizacion,
+}) {
+  const transporter = crearTransporter();
+  if (!transporter || !email) return;
+
+  const tipoLabel = {
+    FACTURA:      'Factura',
+    NOTA_CREDITO: 'Nota de Crédito',
+    NOTA_DEBITO:  'Nota de Débito',
+    NOTA_VENTA:   'Nota de Venta',
+  }[tipo] || tipo;
+
+  const tipoFilename = {
+    FACTURA:      'FAC',
+    NOTA_CREDITO: 'NC',
+    NOTA_DEBITO:  'ND',
+    NOTA_VENTA:   'NV',
+  }[tipo] || tipo;
+
+  const fechaStr = fecha
+    ? new Date(fecha).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : '';
+  const totalStr = (total !== undefined && total !== null)
+    ? `$${Number(total).toFixed(2)}`
+    : '';
+
+  const html = templateDocumentoFiscal({
+    tipoLabel, numero, razonSocialEmisor, razonSocialComprador,
+    fechaStr, totalStr, claveAcceso, numeroAutorizacion,
+  });
+
+  const attachments = [];
+  if (pdfPath && fs.existsSync(pdfPath)) {
+    attachments.push({
+      filename: `${tipoFilename}-${numero}.pdf`,
+      path:     pdfPath,
+    });
+  }
+
+  try {
+    await transporter.sendMail({
+      from:    process.env.SMTP_FROM || 'AELA ERP <info@corpsimtelec.com>',
+      to:      email,
+      subject: `${tipoLabel} ${numero} — ${razonSocialEmisor || 'AELA ERP'}`,
+      html,
+      attachments,
+    });
+    console.log(`[email] ${tipoLabel} ${numero} enviada a ${email}`);
+  } catch (err) {
+    console.error(`[email] Error enviando ${tipoLabel} ${numero} a ${email}:`, err.message);
+  }
+}
+
+module.exports = { enviarEmailBienvenida, enviarAlertaSoporte, enviarDocumentoFiscal };

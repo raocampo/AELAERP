@@ -13,6 +13,7 @@ const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { esErrorConectividad } = require('../utils/colaSRI');
 const { construirConfiguracionSriBase } = require('../utils/sriContribuyente');
 const { getCertBuffer, tieneCertificado } = require('../utils/certUtils');
+const { enviarDocumentoFiscal } = require('../utils/email');
 
 router.use(proteger);
 router.use(autorizarPermiso('facturacion.emitir'));
@@ -75,6 +76,26 @@ async function procesarNotaDebitoEnSRI(ndId, xmlGenerado, config) {
           mensajesSri:        { autorizacion: autorizacion.estado },
         },
       });
+
+      // Buscar email del comprador en la tabla clientes
+      const clienteND = await prisma.clientes.findFirst({
+        where:  { empresaId: nd.empresaId, identificacion: nd.identificacionComprador },
+        select: { email: true },
+      }).catch(() => null);
+      if (clienteND?.email) {
+        enviarDocumentoFiscal({
+          tipo:                 'NOTA_DEBITO',
+          numero:               nd.numero,
+          email:                clienteND.email,
+          pdfPath,
+          razonSocialEmisor:    nd.rucEmisor,
+          razonSocialComprador: nd.razonSocialComprador,
+          fecha:                nd.fechaEmision,
+          total:                nd.valorTotal,
+          claveAcceso:          nd.claveAcceso,
+          numeroAutorizacion:   autorizacion.numeroAutorizacion,
+        }).catch(err => console.error('[email] ND:', err.message));
+      }
     } else {
       await prisma.notas_debito.update({
         where: { id: ndId },

@@ -17,6 +17,7 @@ const { checkLimiteNotasVenta } = require('../middleware/edition');
 const { registrarAuditoria }   = require('../utils/auditoria');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
+const { enviarDocumentoFiscal } = require('../utils/email');
 
 router.use(proteger);
 router.use(autorizarPermiso('notasVenta.gestionar'));
@@ -676,6 +677,24 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
     });
 
     res.status(201).json({ success: true, data: nota, mensaje: 'Nota de venta creada correctamente' });
+
+    // Enviar PDF al cliente en background si tiene email
+    if (nota.email) {
+      const outPath = path.join(os.tmpdir(), `nv-email-${nota.id}-${Date.now()}.pdf`);
+      generarRIDENotaVenta(nota, config, outPath)
+        .then(() => enviarDocumentoFiscal({
+          tipo:                 'NOTA_VENTA',
+          numero:               nota.numeroNota,
+          email:                nota.email,
+          pdfPath:              outPath,
+          razonSocialEmisor:    config.razonSocial || nota.razonSocialEmisor,
+          razonSocialComprador: nota.razonSocial,
+          fecha:                nota.fechaEmision,
+          total:                nota.total,
+        }))
+        .then(() => { try { fs.unlinkSync(outPath); } catch (_) {} })
+        .catch(err => console.error('[email] NV:', err.message));
+    }
   } catch (err) {
     console.error('Error crear nota de venta:', err);
     if (/Stock insuficiente|Producto no encontrado/.test(err.message || '')) {

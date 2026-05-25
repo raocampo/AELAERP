@@ -23,6 +23,7 @@ const { registrarMovimientoCaja } = require('../utils/caja');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
 const { esErrorConectividad } = require('../utils/colaSRI');
 const { getCertBuffer, tieneCertificado } = require('../utils/certUtils');
+const { enviarDocumentoFiscal } = require('../utils/email');
 
 // Aplicar autenticación JWT a todas las rutas
 router.use(proteger);
@@ -225,6 +226,21 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config) {
       } catch (contErr) {
         console.error('Error creando asiento automático de factura:', contErr.message);
       }
+
+      if (factura.emailComprador) {
+        enviarDocumentoFiscal({
+          tipo:                  'FACTURA',
+          numero:                factura.numeroFactura,
+          email:                 factura.emailComprador,
+          pdfPath,
+          razonSocialEmisor:     factura.razonSocialEmisor,
+          razonSocialComprador:  factura.razonSocialComprador,
+          fecha:                 factura.fechaEmision,
+          total:                 factura.importeTotal,
+          claveAcceso:           factura.claveAcceso,
+          numeroAutorizacion:    autorizacion.numeroAutorizacion,
+        }).catch(err => console.error('[email] Factura:', err.message));
+      }
     } else {
       // Si hay mensajes de rechazo reales del SRI → RECHAZADO definitivo
       // Si la respuesta está vacía (SRI aún procesando) → FIRMADO_PENDIENTE_ENVIO para reintento
@@ -309,6 +325,30 @@ async function procesarNCEnSRI(ncId, xmlGenerado, config) {
           pdfUrl:             `/uploads/facturas/nc-${ncId}.pdf`,
         },
       });
+
+      // Obtener email del comprador desde la factura relacionada
+      let emailNC = null;
+      if (nc.facturaId) {
+        const factRel = await prisma.facturas.findUnique({
+          where:  { id: nc.facturaId },
+          select: { emailComprador: true },
+        });
+        emailNC = factRel?.emailComprador || null;
+      }
+      if (emailNC) {
+        enviarDocumentoFiscal({
+          tipo:                 'NOTA_CREDITO',
+          numero:               nc.numeroNC,
+          email:                emailNC,
+          pdfPath,
+          razonSocialEmisor:    config.razonSocial,
+          razonSocialComprador: nc.razonSocialComprador,
+          fecha:                nc.fechaEmision,
+          total:                nc.importeTotal,
+          claveAcceso:          nc.claveAcceso,
+          numeroAutorizacion:   autorizacion.numeroAutorizacion,
+        }).catch(err => console.error('[email] NC:', err.message));
+      }
     } else {
       const esRechazoReal = autorizacion.mensajes && autorizacion.mensajes.length > 0;
       await prisma.notas_credito.update({
