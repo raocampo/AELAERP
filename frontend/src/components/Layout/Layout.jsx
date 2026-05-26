@@ -17,6 +17,7 @@ import UpgradeModal from '../Upgrade/UpgradeModal';
 import CambiarPassword from '../Auth/CambiarPassword';
 import QuickBar from './QuickBar';
 import EmpresaSwitcher from './EmpresaSwitcher';
+import api from '../../services/api';
 import './Layout.css';
 
 /** ErrorBoundary local para el Outlet — captura errores de módulos sin romper el layout */
@@ -203,7 +204,15 @@ export default function Layout() {
   const [offline, setOffline]       = useState(!navigator.onLine);
   const [swUpdate, setSwUpdate]     = useState(false);
   const [trialExpirado, setTrialExpirado] = useState(false);
+  const [clienteLogo, setClienteLogo] = useState(null);
   const pendientesSRI = usePendientesSRI();
+
+  // Cargar logo del cliente desde la configuración SRI
+  useEffect(() => {
+    api.get('/auth/branding')
+      .then(res => { if (res.data?.data?.logoUrl) setClienteLogo(res.data.data.logoUrl); })
+      .catch(() => {});
+  }, [empresa?.id]);
 
   // ── Sidebar colapsable — persiste en localStorage (mobile siempre expandido) ─
   const [sidebarColapsado, setSidebarColapsado] = useState(() => {
@@ -293,16 +302,29 @@ export default function Layout() {
           title={sidebarColapsado ? 'Expandir menú' : 'Colapsar menú'}
         >
           <div className="sidebar-brand-logo">
-            <svg width="32" height="32" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-              <rect width="64" height="64" rx="14" fill="white" fillOpacity="0.15"/>
-              <rect x="14" y="18" width="36" height="25" rx="5" fill="none" stroke="white" strokeWidth="2.5"/>
-              <rect x="22" y="35" width="20" height="16" rx="4" fill="white" opacity="0.95"/>
-              <circle cx="32" cy="29" r="4.5" fill="white"/>
-            </svg>
+            {clienteLogo ? (
+              <img src={clienteLogo} alt="Logo" className="sidebar-client-logo" />
+            ) : (
+              <svg width="32" height="32" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                <rect width="64" height="64" rx="14" fill="white" fillOpacity="0.15"/>
+                <rect x="14" y="18" width="36" height="25" rx="5" fill="none" stroke="white" strokeWidth="2.5"/>
+                <rect x="22" y="35" width="20" height="16" rx="4" fill="white" opacity="0.95"/>
+                <circle cx="32" cy="29" r="4.5" fill="white"/>
+              </svg>
+            )}
             {!sidebarColapsado && (
-              <div>
-                <span className="sidebar-sigla">AELA</span>
-                <span className="sidebar-sub">ERP Ecuador</span>
+              <div className="sidebar-brand-nombres">
+                {empresa?.nombreComercial ? (
+                  <>
+                    <span className="sidebar-client-nombre">{empresa.nombreComercial}</span>
+                    {empresa.razonSocial && empresa.razonSocial !== empresa.nombreComercial && (
+                      <span className="sidebar-client-razon">{empresa.razonSocial}</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="sidebar-client-nombre">{empresa?.razonSocial || 'AELA'}</span>
+                )}
+                <span className="sidebar-sub">AELA ERP by CorpSimtelec</span>
               </div>
             )}
           </div>
@@ -313,13 +335,10 @@ export default function Layout() {
           )}
         </div>
 
-        {/* Empresa */}
+        {/* Modo empresa */}
         {!sidebarColapsado && (
           <div className="sidebar-empresa">
-            {empresa?.razonSocial || 'Empresa activa'}
-            <small style={{ display: 'block', color: '#94a3b8', marginTop: 4 }}>
-              {modoMulti ? 'Modo multiempresa' : 'Modo monoempresa'}
-            </small>
+            <small>{modoMulti ? 'Modo multiempresa' : 'Modo monoempresa'}</small>
           </div>
         )}
 
