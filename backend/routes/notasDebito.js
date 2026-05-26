@@ -84,16 +84,18 @@ async function procesarNotaDebitoEnSRI(ndId, xmlGenerado, config) {
       }).catch(() => null);
       if (clienteND?.email) {
         enviarDocumentoFiscal({
-          tipo:                 'NOTA_DEBITO',
-          numero:               nd.numero,
-          email:                clienteND.email,
+          tipo:                  'NOTA_DEBITO',
+          numero:                nd.numero,
+          email:                 clienteND.email,
           pdfPath,
-          razonSocialEmisor:    nd.rucEmisor,
-          razonSocialComprador: nd.razonSocialComprador,
-          fecha:                nd.fechaEmision,
-          total:                nd.valorTotal,
-          claveAcceso:          nd.claveAcceso,
-          numeroAutorizacion:   autorizacion.numeroAutorizacion,
+          razonSocialEmisor:     config.razonSocial,
+          nombreComercialEmisor: config.nombreComercial,
+          logoUrl:               config.logoUrl,
+          razonSocialComprador:  nd.razonSocialComprador,
+          fecha:                 nd.fechaEmision,
+          total:                 nd.valorTotal,
+          claveAcceso:           nd.claveAcceso,
+          numeroAutorizacion:    autorizacion.numeroAutorizacion,
         }).catch(err => console.error('[email] ND:', err.message));
       }
     } else {

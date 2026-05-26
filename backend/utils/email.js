@@ -209,14 +209,25 @@ async function enviarAlertaSoporte({ asunto, mensaje }) {
 
 // ─── Template HTML para documentos fiscales ──────────────────────────────────
 function templateDocumentoFiscal({
-  tipoLabel, numero, razonSocialEmisor, razonSocialComprador,
-  fechaStr, totalStr, claveAcceso, numeroAutorizacion,
+  tipoLabel, numero, razonSocialEmisor, nombreComercialEmisor, logoUrl,
+  razonSocialComprador, fechaStr, totalStr, claveAcceso, numeroAutorizacion,
 }) {
   const urlSRI = `https://srienlinea.sri.gob.ec/comprobantes-electronicos-internet/pages/consultaComprobantes/consultarComprobante.jsf`;
   const colorHeader = tipoLabel === 'Nota de Crédito' ? '#059669'
     : tipoLabel === 'Nota de Débito'  ? '#d97706'
     : tipoLabel === 'Nota de Venta'   ? '#2563eb'
     : '#7C3AED'; // Factura
+
+  const nombreMostrar  = nombreComercialEmisor || razonSocialEmisor || 'AELA ERP';
+  const esNV           = tipoLabel === 'Nota de Venta';
+
+  // Logo: se muestra si está disponible (data URI base64 o URL externa)
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="${nombreMostrar}" style="height:64px;max-width:200px;object-fit:contain;border-radius:8px;margin-bottom:12px;display:block;margin-left:auto;margin-right:auto;"/>`
+    : `<svg width="48" height="48" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:10px;display:block;margin-left:auto;margin-right:auto;">
+        <rect width="28" height="28" rx="7" fill="rgba(255,255,255,.2)"/>
+        <path d="M14 5 L22 23 M14 5 L6 23 M9 17 H19" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+       </svg>`;
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -225,32 +236,30 @@ function templateDocumentoFiscal({
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>${tipoLabel} ${numero}</title>
 </head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 20px;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.10);">
 
         <!-- Header -->
         <tr>
-          <td style="background:linear-gradient(135deg,${colorHeader},${colorHeader}cc);padding:32px 40px;text-align:center;">
-            <svg width="44" height="44" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:10px">
-              <rect width="28" height="28" rx="7" fill="rgba(255,255,255,.15)"/>
-              <path d="M14 5 L22 23 M14 5 L6 23 M9 17 H19" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            </svg>
-            <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800;letter-spacing:-.5px">AELA ERP</h1>
-            <p style="color:rgba(255,255,255,.8);margin:4px 0 0;font-size:13px">by CorpSimtelec</p>
+          <td style="background:linear-gradient(135deg,${colorHeader},${colorHeader}bb);padding:36px 40px 28px;text-align:center;">
+            ${logoHtml}
+            <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800;letter-spacing:-.3px;line-height:1.2">${nombreMostrar}</h1>
+            <p style="color:rgba(255,255,255,.65);margin:5px 0 0;font-size:12px;letter-spacing:.3px">AELA ERP · by CorpSimtelec</p>
           </td>
         </tr>
 
         <!-- Body -->
         <tr>
-          <td style="padding:36px 40px;">
-            <p style="color:#475569;margin:0 0 6px;font-size:14px">Estimado/a,</p>
-            <h2 style="color:#1e293b;margin:0 0 4px;font-size:20px;font-weight:700">
+          <td style="padding:36px 40px 28px;">
+            <p style="color:#64748b;margin:0 0 4px;font-size:14px">Estimado/a cliente,</p>
+            <h2 style="color:#1e293b;margin:0 0 6px;font-size:20px;font-weight:700">
               ${tipoLabel} <span style="color:${colorHeader}">${numero}</span>
             </h2>
-            <p style="color:#64748b;margin:0 0 28px;font-size:14px">
-              Adjunta a este correo encontrará el comprobante en formato PDF.
+            <p style="color:#475569;margin:0 0 28px;font-size:14px;line-height:1.6">
+              Le enviamos adjunto el comprobante electrónico${esNV ? '.' : ' autorizado por el SRI.'}<br/>
+              Por favor consérvelo para sus registros.
             </p>
 
             <!-- Datos del comprobante -->
@@ -356,7 +365,8 @@ function templateDocumentoFiscal({
  */
 async function enviarDocumentoFiscal({
   tipo, numero, email, pdfPath,
-  razonSocialEmisor, razonSocialComprador,
+  razonSocialEmisor, nombreComercialEmisor, logoUrl,
+  razonSocialComprador,
   fecha, total, claveAcceso, numeroAutorizacion,
 }) {
   if (!email) return;
@@ -383,7 +393,9 @@ async function enviarDocumentoFiscal({
     : '';
 
   const html = templateDocumentoFiscal({
-    tipoLabel, numero, razonSocialEmisor, razonSocialComprador,
+    tipoLabel, numero,
+    razonSocialEmisor, nombreComercialEmisor, logoUrl,
+    razonSocialComprador,
     fechaStr, totalStr, claveAcceso, numeroAutorizacion,
   });
 

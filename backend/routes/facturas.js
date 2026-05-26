@@ -234,6 +234,8 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config) {
           email:                 factura.emailComprador,
           pdfPath,
           razonSocialEmisor:     factura.razonSocialEmisor,
+          nombreComercialEmisor: config.nombreComercial,
+          logoUrl:               config.logoUrl,
           razonSocialComprador:  factura.razonSocialComprador,
           fecha:                 factura.fechaEmision,
           total:                 factura.importeTotal,
@@ -337,14 +339,16 @@ async function procesarNCEnSRI(ncId, xmlGenerado, config) {
       }
       if (emailNC) {
         enviarDocumentoFiscal({
-          tipo:                 'NOTA_CREDITO',
-          numero:               nc.numeroNC,
-          email:                emailNC,
+          tipo:                  'NOTA_CREDITO',
+          numero:                nc.numeroNC,
+          email:                 emailNC,
           pdfPath,
-          razonSocialEmisor:    config.razonSocial,
-          razonSocialComprador: nc.razonSocialComprador,
-          fecha:                nc.fechaEmision,
-          total:                nc.importeTotal,
+          razonSocialEmisor:     config.razonSocial,
+          nombreComercialEmisor: config.nombreComercial,
+          logoUrl:               config.logoUrl,
+          razonSocialComprador:  nc.razonSocialComprador,
+          fecha:                 nc.fechaEmision,
+          total:                 nc.importeTotal,
           claveAcceso:          nc.claveAcceso,
           numeroAutorizacion:   autorizacion.numeroAutorizacion,
         }).catch(err => console.error('[email] NC:', err.message));

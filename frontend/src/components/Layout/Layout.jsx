@@ -24,7 +24,15 @@ import './Layout.css';
 class OutletErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(err, info) { console.error('[AELA Outlet]', err, info?.componentStack); }
+  componentDidCatch(err, info) {
+    console.error('[AELA Outlet]', err, info?.componentStack);
+    // Chunk load error = deploy nuevo con hashes distintos; recarga automática una vez
+    const isChunkError = /Failed to fetch dynamically imported module|Loading chunk|ChunkLoadError/i.test(err?.message || '');
+    if (isChunkError && !sessionStorage.getItem('aela_chunk_reload')) {
+      sessionStorage.setItem('aela_chunk_reload', '1');
+      window.location.reload();
+    }
+  }
   render() {
     if (this.state.error) {
       return (

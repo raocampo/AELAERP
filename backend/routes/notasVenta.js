@@ -683,14 +683,16 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
       const outPath = path.join(os.tmpdir(), `nv-email-${nota.id}-${Date.now()}.pdf`);
       generarRIDENotaVenta(nota, config, outPath)
         .then(() => enviarDocumentoFiscal({
-          tipo:                 'NOTA_VENTA',
-          numero:               nota.numeroNota,
-          email:                nota.email,
-          pdfPath:              outPath,
-          razonSocialEmisor:    config.razonSocial || nota.razonSocialEmisor,
-          razonSocialComprador: nota.razonSocial,
-          fecha:                nota.fechaEmision,
-          total:                nota.total,
+          tipo:                  'NOTA_VENTA',
+          numero:                nota.numeroNota,
+          email:                 nota.email,
+          pdfPath:               outPath,
+          razonSocialEmisor:     config.razonSocial || nota.razonSocialEmisor,
+          nombreComercialEmisor: config.nombreComercial,
+          logoUrl:               config.logoUrl,
+          razonSocialComprador:  nota.razonSocial,
+          fecha:                 nota.fechaEmision,
+          total:                 nota.total,
         }))
         .then(() => { try { fs.unlinkSync(outPath); } catch (_) {} })
         .catch(err => console.error('[email] NV:', err.message));
