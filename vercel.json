@@ -3,7 +3,13 @@
   "redirects": [
     {
       "source": "/(.*)",
-      "has": [{ "type": "host", "value": "aelaerp.vercel.app" }],
+      "has": [{ "type": "host", "value": "aelaerp-git-main-raocampos-projects.vercel.app" }],
+      "destination": "https://aela.corpsimtelec.com/$1",
+      "permanent": true
+    },
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "aelaerp-9rmp7yjd7-raocampos-projects.vercel.app" }],
       "destination": "https://aela.corpsimtelec.com/$1",
       "permanent": true
     }
