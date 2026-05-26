@@ -7,13 +7,9 @@
   'use strict';
 
   // ── URL del sistema ──────────────────────────────────────
-  // Cambiar por la URL de Vercel una vez desplegado.
-  // La URL de Vercel se encuentra en: vercel.com → proyecto aelaerp → Domains
   const APP_URL = window.location.hostname === 'localhost'
     ? 'http://localhost:5174'
-    : window.location.hostname === 'aela.corpsimtelec.com'
-    ? 'http://aela.corpsimtelec.com'
-    : 'https://aelaerp.vercel.app';
+    : 'https://aela.corpsimtelec.com';
 
   // Enlazar todos los botones "Acceder"
   ['btn-acceder', 'btn-acceder-mobile', 'btn-acceder-hero'].forEach((id) => {
