@@ -30,19 +30,6 @@
   margin: 0;
 }
 
-.btn-nuevo-ret {
-  background: #7C3AED;
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.2s;
-}
-.btn-nuevo-ret:hover { background: #6D28D9; }
 
 /* Filtros */
 .ret-filtros {
@@ -62,18 +49,6 @@
 }
 .ret-input:focus { outline: none; border-color: #192C4A; box-shadow: 0 0 0 2px rgba(25,44,74,0.1); }
 
-.btn-buscar-ret {
-  background: #7C3AED;
-  color: #fff;
-  border: none;
-  padding: 8px 18px;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.btn-buscar-ret:hover { background: #6D28D9; }
 
 .ret-error {
   background: #fef2f2;
@@ -190,17 +165,6 @@
   color: #374151;
 }
 
-.btn-pag {
-  padding: 6px 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #fff;
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: background 0.2s;
-}
-.btn-pag:disabled { opacity: 0.4; cursor: default; }
-.btn-pag:not(:disabled):hover { background: #f1f5f9; }
 
 /* Modal anulación */
 .ret-modal-overlay {
@@ -243,30 +207,6 @@
   margin-top: 16px;
 }
 
-.btn-cancel-modal {
-  padding: 8px 18px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #fff;
-  cursor: pointer;
-  font-size: 0.9rem;
-  color: #374151;
-  transition: background 0.2s;
-}
-.btn-cancel-modal:hover { background: #f1f5f9; }
-
-.btn-confirm-anular {
-  padding: 8px 18px;
-  border: none;
-  border-radius: 6px;
-  background: #dc2626;
-  color: #fff;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
-  transition: background 0.2s;
-}
-.btn-confirm-anular:hover { background: #b91c1c; }
 
 /* ─── RESPONSIVE ─────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
@@ -277,7 +217,7 @@
     align-items: stretch;
   }
   .ret-title { font-size: 1.3rem; }
-  .btn-nuevo-ret { width: 100%; }
+  .ret-header button { width: 100%; }
 
   .ret-filtros {
     flex-direction: column;

@@ -140,7 +140,7 @@ export default function ListaRetenciones() {
           <h1 className="ret-title">Comprobantes de Retención</h1>
           <p className="ret-subtitle">Gestión de retenciones electrónicas SRI (tipo 07)</p>
         </div>
-        <button className="btn-nuevo-ret" onClick={() => navigate('/retenciones/nueva')}>
+        <button className="btn-primary" onClick={() => navigate('/retenciones/nueva')}>
           + Nueva Retención
         </button>
       </div>
@@ -165,7 +165,7 @@ export default function ListaRetenciones() {
           type="text" name="proveedor" value={filtros.proveedor}
           onChange={handleFiltro} className="ret-input" placeholder="Buscar proveedor..."
         />
-        <button className="btn-buscar-ret" onClick={() => cargar(1)}>Buscar</button>
+        <button className="btn-primary" onClick={() => cargar(1)}>Buscar</button>
       </div>
 
       {error && <div className="ret-error">{error}</div>}
@@ -239,9 +239,9 @@ export default function ListaRetenciones() {
         <div className="ret-paginacion">
           <span className="ret-total-info">Total: {total} retenciones</span>
           <div className="ret-paginas">
-            <button disabled={page <= 1} onClick={() => cargar(page - 1)} className="btn-pag">‹ Ant.</button>
+            <button disabled={page <= 1} onClick={() => cargar(page - 1)} className="btn-secondary btn-sm">‹ Ant.</button>
             <span>Página {page} / {pages}</span>
-            <button disabled={page >= pages} onClick={() => cargar(page + 1)} className="btn-pag">Sig. ›</button>
+            <button disabled={page >= pages} onClick={() => cargar(page + 1)} className="btn-secondary btn-sm">Sig. ›</button>
           </div>
         </div>
       )}
@@ -260,8 +260,8 @@ export default function ListaRetenciones() {
               placeholder="Motivo de anulación..."
             />
             <div className="ret-modal-btns">
-              <button className="btn-cancel-modal" onClick={() => setModalAnular(null)}>Cancelar</button>
-              <button className="btn-confirm-anular" onClick={anular}>Confirmar Anulación</button>
+              <button className="btn-secondary" onClick={() => setModalAnular(null)}>Cancelar</button>
+              <button className="btn-danger" onClick={anular}>Confirmar Anulación</button>
             </div>
           </div>
         </div>

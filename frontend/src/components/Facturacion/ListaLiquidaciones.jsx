@@ -140,13 +140,13 @@ export default function ListaLiquidaciones() {
           <p className="liq-subtitle">Comprobante electrónico tipo 03 — compras a personas naturales sin RUC</p>
         </div>
         <div className="liq-header-actions">
-          <button className="btn-nav-liq" onClick={() => navigate('/compras')}>
+          <button className="btn-secondary" onClick={() => navigate('/compras')}>
             ← Volver a Compras
           </button>
-          <button className="btn-nav-liq" onClick={() => navigate('/dashboard')}>
+          <button className="btn-secondary" onClick={() => navigate('/dashboard')}>
             Salir al Dashboard
           </button>
-          <button className="btn-nueva-liq" onClick={() => navigate('/liquidaciones/nueva')}>
+          <button className="btn-primary" onClick={() => navigate('/liquidaciones/nueva')}>
             + Nueva Liquidación
           </button>
         </div>
@@ -172,7 +172,7 @@ export default function ListaLiquidaciones() {
           type="text" name="proveedor" value={filtros.proveedor}
           onChange={handleFiltro} className="liq-input" placeholder="Buscar proveedor..."
         />
-        <button className="btn-buscar-liq" onClick={() => cargar(1)}>Buscar</button>
+        <button className="btn-primary" onClick={() => cargar(1)}>Buscar</button>
       </div>
 
       {error && <div className="liq-error">{error}</div>}
@@ -244,9 +244,9 @@ export default function ListaLiquidaciones() {
         <div className="liq-paginacion">
           <span className="liq-total-info">Total: {total} liquidaciones</span>
           <div className="liq-paginas">
-            <button disabled={page <= 1} onClick={() => cargar(page - 1)} className="btn-pag">‹ Ant.</button>
+            <button disabled={page <= 1} onClick={() => cargar(page - 1)} className="btn-secondary btn-sm">‹ Ant.</button>
             <span>Página {page} / {pages}</span>
-            <button disabled={page >= pages} onClick={() => cargar(page + 1)} className="btn-pag">Sig. ›</button>
+            <button disabled={page >= pages} onClick={() => cargar(page + 1)} className="btn-secondary btn-sm">Sig. ›</button>
           </div>
         </div>
       )}
@@ -265,8 +265,8 @@ export default function ListaLiquidaciones() {
               placeholder="Motivo de anulación..."
             />
             <div className="liq-modal-btns">
-              <button className="btn-cancel-modal" onClick={() => setModalAnular(null)}>Cancelar</button>
-              <button className="btn-confirm-anular" onClick={anular}>Confirmar Anulación</button>
+              <button className="btn-secondary" onClick={() => setModalAnular(null)}>Cancelar</button>
+              <button className="btn-danger" onClick={anular}>Confirmar Anulación</button>
             </div>
           </div>
         </div>

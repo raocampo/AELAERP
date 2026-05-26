@@ -427,7 +427,7 @@ export default function GestionProveedores() {
                       </td>
                       <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.provincia || '—'}</td>
                       <td className="acciones">
-                        <button className="btn-sm-edit" onClick={() => agregarDesdeCatastro(c)}>
+                        <button className="btn-secondary btn-sm" onClick={() => agregarDesdeCatastro(c)}>
                           + Usar como proveedor
                         </button>
                       </td>
@@ -485,7 +485,7 @@ export default function GestionProveedores() {
                       <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.email || '—'}</td>
                       <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.telefono || '—'}</td>
                       <td className="acciones">
-                        <button className="btn-sm-edit" style={{ background: '#10b981', color: '#fff', border: 'none' }}
+                        <button className="btn-success btn-sm"
                           onClick={() => agregarDesdeClientes(c)}>
                           + Usar como proveedor
                         </button>

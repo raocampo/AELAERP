@@ -334,7 +334,7 @@ export default function GestionClientes() {
                       </td>
                       <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{c.provincia || '—'}</td>
                       <td className="acciones">
-                        <button className="btn-sm-edit" onClick={() => agregarDesdeCatastro(c)}>
+                        <button className="btn-secondary btn-sm" onClick={() => agregarDesdeCatastro(c)}>
                           + Agregar
                         </button>
                       </td>
