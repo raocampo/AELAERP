@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { formatFechaCorta } from '../../utils/fecha';
+import { IcPDF, IcReenviar, IcAnular } from '../../utils/icons';
 import './ListaNotasDebito.css';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
@@ -143,16 +144,24 @@ export default function ListaNotasDebito() {
                       <td>{fmtFecha(nd.fechaEmision)}</td>
                       <td><span className={`badge ${badge.cls}`}>{badge.label}</span></td>
                       <td>
-                        {nd.pdfUrl && (
-                          <a href={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5600'}${nd.pdfUrl}`}
-                            target="_blank" rel="noreferrer" className="btn-icon" title="Ver PDF">📄</a>
-                        )}
-                        {['PENDIENTE_FIRMA','RECHAZADO','ERROR','FIRMADO_PENDIENTE_ENVIO'].includes(nd.estadoSri) && (
-                          <button className="btn-icon" onClick={() => reenviar(nd.id)} title="Reenviar al SRI">🔄</button>
-                        )}
-                        {!nd.anulada && nd.estadoSri !== 'AUTORIZADO' && (
-                          <button className="btn-icon btn-danger-icon" onClick={() => anular(nd.id)} title="Anular">🗑️</button>
-                        )}
+                        <div className="tbl-acciones">
+                          {nd.pdfUrl && (
+                            <a href={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5600'}${nd.pdfUrl}`}
+                              target="_blank" rel="noreferrer" className="btn-icon" title="Ver PDF">
+                              <IcPDF/>
+                            </a>
+                          )}
+                          {['PENDIENTE_FIRMA','RECHAZADO','ERROR','FIRMADO_PENDIENTE_ENVIO'].includes(nd.estadoSri) && (
+                            <button className="btn-icon warning" onClick={() => reenviar(nd.id)} title="Reenviar al SRI">
+                              <IcReenviar/>
+                            </button>
+                          )}
+                          {!nd.anulada && nd.estadoSri !== 'AUTORIZADO' && (
+                            <button className="btn-icon danger" onClick={() => anular(nd.id)} title="Anular">
+                              <IcAnular/>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

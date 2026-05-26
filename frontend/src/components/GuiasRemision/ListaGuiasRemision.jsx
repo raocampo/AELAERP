@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatFechaCorta } from '../../utils/fecha';
+import { IcVer, IcEditar, IcReenviar, IcAnular } from '../../utils/icons';
 import './GuiasRemision.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
@@ -198,47 +199,34 @@ export default function ListaGuiasRemision() {
                         <span className={`gr-badge ${badge.cls}`}>{badge.label}</span>
                       </td>
                       <td className="gr-acciones">
-                        <button
-                          className="btn btn-icon"
-                          title="Ver detalle"
-                          onClick={() => navigate(`/guias-remision/${g.id}`)}
-                        >
-                          👁️
-                        </button>
-                        {!g.anulada && g.estadoSRI === 'NO_ENVIADA' && (
-                          <>
-                            <button
-                              className="btn btn-icon"
-                              title="Editar"
-                              onClick={() => navigate(`/guias-remision/${g.id}/editar`)}
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              className="btn btn-icon"
-                              title="Enviar al SRI"
-                              onClick={() => handleEnviarSRI(g.id, g.numero)}
-                            >
-                              📤
-                            </button>
-                            <button
-                              className="btn btn-icon danger"
-                              title="Anular"
-                              onClick={() => handleAnular(g.id, g.numero)}
-                            >
-                              🗑️
-                            </button>
-                          </>
-                        )}
-                        {!g.anulada && g.estadoSRI === 'RECHAZADA' && (
-                          <button
-                            className="btn btn-icon"
-                            title="Reintentar envío al SRI"
-                            onClick={() => handleEnviarSRI(g.id, g.numero)}
-                          >
-                            🔄
+                        <div className="tbl-acciones">
+                          <button className="btn-icon" title="Ver detalle"
+                            onClick={() => navigate(`/guias-remision/${g.id}`)}>
+                            <IcVer/>
                           </button>
-                        )}
+                          {!g.anulada && g.estadoSRI === 'NO_ENVIADA' && (
+                            <>
+                              <button className="btn-icon" title="Editar"
+                                onClick={() => navigate(`/guias-remision/${g.id}/editar`)}>
+                                <IcEditar/>
+                              </button>
+                              <button className="btn-icon warning" title="Enviar al SRI"
+                                onClick={() => handleEnviarSRI(g.id, g.numero)}>
+                                <IcReenviar/>
+                              </button>
+                              <button className="btn-icon danger" title="Anular"
+                                onClick={() => handleAnular(g.id, g.numero)}>
+                                <IcAnular/>
+                              </button>
+                            </>
+                          )}
+                          {!g.anulada && g.estadoSRI === 'RECHAZADA' && (
+                            <button className="btn-icon warning" title="Reintentar envío al SRI"
+                              onClick={() => handleEnviarSRI(g.id, g.numero)}>
+                              <IcReenviar/>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

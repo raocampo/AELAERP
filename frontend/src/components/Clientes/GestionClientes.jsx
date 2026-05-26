@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { IcEditar, IcActivar, IcDesactivar } from '../../utils/icons';
 import './GestionClientes.css';
 
 const TIPOS_IDENTIFICACION = [
@@ -397,13 +398,16 @@ export default function GestionClientes() {
                       </span>
                     </td>
                     <td className="acciones" onClick={(e) => e.stopPropagation()}>
-                      <button className="btn-sm-edit" onClick={() => abrirEditar(c)}>Editar</button>
-                      <button
-                        className={`btn-sm-toggle ${c.activo ? 'desactivar' : 'activar'}`}
-                        onClick={() => toggleActivo(c)}
-                      >
-                        {c.activo ? 'Desactivar' : 'Activar'}
-                      </button>
+                      <div className="tbl-acciones">
+                        <button className="btn-icon" title="Editar cliente" onClick={() => abrirEditar(c)}><IcEditar/></button>
+                        <button
+                          className={`btn-icon ${c.activo ? 'danger' : 'success'}`}
+                          title={c.activo ? 'Desactivar cliente' : 'Activar cliente'}
+                          onClick={() => toggleActivo(c)}
+                        >
+                          {c.activo ? <IcDesactivar/> : <IcActivar/>}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

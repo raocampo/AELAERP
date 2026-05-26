@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { formatFechaCorta } from '../../utils/fecha';
+import { IcPDF, IcXML, IcReenviar, IcAnular } from '../../utils/icons';
 import './ListaRetenciones.css';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
@@ -202,30 +203,26 @@ export default function ListaRetenciones() {
                     <td className="ret-total">${parseFloat(ret.totalRetenido).toFixed(2)}</td>
                     <td><span className={`ret-badge ${badge.cls}`}>{badge.label}</span></td>
                     <td>
-                      <div className="ret-acciones">
-                        <button
-                          className="btn-ret btn-pdf"
-                          onClick={() => descargarPDF(ret.id, ret.numeroRetencion)}
-                          title="Descargar PDF RIDE"
-                        >PDF</button>
-                        <button
-                          className="btn-ret btn-xml"
-                          onClick={() => descargarXML(ret.id, ret.numeroRetencion)}
-                          title="Descargar XML"
-                        >XML</button>
+                      <div className="tbl-acciones">
+                        <button className="btn-icon" title="Descargar PDF RIDE"
+                          onClick={() => descargarPDF(ret.id, ret.numeroRetencion)}>
+                          <IcPDF/>
+                        </button>
+                        <button className="btn-icon" title="Descargar XML"
+                          onClick={() => descargarXML(ret.id, ret.numeroRetencion)}>
+                          <IcXML/>
+                        </button>
                         {!ret.anulada && ret.estadoSri !== 'AUTORIZADO' && (
-                          <button
-                            className="btn-ret btn-reenviar"
-                            onClick={() => reenviar(ret.id)}
-                            title="Reenviar al SRI"
-                          >Reenviar</button>
+                          <button className="btn-icon warning" title="Reenviar al SRI"
+                            onClick={() => reenviar(ret.id)}>
+                            <IcReenviar/>
+                          </button>
                         )}
                         {!ret.anulada && (
-                          <button
-                            className="btn-ret btn-anular"
-                            onClick={() => { setModalAnular(ret.id); setMotivoAnular(''); }}
-                            title="Anular"
-                          >Anular</button>
+                          <button className="btn-icon danger" title="Anular"
+                            onClick={() => { setModalAnular(ret.id); setMotivoAnular(''); }}>
+                            <IcAnular/>
+                          </button>
                         )}
                       </div>
                     </td>

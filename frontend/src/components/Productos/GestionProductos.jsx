@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import { descargarCsv } from '../../utils/exportCsv';
+import { IcEditar, IcEliminar } from '../../utils/icons';
 import './GestionProductos.css';
 
 const FORM_INICIAL = {
@@ -418,8 +419,10 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                       <td>{producto.tarifaIva}%</td>
                       <td>{producto.activo ? 'Activo' : 'Inactivo'}</td>
                       <td className="prod-table-actions">
-                        <button className="btn-link" onClick={() => editarProducto(producto)}>Editar</button>
-                        <button className="btn-link danger" onClick={() => eliminarProducto(producto.id)}>Eliminar</button>
+                        <div className="tbl-acciones">
+                          <button className="btn-icon" title="Editar producto" onClick={() => editarProducto(producto)}><IcEditar/></button>
+                          <button className="btn-icon danger" title="Eliminar producto" onClick={() => eliminarProducto(producto.id)}><IcEliminar/></button>
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -9,3 +9,34 @@ body {
 
 a { color: inherit; }
 button { font-family: inherit; }
+
+/* ─── Botones de acción en tablas — convención global ─────────────────────── */
+.tbl-acciones {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  cursor: pointer;
+  color: #475569;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.btn-icon svg { display: block; width: 15px; height: 15px; }
+.btn-icon:hover { background: #e2e8f0; color: #1e293b; }
+.btn-icon.primary:hover { background: #ede9fe; border-color: #7c3aed; color: #7c3aed; }
+.btn-icon.success:hover { background: #dcfce7; border-color: #16a34a; color: #16a34a; }
+.btn-icon.warning:hover { background: #fef3c7; border-color: #d97706; color: #d97706; }
+.btn-icon.danger  { color: #ef4444; }
+.btn-icon.danger:hover  { background: #fee2e2; border-color: #ef4444; color: #ef4444; }

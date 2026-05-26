@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaCorta } from '../../utils/fecha';
+import { IcEditar } from '../../utils/icons';
 import './TalentoHumano.css';
 
 const ListaEmpleados = () => {
@@ -111,9 +112,12 @@ const ListaEmpleados = () => {
                       </span>
                     </td>
                     <td>
-                      <button className="btn-th-sm" onClick={() => navigate(`/talento-humano/empleados/${emp.id}`)}>
-                        ✏️ Ver / Editar
-                      </button>
+                      <div className="tbl-acciones" style={{ justifyContent: 'center' }}>
+                        <button className="btn-icon" title="Ver / Editar empleado"
+                          onClick={() => navigate(`/talento-humano/empleados/${emp.id}`)}>
+                          <IcEditar/>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

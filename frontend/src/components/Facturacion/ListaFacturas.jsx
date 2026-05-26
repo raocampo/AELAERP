@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaCorta } from '../../utils/fecha';
+import { IcVer, IcPDF, IcDescargar, IcReenviar, IcAnular } from '../../utils/icons';
 import './ListaFacturas.css';
 
 // Base URL del servidor sin /api al final (para fetch directo con Authorization header)
@@ -204,32 +205,32 @@ const TabFacturas = ({ navigate, onIrNC }) => {
                     )}
                   </td>
                   <td>
-                    <div className="fact-acciones">
-                      <button
-                        className="btn-icon" title="Ver detalle"
-                        onClick={() => navigate(`/facturas/${f.id}`)}
-                      >👁️</button>
-                      <button
-                        className="btn-icon" title="Descargar RIDE PDF"
-                        onClick={() => descargarPDF(f)}
-                      >📄</button>
+                    <div className="tbl-acciones">
+                      <button className="btn-icon" title="Ver detalle"
+                        onClick={() => navigate(`/facturas/${f.id}`)}>
+                        <IcVer/>
+                      </button>
+                      <button className="btn-icon" title="Descargar RIDE PDF"
+                        onClick={() => descargarPDF(f)}>
+                        <IcPDF/>
+                      </button>
                       {(f.estadoSri === 'AUTORIZADO' || f.xmlFirmado) && (
-                        <button
-                          className="btn-icon" title="Descargar XML"
-                          onClick={() => descargarXML(f)}
-                        >📥</button>
+                        <button className="btn-icon" title="Descargar XML"
+                          onClick={() => descargarXML(f)}>
+                          <IcDescargar/>
+                        </button>
                       )}
                       {['PENDIENTE_FIRMA', 'RECHAZADO', 'ENVIADO'].includes(f.estadoSri) && !f.anulada && (
-                        <button
-                          className="btn-icon" title="Reenviar al SRI"
-                          onClick={() => reenviarSRI(f)}
-                        >🔄</button>
+                        <button className="btn-icon warning" title="Reenviar al SRI"
+                          onClick={() => reenviarSRI(f)}>
+                          <IcReenviar/>
+                        </button>
                       )}
                       {!f.anulada && f.estadoSri !== 'ANULADO' && (
-                        <button
-                          className="btn-icon danger" title="Anular factura"
-                          onClick={() => setModalAnular(f)}
-                        >✕</button>
+                        <button className="btn-icon danger" title="Anular factura"
+                          onClick={() => setModalAnular(f)}>
+                          <IcAnular/>
+                        </button>
                       )}
                     </div>
                   </td>

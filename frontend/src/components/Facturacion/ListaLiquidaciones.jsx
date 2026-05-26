@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { formatFechaCorta } from '../../utils/fecha';
+import { IcPDF, IcXML, IcReenviar, IcAnular } from '../../utils/icons';
 import './ListaLiquidaciones.css';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
@@ -207,30 +208,26 @@ export default function ListaLiquidaciones() {
                     <td className="liq-total">${parseFloat(liq.importeTotal).toFixed(2)}</td>
                     <td><span className={`liq-badge ${badge.cls}`}>{badge.label}</span></td>
                     <td>
-                      <div className="liq-acciones">
-                        <button
-                          className="btn-liq btn-pdf"
-                          onClick={() => descargarPDF(liq.id, liq.numeroLiquidacion)}
-                          title="Descargar PDF RIDE"
-                        >PDF</button>
-                        <button
-                          className="btn-liq btn-xml"
-                          onClick={() => descargarXML(liq.id, liq.numeroLiquidacion)}
-                          title="Descargar XML"
-                        >XML</button>
+                      <div className="tbl-acciones">
+                        <button className="btn-icon" title="Descargar PDF RIDE"
+                          onClick={() => descargarPDF(liq.id, liq.numeroLiquidacion)}>
+                          <IcPDF/>
+                        </button>
+                        <button className="btn-icon" title="Descargar XML"
+                          onClick={() => descargarXML(liq.id, liq.numeroLiquidacion)}>
+                          <IcXML/>
+                        </button>
                         {!liq.anulada && liq.estadoSri !== 'AUTORIZADO' && (
-                          <button
-                            className="btn-liq btn-reenviar"
-                            onClick={() => reenviar(liq.id)}
-                            title="Reenviar al SRI"
-                          >Reenviar</button>
+                          <button className="btn-icon warning" title="Reenviar al SRI"
+                            onClick={() => reenviar(liq.id)}>
+                            <IcReenviar/>
+                          </button>
                         )}
                         {!liq.anulada && (
-                          <button
-                            className="btn-liq btn-anular"
-                            onClick={() => { setModalAnular(liq.id); setMotivoAnular(''); }}
-                            title="Anular"
-                          >Anular</button>
+                          <button className="btn-icon danger" title="Anular"
+                            onClick={() => { setModalAnular(liq.id); setMotivoAnular(''); }}>
+                            <IcAnular/>
+                          </button>
                         )}
                       </div>
                     </td>

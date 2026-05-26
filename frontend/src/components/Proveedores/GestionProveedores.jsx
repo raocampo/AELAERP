@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
+import { IcEditar, IcActivar, IcDesactivar } from '../../utils/icons';
 import './GestionProveedores.css';
 
 const TIPOS_IDENTIFICACION = [
@@ -548,13 +549,16 @@ export default function GestionProveedores() {
                       </span>
                     </td>
                     <td className="acciones">
-                      <button className="btn-sm-edit" onClick={() => abrirEditar(proveedor)}>Editar</button>
-                      <button
-                        className={`btn-sm-toggle ${proveedor.activo ? 'desactivar' : 'activar'}`}
-                        onClick={() => toggleActivo(proveedor)}
-                      >
-                        {proveedor.activo ? 'Desactivar' : 'Activar'}
-                      </button>
+                      <div className="tbl-acciones">
+                        <button className="btn-icon" title="Editar proveedor" onClick={() => abrirEditar(proveedor)}><IcEditar/></button>
+                        <button
+                          className={`btn-icon ${proveedor.activo ? 'danger' : 'success'}`}
+                          title={proveedor.activo ? 'Desactivar proveedor' : 'Activar proveedor'}
+                          onClick={() => toggleActivo(proveedor)}
+                        >
+                          {proveedor.activo ? <IcDesactivar/> : <IcActivar/>}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

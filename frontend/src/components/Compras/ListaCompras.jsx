@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { descargarCsv } from '../../utils/exportCsv';
 import { parseFechaLocal } from '../../utils/fecha';
+import { IcVer, IcEditar } from '../../utils/icons';
 import './ListaCompras.css';
 
 const FILTROS_INICIALES = {
@@ -257,11 +258,10 @@ export default function ListaCompras() {
                         {item.tipoGasto
                           ? <span className={`compras-chip tipo-gasto-${item.tipoGasto.toLowerCase()}`}>{item.tipoGasto}</span>
                           : <span className="compras-chip sin-clasificar">—</span>}
-                        <button
-                          title="Clasificar tipo de gasto"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '.8rem', padding: '2px 4px', color: '#64748b' }}
-                          onClick={() => setQuickEdit({ id: item.id, tipoGasto: item.tipoGasto || '' })}
-                        >✏</button>
+                        <button className="btn-icon" title="Clasificar tipo de gasto"
+                          onClick={() => setQuickEdit({ id: item.id, tipoGasto: item.tipoGasto || '' })}>
+                          <IcEditar/>
+                        </button>
                       </div>
                     </td>
                     <td>
@@ -276,11 +276,9 @@ export default function ListaCompras() {
                           {item.egresoCajaRegistrado && <span className="compras-flag warn">Caja</span>}
                           {!item.egresoCajaRegistrado && item.movimientosInventario === 0 && <span className="compras-flag">Solo registro</span>}
                         </div>
-                        <button
-                          className="compras-link"
-                          onClick={() => navigate(`/compras/${item.id}`)}
-                        >
-                          Ver detalle
+                        <button className="btn-icon" title="Ver detalle de compra"
+                          onClick={() => navigate(`/compras/${item.id}`)}>
+                          <IcVer/>
                         </button>
                       </div>
                     </td>

@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { IcEditar, IcActivar, IcDesactivar } from '../../utils/icons';
 import { useAuth } from '../../context/useAuth';
 import { ROLE_OPTIONS, obtenerRolLabel, tienePermiso, PERMISOS_POR_MODULO, PERMISO_LABELS } from '../../utils/roles';
 import './GestionUsuarios.css';
@@ -353,16 +354,15 @@ export default function GestionUsuarios() {
                     </span>
                   </td>
                   <td>
-                    <div className="usuarios-acciones">
-                      <button className="btn-accion-editar" onClick={() => abrirEditar(item)}>
-                        ✏️ Editar
-                      </button>
+                    <div className="tbl-acciones" style={{ justifyContent: 'center' }}>
+                      <button className="btn-icon" title="Editar usuario" onClick={() => abrirEditar(item)}><IcEditar/></button>
                       {item.id !== usuario?.id && (
                         <button
-                          className={`btn-accion-toggle ${item.activo ? 'desactivar' : 'activar'}`}
+                          className={`btn-icon ${item.activo ? 'danger' : 'success'}`}
+                          title={item.activo ? 'Desactivar usuario' : 'Activar usuario'}
                           onClick={() => toggleActivo(item)}
                         >
-                          {item.activo ? 'Desactivar' : 'Activar'}
+                          {item.activo ? <IcDesactivar/> : <IcActivar/>}
                         </button>
                       )}
                     </div>

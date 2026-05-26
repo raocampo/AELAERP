@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaCorta } from '../../utils/fecha';
+import { IcVer, IcPDF, IcAnular } from '../../utils/icons';
 
 export default function ListaNotasVenta() {
   const navigate = useNavigate();
@@ -171,19 +172,19 @@ export default function ListaNotasVenta() {
                   </td>
                   <td style={{ padding: '10px 14px', textAlign: 'center' }}
                     onClick={e => e.stopPropagation()}>
-                    <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}
+                    <div className="tbl-acciones" style={{ justifyContent: 'center' }}>
+                      <button className="btn-icon" title="Ver detalle"
                         onClick={() => navigate(`/notas-venta/${n.id}`)}>
-                        Ver
+                        <IcVer/>
                       </button>
-                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}
+                      <button className="btn-icon" title="Descargar PDF"
                         onClick={() => verPDF(n.id)}>
-                        PDF
+                        <IcPDF/>
                       </button>
                       {!n.anulada && (
-                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}
+                        <button className="btn-icon danger" title="Anular"
                           onClick={() => anular(n.id)}>
-                          Anular
+                          <IcAnular/>
                         </button>
                       )}
                     </div>
