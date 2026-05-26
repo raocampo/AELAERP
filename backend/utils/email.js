@@ -6,42 +6,72 @@
 const nodemailer = require('nodemailer');
 const fs         = require('fs');
 
-// ─── Crear transporter según configuración SMTP ───────────────────────────────
-function crearTransporter(backup = false) {
-  const prefix = backup ? 'SMTP_HOST_BACKUP' : 'SMTP_HOST';
-  const host   = process.env[prefix];
-  if (!host) return null;
+// ─── Primario: Resend HTTP API (evita bloqueo de puertos SMTP en Railway) ─────
+// Usa fetch nativo de Node.js 18+. No requiere paquete adicional.
+async function enviarViaResendAPI(mailOptions) {
+  const apiKey = process.env.SMTP_PASS;
+  if (!apiKey || !String(apiKey).startsWith('re_')) return null; // no es API key Resend
 
-  const sufijo = backup ? '_BACKUP' : '';
+  const body = {
+    from:    mailOptions.from,
+    to:      Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to],
+    subject: mailOptions.subject,
+    ...(mailOptions.html && { html: mailOptions.html }),
+    ...(mailOptions.text && { text: mailOptions.text }),
+  };
+
+  if (mailOptions.attachments?.length > 0) {
+    body.attachments = mailOptions.attachments
+      .filter(a => a.path && fs.existsSync(a.path))
+      .map(a => ({
+        filename: a.filename,
+        content:  fs.readFileSync(a.path).toString('base64'),
+      }));
+  }
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Resend API ${res.status}: ${err.message || res.statusText}`);
+  }
+  return await res.json();
+}
+
+// ─── Backup: Gmail SMTP (nodemailer) ─────────────────────────────────────────
+function crearTransporterGmail() {
+  const host = process.env.SMTP_HOST_BACKUP;
+  if (!host) return null;
   return nodemailer.createTransport({
     host,
-    port:   parseInt(process.env[`SMTP_PORT${sufijo}`] || '587', 10),
-    secure: process.env[`SMTP_SECURE${sufijo}`] === 'true',
+    port:   parseInt(process.env.SMTP_PORT_BACKUP || '587', 10),
+    secure: process.env.SMTP_SECURE_BACKUP === 'true',
     auth: {
-      user: process.env[`SMTP_USER${sufijo}`],
-      pass: process.env[`SMTP_PASS${sufijo}`],
+      user: process.env.SMTP_USER_BACKUP,
+      pass: process.env.SMTP_PASS_BACKUP,
     },
   });
 }
 
-// Intenta enviar con el transporter primario; si falla, usa el backup.
+// Intenta Resend API primero; si falla usa Gmail SMTP como backup.
 async function enviarConFallback(mailOptions) {
-  const primary = crearTransporter(false);
-  if (primary) {
-    try {
-      const info = await primary.sendMail(mailOptions);
-      return info;
-    } catch (err) {
-      console.warn('[email] Fallo primario, intentando backup:', err.message);
-    }
+  try {
+    const result = await enviarViaResendAPI(mailOptions);
+    if (result) return result;
+  } catch (err) {
+    console.warn('[email] Fallo Resend API, intentando Gmail backup:', err.message);
   }
-  const backup = crearTransporter(true);
+
+  const backup = crearTransporterGmail();
   if (backup) {
-    // FROM del backup si está configurado
     const fromBackup = process.env.SMTP_FROM_BACKUP || mailOptions.from;
     return backup.sendMail({ ...mailOptions, from: fromBackup });
   }
-  throw new Error('Sin SMTP configurado (ni primario ni backup)');
+  throw new Error('Sin método de envío disponible (Resend API y Gmail SMTP fallaron)');
 }
 
 // ─── Template HTML de bienvenida ─────────────────────────────────────────────
@@ -329,8 +359,7 @@ async function enviarDocumentoFiscal({
   razonSocialEmisor, razonSocialComprador,
   fecha, total, claveAcceso, numeroAutorizacion,
 }) {
-  const transporter = crearTransporter();
-  if (!transporter || !email) return;
+  if (!email) return;
 
   const tipoLabel = {
     FACTURA:      'Factura',
