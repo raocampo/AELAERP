@@ -310,7 +310,12 @@ const FormFactura = () => {
     setDireccion(c.direccion || '');
     setBusqCliente(c.razonSocial);
     setMostrarDrop(false);
-    setMensajeSRI('');
+    const faltantes = [!c.email && 'email', !c.telefono && 'teléfono', !c.direccion && 'dirección'].filter(Boolean);
+    setMensajeSRI(
+      faltantes.length > 0
+        ? `✓ Cliente cargado. Faltan: ${faltantes.join(', ')} — completa los campos y se guardarán al emitir.`
+        : '✓ Cliente cargado.'
+    );
   };
 
   // ── Consulta SRI al escribir identificación completa ──────────────────────
@@ -343,11 +348,11 @@ const FormFactura = () => {
           setMensajeSRI(`✓ Encontrado en ${fuente}: ${c.razonSocial || limpio}${(!c.email || !c.telefono) ? ' — puede completar email/teléfono, se actualizarán.' : ''}`);
         }
       } else if (res.data.servicioNoDisponible) {
-        setMensajeSRI(res.data.mensaje || 'No fue posible consultar el SRI en este momento');
+        setMensajeSRI('⚠ SRI no disponible — ingresa los datos manualmente: se registrará como nuevo cliente al emitir.');
       } else if (res.data.encontrado === false) {
-        setMensajeSRI(res.data.mensaje || 'No encontrado en SRI — ingresa los datos manualmente');
+        setMensajeSRI('⚠ No encontrado en SRI — ingresa los datos manualmente: se registrará como nuevo cliente al emitir.');
       } else {
-        setMensajeSRI('No encontrado en SRI — ingresa los datos manualmente');
+        setMensajeSRI('⚠ No encontrado en SRI — ingresa los datos manualmente: se registrará como nuevo cliente al emitir.');
       }
     } catch {
       setMensajeSRI('Error al consultar SRI — ingresa los datos manualmente');

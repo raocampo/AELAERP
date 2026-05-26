@@ -71,7 +71,7 @@ export default function Dashboard() {
         <div>
           <h1 className="dash-titulo">Panel principal</h1>
           <p className="dash-bienvenida">
-            {empresa?.razonSocial || 'AELA'} · Sesión de <strong>{usuario?.nombre}</strong>
+            {empresa?.nombreComercial || empresa?.razonSocial || 'AELA'} · Sesión de <strong>{usuario?.nombre}</strong>
           </p>
         </div>
         <div className="dash-plan" style={{ background: `${planColor}18`, color: planColor, borderColor: `${planColor}40` }}>
