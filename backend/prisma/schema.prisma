@@ -899,6 +899,7 @@ model auditoria {
   datosAntes  Json?
   datosNuevos Json?
   ip          String?   @db.VarChar(45)
+  userAgent   String?   @db.VarChar(500)
   fecha       DateTime  @default(now())
 
   usuario   usuarios? @relation(fields: [usuarioId], references: [id])
