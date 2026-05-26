@@ -221,10 +221,13 @@ function templateDocumentoFiscal({
   const nombreMostrar  = nombreComercialEmisor || razonSocialEmisor || 'AELA ERP';
   const esNV           = tipoLabel === 'Nota de Venta';
 
-  // Logo: se muestra si está disponible (data URI base64 o URL externa)
-  const logoHtml = logoUrl
-    ? `<img src="${logoUrl}" alt="${nombreMostrar}" style="height:64px;max-width:200px;object-fit:contain;border-radius:8px;margin-bottom:12px;display:block;margin-left:auto;margin-right:auto;"/>`
-    : `<svg width="48" height="48" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:10px;display:block;margin-left:auto;margin-right:auto;">
+  // Data URIs (base64) se excluyen del email: pueden pesar 200-500 KB y Gmail
+  // recorta mensajes > 102 KB ocultando todo el contenido.
+  // Solo se usa la imagen si es una URL externa real (https://...).
+  const logoEsUrl = logoUrl && logoUrl.startsWith('http');
+  const logoHtml  = logoEsUrl
+    ? `<img src="${logoUrl}" alt="${nombreMostrar}" style="height:56px;max-width:180px;object-fit:contain;border-radius:6px;margin-bottom:10px;display:block;margin-left:auto;margin-right:auto;"/>`
+    : `<svg width="44" height="44" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:10px;display:block;margin-left:auto;margin-right:auto;">
         <rect width="28" height="28" rx="7" fill="rgba(255,255,255,.2)"/>
         <path d="M14 5 L22 23 M14 5 L6 23 M9 17 H19" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
        </svg>`;
