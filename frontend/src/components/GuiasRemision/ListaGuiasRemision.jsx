@@ -200,28 +200,28 @@ export default function ListaGuiasRemision() {
                       </td>
                       <td className="gr-acciones">
                         <div className="tbl-acciones">
-                          <button className="btn-icon" title="Ver detalle"
+                          <button className="btn-icon ic-ver" title="Ver detalle"
                             onClick={() => navigate(`/guias-remision/${g.id}`)}>
                             <IcVer/>
                           </button>
                           {!g.anulada && g.estadoSRI === 'NO_ENVIADA' && (
                             <>
-                              <button className="btn-icon" title="Editar"
+                              <button className="btn-icon ic-editar" title="Editar"
                                 onClick={() => navigate(`/guias-remision/${g.id}/editar`)}>
                                 <IcEditar/>
                               </button>
-                              <button className="btn-icon warning" title="Enviar al SRI"
+                              <button className="btn-icon ic-reenviar" title="Enviar al SRI"
                                 onClick={() => handleEnviarSRI(g.id, g.numero)}>
                                 <IcReenviar/>
                               </button>
-                              <button className="btn-icon danger" title="Anular"
+                              <button className="btn-icon ic-anular" title="Anular"
                                 onClick={() => handleAnular(g.id, g.numero)}>
                                 <IcAnular/>
                               </button>
                             </>
                           )}
                           {!g.anulada && g.estadoSRI === 'RECHAZADA' && (
-                            <button className="btn-icon warning" title="Reintentar envío al SRI"
+                            <button className="btn-icon ic-reenviar" title="Reintentar envío al SRI"
                               onClick={() => handleEnviarSRI(g.id, g.numero)}>
                               <IcReenviar/>
                             </button>

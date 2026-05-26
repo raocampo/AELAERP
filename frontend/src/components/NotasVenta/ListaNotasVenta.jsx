@@ -131,7 +131,7 @@ export default function ListaNotasVenta() {
         <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
-              <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #e2e8f0' }}>
+              <tr style={{ background: '#192C4A', color: '#fff' }}>
                 <th style={{ padding: '11px 14px', textAlign: 'left' }}>N° Nota</th>
                 <th style={{ padding: '11px 14px', textAlign: 'left' }}>Fecha</th>
                 <th style={{ padding: '11px 14px', textAlign: 'left' }}>Cliente</th>
@@ -173,16 +173,16 @@ export default function ListaNotasVenta() {
                   <td style={{ padding: '10px 14px', textAlign: 'center' }}
                     onClick={e => e.stopPropagation()}>
                     <div className="tbl-acciones" style={{ justifyContent: 'center' }}>
-                      <button className="btn-icon" title="Ver detalle"
+                      <button className="btn-icon ic-ver" title="Ver detalle"
                         onClick={() => navigate(`/notas-venta/${n.id}`)}>
                         <IcVer/>
                       </button>
-                      <button className="btn-icon" title="Descargar PDF"
+                      <button className="btn-icon ic-pdf" title="Descargar PDF"
                         onClick={() => verPDF(n.id)}>
                         <IcPDF/>
                       </button>
                       {!n.anulada && (
-                        <button className="btn-icon danger" title="Anular"
+                        <button className="btn-icon ic-anular" title="Anular"
                           onClick={() => anular(n.id)}>
                           <IcAnular/>
                         </button>

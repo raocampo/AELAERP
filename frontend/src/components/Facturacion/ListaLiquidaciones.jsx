@@ -209,22 +209,22 @@ export default function ListaLiquidaciones() {
                     <td><span className={`liq-badge ${badge.cls}`}>{badge.label}</span></td>
                     <td>
                       <div className="tbl-acciones">
-                        <button className="btn-icon" title="Descargar PDF RIDE"
+                        <button className="btn-icon ic-pdf" title="Descargar PDF RIDE"
                           onClick={() => descargarPDF(liq.id, liq.numeroLiquidacion)}>
                           <IcPDF/>
                         </button>
-                        <button className="btn-icon" title="Descargar XML"
+                        <button className="btn-icon ic-xml" title="Descargar XML"
                           onClick={() => descargarXML(liq.id, liq.numeroLiquidacion)}>
                           <IcXML/>
                         </button>
                         {!liq.anulada && liq.estadoSri !== 'AUTORIZADO' && (
-                          <button className="btn-icon warning" title="Reenviar al SRI"
+                          <button className="btn-icon ic-reenviar" title="Reenviar al SRI"
                             onClick={() => reenviar(liq.id)}>
                             <IcReenviar/>
                           </button>
                         )}
                         {!liq.anulada && (
-                          <button className="btn-icon danger" title="Anular"
+                          <button className="btn-icon ic-anular" title="Anular"
                             onClick={() => { setModalAnular(liq.id); setMotivoAnular(''); }}>
                             <IcAnular/>
                           </button>

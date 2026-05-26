@@ -420,8 +420,8 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                       <td>{producto.activo ? 'Activo' : 'Inactivo'}</td>
                       <td className="prod-table-actions">
                         <div className="tbl-acciones">
-                          <button className="btn-icon" title="Editar producto" onClick={() => editarProducto(producto)}><IcEditar/></button>
-                          <button className="btn-icon danger" title="Eliminar producto" onClick={() => eliminarProducto(producto.id)}><IcEliminar/></button>
+                          <button className="btn-icon ic-editar" title="Editar producto" onClick={() => editarProducto(producto)}><IcEditar/></button>
+                          <button className="btn-icon ic-eliminar" title="Eliminar producto" onClick={() => eliminarProducto(producto.id)}><IcEliminar/></button>
                         </div>
                       </td>
                     </tr>

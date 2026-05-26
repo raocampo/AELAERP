@@ -64,8 +64,8 @@
   font-size: 13.5px;
 }
 .usuarios-table thead tr {
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
+  background: #192C4A;
+  border-bottom: 2px solid #192C4A;
 }
 .usuarios-table th {
   padding: 13px 16px;
@@ -74,7 +74,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: #64748b;
+  color: #fff;
   white-space: nowrap;
 }
 .usuarios-table th.center { text-align: center; }

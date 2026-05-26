@@ -258,7 +258,7 @@ export default function ListaCompras() {
                         {item.tipoGasto
                           ? <span className={`compras-chip tipo-gasto-${item.tipoGasto.toLowerCase()}`}>{item.tipoGasto}</span>
                           : <span className="compras-chip sin-clasificar">—</span>}
-                        <button className="btn-icon" title="Clasificar tipo de gasto"
+                        <button className="btn-icon ic-editar" title="Clasificar tipo de gasto"
                           onClick={() => setQuickEdit({ id: item.id, tipoGasto: item.tipoGasto || '' })}>
                           <IcEditar/>
                         </button>
@@ -276,7 +276,7 @@ export default function ListaCompras() {
                           {item.egresoCajaRegistrado && <span className="compras-flag warn">Caja</span>}
                           {!item.egresoCajaRegistrado && item.movimientosInventario === 0 && <span className="compras-flag">Solo registro</span>}
                         </div>
-                        <button className="btn-icon" title="Ver detalle de compra"
+                        <button className="btn-icon ic-ver" title="Ver detalle de compra"
                           onClick={() => navigate(`/compras/${item.id}`)}>
                           <IcVer/>
                         </button>

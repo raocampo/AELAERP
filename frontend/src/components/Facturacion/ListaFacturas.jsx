@@ -206,28 +206,28 @@ const TabFacturas = ({ navigate, onIrNC }) => {
                   </td>
                   <td>
                     <div className="tbl-acciones">
-                      <button className="btn-icon" title="Ver detalle"
+                      <button className="btn-icon ic-ver" title="Ver detalle"
                         onClick={() => navigate(`/facturas/${f.id}`)}>
                         <IcVer/>
                       </button>
-                      <button className="btn-icon" title="Descargar RIDE PDF"
+                      <button className="btn-icon ic-pdf" title="Descargar RIDE PDF"
                         onClick={() => descargarPDF(f)}>
                         <IcPDF/>
                       </button>
                       {(f.estadoSri === 'AUTORIZADO' || f.xmlFirmado) && (
-                        <button className="btn-icon" title="Descargar XML"
+                        <button className="btn-icon ic-xml" title="Descargar XML"
                           onClick={() => descargarXML(f)}>
                           <IcDescargar/>
                         </button>
                       )}
                       {['PENDIENTE_FIRMA', 'RECHAZADO', 'ENVIADO'].includes(f.estadoSri) && !f.anulada && (
-                        <button className="btn-icon warning" title="Reenviar al SRI"
+                        <button className="btn-icon ic-reenviar" title="Reenviar al SRI"
                           onClick={() => reenviarSRI(f)}>
                           <IcReenviar/>
                         </button>
                       )}
                       {!f.anulada && f.estadoSri !== 'ANULADO' && (
-                        <button className="btn-icon danger" title="Anular factura"
+                        <button className="btn-icon ic-anular" title="Anular factura"
                           onClick={() => setModalAnular(f)}>
                           <IcAnular/>
                         </button>
@@ -392,20 +392,21 @@ const TabNotasCredito = ({ navigate }) => {
                 <td className="text-right"><strong>${parseFloat(nc.importeTotal).toFixed(2)}</strong></td>
                 <td><BadgeEstado estado={nc.estadoSri} /></td>
                 <td style={{ whiteSpace: 'nowrap' }}>
-                  <button className="btn-icon" onClick={() => descargarPDFnc(nc)} title="Descargar RIDE NC">
-                    📄
-                  </button>
-                  {['PENDIENTE_FIRMA', 'RECHAZADO', 'FIRMADO_PENDIENTE_ENVIO'].includes(nc.estadoSri) && (
-                    <button
-                      className="btn-icon"
-                      onClick={() => enviarSRI(nc)}
-                      disabled={enviando === nc.id}
-                      title="Enviar al SRI"
-                      style={{ marginLeft: '4px' }}
-                    >
-                      {enviando === nc.id ? '⏳' : '🚀'}
+                  <div className="tbl-acciones">
+                    <button className="btn-icon ic-pdf" onClick={() => descargarPDFnc(nc)} title="Descargar RIDE NC">
+                      <IcPDF/>
                     </button>
-                  )}
+                    {['PENDIENTE_FIRMA', 'RECHAZADO', 'FIRMADO_PENDIENTE_ENVIO'].includes(nc.estadoSri) && (
+                      <button
+                        className="btn-icon ic-reenviar"
+                        onClick={() => enviarSRI(nc)}
+                        disabled={enviando === nc.id}
+                        title="Enviar al SRI"
+                      >
+                        <IcReenviar/>
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

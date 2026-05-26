@@ -550,9 +550,9 @@ export default function GestionProveedores() {
                     </td>
                     <td className="acciones">
                       <div className="tbl-acciones">
-                        <button className="btn-icon" title="Editar proveedor" onClick={() => abrirEditar(proveedor)}><IcEditar/></button>
+                        <button className="btn-icon ic-editar" title="Editar proveedor" onClick={() => abrirEditar(proveedor)}><IcEditar/></button>
                         <button
-                          className={`btn-icon ${proveedor.activo ? 'danger' : 'success'}`}
+                          className={`btn-icon ${proveedor.activo ? 'ic-desactivar' : 'ic-activar'}`}
                           title={proveedor.activo ? 'Desactivar proveedor' : 'Activar proveedor'}
                           onClick={() => toggleActivo(proveedor)}
                         >

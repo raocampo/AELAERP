@@ -235,7 +235,8 @@
 }
 
 .prod-table th {
-  color: #64748b;
+  background: #192C4A;
+  color: #fff;
   font-size: 0.88rem;
 }
 

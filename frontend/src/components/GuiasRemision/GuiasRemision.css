@@ -87,12 +87,12 @@
 }
 
 .gr-table th {
-  background: #f8fafc;
+  background: #192C4A;
   padding: 10px 14px;
   text-align: left;
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: #fff;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid #e2e8f0;
@@ -264,12 +264,12 @@
 }
 
 .gr-detalles-table th {
-  background: #f8fafc;
+  background: #192C4A;
   padding: 8px 10px;
   text-align: left;
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: #fff;
   text-transform: uppercase;
   border-bottom: 1px solid #e2e8f0;
 }

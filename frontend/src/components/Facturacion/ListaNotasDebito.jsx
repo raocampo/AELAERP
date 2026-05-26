@@ -147,17 +147,17 @@ export default function ListaNotasDebito() {
                         <div className="tbl-acciones">
                           {nd.pdfUrl && (
                             <a href={`${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5600'}${nd.pdfUrl}`}
-                              target="_blank" rel="noreferrer" className="btn-icon" title="Ver PDF">
+                              target="_blank" rel="noreferrer" className="btn-icon ic-pdf" title="Ver PDF">
                               <IcPDF/>
                             </a>
                           )}
                           {['PENDIENTE_FIRMA','RECHAZADO','ERROR','FIRMADO_PENDIENTE_ENVIO'].includes(nd.estadoSri) && (
-                            <button className="btn-icon warning" onClick={() => reenviar(nd.id)} title="Reenviar al SRI">
+                            <button className="btn-icon ic-reenviar" onClick={() => reenviar(nd.id)} title="Reenviar al SRI">
                               <IcReenviar/>
                             </button>
                           )}
                           {!nd.anulada && nd.estadoSri !== 'AUTORIZADO' && (
-                            <button className="btn-icon danger" onClick={() => anular(nd.id)} title="Anular">
+                            <button className="btn-icon ic-anular" onClick={() => anular(nd.id)} title="Anular">
                               <IcAnular/>
                             </button>
                           )}

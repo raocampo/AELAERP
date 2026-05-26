@@ -399,9 +399,9 @@ export default function GestionClientes() {
                     </td>
                     <td className="acciones" onClick={(e) => e.stopPropagation()}>
                       <div className="tbl-acciones">
-                        <button className="btn-icon" title="Editar cliente" onClick={() => abrirEditar(c)}><IcEditar/></button>
+                        <button className="btn-icon ic-editar" title="Editar cliente" onClick={() => abrirEditar(c)}><IcEditar/></button>
                         <button
-                          className={`btn-icon ${c.activo ? 'danger' : 'success'}`}
+                          className={`btn-icon ${c.activo ? 'ic-desactivar' : 'ic-activar'}`}
                           title={c.activo ? 'Desactivar cliente' : 'Activar cliente'}
                           onClick={() => toggleActivo(c)}
                         >

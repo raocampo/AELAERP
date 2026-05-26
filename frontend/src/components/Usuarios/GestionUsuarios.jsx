@@ -355,10 +355,10 @@ export default function GestionUsuarios() {
                   </td>
                   <td>
                     <div className="tbl-acciones" style={{ justifyContent: 'center' }}>
-                      <button className="btn-icon" title="Editar usuario" onClick={() => abrirEditar(item)}><IcEditar/></button>
+                      <button className="btn-icon ic-editar" title="Editar usuario" onClick={() => abrirEditar(item)}><IcEditar/></button>
                       {item.id !== usuario?.id && (
                         <button
-                          className={`btn-icon ${item.activo ? 'danger' : 'success'}`}
+                          className={`btn-icon ${item.activo ? 'ic-desactivar' : 'ic-activar'}`}
                           title={item.activo ? 'Desactivar usuario' : 'Activar usuario'}
                           onClick={() => toggleActivo(item)}
                         >

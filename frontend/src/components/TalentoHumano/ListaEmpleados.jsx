@@ -113,7 +113,7 @@ const ListaEmpleados = () => {
                     </td>
                     <td>
                       <div className="tbl-acciones" style={{ justifyContent: 'center' }}>
-                        <button className="btn-icon" title="Ver / Editar empleado"
+                        <button className="btn-icon ic-editar" title="Ver / Editar empleado"
                           onClick={() => navigate(`/talento-humano/empleados/${emp.id}`)}>
                           <IcEditar/>
                         </button>
