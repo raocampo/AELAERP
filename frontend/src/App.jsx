@@ -78,6 +78,7 @@ const Nomina             = lazy(() => import('./components/TalentoHumano/Nomina'
 const Ausencias          = lazy(() => import('./components/TalentoHumano/Ausencias'));
 const AyudaSistema       = lazy(() => import('./components/Ayuda/AyudaSistema'));
 const AccesoTenant       = lazy(() => import('./components/Tenant/AccesoTenant'));
+const PanelSuperAdmin    = lazy(() => import('./components/SuperAdmin/PanelSuperAdmin'));
 
 function RouteLoading() {
   return <div style={{ padding: 40 }}>Cargando módulo...</div>;
@@ -247,6 +248,9 @@ function App() {
                 {/* Centro de Ayuda — accesible para todos */}
                 <Route path="ayuda" element={<AyudaSistema />} />
               </Route>
+
+              {/* Panel super-admin SaaS — standalone, sin Layout ni AuthContext */}
+              <Route path="/super-admin" element={<PanelSuperAdmin />} />
 
               {/* Acceso tenant: /:slug — guarda slug en localStorage y redirige a /login */}
               <Route path="/:slug" element={<AccesoTenant />} />

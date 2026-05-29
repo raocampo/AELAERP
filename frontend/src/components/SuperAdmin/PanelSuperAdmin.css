@@ -1,0 +1,437 @@
+/* ============================================================
+   PanelSuperAdmin.css — Panel Admin SaaS AELA ERP
+   ============================================================ */
+
+/* ── Reset para la página standalone ── */
+.sa-wrapper,
+.sa-login-wrapper {
+  min-height: 100vh;
+  background: #f1f5f9;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+/* ── Login ────────────────────────────────────────────────── */
+.sa-login-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sa-login-box {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.10);
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sa-login-logo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+
+.sa-login-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+.sa-login-subtitle {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.sa-login-error {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+}
+
+.sa-login-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 0.95rem;
+}
+
+/* ── Header ───────────────────────────────────────────────── */
+.sa-header {
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.sa-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sa-header-title {
+  display: block;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1.1;
+}
+.sa-header-sub {
+  display: block;
+  font-size: 0.75rem;
+  color: #6d28d9;
+  font-weight: 600;
+}
+
+.sa-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sa-flash {
+  background: #dcfce7;
+  color: #15803d;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+/* ── Main ─────────────────────────────────────────────────── */
+.sa-main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 28px 28px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── Stats ────────────────────────────────────────────────── */
+.sa-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+.sa-stat-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px 20px;
+  border-top: 4px solid;
+  box-shadow: 0 1px 6px rgba(0,0,0,.06);
+}
+.sa-stat-value {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.sa-stat-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+/* ── Filtros ──────────────────────────────────────────────── */
+.sa-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sa-search {
+  flex: 1;
+  min-width: 220px;
+  padding: 9px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color .15s;
+}
+.sa-search:focus {
+  border-color: #6d28d9;
+}
+
+.sa-filters select {
+  padding: 9px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  outline: none;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* ── Tabla ────────────────────────────────────────────────── */
+.sa-table-wrapper {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 1px 8px rgba(0,0,0,.07);
+  overflow-x: auto;
+}
+
+.sa-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sa-table thead tr {
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+}
+.sa-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.sa-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.sa-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.sa-row--suspendido td {
+  opacity: .6;
+}
+
+.sa-slug {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+.sa-db-name {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+.sa-email {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+.sa-tel {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+.sa-empty-val {
+  color: #cbd5e1;
+}
+
+/* Badges estado */
+.sa-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.sa-badge--activo       { background: #dcfce7; color: #15803d; }
+.sa-badge--provisioning { background: #dbeafe; color: #1d4ed8; }
+.sa-badge--suspendido   { background: #fee2e2; color: #b91c1c; }
+.sa-badge--vencido      { background: #f1f5f9; color: #64748b; }
+.sa-badge--error        { background: #fef3c7; color: #92400e; }
+
+/* Plan badges */
+.sa-plan {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.sa-plan--lite   { background: #f1f5f9; color: #475569; }
+.sa-plan--medium { background: #ede9fe; color: #6d28d9; }
+.sa-plan--pro    { background: #fef3c7; color: #92400e; }
+
+.sa-trial-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 10px;
+}
+
+/* ── Botones de acción ────────────────────────────────────── */
+.sa-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sa-btn-sm {
+  padding: 7px 14px !important;
+  font-size: 0.82rem !important;
+}
+.sa-btn-xs {
+  padding: 5px 10px !important;
+  font-size: 0.78rem !important;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: opacity .15s;
+  white-space: nowrap;
+}
+.sa-btn-xs:hover { opacity: .85; }
+
+/* ── Modales ──────────────────────────────────────────────── */
+.sa-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 20px;
+}
+
+.sa-modal {
+  background: #fff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.2);
+  overflow: hidden;
+}
+
+.sa-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.sa-modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #1e293b;
+}
+.sa-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.sa-modal-close:hover { background: #f1f5f9; color: #1e293b; }
+
+.sa-modal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.sa-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ── Formulario ───────────────────────────────────────────── */
+.sa-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sa-form-row label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+}
+.sa-form-row input,
+.sa-form-row select {
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  outline: none;
+  background: #fff;
+  transition: border-color .15s;
+}
+.sa-form-row input:focus,
+.sa-form-row select:focus {
+  border-color: #6d28d9;
+}
+.sa-form-row--checks {
+  flex-direction: row;
+  gap: 20px;
+  align-items: center;
+}
+.sa-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+}
+
+/* ── Misc ─────────────────────────────────────────────────── */
+.sa-loading {
+  padding: 40px;
+  text-align: center;
+  color: #94a3b8;
+}
+.sa-empty {
+  padding: 32px;
+  text-align: center;
+  color: #94a3b8;
+}
+.sa-saving {
+  background: #fff;
+  padding: 24px 40px;
+  border-radius: 12px;
+  font-weight: 700;
+  color: #6d28d9;
+  font-size: 1rem;
+}
+.sa-error-banner {
+  background: #fee2e2;
+  color: #b91c1c;
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 640px) {
+  .sa-main { padding: 16px; }
+  .sa-header { padding: 12px 16px; }
+  .sa-stats-row { grid-template-columns: repeat(3, 1fr); }
+  .sa-actions { flex-direction: column; }
+}

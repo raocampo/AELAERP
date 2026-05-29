@@ -54,6 +54,8 @@ const guiasRemisionRoutes = require('./routes/guiasRemision');
 const bancosRoutes = require('./routes/bancos');
 const talentoHumanoRoutes = require('./routes/talentoHumano');
 const puntosEmisionRoutes = require('./routes/puntosEmision');
+const superAdminRoutes    = require('./routes/superAdmin');
+const impresoraRoutes     = require('./routes/impresora');
 const { soloMediumOPro, soloPro } = require('./middleware/edition');
 const { contarPendientes } = require('./utils/colaSRI');
 const { proteger } = require('./middleware/auth');
@@ -72,6 +74,7 @@ app.use('/api/proveedores', soloMediumOPro, proveedoresRoutes);
 app.use('/api/productos', productosRoutes);
 app.use('/api/compras', soloMediumOPro, comprasRoutes);
 app.use('/api/inventario', inventarioRoutes);
+app.use('/api/impresora', impresoraRoutes);
 app.use('/api/caja', cajaRoutes);
 app.use('/api/facturas', facturasRoutes);
 app.use('/api/notas-venta', notasVentaRoutes);
@@ -88,6 +91,7 @@ app.use('/api/guias-remision', soloMediumOPro, guiasRemisionRoutes);
 app.use('/api/bancos', bancosRoutes);
 app.use('/api/talento-humano', soloMediumOPro, talentoHumanoRoutes);
 app.use('/api/puntos-emision', puntosEmisionRoutes);
+app.use('/api/super-admin',   superAdminRoutes);
 
 app.get('/api/cola-sri/estado', proteger, async (req, res) => {
   try {

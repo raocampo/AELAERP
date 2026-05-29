@@ -91,15 +91,18 @@ async function crearBaseDatos(dbName) {
   return { dbName: safeDb };
 }
 
-// ─── Corre las migraciones Prisma sobre la BD del tenant ──────────────────────
-function ejecutarMigraciones(dbUrl) {
+// ─── Aplica el schema Prisma sobre la BD del tenant con db push ───────────────
+// Usamos "db push" y NO "migrate deploy" porque este proyecto no tiene archivos
+// de migración en prisma/migrations/ — usa db push en el startup script.
+// "migrate deploy" con carpeta vacía no hace nada y deja la BD sin tablas.
+function aplicarSchemaTenant(dbUrl) {
   const schemaPath = path.join(__dirname, '../prisma/schema.prisma');
   execSync(
-    `npx prisma migrate deploy --schema="${schemaPath}"`,
+    `npx prisma db push --schema="${schemaPath}" --accept-data-loss --skip-generate`,
     {
       env: { ...process.env, DATABASE_URL: dbUrl },
       stdio: 'pipe',
-      timeout: 60000,
+      timeout: 120000, // 2 min — crear tablas en BD nueva puede tardar
     }
   );
 }
@@ -173,12 +176,14 @@ async function provisionarTenant({
     // 3. Crear BD PostgreSQL
     await crearBaseDatos(dbName);
 
-    // 4. Correr migraciones Prisma
-    // La URL usa las credenciales del admin apuntando a la nueva BD del tenant
-    const adminUrl  = process.env.DATABASE_ADMIN_URL || process.env.DATABASE_MASTER_URL;
-    const adminConn = parsearDbUrl(adminUrl);
+    // 4. Aplicar schema Prisma con db push (NO migrate deploy — no hay archivos de migración)
+    // Usamos DATABASE_ADMIN_URL con prioridad; si no existe, DATABASE_URL como fallback.
+    // DATABASE_MASTER_URL puede tener ?schema=aela_master y no sirve como admin de BD.
+    const adminUrlParaSchema = process.env.DATABASE_ADMIN_URL || process.env.DATABASE_URL;
+    if (!adminUrlParaSchema) throw new Error('No hay DATABASE_ADMIN_URL ni DATABASE_URL configurado');
+    const adminConn = parsearDbUrl(adminUrlParaSchema);
     const dbUrl = `postgresql://${adminConn.user}:${encodeURIComponent(adminConn.password)}@${adminConn.host}:${adminConn.port}/${dbName}`;
-    ejecutarMigraciones(dbUrl);
+    aplicarSchemaTenant(dbUrl);
 
     // 5. Actualizar estado → activo
     const tenantActivo = await master.tenants.update({
@@ -189,20 +194,25 @@ async function provisionarTenant({
       },
     });
 
-    // 6. Guardar esTrial y trialExpiresAt en la BD del tenant (tabla empresas)
+    // 6. Actualizar plan/trial en empresa dentro de la BD del tenant
+    // (La empresa real se crea en bootstrap cuando el usuario configura su cuenta)
     try {
       const prismaT = getTenantPrisma(tenantActivo);
-      await prismaT.empresas.updateMany({
-        data: {
-          plan,
-          factAnualesMax: limites.factAnualesMax,
-          maxUsuarios:    limites.maxUsuarios,
-          esTrial,
-          trialExpiresAt: trialExpiresAt || null,
-        },
-      });
+      const empresasExistentes = await prismaT.empresas.count();
+      if (empresasExistentes > 0) {
+        await prismaT.empresas.updateMany({
+          data: {
+            plan,
+            factAnualesMax: limites.factAnualesMax,
+            maxUsuarios:    limites.maxUsuarios,
+            esTrial,
+            trialExpiresAt: trialExpiresAt || null,
+          },
+        });
+      }
     } catch (err) {
-      console.warn(`[provisioning] No se pudo actualizar empresas en BD del tenant '${slug}':`, err.message);
+      // No crítico — bootstrap lo completará al momento del setup inicial
+      console.warn(`[provisioning] No se pudo actualizar empresas en BD '${slug}':`, err.message);
     }
 
     console.log(`[provisioning] Tenant '${slug}' (${plan}${esTrial ? ' trial 15d' : ''}) listo. BD: ${dbName}`);

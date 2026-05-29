@@ -41,17 +41,31 @@ const proteger = async (req, res, next) => {
     const modoMulti = modoOperacion === 'multiempresa';
     // decoded.empresaId viene del JWT cuando el usuario cambió de empresa activa (macro empresa)
     const empresaIdActiva = decoded.empresaId || usuario.empresaId;
-    const empresaId = modoMulti ? empresaIdActiva : 1;
 
-    let empresa = await db.empresas.findUnique({ where: { id: empresaId } });
-    if (!empresa && !modoMulti) {
-      empresa = await db.empresas.findFirst({
-        where: { activo: true },
-        orderBy: { id: 'asc' },
-      });
+    // En modoMulti: usar la empresaId del JWT (puede ser > 1).
+    // En monoempresa: buscar la primera empresa activa (no asumir id=1 que
+    // podría no existir o ser otra empresa en BDs migradas).
+    let empresa;
+    if (modoMulti && empresaIdActiva) {
+      empresa = await db.empresas.findUnique({ where: { id: empresaIdActiva } });
+      // Si la empresa del JWT no existe, buscar la primera del usuario como fallback
+      if (!empresa && usuario.empresaId) {
+        empresa = await db.empresas.findUnique({ where: { id: usuario.empresaId } });
+      }
+    } else {
+      // Monoempresa: la empresa del usuario o la primera activa disponible
+      if (usuario.empresaId) {
+        empresa = await db.empresas.findUnique({ where: { id: usuario.empresaId } });
+      }
+      if (!empresa) {
+        empresa = await db.empresas.findFirst({
+          where: { activo: true },
+          orderBy: { id: 'asc' },
+        });
+      }
     }
 
-    req.empresa = empresa || { id: 1, plan: process.env.AELA_EDITION || 'full', factAnualesMax: null };
+    req.empresa = empresa || { id: empresaIdActiva || 1, plan: process.env.AELA_EDITION || 'full', factAnualesMax: null };
 
     // ── Trial expirado ───────────────────────────────────────────────────────
     if (req.empresa.esTrial && req.empresa.trialExpiresAt) {

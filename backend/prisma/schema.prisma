@@ -249,6 +249,14 @@ model configuracion_sistema {
   documentoPosDefault   String    @default("factura") @db.VarChar(20)
   impresionAutoReciboPos Boolean  @default(false)
   impresoraKiosko       String?   @db.VarChar(120)
+  // ── Impresora térmica POS ──────────────────────────────
+  impresoraIp           String?   @db.VarChar(50)   // IP local, ej: 192.168.1.100
+  impresoraPuerto       Int?      @default(9100)     // Puerto TCP ESC/POS
+  impresoraAncho        Int?      @default(80)       // Ancho papel: 58 o 80 mm
+  impresoraHabilitada   Boolean   @default(false)
+  cajaDineroHabilitada  Boolean   @default(false)    // Abrir cajón al imprimir
+  impresionAutoMobile   Boolean   @default(false)    // Auto-imprimir tras cobro en mobile
+  // ──────────────────────────────────────────────────────
   inventarioHabilitado  Boolean   @default(false)
   permitirStockNegativo Boolean   @default(false)
   comprasHabilitadas    Boolean   @default(true)

@@ -258,7 +258,11 @@ router.post('/', proteger, soloAdmin, async (req, res) => {
     const planFinal = plan === 'lite' ? 'lite' : 'full';
     const empresaSri = await obtenerEmpresaSri(rucLimpio);
 
-    const empresa = await prisma.$transaction(async (tx) => {
+    // Usar req.prisma (BD del tenant actual) para que la empresa nueva
+    // quede en la BD correcta. Fallback al global solo en monoinstancia.
+    const db = req.prisma || prisma;
+
+    const empresa = await db.$transaction(async (tx) => {
       const creada = await tx.empresas.create({
         data: {
           ruc: rucLimpio,
