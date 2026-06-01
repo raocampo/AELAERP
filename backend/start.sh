@@ -20,7 +20,15 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
-echo "--- Aplicando migraciones de schema tenant (prisma migrate deploy) ---"
+echo "--- Verificando historial de migraciones (baseline si es necesario) ---"
+node scripts/baselineMigrations.js
+BASELINE_EXIT=$?
+if [ $BASELINE_EXIT -ne 0 ]; then
+  echo "ADVERTENCIA: baselineMigrations.js salió con error $BASELINE_EXIT — se intenta migrate deploy igualmente."
+fi
+
+echo ""
+echo "--- Aplicando migraciones nuevas (prisma migrate deploy) ---"
 npx prisma migrate deploy
 DB_EXIT=$?
 
