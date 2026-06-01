@@ -27,7 +27,12 @@ export function parseFechaLocal(fecha) {
     const [y, m, d] = s.split('-').map(Number);
     return new Date(y, m - 1, d);
   }
-  // Con hora (ISO completo u otros formatos): el navegador aplica zona local
+  // ISO con hora (ej: "2026-06-01T00:00:00.000Z" que devuelve Prisma para DateTime):
+  // extraemos solo la parte de fecha y usamos hora local para evitar el desfase UTC→Ecuador.
+  const isoDate = /^(\d{4})-(\d{2})-(\d{2})T/.exec(s);
+  if (isoDate) {
+    return new Date(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3]));
+  }
   return new Date(s);
 }
 
