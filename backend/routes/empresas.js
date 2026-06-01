@@ -8,6 +8,9 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
 const { proteger, soloAdmin } = require('../middleware/auth');
+
+// Garantiza que req.prisma apunte a la BD del tenant activo (SaaS) o a la global (monoinstancia).
+router.use((req, _res, next) => { req.prisma = req.prisma || prisma; next(); });
 const {
   asegurarConfiguracionSriEmpresa,
   obtenerEmpresaSri,
@@ -20,7 +23,7 @@ const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
 // GET /api/empresas — listar todas (super-admin)
 router.get('/', proteger, soloAdmin, async (req, res) => {
   try {
-    const empresas = await prisma.empresas.findMany({
+    const empresas = await req.prisma.empresas.findMany({
       orderBy: { razonSocial: 'asc' },
       include: {
         _count: { select: { usuarios: true, facturas: true } },
@@ -39,8 +42,8 @@ router.get('/mis-empresas', proteger, async (req, res) => {
     const CAMPOS_EMPRESA = { id: true, ruc: true, razonSocial: true, nombreComercial: true, plan: true, activo: true, esMatriz: true, parentEmpresaId: true };
 
     const [defaultEmpresa, accesos] = await Promise.all([
-      prisma.empresas.findUnique({ where: { id: req.usuario.empresaId }, select: CAMPOS_EMPRESA }),
-      prisma.usuario_empresas.findMany({
+      req.prisma.empresas.findUnique({ where: { id: req.usuario.empresaId }, select: CAMPOS_EMPRESA }),
+      req.prisma.usuario_empresas.findMany({
         where: { usuarioId: req.usuario.id },
         include: { empresa: { select: CAMPOS_EMPRESA } },
       }),
@@ -70,7 +73,7 @@ router.get('/mis-empresas', proteger, async (req, res) => {
 // GET /api/empresas/mi-empresa — empresa del usuario autenticado
 router.get('/mi-empresa', proteger, async (req, res) => {
   try {
-    const empresa = await prisma.empresas.findUnique({
+    const empresa = await req.prisma.empresas.findUnique({
       where: { id: req.empresa.id },
     });
     if (!empresa) return res.status(404).json({ success: false, mensaje: 'Empresa no encontrada' });
@@ -127,42 +130,42 @@ router.get('/estadisticas', proteger, async (req, res) => {
       cajaHoy,
     ] = await Promise.all([
       // Conteo anual
-      prisma.facturas.count({
+      req.prisma.facturas.count({
         where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lte: finAño } },
       }),
-      prisma.notas_venta.count({
+      req.prisma.notas_venta.count({
         where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lte: finAño } },
       }),
 
       // Ventas del mes (suma importeTotal / total)
-      prisma.facturas.aggregate({
+      req.prisma.facturas.aggregate({
         where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioMes, lte: finMes } },
         _sum: { importeTotal: true },
         _count: { id: true },
       }),
-      prisma.notas_venta.aggregate({
+      req.prisma.notas_venta.aggregate({
         where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioMes, lte: finMes } },
         _sum: { total: true },
         _count: { id: true },
       }),
 
       // Compras del mes
-      prisma.facturas_compra.aggregate({
+      req.prisma.facturas_compra.aggregate({
         where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioMes, lte: finMes } },
         _sum: { importeTotal: true },
         _count: { id: true },
       }),
 
       // Maestros
-      prisma.clientes.count({ where: { empresaId: eId, activo: true } }),
-      prisma.productos_servicios.count({ where: { empresaId: eId, activo: true } }),
-      prisma.proveedores.count({ where: { empresaId: eId, activo: true } }).catch(() => 0),
+      req.prisma.clientes.count({ where: { empresaId: eId, activo: true } }),
+      req.prisma.productos_servicios.count({ where: { empresaId: eId, activo: true } }),
+      req.prisma.proveedores.count({ where: { empresaId: eId, activo: true } }).catch(() => 0),
 
       // Stock bajo (placeholder — se sobreescribe con raw query abajo)
       Promise.resolve(0),
 
       // Caja abierta hoy
-      prisma.cajas_diarias.findFirst({
+      req.prisma.cajas_diarias.findFirst({
         where: { empresaId: eId, fechaOperacion: { gte: hoyInicio }, estado: 'ABIERTA' },
         include: {
           movimientos: { select: { tipo: true, monto: true } },
@@ -185,7 +188,7 @@ router.get('/estadisticas', proteger, async (req, res) => {
     // Stock bajo: usar raw query si prisma no soporta comparación de columnas
     let stockBajoCount = 0;
     try {
-      const raw = await prisma.$queryRaw`
+      const raw = await req.prisma.$queryRaw`
         SELECT COUNT(*)::int AS total
         FROM productos_servicios
         WHERE "empresaId" = ${eId}
@@ -258,9 +261,7 @@ router.post('/', proteger, soloAdmin, async (req, res) => {
     const planFinal = plan === 'lite' ? 'lite' : 'full';
     const empresaSri = await obtenerEmpresaSri(rucLimpio);
 
-    // Usar req.prisma (BD del tenant actual) para que la empresa nueva
-    // quede en la BD correcta. Fallback al global solo en monoinstancia.
-    const db = req.prisma || prisma;
+    const db = req.prisma;
 
     const empresa = await db.$transaction(async (tx) => {
       const creada = await tx.empresas.create({
@@ -312,7 +313,7 @@ router.put('/:id', proteger, soloAdmin, async (req, res) => {
       data.factAnualesMax = data.plan === 'lite' ? 100 : null;
     }
 
-    const empresa = await prisma.$transaction(async (tx) => {
+    const empresa = await req.prisma.$transaction(async (tx) => {
       const actualizada = await tx.empresas.update({ where: { id: parseInt(req.params.id, 10) }, data });
       if (plan !== undefined) {
         const dataConfig = { tipoSistema: actualizada.plan };
@@ -343,11 +344,11 @@ router.put('/:id', proteger, soloAdmin, async (req, res) => {
 router.get('/:id/usuarios', proteger, soloAdmin, async (req, res) => {
   try {
     const empresaId = parseInt(req.params.id, 10);
-    const empresa = await prisma.empresas.findUnique({ where: { id: empresaId } });
+    const empresa = await req.prisma.empresas.findUnique({ where: { id: empresaId } });
     if (!empresa) return res.status(404).json({ success: false, mensaje: 'Empresa no encontrada' });
 
     // Usuarios con acceso extra (usuario_empresas)
-    const accesos = await prisma.usuario_empresas.findMany({
+    const accesos = await req.prisma.usuario_empresas.findMany({
       where: { empresaId },
       include: {
         usuario: { select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, empresaId: true } },
@@ -355,7 +356,7 @@ router.get('/:id/usuarios', proteger, soloAdmin, async (req, res) => {
     });
 
     // Usuarios que tienen esta empresa como empresa por defecto
-    const usuariosDefault = await prisma.usuarios.findMany({
+    const usuariosDefault = await req.prisma.usuarios.findMany({
       where: { empresaId },
       select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, empresaId: true },
     });
@@ -388,8 +389,8 @@ router.post('/:id/usuarios', proteger, soloAdmin, async (req, res) => {
     }
 
     const [empresa, usuario] = await Promise.all([
-      prisma.empresas.findUnique({ where: { id: empresaId } }),
-      prisma.usuarios.findUnique({ where: { id: usuarioId } }),
+      req.prisma.empresas.findUnique({ where: { id: empresaId } }),
+      req.prisma.usuarios.findUnique({ where: { id: usuarioId } }),
     ]);
     if (!empresa) return res.status(404).json({ success: false, mensaje: 'Empresa no encontrada' });
     if (!usuario) return res.status(404).json({ success: false, mensaje: 'Usuario no encontrado' });
@@ -399,7 +400,7 @@ router.post('/:id/usuarios', proteger, soloAdmin, async (req, res) => {
       return res.status(409).json({ success: false, mensaje: 'El usuario ya pertenece a esta empresa por defecto' });
     }
 
-    const acceso = await prisma.usuario_empresas.upsert({
+    const acceso = await req.prisma.usuario_empresas.upsert({
       where: { usuarioId_empresaId: { usuarioId, empresaId } },
       create: { usuarioId, empresaId, rol },
       update: { rol },
@@ -418,7 +419,7 @@ router.delete('/:id/usuarios/:usuarioId', proteger, soloAdmin, async (req, res) 
     const empresaId = parseInt(req.params.id, 10);
     const usuarioId = parseInt(req.params.usuarioId, 10);
 
-    const usuario = await prisma.usuarios.findUnique({ where: { id: usuarioId } });
+    const usuario = await req.prisma.usuarios.findUnique({ where: { id: usuarioId } });
     if (usuario?.empresaId === empresaId) {
       return res.status(400).json({
         success: false,
@@ -426,7 +427,7 @@ router.delete('/:id/usuarios/:usuarioId', proteger, soloAdmin, async (req, res) 
       });
     }
 
-    await prisma.usuario_empresas.delete({
+    await req.prisma.usuario_empresas.delete({
       where: { usuarioId_empresaId: { usuarioId, empresaId } },
     });
 
