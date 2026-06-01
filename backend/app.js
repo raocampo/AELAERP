@@ -61,9 +61,21 @@ const { soloMediumOPro, soloPro } = require('./middleware/edition');
 const { contarPendientes } = require('./utils/colaSRI');
 const { proteger } = require('./middleware/auth');
 const { resolverTenant } = require('./middleware/tenant');
+const prismaModule        = require('./config/prisma');
 
-// Resolver tenant (SaaS multi-tenant) en TODAS las rutas antes de procesarlas
+// 1. Resolver tenant → inyecta req.prisma con el cliente de la BD del tenant
 app.use(resolverTenant);
+
+// 2. Si el tenant fue resuelto, activar su cliente como contexto global de prisma
+//    para este request. Así todos los módulos que hacen require('./config/prisma')
+//    obtienen automáticamente el cliente correcto sin necesidad de usar req.prisma.
+app.use((req, _res, next) => {
+  if (req.prisma && req.prisma !== prismaModule._globalClient) {
+    prismaModule.runWithClient(req.prisma, next);
+  } else {
+    next();
+  }
+});
 
 app.use('/api/registro', registroRoutes);
 app.use('/api/auth', authRoutes);
