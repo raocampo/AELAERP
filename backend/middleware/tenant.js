@@ -103,6 +103,9 @@ async function resolverTenant(req, res, next) {
       slug = process.env.AELA_TENANT_SLUG;
     }
 
+    // Log de diagnóstico (activo siempre — eliminar tras confirmar el fix)
+    console.log(`[tenant] ${req.method} ${req.path} | slug="${slug}" | host="${req.headers.host}" | header="${req.headers['x-tenant-slug'] || ''}"`);
+
     if (!slug) {
       // Sin slug → modo monoinstancia sin multi-tenant, continuar normal
       return next();
@@ -110,6 +113,8 @@ async function resolverTenant(req, res, next) {
 
     // 4. Buscar tenant en BD master
     const tenant = await buscarTenant({ slug });
+
+    console.log(`[tenant] buscarTenant("${slug}") → ${tenant ? `encontrado dbName=${tenant.dbName}` : 'NO ENCONTRADO'}`);
 
     if (!tenant) {
       return res.status(404).json({
