@@ -21,6 +21,19 @@ const proteger = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+    // Validar que el token pertenezca al mismo tenant del request.
+    // Un token emitido para corpsimtelec (tenantSlug=null) no puede usarse
+    // para acceder a un tenant externo (mprq, loja-torneos, etc.) y viceversa.
+    const tokenTenant   = decoded.tenantSlug ?? null;
+    const requestTenant = req.tenant?.slug    ?? null;
+    if (tokenTenant !== requestTenant) {
+      return res.status(401).json({
+        success: false,
+        mensaje: 'Sesión no válida para este tenant. Por favor inicia sesión nuevamente.',
+        codigo:  'TENANT_MISMATCH',
+      });
+    }
+
     const db = req.prisma || prisma;
     const usuario = await db.usuarios.findUnique({
       where: { id: decoded.id },
