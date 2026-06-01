@@ -20,22 +20,20 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
+echo "--- Aplicando correcciones de schema (SQL directo, idempotente) ---"
+node scripts/applySchemaFixes.js
+
+echo ""
 echo "--- Verificando historial de migraciones (baseline si es necesario) ---"
 node scripts/baselineMigrations.js
-BASELINE_EXIT=$?
-if [ $BASELINE_EXIT -ne 0 ]; then
-  echo "ADVERTENCIA: baselineMigrations.js salió con error $BASELINE_EXIT — se intenta migrate deploy igualmente."
-fi
 
 echo ""
 echo "--- Aplicando migraciones nuevas (prisma migrate deploy) ---"
 npx prisma migrate deploy
 DB_EXIT=$?
-
 if [ $DB_EXIT -ne 0 ]; then
   echo ""
-  echo "ADVERTENCIA: prisma migrate deploy falló (exit $DB_EXIT)."
-  echo "El servidor arrancará igual — revisa los Deploy Logs de Railway."
+  echo "ADVERTENCIA: prisma migrate deploy falló (exit $DB_EXIT) — el servidor arrancará igual."
   echo ""
 fi
 
