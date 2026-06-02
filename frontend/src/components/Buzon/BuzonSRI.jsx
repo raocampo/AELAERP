@@ -100,8 +100,41 @@ export default function BuzonSRI() {
   const [importandoXml, setImportandoXml] = useState(false);
   const [resumenXml, setResumenXml]       = useState(null);
 
+  const [archivoTxt, setArchivoTxt]       = useState(null);
+  const [txtInfo, setTxtInfo]             = useState(null); // { total, claves }
+
   const [historial, setHistorial]             = useState(null);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
+
+  // ── Parsear archivo TXT del portal SRI ──────────────────────
+  // El SRI descarga archivos TXT/CSV con claves de acceso de 49 dígitos.
+  // Se extraen con regex y se cargan en el textarea de claves.
+  const leerTxt = (file) => {
+    if (!file) return;
+    setArchivoTxt(file);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const contenido = e.target.result || '';
+      // Extraer todas las secuencias de exactamente 49 dígitos numéricos
+      const clavesEncontradas = [...new Set(
+        (contenido.match(/\b\d{49}\b/g) || [])
+      )];
+      setTxtInfo({ total: clavesEncontradas.length, claves: clavesEncontradas });
+      if (clavesEncontradas.length === 0) {
+        toast.error('No se encontraron claves de acceso (49 dígitos) en el archivo.');
+      } else {
+        toast.success(`${clavesEncontradas.length} clave(s) encontrada(s) en el archivo.`);
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+  };
+
+  const cargarClavesDeseTxt = () => {
+    if (!txtInfo?.claves?.length) return;
+    setTextareaClaves(txtInfo.claves.join('\n'));
+    setTab('claves'); // cambiar a la pestaña de claves manuales
+    toast.success(`${txtInfo.claves.length} clave(s) cargadas. Revisa y haz clic en "Consultar".`);
+  };
 
   const importarXml = async () => {
     if (archivosXml.length === 0) { toast.error('Selecciona uno o más archivos XML'); return; }
@@ -278,7 +311,8 @@ export default function BuzonSRI() {
       </div>
 
       <div className="buzon-tabs-bar">
-        <button className={`buzon-tab ${tab === 'descarga' ? 'active' : ''}`} onClick={() => handleTabChange('descarga')}>Descarga automática SRI</button>
+        <button className={`buzon-tab ${tab === 'descarga' ? 'active' : ''}`} onClick={() => handleTabChange('descarga')}>🔗 Descarga automática SRI</button>
+        <button className={`buzon-tab ${tab === 'txt' ? 'active' : ''}`} onClick={() => handleTabChange('txt')}>📄 Importar TXT del SRI</button>
         <button className={`buzon-tab ${tab === 'claves' ? 'active' : ''}`} onClick={() => handleTabChange('claves')}>Por claves de acceso</button>
         <button className={`buzon-tab ${tab === 'zip' ? 'active' : ''}`} onClick={() => handleTabChange('zip')}>Importar ZIP</button>
         <button className={`buzon-tab ${tab === 'xml' ? 'active' : ''}`} onClick={() => handleTabChange('xml')}>Importar XML</button>
@@ -577,6 +611,90 @@ export default function BuzonSRI() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── TAB TXT DEL PORTAL SRI ───────────────────────── */}
+      {tab === 'txt' && (
+        <div className="buzon-card">
+          <div className="buzon-step">
+            <h2 className="buzon-step-title">Importar desde archivo TXT del portal SRI</h2>
+            <p className="buzon-step-hint">
+              El portal SRI en línea permite descargar un reporte en formato <strong>.txt</strong> o <strong>.csv</strong>
+              con el listado de comprobantes electrónicos recibidos. AELA extrae automáticamente las
+              <strong> claves de acceso</strong> de ese archivo y las importa al sistema.
+            </p>
+
+            <div className="buzon-txt-instrucciones">
+              <h4>¿Cómo obtener el archivo TXT del SRI?</h4>
+              <ol>
+                <li>Ingresa a <strong>srienlinea.sri.gob.ec</strong> con tu RUC y contraseña.</li>
+                <li>Ve a <strong>Comprobantes Electrónicos → Documentos Recibidos</strong>.</li>
+                <li>Filtra por rango de fechas y tipo de documento.</li>
+                <li>Haz clic en <strong>Descargar</strong> o <strong>Exportar</strong> (TXT / CSV).</li>
+                <li>Sube ese archivo aquí.</li>
+              </ol>
+              <div className="buzon-txt-nota">
+                💡 El archivo puede tener extensión <code>.txt</code>, <code>.csv</code> o <code>.prn</code>.
+                AELA busca automáticamente todos los números de 49 dígitos (claves de acceso) dentro del archivo.
+              </div>
+            </div>
+
+            <div className="buzon-upload-area" style={{ marginTop: '1.25rem' }}>
+              <label className="buzon-upload-label" htmlFor="txt-input">
+                {archivoTxt ? `📄 ${archivoTxt.name}` : '📁 Haz clic para seleccionar archivo TXT / CSV del SRI'}
+              </label>
+              <input id="txt-input" type="file" accept=".txt,.csv,.prn,text/plain,text/csv"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files[0] || null;
+                  setArchivoTxt(f);
+                  setTxtInfo(null);
+                  if (f) leerTxt(f);
+                }}
+              />
+            </div>
+
+            {txtInfo && (
+              <div className="buzon-txt-resultado" style={{ marginTop: '1rem' }}>
+                {txtInfo.total === 0 ? (
+                  <div className="buzon-alerta-warning">
+                    ⚠️ No se encontraron claves de acceso en el archivo. Verifica que sea el archivo correcto del portal SRI.
+                  </div>
+                ) : (
+                  <>
+                    <div className="buzon-alerta-ok">
+                      ✅ Se encontraron <strong>{txtInfo.total}</strong> clave(s) de acceso en el archivo.
+                    </div>
+                    <ul className="buzon-txt-claves-preview">
+                      {txtInfo.claves.slice(0, 5).map((c) => (
+                        <li key={c}><code>{c.slice(0, 20)}…</code></li>
+                      ))}
+                      {txtInfo.total > 5 && <li style={{ color: '#64748b' }}>…y {txtInfo.total - 5} más</li>}
+                    </ul>
+                    {txtInfo.total > 50 && (
+                      <div className="buzon-alerta-warning" style={{ marginTop: '.5rem' }}>
+                        ⚠️ El archivo tiene {txtInfo.total} claves. Se cargarán las primeras 50 (límite por lote).
+                        Divide la importación en varios lotes.
+                      </div>
+                    )}
+                    <button
+                      className="btn-primary"
+                      style={{ marginTop: '1rem' }}
+                      onClick={() => {
+                        const clavesLote = txtInfo.claves.slice(0, 50);
+                        setTextareaClaves(clavesLote.join('\n'));
+                        handleTabChange('claves');
+                        toast.success(`${clavesLote.length} clave(s) cargadas en el panel de claves. Haz clic en "Consultar".`);
+                      }}
+                    >
+                      Cargar {Math.min(txtInfo.total, 50)} claves → Continuar importación
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
