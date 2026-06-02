@@ -869,12 +869,18 @@ router.put('/:id', async (req, res) => {
     if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
     if (compra.anulada) return res.status(400).json({ success: false, mensaje: 'No se puede editar una compra anulada' });
 
-    const { observaciones, proveedorId, fechaEmision, tipoGasto } = req.body || {};
+    const { observaciones, proveedorId, fechaEmision, tipoGasto,
+            subtotal0, subtotal15, totalIva } = req.body || {};
 
     const data = {};
     if (observaciones !== undefined) data.observaciones = limpiarTexto(observaciones) || null;
     if (proveedorId !== undefined) data.proveedorId = proveedorId ? parseInt(proveedorId, 10) : null;
     if (tipoGasto !== undefined) data.tipoGasto = limpiarTexto(tipoGasto) || null;
+
+    // Corrección manual del desglose IVA (para registros importados sin desglose)
+    if (subtotal0  !== undefined) data.subtotal0  = Math.max(0, parseFloat(subtotal0)  || 0);
+    if (subtotal15 !== undefined) data.subtotal15 = Math.max(0, parseFloat(subtotal15) || 0);
+    if (totalIva   !== undefined) data.totalIva   = Math.max(0, parseFloat(totalIva)   || 0);
 
     // Fecha solo si no tiene movimientos de inventario aplicados
     if (fechaEmision !== undefined && compra.movimientosInventario === 0) {

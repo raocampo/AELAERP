@@ -191,10 +191,15 @@ function extraerTarifaIvaDetalle(impuesto) {
   const tarifa = toNumber(impuesto.tarifa, NaN);
   if (Number.isFinite(tarifa)) return normalizarTarifaIva(tarifa);
 
+  // Tabla de codigoPorcentaje del SRI Ecuador:
+  //   0 → 0%    1 → 12% (histórico)   2 → 12%   3 → 14%   4 → No objeto
+  //   5 → 15%   6 → 15% (servicios)   7 → 5%    8 → 5% (bienes)
   const codigo = String(impuesto.codigoPorcentaje || impuesto.porcentajeCodigo || '').trim();
-  if (codigo === '0') return 0;
-  if (codigo === '5') return 5;
-  if (['2', '3', '4'].includes(codigo)) return 15;
+  if (codigo === '0' || codigo === '4') return 0;
+  if (codigo === '7' || codigo === '8') return 5;
+  if (codigo === '5' || codigo === '6') return 15;
+  if (['1', '2'].includes(codigo)) return 12;
+  if (codigo === '3') return 14;
   return 0;
 }
 

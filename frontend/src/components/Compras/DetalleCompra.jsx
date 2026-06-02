@@ -59,6 +59,9 @@ export default function DetalleCompra() {
   const [modalEditar, setModalEditar] = useState(false);
   const [editObs, setEditObs] = useState('');
   const [editTipoGasto, setEditTipoGasto] = useState('');
+  const [editSubtotal0, setEditSubtotal0] = useState('');
+  const [editSubtotal15, setEditSubtotal15] = useState('');
+  const [editTotalIva, setEditTotalIva] = useState('');
   const [guardando, setGuardando] = useState(false);
 
   // Modal anular
@@ -91,13 +94,25 @@ export default function DetalleCompra() {
   const abrirEditar = () => {
     setEditObs(compra?.observaciones || '');
     setEditTipoGasto(compra?.tipoGasto || '');
+    setEditSubtotal0(String(compra?.subtotal0 ?? ''));
+    setEditSubtotal15(String(compra?.subtotal15 ?? ''));
+    setEditTotalIva(String(compra?.totalIva ?? ''));
     setModalEditar(true);
   };
 
   const guardarEdicion = async () => {
     setGuardando(true);
     try {
-      await api.put(`/compras/${id}`, { observaciones: editObs, tipoGasto: editTipoGasto || null });
+      const body = {
+        observaciones: editObs,
+        tipoGasto: editTipoGasto || null,
+      };
+      // Solo enviar subtotales si el usuario los modificó (no vacíos)
+      if (editSubtotal0 !== '') body.subtotal0  = parseFloat(editSubtotal0)  || 0;
+      if (editSubtotal15 !== '') body.subtotal15 = parseFloat(editSubtotal15) || 0;
+      if (editTotalIva !== '') body.totalIva    = parseFloat(editTotalIva)   || 0;
+
+      await api.put(`/compras/${id}`, body);
       toast.success('Compra actualizada');
       setModalEditar(false);
       cargar();
@@ -163,16 +178,41 @@ export default function DetalleCompra() {
                 <option value="VIVIENDA">🏠 Vivienda</option>
                 <option value="VESTIMENTA">👔 Vestimenta</option>
                 <option value="TURISMO">✈ Turismo</option>
+                <option value="GASTOS_PERSONALES">👤 Gastos Personales</option>
+                <option value="GASTOS_PROFESIONALES">💼 Gastos Profesionales</option>
                 <option value="OTROS">📦 Otros deducibles</option>
               </select>
             </label>
+            <div style={{ fontSize: '.8rem', color: '#64748b', margin: '.25rem 0 .75rem' }}>
+              Desglose IVA — corregir si los valores aparecen en $0.00
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '.5rem', marginBottom: '.75rem' }}>
+              <label className="dc-modal-label" style={{ margin: 0 }}>
+                Base 0% IVA
+                <input className="dc-modal-input" type="number" step="0.01" min="0"
+                  value={editSubtotal0} onChange={(e) => setEditSubtotal0(e.target.value)}
+                  placeholder="0.00" />
+              </label>
+              <label className="dc-modal-label" style={{ margin: 0 }}>
+                Base 15% IVA
+                <input className="dc-modal-input" type="number" step="0.01" min="0"
+                  value={editSubtotal15} onChange={(e) => setEditSubtotal15(e.target.value)}
+                  placeholder="0.00" />
+              </label>
+              <label className="dc-modal-label" style={{ margin: 0 }}>
+                IVA pagado
+                <input className="dc-modal-input" type="number" step="0.01" min="0"
+                  value={editTotalIva} onChange={(e) => setEditTotalIva(e.target.value)}
+                  placeholder="0.00" />
+              </label>
+            </div>
             <label className="dc-modal-label">
               Observaciones
               <textarea
                 className="dc-modal-textarea"
                 value={editObs}
                 onChange={(e) => setEditObs(e.target.value)}
-                rows={4}
+                rows={3}
                 placeholder="Observaciones internas de la compra..."
               />
             </label>
