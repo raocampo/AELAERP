@@ -163,6 +163,153 @@ const SECCIONES = [
       </div>
     ),
   },
+  {
+    id: 'facturas',
+    icono: '🧾',
+    titulo: 'Emitir una factura electrónica',
+    contenido: (
+      <div className="ayuda-contenido">
+        <h4>Pasos para emitir una factura</h4>
+        <ol>
+          <li>Ve a <strong>Ventas → Facturas → + Nueva Factura</strong>.</li>
+          <li>Busca el cliente por nombre, RUC o cédula. Si no existe, créalo en el momento.</li>
+          <li>Agrega los productos/servicios: escribe el código o descripción y selecciona del listado.</li>
+          <li>Ajusta cantidades, precios y descuentos si aplica.</li>
+          <li>Selecciona la forma de pago (efectivo, tarjeta, transferencia, etc.).</li>
+          <li>Haz clic en <strong>Firmar y enviar</strong>. El sistema envía al SRI y obtiene la autorización.</li>
+          <li>El RIDE (PDF) se genera automáticamente. Puedes enviarlo por email o imprimirlo.</li>
+        </ol>
+        <h4>Estados de la factura</h4>
+        <table className="ayuda-tabla">
+          <thead><tr><th>Estado</th><th>Significado</th></tr></thead>
+          <tbody>
+            <tr><td>🟡 Pendiente</td><td>Guardada sin enviar al SRI</td></tr>
+            <tr><td>🔵 Enviada</td><td>Enviada al SRI, esperando autorización</td></tr>
+            <tr><td>🟢 Autorizada</td><td>Autorizada por el SRI — tiene validez legal</td></tr>
+            <tr><td>🔴 Rechazada</td><td>El SRI rechazó el comprobante — revisa los datos</td></tr>
+            <tr><td>⚫ Anulada</td><td>Anulada. Debes emitir una nueva si fue un error</td></tr>
+          </tbody>
+        </table>
+        <div className="ayuda-nota ayuda-nota-warning">
+          ⚠️ Una vez autorizada por el SRI, una factura <strong>no se puede editar ni eliminar</strong>. Para corregirla debes emitir una Nota de Crédito.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'compras-gastos',
+    icono: '🛒',
+    titulo: 'Compras — Clasificación de gastos para el SRI',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Clasificar tus facturas de compra es importante para la <strong>declaración del IVA</strong> y el cálculo de <strong>gastos deducibles</strong> en la declaración anual del Impuesto a la Renta.</p>
+
+        <h4>Categorías disponibles</h4>
+        <table className="ayuda-tabla">
+          <thead><tr><th>Categoría</th><th>¿Cuándo usarla?</th></tr></thead>
+          <tbody>
+            <tr><td>🏥 Salud</td><td>Medicamentos, consultas médicas, seguros de salud</td></tr>
+            <tr><td>📚 Educación</td><td>Colegiaturas, útiles, cursos, internet educativo</td></tr>
+            <tr><td>🍽 Alimentación</td><td>Supermercado, restaurantes, alimentos para el hogar</td></tr>
+            <tr><td>🏠 Vivienda</td><td>Arriendo, servicios básicos, reparaciones del hogar</td></tr>
+            <tr><td>👔 Vestimenta</td><td>Ropa, calzado, accesorios de vestir</td></tr>
+            <tr><td>✈ Turismo</td><td>Hoteles, pasajes, agencias de viaje nacionales</td></tr>
+            <tr><td>👤 Gastos Personales</td><td>Gastos personales deducibles para personas naturales (Form 107)</td></tr>
+            <tr><td>💼 Gastos Profesionales</td><td>Gastos propios del ejercicio profesional o actividad empresarial</td></tr>
+            <tr><td>📦 Otros deducibles</td><td>Cualquier otro gasto deducible no contemplado</td></tr>
+          </tbody>
+        </table>
+
+        <h4>Cómo clasificar una compra</h4>
+        <ol>
+          <li>Al registrar una compra: campo <strong>"Tipo de gasto (deducción SRI)"</strong> en el formulario.</li>
+          <li>En el listado de compras: clic en el ícono ✏ en la columna <strong>Tipo Gasto</strong> para clasificar sin abrir el detalle.</li>
+          <li>Usa el botón <strong>⚡ Auto-clasificar</strong> para que el sistema asigne categorías automáticamente basándose en el nombre del proveedor.</li>
+        </ol>
+
+        <h4>Reporte por clasificación</h4>
+        <p>En <strong>Compras</strong>, debajo de los filtros, verás la tabla <strong>"Resumen por clasificación de gasto"</strong> con:</p>
+        <ul>
+          <li><strong>Base 0%</strong>: subtotal de compras sin IVA (tarifa 0%)</li>
+          <li><strong>Base IVA</strong>: subtotal de compras con IVA (tarifa 15%)</li>
+          <li><strong>IVA pagado</strong>: total de IVA en las compras visibles</li>
+          <li><strong>Total</strong>: importe total incluyendo IVA</li>
+        </ul>
+        <p>Haz clic en <strong>📊 Descargar resumen CSV</strong> para exportar este reporte. Filtra primero por fecha o tipo de gasto para obtener el reporte que necesitas para tu declaración.</p>
+
+        <div className="ayuda-nota">
+          💡 Para la declaración del IVA (Form 104): usa la columna <strong>Base IVA</strong> como "Compras gravadas" y la columna <strong>IVA pagado</strong> como "IVA en compras".
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'pos',
+    icono: '🛍️',
+    titulo: 'POS — Punto de Venta',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>El módulo POS permite realizar ventas rápidas desde una interfaz optimizada para caja.</p>
+        <h4>Cómo usar el POS</h4>
+        <ol>
+          <li>Ve a <strong>POS</strong> desde el menú lateral.</li>
+          <li>Busca productos por código o descripción. Usa el escáner si tienes uno conectado.</li>
+          <li>Ajusta cantidades con los botones +/- o editando el campo directamente.</li>
+          <li>Selecciona el tipo de documento: <strong>Factura</strong> o <strong>Nota de Venta</strong>.</li>
+          <li>Si necesitas factura, ingresa el RUC/cédula del cliente. Para consumidor final deja en blanco.</li>
+          <li>Selecciona la forma de pago y haz clic en <strong>Cobrar</strong>.</li>
+          <li>El comprobante se envía al SRI automáticamente si está en modo Producción.</li>
+        </ol>
+        <div className="ayuda-nota">
+          💡 El POS integra automáticamente el cobro con la Caja Diaria si está abierta.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'caja',
+    icono: '💰',
+    titulo: 'Caja Diaria',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>La Caja Diaria registra todos los movimientos de efectivo del día.</p>
+        <h4>Flujo diario</h4>
+        <ol>
+          <li><strong>Apertura:</strong> Al iniciar el día ve a <strong>Ventas → Caja Diaria → Abrir Caja</strong>. Ingresa el monto inicial en efectivo.</li>
+          <li><strong>Durante el día:</strong> Las ventas en efectivo del POS se registran automáticamente. Puedes agregar ingresos o egresos manuales (pago de servicios, gastos menores, etc.).</li>
+          <li><strong>Cierre:</strong> Al final del día haz clic en <strong>Cerrar Caja</strong>. El sistema muestra el resumen con el saldo calculado vs el saldo real contado.</li>
+        </ol>
+        <div className="ayuda-nota ayuda-nota-warning">
+          ⚠️ Si el administrador configura "Cierre de caja obligatorio", no podrás emitir comprobantes al día siguiente sin cerrar la caja del día anterior.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'acceso',
+    icono: '🔗',
+    titulo: 'Acceso al sistema y marcadores',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Para acceder siempre al sistema correcto desde cualquier dispositivo, guarda la URL de acceso como marcador en tu navegador.</p>
+        <h4>¿Cuál URL guardar como marcador?</h4>
+        <ul>
+          <li>Si tu empresa está en la plataforma AELA con un slug (ej: mprq): <br/><code>https://aela.corpsimtelec.com/mprq</code></li>
+          <li>Si tu empresa tiene dominio propio (marca blanca): <br/><code>https://erp.tudominio.com</code></li>
+          <li>Si eres usuario de CorpSimtelec directamente: <br/><code>https://aela.corpsimtelec.com/login</code></li>
+        </ul>
+        <div className="ayuda-nota">
+          💡 La URL con el slug siempre redirige automáticamente al login de TU empresa, incluso si cierras sesión o usas un dispositivo diferente.
+        </div>
+        <h4>Soporte CorpSimtelec</h4>
+        <ul>
+          <li>📱 WhatsApp: <strong>+593 097 889 3520</strong></li>
+          <li>✉️ Email: <strong>soporte@corpsimtelec.com</strong></li>
+          <li>🌐 Web: <strong>corpsimtelec.com</strong></li>
+        </ul>
+      </div>
+    ),
+  },
 ];
 
 export default function AyudaSistema() {

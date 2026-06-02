@@ -38,7 +38,7 @@
 
 .compras-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 1rem;
   padding: 1rem;
 }
@@ -55,6 +55,50 @@
   color: #64748b;
   font-size: 0.92rem;
 }
+
+.compras-summary-card--iva strong { color: #7c3aed; }
+
+/* ── Resumen por clasificación ───────────────────────────────────────────── */
+.compras-resumen-tipo {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  margin: 0 1rem;
+}
+
+.compras-resumen-tipo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.compras-resumen-tipo-header h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.compras-resumen-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.compras-resumen-tabla th,
+.compras-resumen-tabla td {
+  padding: 0.45rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.compras-resumen-tabla th { background: #f8fafc; color: #475569; font-weight: 600; }
+.compras-resumen-tabla tfoot td { border-top: 2px solid #e2e8f0; border-bottom: none; }
+.compras-resumen-tabla .num { text-align: right; }
+.compras-resumen-tabla .iva-cell  { color: #7c3aed; }
+.compras-resumen-tabla .total-cell { color: #0f172a; font-weight: 600; }
 
 .compras-summary-card strong {
   display: block;

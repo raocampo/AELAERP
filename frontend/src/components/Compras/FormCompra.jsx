@@ -598,6 +598,8 @@ export default function FormCompra() {
                 <option value="VIVIENDA">🏠 Vivienda</option>
                 <option value="VESTIMENTA">👔 Vestimenta</option>
                 <option value="TURISMO">✈ Turismo</option>
+                <option value="GASTOS_PERSONALES">👤 Gastos Personales</option>
+                <option value="GASTOS_PROFESIONALES">💼 Gastos Profesionales</option>
                 <option value="OTROS">📦 Otros deducibles</option>
               </select>
             </label>

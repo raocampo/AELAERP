@@ -22,6 +22,8 @@ const TIPO_GASTO_OPCIONES = [
   { value: 'VIVIENDA', label: '🏠 Vivienda' },
   { value: 'VESTIMENTA', label: '👔 Vestimenta' },
   { value: 'TURISMO', label: '✈ Turismo' },
+  { value: 'GASTOS_PERSONALES', label: '👤 Gastos Personales' },
+  { value: 'GASTOS_PROFESIONALES', label: '💼 Gastos Profesionales' },
   { value: 'OTROS', label: '📦 Otros deducibles' },
   { value: 'SIN_CLASIFICAR', label: '⚠ Sin clasificar' },
 ];
@@ -35,6 +37,8 @@ const TIPO_GASTO_EDIT = [
   { value: 'VIVIENDA', label: '🏠 Vivienda' },
   { value: 'VESTIMENTA', label: '👔 Vestimenta' },
   { value: 'TURISMO', label: '✈ Turismo' },
+  { value: 'GASTOS_PERSONALES', label: '👤 Gastos Personales' },
+  { value: 'GASTOS_PROFESIONALES', label: '💼 Gastos Profesionales' },
   { value: 'OTROS', label: '📦 Otros deducibles' },
 ];
 
@@ -141,8 +145,41 @@ export default function ListaCompras() {
     }
   };
 
-  const totalCompras = items.reduce((acc, item) => acc + Number(item.importeTotal || 0), 0);
-  const conInventario = items.filter((item) => item.movimientosInventario > 0).length;
+  const totalCompras   = items.reduce((acc, it) => acc + Number(it.importeTotal || 0), 0);
+  const totalBase0     = items.reduce((acc, it) => acc + Number(it.subtotal0 || 0), 0);
+  const totalBase15    = items.reduce((acc, it) => acc + Number(it.subtotal15 || it.subtotal5 || 0), 0);
+  const totalIvaItems  = items.reduce((acc, it) => acc + Number(it.totalIva || 0), 0);
+  const conInventario  = items.filter((it) => it.movimientosInventario > 0).length;
+
+  // Resumen agrupado por tipo de gasto (para la tabla de clasificación)
+  const resumenPorTipo = Object.values(
+    items.reduce((acc, it) => {
+      const tipo = it.tipoGasto || 'SIN_CLASIFICAR';
+      if (!acc[tipo]) acc[tipo] = { tipo, count: 0, base0: 0, base15: 0, iva: 0, total: 0 };
+      acc[tipo].count++;
+      acc[tipo].base0  += Number(it.subtotal0  || 0);
+      acc[tipo].base15 += Number(it.subtotal15 || it.subtotal5 || 0);
+      acc[tipo].iva    += Number(it.totalIva   || 0);
+      acc[tipo].total  += Number(it.importeTotal || 0);
+      return acc;
+    }, {})
+  ).sort((a, b) => b.total - a.total);
+
+  const exportarResumenCsv = () => {
+    const labelDe = (v) => TIPO_GASTO_OPCIONES.find(o => o.value === v)?.label?.replace(/[^\w ]/g, '').trim() || v;
+    const lineas = [
+      'Clasificación,Facturas,Base 0%,Base IVA,IVA,Total',
+      ...resumenPorTipo.map(r =>
+        `"${labelDe(r.tipo)}",${r.count},${r.base0.toFixed(2)},${r.base15.toFixed(2)},${r.iva.toFixed(2)},${r.total.toFixed(2)}`
+      ),
+      `"TOTAL",${items.length},${totalBase0.toFixed(2)},${totalBase15.toFixed(2)},${totalIvaItems.toFixed(2)},${totalCompras.toFixed(2)}`,
+    ];
+    const blob = new Blob(['﻿' + lineas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: `resumen-compras-${new Date().toISOString().slice(0,10)}.csv` });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="compras-page">
@@ -174,10 +211,70 @@ export default function ListaCompras() {
           <strong>{fmtMoneda(totalCompras)}</strong>
         </article>
         <article className="compras-summary-card">
+          <span>Base 0% IVA</span>
+          <strong>{fmtMoneda(totalBase0)}</strong>
+        </article>
+        <article className="compras-summary-card">
+          <span>Base con IVA</span>
+          <strong>{fmtMoneda(totalBase15)}</strong>
+        </article>
+        <article className="compras-summary-card compras-summary-card--iva">
+          <span>IVA pagado</span>
+          <strong>{fmtMoneda(totalIvaItems)}</strong>
+        </article>
+        <article className="compras-summary-card">
           <span>Con inventario</span>
           <strong>{conInventario}</strong>
         </article>
       </section>
+
+      {items.length > 0 && resumenPorTipo.length > 0 && (
+        <section className="compras-resumen-tipo">
+          <div className="compras-resumen-tipo-header">
+            <h3>Resumen por clasificación de gasto</h3>
+            <button className="btn-secondary" onClick={exportarResumenCsv}>
+              📊 Descargar resumen CSV
+            </button>
+          </div>
+          <table className="compras-resumen-tabla">
+            <thead>
+              <tr>
+                <th>Clasificación</th>
+                <th className="num">Facturas</th>
+                <th className="num">Base 0%</th>
+                <th className="num">Base IVA</th>
+                <th className="num">IVA</th>
+                <th className="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resumenPorTipo.map((r) => {
+                const label = TIPO_GASTO_OPCIONES.find(o => o.value === r.tipo)?.label || r.tipo;
+                return (
+                  <tr key={r.tipo}>
+                    <td>{label}</td>
+                    <td className="num">{r.count}</td>
+                    <td className="num">{fmtMoneda(r.base0)}</td>
+                    <td className="num">{fmtMoneda(r.base15)}</td>
+                    <td className="num iva-cell">{fmtMoneda(r.iva)}</td>
+                    <td className="num total-cell">{fmtMoneda(r.total)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td><strong>TOTAL</strong></td>
+                <td className="num"><strong>{items.length}</strong></td>
+                <td className="num"><strong>{fmtMoneda(totalBase0)}</strong></td>
+                <td className="num"><strong>{fmtMoneda(totalBase15)}</strong></td>
+                <td className="num iva-cell"><strong>{fmtMoneda(totalIvaItems)}</strong></td>
+                <td className="num total-cell"><strong>{fmtMoneda(totalCompras)}</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </section>
+      )}
 
       <section className="compras-filtros">
         <input

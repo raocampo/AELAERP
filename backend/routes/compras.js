@@ -402,6 +402,7 @@ router.get('/', async (req, res) => {
     const selectConTipoGasto = {
       id: true, proveedorId: true, numeroFactura: true, numeroAutorizacion: true,
       fechaEmision: true, razonSocialProveedor: true, identificacionProveedor: true,
+      subtotal0: true, subtotal5: true, subtotal15: true, totalIva: true,
       importeTotal: true, registraInventario: true, egresoCajaRegistrado: true,
       movimientosInventario: true, origenRegistro: true,
       ...(cols.tipoGasto ? { tipoGasto: true } : {}),
