@@ -16,8 +16,26 @@
 // ============================================================
 
 const SRI_PORTAL_BASE  = 'https://srienlinea.sri.gob.ec';
-const SRI_AUTH_URL     = `${SRI_PORTAL_BASE}/movil-servicios/api/v2.0/contribuyente/login`;
+
+// Endpoints del portal móvil del SRI — probados en orden de preferencia
+const SRI_AUTH_URLS = [
+  `${SRI_PORTAL_BASE}/movil-servicios/api/v2.0/contribuyente/login`,
+  `${SRI_PORTAL_BASE}/movil-servicios/api/v1.0/contribuyente/login`,
+];
+const SRI_AUTH_URL      = SRI_AUTH_URLS[0]; // compatibilidad con código existente
 const SRI_RECIBIDOS_URL = `${SRI_PORTAL_BASE}/movil-servicios/api/v1.0/comprobante/recibidos`;
+
+// Headers que imitan la app oficial SRI Ecuador (Android)
+const SRI_MOBILE_HEADERS = {
+  'Content-Type':   'application/json',
+  'Accept':         'application/json',
+  'User-Agent':     'Dalvik/2.1.0 (Linux; U; Android 12; SM-G991B Build/SP1A.210812.016)',
+  'Accept-Language': 'es-EC,es;q=0.9,en;q=0.8',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Connection':     'keep-alive',
+  'Cache-Control':  'no-cache',
+  'X-Requested-With': 'ec.gob.sri.sri_movil',
+};
 
 const TIMEOUT_MS = 30_000;
 const LIMIT_POR_PAGINA = 100;
@@ -43,40 +61,62 @@ async function _fetch(url, opts = {}) {
  * @returns {string} token JWT para llamadas subsiguientes
  */
 async function autenticarSriPortal(identificacion, password) {
-  let resp;
-  try {
-    resp = await _fetch(SRI_AUTH_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept':        'application/json',
-        'User-Agent':    'AELA-ERP/1.0',
-      },
-      body: JSON.stringify({ user: identificacion, password }),
-    });
-  } catch (err) {
-    throw err; // ya viene con mensaje amigable de _fetch
-  }
+  let ultimoError = null;
 
-  if (resp.status === 401 || resp.status === 403) {
-    throw new Error('Credenciales SRI incorrectas. Verifica el RUC/cédula y la clave del portal.');
-  }
-  if (resp.status === 429) {
-    throw new Error('Demasiados intentos. Espera unos minutos antes de volver a intentar.');
-  }
-  if (!resp.ok) {
+  // Probar los endpoints en orden hasta que uno funcione
+  for (const authUrl of SRI_AUTH_URLS) {
+    let resp;
+    try {
+      resp = await _fetch(authUrl, {
+        method: 'POST',
+        headers: SRI_MOBILE_HEADERS,
+        body: JSON.stringify({ user: identificacion, password }),
+      });
+    } catch (err) {
+      ultimoError = err;
+      continue; // intentar siguiente endpoint
+    }
+
+    if (resp.status === 401 || resp.status === 403) {
+      throw new Error('Credenciales SRI incorrectas. Verifica el RUC/cédula y la clave del portal srienlinea.sri.gob.ec.');
+    }
+    if (resp.status === 429) {
+      throw new Error('Demasiados intentos al portal SRI. Espera unos minutos antes de volver a intentar.');
+    }
+
     const contentType = resp.headers.get('content-type') || '';
     const txt = await resp.text().catch(() => '');
-    // El SRI devuelve HTML cuando el endpoint no existe — evitar mostrar HTML crudo
-    if (resp.status === 404 || contentType.includes('text/html') || txt.trim().startsWith('<')) {
-      throw new Error(
-        'El servicio de consulta automática del portal SRI no está disponible ' +
-        `(HTTP ${resp.status}). El SRI no expone una API pública para esta operación. ` +
-        'Usa la pestaña "Importar ZIP" para importar comprobantes descargados manualmente desde srienlinea.sri.gob.ec.'
-      );
+
+    // El SRI devuelve HTML cuando el endpoint cambió de URL
+    if (!resp.ok || contentType.includes('text/html') || txt.trim().startsWith('<')) {
+      ultimoError = new Error(`Endpoint ${authUrl} no disponible (HTTP ${resp.status})`);
+      continue; // intentar siguiente endpoint
     }
-    throw new Error(`Error del portal SRI al autenticar (${resp.status}): ${txt.slice(0, 150)}`);
+
+    // Parsear JSON del token
+    let data = null;
+    try { data = JSON.parse(txt); } catch { /* continuar con siguiente endpoint */ }
+    if (!data) { ultimoError = new Error('Respuesta no JSON del portal SRI'); continue; }
+
+    const token =
+      data?.token       || data?.access_token ||
+      data?.accessToken || data?.userToken    ||
+      data?.tokenAcceso;
+
+    if (!token) {
+      ultimoError = new Error('El portal SRI no devolvió un token de acceso.');
+      continue;
+    }
+
+    return token; // ✅ autenticación exitosa
   }
+
+  // Todos los endpoints fallaron
+  const msgBase = ultimoError?.message || 'Error desconocido';
+  throw new Error(
+    `No se pudo conectar al portal SRI. ${msgBase}. ` +
+    'Alternativas: usa "Importar TXT del SRI" o "Importar ZIP" con archivos descargados de srienlinea.sri.gob.ec.'
+  );
 
   const data = await resp.json().catch(() => null);
   if (!data) throw new Error('Respuesta inválida del portal SRI al autenticar');
@@ -127,9 +167,8 @@ async function consultarRecibidos(token, {
 
   const resp = await _fetch(`${SRI_RECIBIDOS_URL}?${qs}`, {
     headers: {
+      ...SRI_MOBILE_HEADERS,
       Authorization: `Bearer ${token}`,
-      Accept:        'application/json',
-      'User-Agent':  'AELA-ERP/1.0',
     },
   });
 

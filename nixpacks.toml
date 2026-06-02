@@ -9,6 +9,9 @@ nixPkgs = [
   # Node.js debe incluirse explícitamente al usar setup personalizado
   "nodejs_20",
   "postgresql",
+  # Chromium del sistema (más confiable que el Chrome que descarga Puppeteer)
+  "chromium",
+  # Dependencias de Chromium
   "nss",
   "nspr",
   "alsa-lib",
@@ -31,3 +34,8 @@ nixPkgs = [
   "gdk-pixbuf",
   "gtk3",
 ]
+
+[variables]
+# Usar el Chromium del sistema en vez del Chrome descargado por Puppeteer
+PUPPETEER_EXECUTABLE_PATH = "chromium"
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
