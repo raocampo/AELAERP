@@ -125,6 +125,20 @@ router.put('/tenants/:id', verificarSuperAdmin, async (req, res) => {
         data[c] = req.body[c];
       }
     }
+
+    // Dominio personalizado (marca blanca) — se guarda dentro de brandConfig.dominio
+    if (req.body.dominioPersonalizado !== undefined) {
+      const tenantActual = await master.tenants.findUnique({
+        where:  { id: parseInt(req.params.id, 10) },
+        select: { brandConfig: true },
+      });
+      const bcActual = (tenantActual?.brandConfig && typeof tenantActual.brandConfig === 'object')
+        ? tenantActual.brandConfig
+        : {};
+      const dominio = String(req.body.dominioPersonalizado || '').trim().toLowerCase();
+      data.brandConfig = { ...bcActual, dominio: dominio || null };
+    }
+
     const tenant = await master.tenants.update({
       where: { id: parseInt(req.params.id, 10) },
       data,

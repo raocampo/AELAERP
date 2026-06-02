@@ -73,6 +73,37 @@ router.get('/bootstrap-status', async (req, res) => {
   }
 });
 
+// GET /api/auth/identificar-dominio?host=erp.miempresa.com
+// Endpoint público: dado un hostname devuelve el slug del tenant que lo tiene configurado.
+// Usado por el frontend cuando se carga desde un dominio personalizado (marca blanca).
+router.get('/identificar-dominio', async (req, res) => {
+  const host = String(req.query.host || '').trim().toLowerCase().split(':')[0];
+  if (!host) return res.json({ success: true, data: null });
+
+  try {
+    const { getPrismaMaster } = require('../config/prismaMaster');
+    const master = getPrismaMaster();
+    if (!master) return res.json({ success: true, data: null });
+
+    const tenants = await master.tenants.findMany({
+      where:  { estado: 'activo' },
+      select: { slug: true, plan: true, brandConfig: true },
+    });
+
+    const found = tenants.find((t) => {
+      const bc = t.brandConfig;
+      if (!bc || typeof bc !== 'object') return false;
+      const dominios = Array.isArray(bc.dominios) ? bc.dominios : [];
+      if (bc.dominio) dominios.push(bc.dominio);
+      return dominios.includes(host);
+    });
+
+    res.json({ success: true, data: found ? { slug: found.slug, plan: found.plan } : null });
+  } catch {
+    res.json({ success: true, data: null });
+  }
+});
+
 // GET /api/auth/branding — branding público (sin auth) para personalizar el login
 router.get('/branding', async (req, res) => {
   try {

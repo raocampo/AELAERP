@@ -62,16 +62,17 @@ function useSaApi(clave) {
 // ─── Modal editar tenant ──────────────────────────────────────────────────────
 function ModalEditar({ tenant, onGuardar, onCerrar }) {
   const [form, setForm] = useState({
-    plan:             tenant.plan            || 'lite',
-    estado:           tenant.estado          || 'activo',
-    nombreContacto:   tenant.nombreContacto  || '',
-    emailContacto:    tenant.emailContacto   || '',
-    telefonoContacto: tenant.telefonoContacto || '',
-    fechaVencimiento: tenant.fechaVencimiento
+    plan:                tenant.plan            || 'lite',
+    estado:              tenant.estado          || 'activo',
+    nombreContacto:      tenant.nombreContacto  || '',
+    emailContacto:       tenant.emailContacto   || '',
+    telefonoContacto:    tenant.telefonoContacto || '',
+    fechaVencimiento:    tenant.fechaVencimiento
       ? new Date(tenant.fechaVencimiento).toISOString().slice(0, 10)
       : '',
-    esTrial:   tenant.esTrial   || false,
-    autoRenovar: tenant.autoRenovar || false,
+    esTrial:             tenant.esTrial      || false,
+    autoRenovar:         tenant.autoRenovar  || false,
+    dominioPersonalizado: (tenant.brandConfig?.dominio) || '',
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -126,6 +127,17 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
             <label>Teléfono</label>
             <input type="text" value={form.telefonoContacto}
               onChange={e => set('telefonoContacto', e.target.value)} />
+          </div>
+
+          <div className="sa-form-row">
+            <label>Dominio personalizado <span className="sa-hint">(marca blanca)</span></label>
+            <input type="text" value={form.dominioPersonalizado}
+              onChange={e => set('dominioPersonalizado', e.target.value)}
+              placeholder="erp.miempresa.com (sin https://)" />
+            <small className="sa-hint-block">
+              El cliente accede desde su propio dominio — sin pasar por /slug.
+              Requiere que su DNS apunte a Vercel y el dominio esté agregado en Vercel.
+            </small>
           </div>
 
           <div className="sa-form-row sa-form-row--checks">

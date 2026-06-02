@@ -387,6 +387,9 @@
 .sa-form-row select:focus {
   border-color: #6d28d9;
 }
+.sa-hint       { font-size: 0.75rem; color: #94a3b8; font-weight: 400; }
+.sa-hint-block { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; display: block; line-height: 1.4; }
+
 .sa-form-row--checks {
   flex-direction: row;
   gap: 20px;

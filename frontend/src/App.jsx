@@ -15,19 +15,44 @@ import { obtenerModulosHabilitados, planBloqueadoPorRequisito } from './utils/si
 
 import './App.css';
 
-// Capturar ?tenant=slug al abrir el link de acceso enviado por correo.
-// Se guarda en localStorage para que api.js lo envíe como X-Tenant-Slug en cada petición.
-// Se limpia la URL inmediatamente para que no quede visible en el historial.
-(function capturarTenantSlug() {
+// ── Resolución de tenant al cargar la app ────────────────────────────────────
+// 1. Capturar ?tenant=slug del link de bienvenida por email.
+// 2. Si se carga desde un dominio personalizado (marca blanca), resolver el slug
+//    consultando al backend para que api.js lo envíe como X-Tenant-Slug.
+(function resolverTenantInicial() {
   try {
+    // 1. ?tenant=slug en la URL (link del email de bienvenida)
     const params = new URLSearchParams(window.location.search);
-    const slug = params.get('tenant');
-    if (slug && slug.trim()) {
-      localStorage.setItem('aela_tenant_slug', slug.trim());
+    const slugParam = params.get('tenant');
+    if (slugParam?.trim()) {
+      localStorage.setItem('aela_tenant_slug', slugParam.trim());
       params.delete('tenant');
       const qs = params.toString();
-      const url = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
-      window.history.replaceState({}, '', url);
+      window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+      return; // ya tenemos slug, no necesitamos detectar dominio
+    }
+
+    // 2. Dominio personalizado: si el hostname no es el dominio base de AELA,
+    //    consultar al backend qué tenant corresponde a este dominio.
+    const hostname    = window.location.hostname;
+    const dominioBase = 'aela.corpsimtelec.com';
+    const esLocal     = hostname === 'localhost' || hostname === '127.0.0.1';
+    const esDominioBase = hostname === dominioBase || hostname.endsWith('.vercel.app');
+
+    if (!esLocal && !esDominioBase) {
+      const slugActual = localStorage.getItem('aela_tenant_slug');
+      if (!slugActual) {
+        const apiUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL)
+          || '/api';
+        fetch(`${apiUrl}/auth/identificar-dominio?host=${encodeURIComponent(hostname)}`)
+          .then(r => r.json())
+          .then(json => {
+            if (json?.data?.slug) {
+              localStorage.setItem('aela_tenant_slug', json.data.slug);
+            }
+          })
+          .catch(() => {});
+      }
     }
   } catch (_) {}
 })();
