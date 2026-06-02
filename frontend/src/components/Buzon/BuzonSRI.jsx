@@ -106,6 +106,9 @@ export default function BuzonSRI() {
   const [historial, setHistorial]             = useState(null);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
+  const [diagnostico, setDiagnostico]         = useState(null);
+  const [corrDiagnostico, setCorrDiagnostico] = useState(false);
+
   // ── Parsear archivo TXT del portal SRI ──────────────────────
   // El SRI descarga archivos TXT/CSV con claves de acceso de 49 dígitos.
   // Se extraen con regex y se cargan en el textarea de claves.
@@ -288,6 +291,19 @@ export default function BuzonSRI() {
     setDmPassword(''); setDmResultados([]); setDmSeleccionados(new Set()); setDmResumen(null); setDmPaso(1);
   };
 
+  const ejecutarDiagnostico = async () => {
+    setCorrDiagnostico(true);
+    setDiagnostico(null);
+    try {
+      const res = await api.get('/buzon/sri/diagnostico');
+      setDiagnostico(res.data?.data || null);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al ejecutar diagnóstico');
+    } finally {
+      setCorrDiagnostico(false);
+    }
+  };
+
   const cargarHistorial = useCallback(async () => {
     setCargandoHistorial(true);
     try {
@@ -308,7 +324,49 @@ export default function BuzonSRI() {
           <h1>📥 Buzón SRI</h1>
           <p>Importa documentos electrónicos recibidos: facturas de proveedores, retenciones de clientes, notas de crédito y débito.</p>
         </div>
+        <button
+          className="btn-secondary"
+          onClick={ejecutarDiagnostico}
+          disabled={corrDiagnostico}
+          title="Verifica la conexión con el portal SRI y el estado de Chrome"
+        >
+          {corrDiagnostico ? '⏳ Verificando…' : '🔍 Diagnóstico SRI'}
+        </button>
       </div>
+
+      {diagnostico && (
+        <div className="buzon-diagnostico">
+          <h4>🔍 Diagnóstico de conexión SRI</h4>
+          <div className="buzon-diag-checks">
+            {diagnostico.checks?.map((c, i) => (
+              <div key={i} className={`buzon-diag-check ${c.ok ? 'ok' : 'fail'}`}>
+                <span className="buzon-diag-icon">{c.ok ? '✅' : '❌'}</span>
+                <div>
+                  <strong>{c.tipo}</strong>
+                  {c.url && <span className="buzon-diag-url"> {c.url.replace('https://srienlinea.sri.gob.ec', '')}</span>}
+                  {c.nota && <div className="buzon-diag-nota">{c.nota}</div>}
+                  {c.version && <div className="buzon-diag-nota">Chrome: {c.version}</div>}
+                  {c.error && <div className="buzon-diag-error">{c.error}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="buzon-diag-resumen">
+            {(() => {
+              const portalOk  = diagnostico.checks?.find(c => c.tipo === 'SRI-Portal')?.ok;
+              const chromeOk  = diagnostico.checks?.find(c => c.tipo === 'Chrome')?.ok;
+              if (portalOk && chromeOk)
+                return '✅ Portal SRI accesible y Chrome listo — la descarga automática debería funcionar.';
+              if (portalOk && !chromeOk)
+                return '🟡 Portal SRI accesible pero Chrome no está disponible en el servidor. Usa "Importar TXT del SRI".';
+              if (!portalOk)
+                return '🔴 No se puede acceder al portal SRI. Usa "Importar TXT del SRI" o "Importar ZIP".';
+              return '🟡 Estado parcial — prueba la descarga automática.';
+            })()}
+          </div>
+          <button className="btn-secondary" style={{ marginTop: '.5rem', fontSize: '.8rem' }} onClick={() => setDiagnostico(null)}>Cerrar</button>
+        </div>
+      )}
 
       <div className="buzon-tabs-bar">
         <button className={`buzon-tab ${tab === 'descarga' ? 'active' : ''}`} onClick={() => handleTabChange('descarga')}>🔗 Descarga automática SRI</button>

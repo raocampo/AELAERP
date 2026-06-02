@@ -3,32 +3,59 @@
 //  Scraping del portal SRI en línea con Puppeteer.
 //
 //  Flujo:
-//    1. scraperSriLogin(ruc, password)        → session cookies
+//    1. scraperSriLogin(ruc, password)        → { cookies }
 //    2. scraperSriRecibidos(cookies, params)  → { total, items[] }
-//    3. obtenerRecibidosScraper(params)       → items[] (paginado)
+//    3. obtenerRecibidosScraper(params)       → items[] (por mes)
 //
-//  La clave de acceso de cada comprobante se extrae de la tabla
-//  "Comprobantes Recibidos" del portal srienlinea.sri.gob.ec.
+//  Portal confirmado 2026-06-02:
+//    Login : srienlinea.sri.gob.ec/  (redirige a JSF login)
+//    Docs  : srienlinea.sri.gob.ec/comprobantes-electronicos-internet/pages/consultas/menu.jsf
+//    El portal usa filtro AÑO + MES (no rango de fechas).
 // ============================================================
 
 const puppeteer = require('puppeteer');
 const nodePath   = require('path');
 const { execSync } = require('child_process');
 
-const SRI_BASE          = 'https://srienlinea.sri.gob.ec';
-const SRI_LOGIN_URL     = `${SRI_BASE}/sri-en-linea/SriLoginInternet/ConsultaRucActionInternet/AgregarServicio`;
-const SRI_RECIBIDOS_URL = `${SRI_BASE}/sri-en-linea/VOE/consultas/recepcionComprobantes/RecepcionComprobantes.jsf`;
+const SRI_BASE = 'https://srienlinea.sri.gob.ec';
 
-const TIMEOUT_NAV    = 45_000;
-const TIMEOUT_SEL    = 20_000;
-const MAX_PAGINAS    = 30;  // máx 3 000 docs (30 páginas × 100)
+// ── URLs confirmadas del portal SRI (JSF, vigente al 2026-06-02) ─
+const SRI_LOGIN_URL     = `${SRI_BASE}/`;                 // redirige al login JSF si no autenticado
+const SRI_LOGIN_URL_ALT = `${SRI_BASE}/sri-en-linea/`;   // home del portal
+const SRI_LOGIN_JSF     = `${SRI_BASE}/sri-en-linea/SriLoginInternet/ConsultaRucActionInternet/AgregarServicio`;
 
-// ─── Resolver ruta absoluta de Chromium ─────────────────────
-// Cuando PUPPETEER_EXECUTABLE_PATH es solo un nombre ("chromium"),
-// lo convierte a ruta absoluta via `which` para que spawn lo encuentre.
+// URL real de comprobantes recibidos (confirmada 2026-06-02)
+const SRI_RECIBIDOS_URL = `${SRI_BASE}/comprobantes-electronicos-internet/pages/consultas/menu.jsf`;
+
+const TIMEOUT_NAV  = 40_000;
+const TIMEOUT_SEL  = 15_000;
+const MAX_PAGINAS  = 30;   // máx 3 000 docs (30 páginas × 100)
+
+// ── Detectar si la URL es la página de login ─────────────────
+function _esUrlLogin(url) {
+  return url.includes('/auth/login') ||
+         url.includes('SriLoginInternet') ||
+         url.includes('AgregarServicio') ||
+         url.includes('/login');
+}
+
+// ── Detectar si el login fue exitoso ─────────────────────────
+// Se agrega el patrón de la URL de comprobantes y del home JSF
+function _esUrlAutenticada(url) {
+  return url.includes('/contribuyente/') ||
+         url.includes('/sri-en-linea/home') ||
+         url.includes('/sri-en-linea/inicio') ||
+         url.includes('/comprobantes/') ||
+         url.includes('/comprobantes-electronicos-internet/') ||
+         url.includes('/menuOpciones') ||
+         url.includes('/Servicios.jsf') ||
+         url.includes('/menu.jsf');
+}
+
+// ─── Resolver ruta absoluta de Chromium ──────────────────────
 function _resolverRutaChromium() {
   const raw = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROMIUM_PATH;
-  if (!raw) return null; // Puppeteer usará el Chrome que descargó
+  if (!raw) return null;
   if (nodePath.isAbsolute(raw)) return raw;
   try {
     const fullPath = execSync(`which "${raw}" 2>/dev/null`, {
@@ -38,10 +65,10 @@ function _resolverRutaChromium() {
     }).trim();
     if (fullPath) return fullPath;
   } catch { /* noop */ }
-  return raw; // usar como está (puede estar en PATH)
+  return raw;
 }
 
-// ─── Lanzar navegador ────────────────────────────────────────
+// ─── Lanzar navegador ─────────────────────────────────────────
 async function _lanzarNavegador() {
   const execPath = _resolverRutaChromium();
 
@@ -69,9 +96,7 @@ async function _lanzarNavegador() {
   try {
     return await puppeteer.launch(opts);
   } catch (err) {
-    throw new Error(
-      `BROWSER_UNAVAILABLE: No se pudo iniciar el navegador: ${err.message}`
-    );
+    throw new Error(`BROWSER_UNAVAILABLE: No se pudo iniciar el navegador: ${err.message}`);
   }
 }
 
@@ -80,9 +105,7 @@ async function _buscarPrimerSelector(page, selectors) {
     try {
       const el = await page.$(sel);
       if (el) return el;
-    } catch {
-      // Algunos selectores pueden dejar de ser válidos si cambia el portal.
-    }
+    } catch { /* continuar */ }
   }
   return null;
 }
@@ -91,7 +114,9 @@ async function _clickControlPorTexto(page, textos = []) {
   return page.evaluate((labels) => {
     const normalizar = (txt) => String(txt || '').trim().toLowerCase();
     const buscados = labels.map(normalizar);
-    const controles = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a'));
+    const controles = Array.from(document.querySelectorAll(
+      'button, input[type="submit"], input[type="button"], a'
+    ));
     const encontrado = controles.find((el) => {
       const texto = normalizar(el.textContent || el.value || el.getAttribute('aria-label'));
       return buscados.some((label) => texto.includes(label));
@@ -102,294 +127,155 @@ async function _clickControlPorTexto(page, textos = []) {
   }, textos).catch(() => false);
 }
 
-// ─── Autenticación ───────────────────────────────────────────
-/**
- * Autenticar en el portal SRI y retornar cookies de sesión.
- * @returns {Array} cookies del navegador tras login exitoso
- */
-async function scraperSriLogin(identificacion, password) {
-  let browser;
-  try {
-    browser = await _lanzarNavegador();
-    const page = await browser.newPage();
+// ─── Descomponer rango de fechas en meses ─────────────────────
+// Entrada: dd/mm/yyyy — Salida: [{ anio, mes }, ...]
+function _mesesEnRango(fechaDesde, fechaHasta) {
+  const pd = String(fechaDesde || '').split('/');
+  const ph = String(fechaHasta || '').split('/');
+  const anioIni = parseInt(pd[2], 10) || new Date().getFullYear();
+  const mesIni  = parseInt(pd[1], 10) || 1;
+  const anioFin = parseInt(ph[2], 10) || anioIni;
+  const mesFin  = parseInt(ph[1], 10) || 12;
 
-    // Silenciar errores de recursos externos
-    page.on('requestfailed', () => {});
-    await page.setExtraHTTPHeaders({ 'Accept-Language': 'es-EC,es;q=0.9' });
-
-    // ── Ir a la página de login ──────────────────────────────
-    await page.goto(SRI_LOGIN_URL, {
-      waitUntil: 'networkidle2',
-      timeout: TIMEOUT_NAV,
-    });
-
-    // ── Detectar campos de login ─────────────────────────────
-    // El portal SRI usa distintos IDs según la versión; intentamos varios
-    const SELECTORS_USER = [
-      '#usuario',
-      '#ruc',
-      'input[name="usuario"]',
-      'input[name="ruc"]',
-      'input[id*="usuario"]',
-      'input[type="text"]:first-of-type',
-    ];
-    const SELECTORS_PASS = [
-      '#contrasenia',
-      '#password',
-      'input[name="contrasenia"]',
-      'input[name="password"]',
-      'input[id*="contrasenia"]',
-      'input[type="password"]',
-    ];
-
-    const userField = await _buscarPrimerSelector(page, SELECTORS_USER);
-    if (!userField) {
-      await browser.close();
-      throw new Error(
-        'No se encontró el campo de usuario en el portal SRI. ' +
-        'El portal puede haber cambiado su estructura. Usa la pestaña "Importar ZIP".'
-      );
-    }
-
-    const passField = await _buscarPrimerSelector(page, SELECTORS_PASS);
-    if (!passField) {
-      await browser.close();
-      throw new Error('No se encontró el campo de contraseña en el portal SRI.');
-    }
-
-    // ── Llenar credenciales ──────────────────────────────────
-    await userField.click({ clickCount: 3 });
-    await userField.type(identificacion, { delay: 40 });
-
-    await passField.click({ clickCount: 3 });
-    await passField.type(password, { delay: 40 });
-
-    // ── Submit ───────────────────────────────────────────────
-    const SELECTORS_SUBMIT = [
-      'button[type="submit"]',
-      'input[type="submit"]',
-      '#btnIngresar',
-      '[id*="btnIngresar"]',
-      '[id*="ingresar"]',
-    ];
-
-    let submitted = false;
-    const btn = await _buscarPrimerSelector(page, SELECTORS_SUBMIT);
-    if (btn) {
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }),
-        btn.click(),
-      ]).catch(() => {}); // ignora timeout de navegación; revisamos URL después
-      submitted = true;
-    } else {
-      submitted = await Promise.all([
-        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }).catch(() => {}),
-        _clickControlPorTexto(page, ['Ingresar', 'Entrar', 'Acceder']),
-      ]).then(([, clicked]) => Boolean(clicked)).catch(() => false);
-    }
-
-    if (!submitted) {
-      // Fallback: Enter en el campo de contraseña
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }),
-        passField.press('Enter'),
-      ]).catch(() => {});
-    }
-
-    // ── Verificar login exitoso ──────────────────────────────
-    const urlActual = page.url();
-
-    // Si sigue en la página de login → credenciales incorrectas
-    if (urlActual.includes('SriLoginInternet') || urlActual.includes('AgregarServicio')) {
-      // Revisar si hay mensaje de error en la página
-      const mensajeError = await page.$eval(
-        '[id*="mensajeError"], .msgError, .error-message, .ui-messages-error-detail',
-        (el) => el.textContent.trim()
-      ).catch(() => null);
-
-      await browser.close();
-      throw new Error(
-        mensajeError ||
-        'Las credenciales del portal SRI son incorrectas. ' +
-        'Verifica el RUC/cédula y la contraseña del portal srienlinea.sri.gob.ec.'
-      );
-    }
-
-    const cookies = await page.cookies();
-    await browser.close();
-    return cookies;
-  } catch (err) {
-    if (browser) await browser.close().catch(() => {});
-    throw err;
+  const meses = [];
+  let y = anioIni, m = mesIni;
+  while (y < anioFin || (y === anioFin && m <= mesFin)) {
+    meses.push({ anio: y, mes: m });
+    if (++m > 12) { m = 1; y++; }
   }
+  return meses.length > 0 ? meses : [{ anio: anioIni, mes: mesIni }];
 }
 
-// ─── Consulta de comprobantes recibidos ──────────────────────
-/**
- * Consultar comprobantes recibidos usando las cookies de sesión.
- * @param {Array}  cookies     Cookies obtenidas en scraperSriLogin
- * @param {object} params      { ruc, fechaDesde, fechaHasta, tipoComprobante }
- *   fechaDesde / fechaHasta en formato 'dd/mm/yyyy' o 'yyyy-mm-dd'
- * @returns {{ total: number, items: Array }}
- */
-async function scraperSriRecibidos(cookies, {
-  ruc,
-  fechaDesde,
-  fechaHasta,
-  tipoComprobante = 'TODOS',
-} = {}) {
-  const fDesde = _normalizarFecha(fechaDesde);
-  const fHasta = _normalizarFecha(fechaHasta);
+// ─── Llenar el formulario JSF de comprobantes (año + mes) ─────
+// El portal SRI filtra por período (año + mes), no por rango de fechas.
+async function _consultarMesJsf(page, ruc, anio, mes, tipoComprobante) {
+  // 1. Seleccionar radio "Ruc/Cédula/Pasaporte" (primer radio del formulario)
+  await page.evaluate(() => {
+    const radios = document.querySelectorAll('input[type="radio"]');
+    if (radios[0]) radios[0].click();
+  }).catch(() => {});
 
-  let browser;
-  try {
-    browser = await _lanzarNavegador();
-    const page = await browser.newPage();
-    page.on('requestfailed', () => {});
-
-    // ── Restaurar sesión ─────────────────────────────────────
-    await page.setCookie(...cookies);
-
-    // ── Ir a comprobantes recibidos ──────────────────────────
-    await page.goto(SRI_RECIBIDOS_URL, {
-      waitUntil: 'networkidle2',
-      timeout: TIMEOUT_NAV,
-    });
-
-    // Si nos redirigió a login, la sesión expiró
-    if (page.url().includes('SriLoginInternet')) {
-      await browser.close();
-      throw new Error('La sesión del portal SRI expiró. Vuelve a intentar.');
-    }
-
-    // ── Llenar filtro de fechas ──────────────────────────────
-    await _llenarFiltroFechas(page, fDesde, fHasta, tipoComprobante);
-
-    // ── Recolectar resultados paginados ──────────────────────
-    const items = [];
-    let paginaActual = 0;
-    let totalReportado = 0;
-
-    for (paginaActual = 0; paginaActual < MAX_PAGINAS; paginaActual++) {
-      if (paginaActual > 0) {
-        const hayMas = await _irSiguientePagina(page);
-        if (!hayMas) break;
+  // 2. Llenar campo RUC (puede estar pre-relleno por la sesión)
+  if (ruc) {
+    const rucSels = [
+      'input[id*="identificacion"]', 'input[name*="identificacion"]',
+      'input[id*="ruc"]',            'input[name*="ruc"]',
+      'input[id*="cedula"]',         'input[name*="cedula"]',
+    ];
+    for (const sel of rucSels) {
+      const el = await page.$(sel).catch(() => null);
+      if (!el) continue;
+      const visible = await el.evaluate(e => e.offsetParent !== null).catch(() => false);
+      if (!visible) continue;
+      const actual = await el.evaluate(e => e.value).catch(() => '');
+      if (actual !== ruc) {
+        await el.click({ clickCount: 3 });
+        await el.type(ruc, { delay: 30 });
       }
-
-      // Esperar tabla
-      await page.waitForSelector(
-        'table[id*="comprobante"], table[id*="Comprobante"], .dataTable, [role="grid"]',
-        { timeout: TIMEOUT_SEL }
-      ).catch(() => {});
-
-      const { rows, total } = await _extraerFilas(page);
-      if (total > 0 && totalReportado === 0) totalReportado = total;
-      if (rows.length === 0) break;
-
-      items.push(...rows);
-      if (items.length >= totalReportado && totalReportado > 0) break;
+      break;
     }
-
-    await browser.close();
-    return {
-      total: totalReportado || items.length,
-      items: _deduplicar(items),
-    };
-  } catch (err) {
-    if (browser) await browser.close().catch(() => {});
-    throw err;
   }
-}
 
-// ─── Llenar filtro de fechas ─────────────────────────────────
-async function _llenarFiltroFechas(page, fechaDesde, fechaHasta, tipoComprobante) {
-  // Intentar localizar y llenar el campo fechaDesde
-  const SEL_DESDE = [
-    '#fecDatDesde',
-    '[id*="fechaDesde"]',
-    '[id*="fecDesde"]',
-    'input[name*="fechaDesde"]',
-    'input[name*="fecDesde"]',
+  // 3. Seleccionar año
+  const anioSels = [
+    'select[id*="anio"]', 'select[name*="anio"]',
+    'select[id*="ano"]',  'select[name*="ano"]',
+    'select[id*="year"]', 'select[name*="year"]',
+    'select[id*="Year"]',
   ];
-  const SEL_HASTA = [
-    '#fecDatHasta',
-    '[id*="fechaHasta"]',
-    '[id*="fecHasta"]',
-    'input[name*="fechaHasta"]',
-    'input[name*="fecHasta"]',
+  for (const sel of anioSels) {
+    try {
+      if (!await page.$(sel)) continue;
+      await page.select(sel, String(anio));
+      break;
+    } catch { /* continuar */ }
+  }
+
+  // 4. Seleccionar mes (puede ser "1"-"12" o "01"-"12")
+  const mesSels = [
+    'select[id*="mes"]',   'select[name*="mes"]',
+    'select[id*="month"]', 'select[name*="month"]',
+    'select[id*="Mes"]',
   ];
-  const SEL_BUSCAR = [
-    '#btnBuscar',
-    '[id*="btnBuscar"]',
-    '[id*="buscar"]',
-    'input[value*="Buscar"]',
-  ];
+  for (const sel of mesSels) {
+    try {
+      if (!await page.$(sel)) continue;
+      const mesStr    = String(mes);
+      const mesStr2   = mesStr.padStart(2, '0');
+      let seleccionado = false;
+      for (const v of [mesStr, mesStr2]) {
+        try { await page.select(sel, v); seleccionado = true; break; } catch { /* probar siguiente */ }
+      }
+      if (seleccionado) break;
+    } catch { /* continuar */ }
+  }
 
-  const desde = await _buscarPrimerSelector(page, SEL_DESDE);
-  if (desde) { await desde.click({ clickCount: 3 }); await desde.type(fechaDesde); }
-
-  const hasta = await _buscarPrimerSelector(page, SEL_HASTA);
-  if (hasta) { await hasta.click({ clickCount: 3 }); await hasta.type(fechaHasta); }
-
-  // Tipo de comprobante si aplica
+  // 5. Tipo de comprobante (dejar en default si es TODOS)
   if (tipoComprobante && tipoComprobante !== 'TODOS') {
-    const SEL_TIPO = ['#tipoComprobante', '[id*="tipoCom"]', 'select[name*="tipo"]'];
-    for (const sel of SEL_TIPO) {
+    const tipoSels = [
+      'select[id*="tipo"]',       'select[name*="tipo"]',
+      'select[id*="comprobante"]', 'select[name*="comprobante"]',
+    ];
+    for (const sel of tipoSels) {
       try {
-        const el = await page.$(sel);
-        if (!el) continue;
+        if (!await page.$(sel)) continue;
         await page.select(sel, tipoComprobante).catch(() => {});
         break;
-      } catch {
-        // Continuar con el siguiente selector si el portal cambió.
-      }
+      } catch { /* continuar */ }
     }
   }
 
-  // Click en Buscar y esperar resultado
-  let buscado = false;
-  const buscar = await _buscarPrimerSelector(page, SEL_BUSCAR);
-  if (buscar) {
+  // 6. Click en "Consultar"
+  const btnSels = [
+    'input[value="Consultar"]',
+    'input[value="consultar"]',
+    '[id*="btnConsultar"]',
+    '[id*="consultar"]',
+    'button[type="submit"]',
+    'input[type="submit"]',
+  ];
+  let clicked = false;
+  for (const sel of btnSels) {
+    const btn = await page.$(sel).catch(() => null);
+    if (!btn) continue;
     await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }).catch(() => {}),
-      buscar.click(),
+      page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: TIMEOUT_NAV }).catch(() => {}),
+      btn.click(),
     ]);
-    buscado = true;
-  } else {
-    buscado = await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }).catch(() => {}),
-      _clickControlPorTexto(page, ['Buscar', 'Consultar']),
-    ]).then(([, clicked]) => Boolean(clicked)).catch(() => false);
+    clicked = true;
+    break;
+  }
+  if (!clicked) {
+    const ok = await _clickControlPorTexto(page, ['Consultar', 'Buscar']);
+    if (ok) {
+      await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {});
+    }
   }
 
-  if (!buscado) {
-    // Intentar presionar Enter en el campo de fecha
-    await page.keyboard.press('Enter');
-    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15_000 }).catch(() => {});
-  }
+  // Esperar a que aparezca la tabla o alguna señal de resultado
+  await page.waitForSelector(
+    'table, .lista, .dataTable, [class*="comprobante"]',
+    { timeout: TIMEOUT_SEL }
+  ).catch(() => {});
 }
 
-// ─── Extraer filas de la tabla ───────────────────────────────
+// ─── Extraer filas de la tabla de resultados ──────────────────
 async function _extraerFilas(page) {
   return page.evaluate(() => {
-    // Buscar la tabla de resultados
+    // Buscar la tabla con más columnas (la de datos)
     const tablas = Array.from(document.querySelectorAll('table'));
     let tabla = null;
-
-    // Priorizar la tabla con más columnas (probablemente la de datos)
     let maxCols = 0;
     for (const t of tablas) {
-      const headers = t.querySelectorAll('thead th, thead td');
+      const headers = t.querySelectorAll('thead th, thead td, tr:first-child th, tr:first-child td');
       if (headers.length > maxCols) { maxCols = headers.length; tabla = t; }
     }
-
     if (!tabla) return { rows: [], total: 0 };
 
-    // Detectar índice de columna que contiene la clave de acceso (49 dígitos)
     const rows = [];
-    const trs  = Array.from(tabla.querySelectorAll('tbody tr'));
+    const trs  = Array.from(tabla.querySelectorAll('tbody tr, tr:not(:first-child)'));
 
-    // Total de registros del portal (si hay paginador)
+    // Paginador (total de registros reportado por el portal)
     let total = 0;
     const paginador = document.querySelector(
       '[id*="paginador"], [id*="paginator"], .ui-paginator-current, [id*="totalRegistros"]'
@@ -404,25 +290,23 @@ async function _extraerFilas(page) {
       const celdas = Array.from(tr.querySelectorAll('td'));
       const textos = celdas.map((c) => c.textContent.trim().replace(/\s+/g, ' '));
 
-      // Buscar la clave de acceso (49 dígitos numéricos) en alguna celda
+      // Clave de acceso: 49 dígitos en celda o enlace
       let claveAcceso = null;
       for (const t of textos) {
         const solo = t.replace(/\s/g, '');
         if (/^\d{49}$/.test(solo)) { claveAcceso = solo; break; }
       }
-      // También puede estar en un enlace
       if (!claveAcceso) {
-        const links = tr.querySelectorAll('a[href]');
+        const links = tr.querySelectorAll('a');
         for (const a of links) {
-          const m = (a.href || '').match(/claveAcceso=(\d{49})/i)
-                 || (a.textContent || '').match(/\d{49}/);
+          const href = a.href || '';
+          const txt  = (a.textContent || '').replace(/\s/g, '');
+          const m = href.match(/claveAcceso[=:](\d{49})/i) || txt.match(/^(\d{49})$/);
           if (m) { claveAcceso = m[1]; break; }
         }
       }
-
       if (!claveAcceso) continue;
 
-      // Extraer otros campos de las celdas restantes
       const razonSocial = textos.find((t) => t.length > 5 && !/^\d+$/.test(t) && t !== claveAcceso) || null;
       const fechaMatch  = textos.find((t) => /\d{2}\/\d{2}\/\d{4}/.test(t)) || null;
       const totalMatch  = textos.find((t) => /^\$?\s*[\d.,]+$/.test(t.replace(/\s/g, ''))) || null;
@@ -430,8 +314,8 @@ async function _extraerFilas(page) {
       rows.push({
         claveAcceso,
         razonSocialEmisor: razonSocial,
-        fechaEmision: fechaMatch,
-        importeTotal: totalMatch ? parseFloat(totalMatch.replace(/[$, ]/g, '')) || 0 : 0,
+        fechaEmision:      fechaMatch,
+        importeTotal:      totalMatch ? parseFloat(totalMatch.replace(/[$, ]/g, '')) || 0 : 0,
       });
     }
 
@@ -439,30 +323,42 @@ async function _extraerFilas(page) {
   });
 }
 
-// ─── Ir a la siguiente página ────────────────────────────────
+// ─── Siguiente página (JSF y PrimeFaces) ─────────────────────
 async function _irSiguientePagina(page) {
   const SEL_NEXT = [
+    // PrimeFaces
     '.ui-paginator-next:not(.ui-state-disabled)',
+    // Botones genéricos de siguiente
     '[id*="next"]:not([disabled])',
-    'a[title*="iguiente"]',
+    'a[title="Siguiente"]',
+    'a[title="siguiente"]',
     'a.paginadorSiguiente',
     '.paginadorSig',
+    'input[value="Siguiente"]',
   ];
 
   for (const sel of SEL_NEXT) {
-    const btn = await page.$(sel);
+    const btn = await page.$(sel).catch(() => null);
     if (btn) {
       await Promise.all([
-        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: TIMEOUT_NAV }).catch(() => {}),
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: TIMEOUT_NAV }).catch(() => {}),
         btn.click(),
       ]);
       return true;
     }
   }
+
+  // Buscar por texto como fallback
+  const clicked = await _clickControlPorTexto(page, ['Siguiente', 'siguiente', 'Next']);
+  if (clicked) {
+    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: TIMEOUT_NAV }).catch(() => {});
+    return true;
+  }
+
   return false;
 }
 
-// ─── Deduplicar por clave de acceso ─────────────────────────
+// ─── Deduplicar por clave de acceso ──────────────────────────
 function _deduplicar(items) {
   const visto = new Set();
   return items.filter((it) => {
@@ -472,21 +368,220 @@ function _deduplicar(items) {
   });
 }
 
-// ─── Normalizar fecha a dd/mm/yyyy ───────────────────────────
+// ─── Normalizar fecha a dd/mm/yyyy ────────────────────────────
 function _normalizarFecha(fecha) {
   if (!fecha) return '';
-  // Si viene en yyyy-mm-dd, convertir
   const m = String(fecha).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   return fecha;
 }
 
-// ─── Función principal exportada ─────────────────────────────
+// ─── Login en el portal SRI ───────────────────────────────────
 /**
- * Autenticar y obtener TODOS los comprobantes recibidos
- * en el rango de fechas dado usando scraping del portal SRI.
+ * Autenticar en el portal SRI (JSF) y retornar { cookies, token }.
+ * Para el portal JSF, token siempre es null (usa JSESSIONID en cookies).
+ */
+async function scraperSriLogin(identificacion, password) {
+  let browser;
+  try {
+    browser = await _lanzarNavegador();
+    const page = await browser.newPage();
+
+    page.on('requestfailed', () => {});
+    await page.setExtraHTTPHeaders({ 'Accept-Language': 'es-EC,es;q=0.9' });
+
+    // ── Navegar al portal (el orden asegura llegar al formulario de login) ──
+    let loginExitoso = false;
+    for (const loginUrl of [SRI_LOGIN_URL, SRI_LOGIN_URL_ALT, SRI_LOGIN_JSF]) {
+      try {
+        await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: TIMEOUT_NAV });
+        const url = page.url();
+        if (_esUrlAutenticada(url)) { loginExitoso = true; break; }
+        if (url.includes('srienlinea.sri.gob.ec')) break;
+      } catch { /* intentar siguiente */ }
+    }
+
+    if (loginExitoso) {
+      const cookies = await page.cookies();
+      await browser.close();
+      return { cookies, token: null };
+    }
+
+    // ── Detectar campos del formulario ───────────────────────
+    const SELECTORS_USER = [
+      // Portal JSF (IDs confirmados del portal SRI)
+      '#usuario',
+      'input[name="usuario"]',
+      'input[id*="usuario"]',
+      '#ruc',
+      'input[name="ruc"]',
+      // SPA / Angular fallbacks
+      'input[formcontrolname="usuario"]',
+      'input[formcontrolname="ruc"]',
+      'input[autocomplete="username"]',
+      'input[type="text"]:first-of-type',
+    ];
+    const SELECTORS_PASS = [
+      '#contrasenia',
+      'input[name="contrasenia"]',
+      'input[id*="contrasenia"]',
+      '#password',
+      'input[name="password"]',
+      // Angular fallbacks
+      'input[formcontrolname="contrasenia"]',
+      'input[autocomplete="current-password"]',
+      'input[type="password"]',
+    ];
+
+    // Esperar a que aparezca el formulario
+    await page.waitForSelector('input[type="text"], input[type="password"]', { timeout: TIMEOUT_SEL }).catch(() => {});
+
+    const userField = await _buscarPrimerSelector(page, SELECTORS_USER);
+    if (!userField) {
+      await browser.close();
+      throw new Error(
+        'No se encontró el campo de usuario en el portal SRI. ' +
+        'Puede que el portal haya cambiado su estructura. Usa "Importar TXT del SRI" o "Importar ZIP".'
+      );
+    }
+
+    const passField = await _buscarPrimerSelector(page, SELECTORS_PASS);
+    if (!passField) {
+      await browser.close();
+      throw new Error('No se encontró el campo de contraseña en el portal SRI.');
+    }
+
+    // ── Llenar credenciales ───────────────────────────────────
+    await userField.click({ clickCount: 3 });
+    await userField.type(identificacion, { delay: 40 });
+
+    await passField.click({ clickCount: 3 });
+    await passField.type(password, { delay: 40 });
+
+    // ── Enviar formulario ────────────────────────────────────
+    const SELECTORS_SUBMIT = [
+      'input[value="Ingresar"]',
+      'button[type="submit"]',
+      'input[type="submit"]',
+      '#btnIngresar',
+      '[id*="btnIngresar"]',
+      '[id*="ingresar"]',
+    ];
+
+    let submitted = false;
+    const btnSubmit = await _buscarPrimerSelector(page, SELECTORS_SUBMIT);
+    if (btnSubmit) {
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: TIMEOUT_NAV }).catch(() => {}),
+        btnSubmit.click(),
+      ]);
+      submitted = true;
+    }
+
+    if (!submitted) {
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: TIMEOUT_NAV }).catch(() => {}),
+        _clickControlPorTexto(page, ['Ingresar', 'Entrar', 'Acceder', 'Login']),
+      ]).catch(() => {});
+    }
+
+    // ── Verificar resultado del login ─────────────────────────
+    const urlActual = page.url();
+
+    if (_esUrlLogin(urlActual) || !_esUrlAutenticada(urlActual)) {
+      const mensajeError = await page.$eval(
+        '[id*="mensajeError"], .msgError, .error-message, .ui-messages-error-detail, ' +
+        '.alert-danger, .mat-error, [class*="error"]:not(input)',
+        (el) => el.textContent.trim()
+      ).catch(() => null);
+
+      await browser.close();
+      throw new Error(
+        mensajeError ||
+        'Las credenciales del portal SRI son incorrectas. ' +
+        'Verifica el RUC/cédula y la contraseña de srienlinea.sri.gob.ec.'
+      );
+    }
+
+    const cookies = await page.cookies();
+    await browser.close();
+    return { cookies, token: null };
+  } catch (err) {
+    if (browser) await browser.close().catch(() => {});
+    throw err;
+  }
+}
+
+// ─── Consulta de comprobantes recibidos ──────────────────────
+/**
+ * Consultar comprobantes recibidos usando cookies de sesión.
+ * Itera por cada mes del rango dado (el portal SRI filtra por año+mes).
  *
- * @param {{ identificacion, password, ruc, fechaDesde, fechaHasta, tipoComprobante }} params
+ * @param {Array|{cookies}}  cookies   Cookies de scraperSriLogin
+ * @param {{ ruc, fechaDesde, fechaHasta, tipoComprobante }} params
+ * @returns {{ total: number, items: Array }}
+ */
+async function scraperSriRecibidos(cookies, {
+  ruc,
+  fechaDesde,
+  fechaHasta,
+  tipoComprobante = 'TODOS',
+} = {}) {
+  const fDesde  = _normalizarFecha(fechaDesde);
+  const fHasta  = _normalizarFecha(fechaHasta);
+  const meses   = _mesesEnRango(fDesde, fHasta);
+
+  let browser;
+  try {
+    browser = await _lanzarNavegador();
+    const page = await browser.newPage();
+    page.on('requestfailed', () => {});
+
+    // Restaurar sesión
+    const cookiesArr = Array.isArray(cookies) ? cookies : (cookies?.cookies || []);
+    if (cookiesArr.length > 0) await page.setCookie(...cookiesArr);
+
+    // Navegar a comprobantes recibidos
+    await page.goto(SRI_RECIBIDOS_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT_NAV });
+
+    if (_esUrlLogin(page.url())) {
+      await browser.close();
+      throw new Error('La sesión del portal SRI expiró. Vuelve a intentar.');
+    }
+
+    const todosLosItems = [];
+
+    // El portal filtra por mes — iterar sobre cada mes del rango
+    for (const { anio, mes } of meses) {
+      await _consultarMesJsf(page, ruc, anio, mes, tipoComprobante);
+
+      // Extraer todas las páginas del mes actual
+      for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
+        if (pagina > 0) {
+          const hayMas = await _irSiguientePagina(page);
+          if (!hayMas) break;
+        }
+
+        const { rows } = await _extraerFilas(page);
+        if (rows.length === 0) break;
+        todosLosItems.push(...rows);
+      }
+    }
+
+    await browser.close();
+    const items = _deduplicar(todosLosItems);
+    return { total: items.length, items };
+  } catch (err) {
+    if (browser) await browser.close().catch(() => {});
+    throw err;
+  }
+}
+
+// ─── Función principal exportada ──────────────────────────────
+/**
+ * Login + consulta de TODOS los comprobantes recibidos en el rango dado.
+ *
+ * @param {{ identificacion, password, fechaDesde, fechaHasta, tipoComprobante }} params
  * @returns {Array<{ claveAcceso, razonSocialEmisor, fechaEmision, importeTotal }>}
  */
 async function obtenerRecibidosScraper({
@@ -503,9 +598,8 @@ async function obtenerRecibidosScraper({
     throw new Error('Se requiere rango de fechas (fechaDesde, fechaHasta)');
   }
 
-  const cookies = await scraperSriLogin(identificacion, password);
-
-  const { items } = await scraperSriRecibidos(cookies, {
+  const session = await scraperSriLogin(identificacion, password);
+  const { items } = await scraperSriRecibidos(session, {
     ruc: identificacion,
     fechaDesde,
     fechaHasta,

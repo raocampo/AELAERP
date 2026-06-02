@@ -484,39 +484,58 @@ router.get('/historial', async (req, res) => {
 });
 
 // ─── GET /sri/diagnostico ────────────────────────────────────
-// Diagnóstico: verifica conectividad con el portal SRI y disponibilidad de Chrome
 router.get('/sri/diagnostico', async (req, res) => {
   const resultado = { timestamp: new Date().toISOString(), checks: [] };
 
-  // 1. Probar conectividad REST con el SRI
-  for (const url of ['https://srienlinea.sri.gob.ec/movil-servicios/api/v2.0/contribuyente/login',
-                     'https://srienlinea.sri.gob.ec/movil-servicios/api/v1.0/contribuyente/login']) {
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 8000);
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
-                   'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 12)', 'X-Requested-With': 'ec.gob.sri.sri_movil' },
-        body: JSON.stringify({ user: 'test', password: 'test' }),
-        signal: ctrl.signal,
-      }).finally(() => clearTimeout(t));
-      const ct = resp.headers.get('content-type') || '';
-      resultado.checks.push({
-        tipo: 'SRI-REST', url,
-        status: resp.status,
-        esJson: ct.includes('application/json'),
-        ok: resp.status === 401 || ct.includes('application/json'), // 401 = conectó pero credenciales malas = ✓
-        nota: resp.status === 401 ? 'Endpoint activo (401=credenciales incorrectas esperado)' :
-              ct.includes('text/html') ? 'Endpoint devuelve HTML — URL puede haber cambiado' :
-              `HTTP ${resp.status}`,
-      });
-    } catch (err) {
-      resultado.checks.push({ tipo: 'SRI-REST', url, ok: false, error: err.message });
-    }
+  // 1. Verificar portal JSF (URL real confirmada 2026-06-02)
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const resp = await fetch('https://srienlinea.sri.gob.ec/', {
+      method: 'GET',
+      headers: { 'Accept': 'text/html', 'User-Agent': 'Mozilla/5.0' },
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(t));
+    const ct = resp.headers.get('content-type') || '';
+    resultado.checks.push({
+      tipo: 'SRI-Portal',
+      url:  'https://srienlinea.sri.gob.ec/',
+      status: resp.status,
+      ok:   resp.ok || resp.status < 500,
+      nota: resp.ok
+        ? 'Portal accesible — scraping disponible'
+        : `HTTP ${resp.status}`,
+    });
+  } catch (err) {
+    resultado.checks.push({ tipo: 'SRI-Portal', url: 'https://srienlinea.sri.gob.ec/', ok: false, error: err.message });
   }
 
-  // 2. Verificar Chrome/Puppeteer
+  // 2. Verificar API móvil SRI (estaba activa, actualmente retorna 404)
+  const apiUrl = 'https://srienlinea.sri.gob.ec/movil-servicios/api/v2.0/contribuyente/login';
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000);
+    const resp = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                 'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 12)', 'X-Requested-With': 'ec.gob.sri.sri_movil' },
+      body: JSON.stringify({ user: 'test', password: 'test' }),
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(t));
+    const ct = resp.headers.get('content-type') || '';
+    resultado.checks.push({
+      tipo: 'SRI-API-Movil', url: apiUrl,
+      status: resp.status,
+      ok: resp.status === 401 || resp.status === 200,
+      nota: resp.status === 401 ? 'API activa (401=credenciales incorrectas esperado)' :
+            resp.status === 404 ? 'API desactivada por el SRI (404) — solo scraping disponible' :
+            `HTTP ${resp.status}`,
+    });
+  } catch (err) {
+    resultado.checks.push({ tipo: 'SRI-API-Movil', url: apiUrl, ok: false, error: err.message });
+  }
+
+  // 3. Verificar Chrome/Puppeteer
   try {
     const { execSync } = require('child_process');
     const chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || 'chromium';

@@ -17,12 +17,14 @@
 
 const SRI_PORTAL_BASE  = 'https://srienlinea.sri.gob.ec';
 
-// Endpoints del portal móvil del SRI — probados en orden de preferencia
+// Endpoints del portal móvil del SRI
+// ESTADO 2026-06-02: ambos endpoints devuelven HTTP 404 — API móvil desactivada por el SRI.
+// Se mantiene el código para cuando el SRI reactive la API o cambie las URLs.
 const SRI_AUTH_URLS = [
   `${SRI_PORTAL_BASE}/movil-servicios/api/v2.0/contribuyente/login`,
   `${SRI_PORTAL_BASE}/movil-servicios/api/v1.0/contribuyente/login`,
 ];
-const SRI_AUTH_URL      = SRI_AUTH_URLS[0]; // compatibilidad con código existente
+const SRI_AUTH_URL      = SRI_AUTH_URLS[0];
 const SRI_RECIBIDOS_URL = `${SRI_PORTAL_BASE}/movil-servicios/api/v1.0/comprobante/recibidos`;
 
 // Headers que imitan la app oficial SRI Ecuador (Android)
@@ -37,7 +39,7 @@ const SRI_MOBILE_HEADERS = {
   'X-Requested-With': 'ec.gob.sri.sri_movil',
 };
 
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 8_000; // API móvil responde 404 rápido — no esperar 30s
 const LIMIT_POR_PAGINA = 100;
 
 // ─── Fetch con timeout ───────────────────────────────────────
@@ -117,26 +119,6 @@ async function autenticarSriPortal(identificacion, password) {
     `No se pudo conectar al portal SRI. ${msgBase}. ` +
     'Alternativas: usa "Importar TXT del SRI" o "Importar ZIP" con archivos descargados de srienlinea.sri.gob.ec.'
   );
-
-  const data = await resp.json().catch(() => null);
-  if (!data) throw new Error('Respuesta inválida del portal SRI al autenticar');
-
-  // El portal puede devolver el token bajo distintos nombres
-  const token =
-    data?.token ||
-    data?.access_token ||
-    data?.accessToken ||
-    data?.userToken ||
-    data?.tokenAcceso;
-
-  if (!token) {
-    throw new Error(
-      'El portal SRI no devolvió un token de acceso. ' +
-      'Verifica que la cuenta esté activa y que las credenciales sean del portal srienlinea.sri.gob.ec'
-    );
-  }
-
-  return token;
 }
 
 // ─── Consulta paginada ───────────────────────────────────────
