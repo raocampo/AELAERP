@@ -1,12 +1,13 @@
 # Manual de Usuario — AELA ERP
-**Versión 1.0 · CorpSimtelec · Ecuador**
+**Versión 1.2 · CorpSimtelec · Ecuador**
+**Actualizado: 2026-06-02**
 
 ---
 
 ## Tabla de Contenidos
 
 1. [Introducción](#1-introducción)
-2. [Inicio de sesión](#2-inicio-de-sesión)
+2. [Cómo acceder al sistema](#2-cómo-acceder-al-sistema)
 3. [Configuración inicial](#3-configuración-inicial)
 4. [Dashboard (Panel principal)](#4-dashboard-panel-principal)
 5. [Módulo POS — Punto de Venta](#5-módulo-pos--punto-de-venta)
@@ -15,7 +16,7 @@
 8. [Módulo Notas de Venta](#8-módulo-notas-de-venta)
 9. [Módulo Compras](#9-módulo-compras)
 10. [Módulo Inventario / Productos](#10-módulo-inventario--productos)
-11. [Módulo Clientes](#11-módulo-clientes)
+11. [Módulo Clientes y Proveedores](#11-módulo-clientes-y-proveedores)
 12. [Módulo Contabilidad](#12-módulo-contabilidad)
 13. [Módulo Bancos](#13-módulo-bancos)
 14. [Declaraciones / ATS / Tributario](#14-declaraciones--ats--tributario)
@@ -73,35 +74,44 @@ AELA ERP detecta automáticamente cuando no hay conexión a internet. En ese mod
 
 ---
 
-## 2. Inicio de sesión
+## 2. Cómo acceder al sistema
 
-### 2.1 Pantalla de login
+### 2.1 URL de acceso
 
-Al abrir AELA ERP en el navegador verá la pantalla de inicio de sesión.
+Dependiendo del tipo de cuenta, la URL de acceso es diferente:
+
+| Tipo de cuenta | URL de acceso |
+|----------------|---------------|
+| **Cuenta directa** (CorpSimtelec y clientes en la plataforma principal) | `https://aela.corpsimtelec.com/login` |
+| **Cliente SaaS con slug** (empresa registrada en la plataforma) | `https://aela.corpsimtelec.com/SLUG` *(ej: `/mprq`)* |
+| **Cliente con dominio propio** (marca blanca) | `https://erp.sudominio.com` |
+
+> 💡 **Importante para clientes SaaS:** Siempre ingrese por la URL con su slug (ej: `aela.corpsimtelec.com/mprq`). Esta URL redirige automáticamente al login de su sistema. **Guarde esta URL como marcador** para acceder siempre a su cuenta correctamente desde cualquier dispositivo.
+
+### 2.2 Pantalla de login
+
+Al ingresar verá la pantalla de inicio de sesión con el nombre y logo de su empresa.
 
 **Pasos para ingresar:**
+1. Escriba su **Usuario** o **correo electrónico**
+2. Escriba su **Contraseña**
+3. Haga clic en **Ingresar**
 
-1. Abra el navegador e ingrese la dirección del sistema (por ejemplo: `http://localhost:5174` en instalación local, o la URL proporcionada por CorpSimtelec).
-2. En el campo **Usuario o correo** escriba su nombre de usuario o su dirección de correo electrónico.
-3. En el campo **Contraseña** escriba su contraseña.
-4. Haga clic en el botón **Ingresar**.
+> 💡 Puede iniciar sesión con su nombre de usuario (ej: `jperez`) o con su correo (ej: `jperez@empresa.com`).
 
-> 💡 Puede iniciar sesión con su nombre de usuario (por ejemplo: `jperez`) o con su correo electrónico completo (por ejemplo: `jperez@miempresa.com`).
+### 2.3 Primera vez — Bootstrap inicial
 
-### 2.2 Primera vez — Bootstrap inicial
+Si el sistema nunca ha sido configurado, verá el **formulario de configuración inicial** para crear la primera empresa y el administrador. Consulte la sección [3. Configuración inicial](#3-configuración-inicial).
 
-Si el sistema nunca ha sido configurado, en lugar del formulario de login verá el **formulario de configuración inicial**. Consulte la sección [3. Configuración inicial](#3-configuración-inicial) para completar ese proceso.
+### 2.4 Timeout de sesión
 
-### 2.3 Recuperar acceso
+Por seguridad, el sistema cierra la sesión automáticamente después de **30 minutos de inactividad**. A los 25 minutos muestra una advertencia. Cualquier acción (clic, escritura) reinicia el contador.
 
-En caso de olvidar su contraseña:
+### 2.5 Recuperar acceso
 
-1. En la pantalla de login, haga clic en el enlace **¿Olvidé mi contraseña?** (debajo del botón Ingresar).
-2. Contacte al administrador del sistema para que le asigne una nueva contraseña desde el módulo de Administración → Usuarios.
+En caso de olvidar su contraseña, contacte al administrador del sistema para que la restablezca desde **Administración → Usuarios**. Si es el administrador, contacte a soporte CorpSimtelec: **WhatsApp +593 097 889 3520** o **soporte@corpsimtelec.com**.
 
-> ⚠ En la versión actual, el restablecimiento de contraseña por correo electrónico es gestionado por el administrador. Si es el administrador y olvidó su contraseña, contacte a soporte CorpSimtelec: **WhatsApp +593 097 889 3520** o **soporte@corpsimtelec.com**.
-
-### 2.4 Cambiar contraseña
+### 2.6 Cambiar contraseña
 
 Una vez dentro del sistema:
 
