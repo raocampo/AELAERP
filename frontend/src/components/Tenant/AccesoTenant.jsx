@@ -22,7 +22,8 @@ export default function AccesoTenant() {
     }
 
     localStorage.setItem('aela_tenant_slug', slugNorm);
-    navigate('/login', { replace: true });
+    // Incluir el slug en la URL del login para que el marcador quede correcto.
+    navigate(`/login?slug=${slugNorm}`, { replace: true });
   }, [slug, navigate]);
 
   return null;

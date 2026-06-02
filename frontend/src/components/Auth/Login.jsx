@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
-import api from '../../services/api';
+import api, { SESSION_STORAGE_KEYS } from '../../services/api';
 import toast from 'react-hot-toast';
 import './Login.css';
 
@@ -39,6 +39,18 @@ export default function Login() {
   });
 
   useEffect(() => {
+    // Leer el slug de la URL (?slug=mprq) ANTES de cualquier llamada API.
+    // Esto permite que los marcadores del navegador preserven el tenant.
+    // Ej: aela.corpsimtelec.com/login?slug=mprq siempre carga el tenant correcto.
+    const slugDeUrl = new URLSearchParams(window.location.search).get('slug')?.trim().toLowerCase();
+    if (slugDeUrl) {
+      const slugActual = localStorage.getItem('aela_tenant_slug');
+      if (slugActual !== slugDeUrl) {
+        SESSION_STORAGE_KEYS.forEach((k) => localStorage.removeItem(k));
+      }
+      localStorage.setItem('aela_tenant_slug', slugDeUrl);
+    }
+
     let activo = true;
 
     const init = async () => {
