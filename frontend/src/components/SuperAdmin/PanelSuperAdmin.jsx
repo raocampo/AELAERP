@@ -4,7 +4,7 @@
 // Accede a /api/super-admin/* con SUPER_ADMIN_KEY
 // ====================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import './PanelSuperAdmin.css';
 
 const API = import.meta.env.VITE_API_URL || '/api';
@@ -50,11 +50,13 @@ function useSaApi(clave) {
     return json.data;
   }, [clave]);
 
-  return {
-    get:  (path)         => call('GET',    path),
-    put:  (path, body)   => call('PUT',    path, body),
-    post: (path, body)   => call('POST',   path, body),
-  };
+  // useMemo estabiliza la referencia del objeto — sin esto se crea uno nuevo en
+  // cada render, lo que dispara cargarDatos en loop infinito (ERR_INSUFFICIENT_RESOURCES).
+  return useMemo(() => ({
+    get:  (path)       => call('GET',  path),
+    put:  (path, body) => call('PUT',  path, body),
+    post: (path, body) => call('POST', path, body),
+  }), [call]);
 }
 
 // ─── Modal editar tenant ──────────────────────────────────────────────────────
