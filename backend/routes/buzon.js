@@ -34,6 +34,17 @@ const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20
 
 const MAX_CLAVES_LOTE = 50;
 
+// ─── Store en memoria para jobs async del scraper SRI ─────────
+// Evita el timeout de 60 s del proxy de Railway respondiendo de inmediato
+// con un jobId y ejecutando el scraper en background.
+const SCRAPER_JOBS = new Map();
+function _limpiarJobsViejos() {
+  const limite = Date.now() - 15 * 60 * 1000;
+  for (const [id, job] of SCRAPER_JOBS) {
+    if (job.startedAt < limite) SCRAPER_JOBS.delete(id);
+  }
+}
+
 router.use(proteger);
 router.use(requiereModulo('comprasHabilitadas'));
 router.use(autorizarPermiso('compras.gestionar'));
@@ -551,9 +562,21 @@ router.get('/sri/diagnostico', async (req, res) => {
   res.json({ success: true, data: resultado });
 });
 
+// ─── GET /sri/job/:jobId ────────────────────────────────────
+// Polling del estado de un job de scraper iniciado con POST /sri/consultar.
+// Devuelve { status: 'pending'|'done'|'error', ... }
+router.get('/sri/job/:jobId', (req, res) => {
+  const job = SCRAPER_JOBS.get(req.params.jobId);
+  if (!job) return res.status(404).json({ success: false, mensaje: 'Job no encontrado o expirado' });
+  if (job.status === 'pending') return res.json({ status: 'pending', mensaje: job.mensaje });
+  if (job.status === 'done')    return res.json({ status: 'done', ...job.result });
+  return res.status(422).json({ status: 'error', success: false, mensaje: job.error, erroresConsulta: job.erroresConsulta });
+});
+
 // ─── POST /sri/consultar ────────────────────────────────────
-// Endpoint estable para descarga automática:
-// 1) intenta Puppeteer/Chromium; 2) si falla, intenta API móvil del portal.
+// Inicia un job async para evitar el timeout de 60 s del proxy de Railway.
+// Responde de inmediato con { jobId, status: 'pending' }.
+// El frontend hace polling a GET /sri/job/:jobId cada 3 s.
 router.post('/sri/consultar', async (req, res) => {
   const {
     identificacion,
@@ -565,43 +588,48 @@ router.post('/sri/consultar', async (req, res) => {
   } = req.body || {};
 
   const errorValidacion = validarPayloadConsultaSri({ identificacion, password, fechaDesde, fechaHasta });
-  if (errorValidacion) {
-    return res.status(400).json({ success: false, mensaje: errorValidacion });
-  }
+  if (errorValidacion) return res.status(400).json({ success: false, mensaje: errorValidacion });
 
   const empresaId = req.empresa.id;
-  const payload = { identificacion, password, fechaDesde, fechaHasta, tipoComprobante };
-  const metodos = metodo === 'portal'
-    ? ['portal']
-    : metodo === 'scraper'
-      ? ['scraper']
-      : ['scraper', 'portal'];
-  const erroresConsulta = [];
+  const payload   = { identificacion, password, fechaDesde, fechaHasta, tipoComprobante };
+  const metodos   = metodo === 'portal' ? ['portal'] : metodo === 'scraper' ? ['scraper'] : ['scraper', 'portal'];
 
-  for (const metodoConsulta of metodos) {
-    try {
-      const docsPortal = metodoConsulta === 'scraper'
-        ? await obtenerRecibidosScraper(payload)
-        : await obtenerRecibidosPortalRest(payload);
-      const respuesta = await armarRespuestaConsultaRecibidos(empresaId, docsPortal);
-      return res.json({ ...respuesta, metodo: metodoConsulta });
-    } catch (err) {
-      erroresConsulta.push({ metodo: metodoConsulta, mensaje: err.message });
-      if (esErrorCredencialesSri(err)) break;
+  // Responder de inmediato con jobId para no exceder el timeout del proxy
+  const jobId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  SCRAPER_JOBS.set(jobId, { status: 'pending', startedAt: Date.now(), mensaje: 'Iniciando navegador...' });
+  _limpiarJobsViejos();
+  res.json({ jobId, status: 'pending' });
+
+  // ── Ejecutar el scraper en background ──────────────────────
+  (async () => {
+    const get    = () => SCRAPER_JOBS.get(jobId) || {};
+    const update = (patch) => SCRAPER_JOBS.set(jobId, { ...get(), ...patch });
+    const erroresConsulta = [];
+
+    for (const metodoConsulta of metodos) {
+      try {
+        update({ mensaje: metodoConsulta === 'scraper' ? 'Navegando portal SRI...' : 'Consultando API del SRI...' });
+        const docsPortal = metodoConsulta === 'scraper'
+          ? await obtenerRecibidosScraper(payload)
+          : await obtenerRecibidosPortalRest(payload);
+        const respuesta = await armarRespuestaConsultaRecibidos(empresaId, docsPortal);
+        update({ status: 'done', result: { ...respuesta, metodo: metodoConsulta } });
+        setTimeout(() => SCRAPER_JOBS.delete(jobId), 15 * 60 * 1000);
+        return;
+      } catch (err) {
+        erroresConsulta.push({ metodo: metodoConsulta, mensaje: err.message });
+        if (esErrorCredencialesSri(err)) break;
+      }
     }
-  }
 
-  const ultimoError = erroresConsulta[erroresConsulta.length - 1];
-  const mensajeBase = ultimoError?.mensaje || 'No se pudo consultar el portal SRI';
-  const mensajeFallback = erroresConsulta.length > 1
-    ? `${mensajeBase} También falló el respaldo automático (${erroresConsulta[0].metodo}: ${erroresConsulta[0].mensaje}).`
-    : mensajeBase;
-
-  return res.status(statusErrorConsultaSri(new Error(mensajeBase))).json({
-    success: false,
-    mensaje: mensajeFallback,
-    erroresConsulta,
-  });
+    const ultimoError  = erroresConsulta[erroresConsulta.length - 1];
+    const mensajeBase  = ultimoError?.mensaje || 'No se pudo consultar el portal SRI';
+    const mensajeFinal = erroresConsulta.length > 1
+      ? `${mensajeBase} También falló el respaldo (${erroresConsulta[0].metodo}: ${erroresConsulta[0].mensaje}).`
+      : mensajeBase;
+    update({ status: 'error', error: mensajeFinal, erroresConsulta });
+    setTimeout(() => SCRAPER_JOBS.delete(jobId), 15 * 60 * 1000);
+  })();
 });
 
 // ─── POST /sri-portal/consultar ─────────────────────────────

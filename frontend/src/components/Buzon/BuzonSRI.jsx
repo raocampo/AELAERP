@@ -53,9 +53,25 @@ function esErrorBrowserNoDisponible(err) {
   return /BROWSER_UNAVAILABLE|no se pudo iniciar el navegador|chromium|chrome/i.test(msg);
 }
 
-async function consultarSriAutomatico(payload) {
-  // Usa el endpoint unificado: intenta Puppeteer primero, luego portal REST como fallback
-  return api.post('/buzon/sri/consultar', payload);
+// Inicia el job y hace polling hasta completar (evita el timeout de 60 s de Railway)
+async function consultarSriAutomatico(payload, onProgreso) {
+  const { data: inicio } = await api.post('/buzon/sri/consultar', payload);
+  if (!inicio.jobId) return { data: inicio }; // respuesta directa inesperada
+
+  const MAX_INTENTOS = 80; // máx ~4 min de polling (80 × 3 s)
+  for (let i = 0; i < MAX_INTENTOS; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const { data: estado } = await api.get(`/buzon/sri/job/${inicio.jobId}`);
+    if (onProgreso) onProgreso(estado.mensaje || 'Procesando...');
+    if (estado.status === 'done') return { data: estado };
+    if (estado.status === 'error') {
+      const err = new Error(estado.mensaje || 'Error en la consulta');
+      err.response = { data: { mensaje: estado.mensaje, erroresConsulta: estado.erroresConsulta } };
+      throw err;
+    }
+    // status === 'pending' → continuar esperando
+  }
+  throw new Error('Tiempo de espera agotado. El scraper tardó más de 4 minutos.');
 }
 
 export default function BuzonSRI() {
@@ -72,6 +88,7 @@ export default function BuzonSRI() {
   const [dmFechaHasta,     setDmFechaHasta]     = useState(hoyISO);
   const [dmTipo,           setDmTipo]           = useState('TODOS');
   const [dmConsultando,    setDmConsultando]    = useState(false);
+  const [dmProgreso,       setDmProgreso]       = useState('');
   const [dmResultados,     setDmResultados]     = useState([]);
   const [dmSeleccionados,  setDmSeleccionados]  = useState(new Set());
   const [dmPaso,           setDmPaso]           = useState(1);
@@ -231,14 +248,18 @@ export default function BuzonSRI() {
     if (!dmPassword.trim())       { toast.error('Ingresa tu clave del portal SRI'); return; }
     if (!dmFechaDesde || !dmFechaHasta) { toast.error('Selecciona el rango de fechas'); return; }
     setDmConsultando(true);
+    setDmProgreso('Iniciando...');
     try {
-      const res = await consultarSriAutomatico({
-        identificacion: dmIdentificacion.trim(),
-        password:       dmPassword,
-        fechaDesde:     dmFechaDesde,
-        fechaHasta:     dmFechaHasta,
-        tipoComprobante: dmTipo,
-      });
+      const res = await consultarSriAutomatico(
+        {
+          identificacion:  dmIdentificacion.trim(),
+          password:        dmPassword,
+          fechaDesde:      dmFechaDesde,
+          fechaHasta:      dmFechaHasta,
+          tipoComprobante: dmTipo,
+        },
+        (msg) => setDmProgreso(msg),
+      );
       const resultados = res.data?.resultados || [];
       setDmResultados(resultados);
       setDmSeleccionados(new Set(resultados.filter((r) => r.estado === 'nuevo').map((r) => r.clave)));
@@ -259,6 +280,7 @@ export default function BuzonSRI() {
       }
     } finally {
       setDmConsultando(false);
+      setDmProgreso('');
     }
   };
 
@@ -448,7 +470,7 @@ export default function BuzonSRI() {
                   onClick={dmConsultar}
                   disabled={dmConsultando || !dmIdentificacion.trim() || !dmPassword.trim()}
                 >
-                  {dmConsultando ? '🤖 Navegando el portal SRI... (puede tardar ~60 s)' : 'Consultar portal SRI →'}
+                  {dmConsultando ? `🤖 ${dmProgreso || 'Navegando el portal SRI...'}` : 'Consultar portal SRI →'}
                 </button>
               </div>
             </div>
