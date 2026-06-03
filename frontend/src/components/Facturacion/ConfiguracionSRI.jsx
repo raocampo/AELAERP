@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import DropZone from '../shared/DropZone';
 import './ConfiguracionSRI.css';
 
 // El logo ahora se guarda como data URI en la BD (no requiere URL del servidor)
@@ -350,11 +351,17 @@ const ConfiguracionSRI = () => {
                 <div className="sri-logo-empty">Sin logo cargado</div>
               )}
               <div className="sri-logo-upload">
-                <input type="file" accept="image/*" ref={logoRef}
-                  onChange={e => setLogoFile(e.target.files[0] || null)} />
-                {logoFile && <span className="field-hint">🖼 {logoFile.name}</span>}
+                <DropZone
+                  accept="image/*"
+                  icon="🖼️"
+                  label="Arrastra o selecciona el logo"
+                  sublabel="PNG, JPG o SVG — recomendado 300×100 px"
+                  files={logoFile ? [logoFile] : []}
+                  onChange={([f]) => setLogoFile(f || null)}
+                />
                 <button type="button" className="btn-secondary"
-                  onClick={handleSubirLogo} disabled={!logoFile || logoUp}>
+                  onClick={handleSubirLogo} disabled={!logoFile || logoUp}
+                  style={{ marginTop: '0.5rem' }}>
                   {logoUp ? 'Subiendo...' : '⬆️ Subir logo'}
                 </button>
               </div>
@@ -494,9 +501,14 @@ const ConfiguracionSRI = () => {
                 <div className="sri-grid-2">
                   <div className="sri-field">
                     <label>Archivo .p12 / .pfx</label>
-                    <input type="file" accept=".p12,.pfx" ref={certRef}
-                      onChange={e => setCertFile(e.target.files[0] || null)} />
-                    {certFile && <span className="field-hint">📄 {certFile.name}</span>}
+                    <DropZone
+                      accept=".p12,.pfx"
+                      icon="🔐"
+                      label="Arrastra o selecciona el certificado"
+                      sublabel="Acepta .p12 o .pfx"
+                      files={certFile ? [certFile] : []}
+                      onChange={([f]) => setCertFile(f || null)}
+                    />
                   </div>
                   <div className="sri-field">
                     <label>Contraseña del certificado</label>

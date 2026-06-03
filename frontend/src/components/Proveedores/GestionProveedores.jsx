@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import { IcEditar, IcActivar, IcDesactivar } from '../../utils/icons';
+import DropZone from '../shared/DropZone';
 import './GestionProveedores.css';
 
 const TIPOS_IDENTIFICACION = [
@@ -604,12 +605,13 @@ export default function GestionProveedores() {
               {!importResult ? (
                 <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e293b', marginBottom: '10px' }}>Paso 2 — Sube tu archivo Excel</div>
-                  <input
-                    type="file"
+                  <DropZone
                     accept=".xlsx,.xls"
-                    onChange={handleImportExcel}
+                    icon="📊"
+                    label="Arrastra o selecciona el archivo Excel"
+                    sublabel="Acepta .xlsx o .xls"
                     disabled={importando}
-                    style={{ display: 'block', width: '100%', cursor: 'pointer' }}
+                    onChange={([f]) => { if (f) handleImportExcel({ target: { files: [f] } }); }}
                   />
                   {importando && (
                     <p style={{ marginTop: '10px', color: '#64748b', fontSize: '0.9rem' }}>Procesando archivo...</p>

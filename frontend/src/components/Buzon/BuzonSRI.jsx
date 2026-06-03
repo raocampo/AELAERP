@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import AuthContext from '../../context/auth-context';
 import { parseFechaLocal, formatFechaCorta, hoyLocal } from '../../utils/fecha';
+import DropZone from '../shared/DropZone';
 import './BuzonSRI.css';
 
 const TIPO_COLORES = {
@@ -731,20 +732,15 @@ export default function BuzonSRI() {
               </div>
             </div>
 
-            <div className="buzon-upload-area" style={{ marginTop: '1.25rem' }}>
-              <label className="buzon-upload-label" htmlFor="txt-input">
-                {archivoTxt ? `📄 ${archivoTxt.name}` : '📁 Haz clic para seleccionar archivo TXT / CSV del SRI'}
-              </label>
-              <input id="txt-input" type="file" accept=".txt,.csv,.prn,text/plain,text/csv"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const f = e.target.files[0] || null;
-                  setArchivoTxt(f);
-                  setTxtInfo(null);
-                  if (f) leerTxt(f);
-                }}
-              />
-            </div>
+            <DropZone
+              accept=".txt,.csv,.prn,text/plain,text/csv"
+              icon="📄"
+              label="Arrastra o selecciona el archivo TXT / CSV del SRI"
+              sublabel="Acepta .txt  .csv  .prn"
+              files={archivoTxt ? [archivoTxt] : []}
+              onChange={([f]) => { setArchivoTxt(f || null); setTxtInfo(null); if (f) leerTxt(f); }}
+              style={{ marginTop: '1.25rem' }}
+            />
 
             {txtInfo && (
               <div className="buzon-txt-resultado" style={{ marginTop: '1rem' }}>
@@ -795,13 +791,14 @@ export default function BuzonSRI() {
           <div className="buzon-step">
             <h2 className="buzon-step-title">Importar desde ZIP</h2>
             <p className="buzon-step-hint">Sube un archivo <strong>.zip</strong> con los XMLs descargados del portal SRI. Máximo 50 archivos XML.</p>
-            <div className="buzon-upload-area">
-              <label className="buzon-upload-label" htmlFor="zip-input">
-                {archivoZip ? `📄 ${archivoZip.name}` : '📁 Haz clic para seleccionar archivo ZIP'}
-              </label>
-              <input id="zip-input" type="file" accept=".zip" style={{ display: 'none' }}
-                onChange={(e) => { setArchivoZip(e.target.files[0] || null); setResumenZip(null); }} />
-            </div>
+            <DropZone
+              accept=".zip"
+              icon="🗜️"
+              label="Arrastra o selecciona el archivo ZIP"
+              sublabel="Acepta .zip con XMLs del portal SRI"
+              files={archivoZip ? [archivoZip] : []}
+              onChange={([f]) => { setArchivoZip(f || null); setResumenZip(null); }}
+            />
             <div className="buzon-opciones">
               <strong>Opciones para facturas:</strong>
               <label><input type="checkbox" checked={opciones.registraInventario} onChange={(e) => setOpciones((p) => ({ ...p, registraInventario: e.target.checked }))} /> Registrar entrada de inventario</label>
@@ -852,24 +849,15 @@ export default function BuzonSRI() {
               Sube uno o varios archivos <strong>.xml</strong> descargados individualmente desde el portal SRI.
               Admite facturas, liquidaciones, retenciones y notas de crédito/débito. Máximo {50} archivos.
             </p>
-            <div className="buzon-upload-area">
-              <label className="buzon-upload-label" htmlFor="xml-input">
-                {archivosXml.length > 0
-                  ? `📄 ${archivosXml.length} archivo(s) XML seleccionado(s)`
-                  : '📁 Haz clic para seleccionar archivo(s) XML'}
-              </label>
-              <input
-                id="xml-input"
-                type="file"
-                accept=".xml"
-                multiple
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  setArchivosXml(Array.from(e.target.files || []));
-                  setResumenXml(null);
-                }}
-              />
-            </div>
+            <DropZone
+              accept=".xml"
+              multiple
+              icon="📋"
+              label="Arrastra o selecciona archivos XML"
+              sublabel="Acepta múltiples .xml del portal SRI (máx. 50)"
+              files={archivosXml}
+              onChange={(fs) => { setArchivosXml(fs); setResumenXml(null); }}
+            />
             {archivosXml.length > 0 && (
               <ul className="buzon-xml-lista">
                 {archivosXml.map((f, i) => <li key={i}>📄 {f.name}</li>)}

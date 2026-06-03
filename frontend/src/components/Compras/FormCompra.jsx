@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import { toInputFecha, hoyLocal } from '../../utils/fecha';
+import DropZone from '../shared/DropZone';
 import './FormCompra.css';
 
 const FORMAS_PAGO = [
@@ -441,10 +442,17 @@ export default function FormCompra() {
           </div>
 
           <div className="compra-import-grid">
-            <label className="compra-upload">
-              <span>Importar XML</span>
-              <input type="file" accept=".xml,text/xml" onChange={importarXml} disabled={importando} />
-            </label>
+            <div>
+              <span style={{ fontWeight: 700, fontSize: '0.9rem', display: 'block', marginBottom: '6px' }}>Importar XML</span>
+              <DropZone
+                accept=".xml,text/xml"
+                icon="📄"
+                label="Arrastra o selecciona el XML"
+                sublabel="Factura de compra .xml"
+                disabled={importando}
+                onChange={([f]) => { if (f) importarXml({ target: { files: [f] } }); }}
+              />
+            </div>
             <div className="compra-keybox">
               <input
                 value={claveAcceso}

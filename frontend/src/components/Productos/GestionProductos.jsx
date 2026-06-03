@@ -4,6 +4,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import { descargarCsv } from '../../utils/exportCsv';
 import { IcEditar, IcEliminar } from '../../utils/icons';
+import DropZone from '../shared/DropZone';
 import './GestionProductos.css';
 
 const FORM_INICIAL = {
@@ -548,7 +549,14 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
               <div className="prod-import-box">
                 <h3>2. Importar desde Excel</h3>
                 <p>Soporta columnas comunes como código, nombre, precio, costo, IVA, stock y producto inventariable.</p>
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setArchivoExcel(e.target.files?.[0] || null)} />
+                <DropZone
+                  accept=".xlsx,.xls,.csv"
+                  icon="📊"
+                  label="Arrastra o selecciona el archivo Excel"
+                  sublabel="Acepta .xlsx  .xls  .csv"
+                  files={archivoExcel ? [archivoExcel] : []}
+                  onChange={([f]) => setArchivoExcel(f || null)}
+                />
                 <button type="button" className="btn-primary" onClick={importarDesdeExcel} disabled={importando}>
                   {importando ? 'Importando...' : 'Importar Excel'}
                 </button>
@@ -558,7 +566,14 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 <h3>3. Importar desde XML de compra</h3>
                 <p>Carga el XML de una factura de compra y AELA tomará los detalles para crear o actualizar productos.</p>
                 <p><strong>El precio del XML será el costo de compra.</strong> Define el % de utilidad para calcular el precio de venta automáticamente.</p>
-                <input type="file" accept=".xml,text/xml,application/xml" onChange={(e) => setArchivoXml(e.target.files?.[0] || null)} />
+                <DropZone
+                  accept=".xml,text/xml,application/xml"
+                  icon="📄"
+                  label="Arrastra o selecciona el XML de compra"
+                  sublabel="Factura de compra .xml"
+                  files={archivoXml ? [archivoXml] : []}
+                  onChange={([f]) => setArchivoXml(f || null)}
+                />
                 <button type="button" className="btn-primary" onClick={importarDesdeXml} disabled={importando}>
                   {importando ? 'Importando...' : 'Importar XML'}
                 </button>
