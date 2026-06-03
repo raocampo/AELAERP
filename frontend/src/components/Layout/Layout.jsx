@@ -62,12 +62,13 @@ function usePendientesSRI() {
 
   useEffect(() => {
     const fetchPendientes = async () => {
-      const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
+      const token      = localStorage.getItem('aela_token') || localStorage.getItem('token');
+      const tenantSlug = localStorage.getItem('aela_tenant_slug');
       if (!token) return;
       try {
-        const res = await fetch(`${API_URL}/cola-sri/estado`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const headers = { Authorization: `Bearer ${token}` };
+        if (tenantSlug) headers['X-Tenant-Slug'] = tenantSlug;
+        const res = await fetch(`${API_URL}/cola-sri/estado`, { headers });
         if (res.ok) {
           const data = await res.json();
           setPendientes(data.pendientes?.total ?? 0);
