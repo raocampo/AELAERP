@@ -5,35 +5,26 @@ import { useAuth } from '../../context/useAuth';
 import { CAPACIDADES_PLAN } from '../../utils/sistema';
 import './ConfiguracionSistema.css';
 
-const PLANES = [
-  {
-    key: 'lite',
-    label: 'Lite',
-    sublabel: 'Gratis',
-    color: '#F9A825',
+const PLANES = {
+  lite: {
+    label: 'Lite', sublabel: 'Gratis', color: '#F9A825',
     descripcion: 'Facturación electrónica básica para RIMPE Negocio Popular.',
     limites: '100 comprobantes/año · 1 usuario',
     modulos: ['Facturas electrónicas', 'Notas de Venta', 'Clientes / Productos'],
   },
-  {
-    key: 'medium',
-    label: 'Medium',
-    sublabel: 'Pyme',
-    color: '#7C3AED',
+  medium: {
+    label: 'Medium', sublabel: 'Pyme', color: '#7C3AED',
     descripcion: 'Facturación + operaciones de punto de venta e inventario.',
     limites: '1.000 comprobantes/año · 3 usuarios',
     modulos: ['Todo lo de Lite', 'Caja Diaria', 'POS', 'Inventario', 'Compras', 'Talento Humano'],
   },
-  {
-    key: 'pro',
-    label: 'Pro',
-    sublabel: 'Empresarial',
-    color: '#1976D2',
+  pro: {
+    label: 'Pro', sublabel: 'Empresarial', color: '#1976D2',
     descripcion: 'Suite completa con contabilidad, tributario y multiempresa.',
     limites: 'Ilimitado · Usuarios ilimitados',
     modulos: ['Todo lo de Medium', 'Retenciones', 'Liquidaciones de Compra', 'ATS', 'Reportes Tributarios', 'Contabilidad', 'Multiempresa'],
   },
-];
+};
 
 const FORM_INICIAL = {
   tipoSistema: 'pro',
@@ -62,6 +53,7 @@ export default function ConfiguracionSistema() {
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [probandoSmtp, setProbandoSmtp] = useState(false);
+  const [smtpAbierto, setSmtpAbierto] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -88,25 +80,6 @@ export default function ConfiguracionSistema() {
       setCargando(false);
     }
   }, [sistema]);
-
-  // Al cambiar plan: fuerza los módulos según capacidades
-  const cambiarPlan = (nuevoPlan) => {
-    const caps = CAPACIDADES_PLAN[nuevoPlan] || CAPACIDADES_PLAN.pro;
-    setForm((prev) => ({
-      ...prev,
-      tipoSistema: nuevoPlan,
-      // Cada módulo: lo que tenía AND lo que el plan permite
-      cajaDiariaHabilitada:     caps.cajaDiariaHabilitada     && prev.cajaDiariaHabilitada,
-      posHabilitado:            caps.posHabilitado            && prev.posHabilitado,
-      inventarioHabilitado:     caps.inventarioHabilitado     && prev.inventarioHabilitado,
-      comprasHabilitadas:       caps.comprasHabilitadas       && prev.comprasHabilitadas,
-      contabilidadHabilitada:   caps.contabilidadHabilitada   && prev.contabilidadHabilitada,
-      retencionesHabilitadas:   caps.retencionesHabilitadas   && prev.retencionesHabilitadas,
-      liquidacionesHabilitadas: caps.liquidacionesHabilitadas && prev.liquidacionesHabilitadas,
-      atsHabilitado:            caps.atsHabilitado            && prev.atsHabilitado,
-      talentoHumanoHabilitado:  caps.talentoHumanoHabilitado  && prev.talentoHumanoHabilitado,
-    }));
-  };
 
   const actualizar = (campo, valor) => setForm((prev) => ({ ...prev, [campo]: valor }));
 
@@ -140,7 +113,8 @@ export default function ConfiguracionSistema() {
   if (cargando) return <div className="syscfg-loading">Cargando configuración del sistema...</div>;
 
   const planActual = form.tipoSistema || 'pro';
-  const caps = CAPACIDADES_PLAN[planActual] || CAPACIDADES_PLAN.pro;
+  const planInfo   = PLANES[planActual] || PLANES.pro;
+  const caps       = CAPACIDADES_PLAN[planActual] || CAPACIDADES_PLAN.pro;
 
   const modulos = [
     { key: 'cajaDiariaHabilitada',     label: 'Caja Diaria' },
@@ -159,58 +133,49 @@ export default function ConfiguracionSistema() {
       <div className="syscfg-header">
         <div>
           <h1>Configuración del Sistema</h1>
-          <p>Selecciona el plan y ajusta los módulos habilitados para esta empresa.</p>
+          <p>Ajusta los módulos y preferencias operativas de tu empresa.</p>
         </div>
       </div>
 
       <form className="syscfg-grid" onSubmit={handleSubmit}>
 
-        {/* ── Selector de Plan ──────────────────────────────────────────────── */}
+        {/* ── Plan activo (solo lectura) ─────────────────────────────────── */}
         <section className="syscfg-card syscfg-card-wide">
           <h2>Plan del sistema</h2>
-          <div className="syscfg-planes">
-            {PLANES.map((plan) => (
-              <button
-                key={plan.key}
-                type="button"
-                className={`syscfg-plan-card ${planActual === plan.key ? 'selected' : ''}`}
-                style={{ '--plan-color': plan.color }}
-                onClick={() => cambiarPlan(plan.key)}
-              >
-                <div className="syscfg-plan-header">
-                  <span className="syscfg-plan-label" style={{ color: plan.color }}>{plan.label}</span>
-                  <span className="syscfg-plan-sublabel">{plan.sublabel}</span>
-                </div>
-                <p className="syscfg-plan-desc">{plan.descripcion}</p>
-                <p className="syscfg-plan-limites">{plan.limites}</p>
-                <ul className="syscfg-plan-modulos">
-                  {plan.modulos.map((m) => <li key={m}>{m}</li>)}
-                </ul>
-              </button>
-            ))}
+          <div className="syscfg-plan-activo" style={{ '--plan-color': planInfo.color }}>
+            <div className="syscfg-plan-activo-left">
+              <div className="syscfg-plan-activo-header">
+                <span className="syscfg-plan-label" style={{ color: planInfo.color }}>{planInfo.label}</span>
+                <span className="syscfg-plan-sublabel">{planInfo.sublabel}</span>
+              </div>
+              <p className="syscfg-plan-desc">{planInfo.descripcion}</p>
+              <p className="syscfg-plan-limites">{planInfo.limites}</p>
+              <ul className="syscfg-plan-modulos">
+                {planInfo.modulos.map((m) => <li key={m}>{m}</li>)}
+              </ul>
+            </div>
+            <div className="syscfg-plan-activo-lock">
+              <span className="syscfg-lock-icon">🔒</span>
+              <p>El plan es gestionado por el administrador del sistema.</p>
+              <p>Para realizar un cambio de plan, contacta a soporte.</p>
+            </div>
           </div>
         </section>
 
-        {/* ── Modo operación ───────────────────────────────────────────────── */}
+        {/* ── Modo de operación (solo lectura) ──────────────────────────── */}
         <section className="syscfg-card">
           <h2>Modo de operación</h2>
-          <label className="syscfg-field">
-            <span>Modo</span>
-            <select
-              value={form.modoOperacion}
-              onChange={(e) => actualizar('modoOperacion', e.target.value)}
-              disabled={planActual !== 'pro'}
-            >
-              <option value="monoempresa">Monoempresa</option>
-              <option value="multiempresa">Multiempresa (solo Pro)</option>
-            </select>
-          </label>
-          <p className="syscfg-note">
-            Multiempresa solo está disponible en el plan Pro.
-          </p>
+          <div className="syscfg-readonly-block">
+            <span className={`syscfg-badge syscfg-badge-modo`}>
+              {form.modoOperacion === 'multiempresa' ? '🏢 Multiempresa' : '🏪 Monoempresa'}
+            </span>
+            <p className="syscfg-note syscfg-readonly-nota">
+              🔒 Gestionado por el administrador del sistema.
+            </p>
+          </div>
         </section>
 
-        {/* ── Caja ─────────────────────────────────────────────────────────── */}
+        {/* ── Caja ──────────────────────────────────────────────────────── */}
         <section className="syscfg-card">
           <h2>Caja</h2>
           <label className="syscfg-field">
@@ -242,7 +207,7 @@ export default function ConfiguracionSistema() {
           </label>
         </section>
 
-        {/* ── POS ──────────────────────────────────────────────────────────── */}
+        {/* ── POS ───────────────────────────────────────────────────────── */}
         <section className="syscfg-card">
           <h2>Punto de Venta (POS)</h2>
           <label className="syscfg-check">
@@ -267,12 +232,11 @@ export default function ConfiguracionSistema() {
           </label>
         </section>
 
-        {/* ── Impresión y kiosko ─────────────────────────────────────────── */}
+        {/* ── Impresión y kiosko ────────────────────────────────────────── */}
         <section className="syscfg-card">
           <h2>Impresión y kiosko</h2>
           <p className="syscfg-note">
-            El navegador no detecta impresoras automáticamente. Esta sección define cómo debe comportarse la impresión
-            del POS en almacenamiento, kiosko o dispositivos móviles.
+            El navegador no detecta impresoras automáticamente. Esta sección define cómo debe comportarse la impresión del POS en almacenamiento, kiosko o dispositivos móviles.
           </p>
           <label className="syscfg-check">
             <input
@@ -292,7 +256,7 @@ export default function ConfiguracionSistema() {
           </label>
         </section>
 
-        {/* ── Inventario ───────────────────────────────────────────────────── */}
+        {/* ── Inventario ────────────────────────────────────────────────── */}
         <section className="syscfg-card">
           <h2>Inventario</h2>
           <label className="syscfg-check">
@@ -315,38 +279,33 @@ export default function ConfiguracionSistema() {
           </label>
         </section>
 
-        {/* ── Módulos avanzados ─────────────────────────────────────────────── */}
+        {/* ── Módulos avanzados ─────────────────────────────────────────── */}
         <section className="syscfg-card">
           <h2>Módulos avanzados</h2>
-
           <label className="syscfg-check">
             <input type="checkbox" checked={form.comprasHabilitadas}
               onChange={(e) => actualizar('comprasHabilitadas', e.target.checked)}
               disabled={!caps.comprasHabilitadas} />
             <span>Compras{!caps.comprasHabilitadas ? ' — requiere Medium o Pro' : ''}</span>
           </label>
-
           <label className="syscfg-check">
             <input type="checkbox" checked={form.retencionesHabilitadas}
               onChange={(e) => actualizar('retencionesHabilitadas', e.target.checked)}
               disabled={!caps.retencionesHabilitadas} />
             <span>Retenciones{!caps.retencionesHabilitadas ? ' — solo Pro' : ''}</span>
           </label>
-
           <label className="syscfg-check">
             <input type="checkbox" checked={form.liquidacionesHabilitadas}
               onChange={(e) => actualizar('liquidacionesHabilitadas', e.target.checked)}
               disabled={!caps.liquidacionesHabilitadas} />
             <span>Liquidaciones de compra{!caps.liquidacionesHabilitadas ? ' — solo Pro' : ''}</span>
           </label>
-
           <label className="syscfg-check">
             <input type="checkbox" checked={form.atsHabilitado}
               onChange={(e) => actualizar('atsHabilitado', e.target.checked)}
               disabled={!caps.atsHabilitado} />
             <span>ATS{!caps.atsHabilitado ? ' — solo Pro' : ''}</span>
           </label>
-
           <label className="syscfg-check">
             <input type="checkbox" checked={form.contabilidadHabilitada}
               onChange={(e) => actualizar('contabilidadHabilitada', e.target.checked)}
@@ -355,7 +314,7 @@ export default function ConfiguracionSistema() {
           </label>
         </section>
 
-        {/* ── Talento Humano ───────────────────────────────────────────────── */}
+        {/* ── Talento Humano ────────────────────────────────────────────── */}
         <section className="syscfg-card">
           <h2>Talento Humano</h2>
           <label className="syscfg-check">
@@ -370,7 +329,6 @@ export default function ConfiguracionSistema() {
               {!caps.talentoHumanoHabilitado ? ' — requiere Medium o Pro' : ''}
             </span>
           </label>
-
           <div className="syscfg-row" style={{ marginTop: '1rem' }}>
             <div className="syscfg-field">
               <label>SBU Ecuador (Salario Básico Unificado)</label>
@@ -394,23 +352,32 @@ export default function ConfiguracionSistema() {
           </div>
         </section>
 
-        {/* ── SMTP / Correo electrónico ────────────────────────────────────── */}
+        {/* ── SMTP / Correo (colapsible) ─────────────────────────────────── */}
         <section className="syscfg-card syscfg-card-wide">
-          <h2>📧 Correo Electrónico (SMTP)</h2>
-          <div className="syscfg-grid">
-            <div className="syscfg-field">
-              <p style={{ margin: '0 0 .5rem', fontSize: '.9rem', color: '#475569', lineHeight: '1.5' }}>
-                Configura las variables de entorno en Railway para habilitar el envío de correos:
-                <code style={{ display: 'block', background: '#f1f5f9', padding: '.5rem .75rem', borderRadius: '.4rem', marginTop: '.4rem', fontSize: '.82rem', lineHeight: '1.7' }}>
-                  SMTP_HOST = smtp.gmail.com<br />
-                  SMTP_PORT = 587<br />
-                  SMTP_SECURE = false<br />
-                  SMTP_USER = tucorreo@gmail.com<br />
-                  SMTP_PASS = contraseña-de-app<br />
-                  SMTP_FROM = AELA ERP &lt;tucorreo@gmail.com&gt;<br />
-                  SMTP_SOPORTE = soporte@tudominio.com
-                </code>
+          <button
+            type="button"
+            className="syscfg-accordion-toggle"
+            onClick={() => setSmtpAbierto((v) => !v)}
+            aria-expanded={smtpAbierto}
+          >
+            <span>📧 Correo Electrónico</span>
+            <span className={`syscfg-accordion-arrow ${smtpAbierto ? 'open' : ''}`}>▾</span>
+          </button>
+
+          {smtpAbierto && (
+            <div className="syscfg-accordion-body">
+              <p className="syscfg-note" style={{ marginBottom: '.75rem' }}>
+                El correo electrónico se configura a nivel del servidor (variables de entorno en Railway).
+                Todos los tenants comparten el mismo servidor de envío. Para verificar que funciona,
+                usa el botón de prueba.
               </p>
+              <code className="syscfg-code-block">
+                SMTP_HOST = smtp.gmail.com<br />
+                SMTP_PORT = 587<br />
+                SMTP_USER = tucorreo@gmail.com<br />
+                SMTP_PASS = contraseña-de-app (o re_xxxx para Resend)<br />
+                SMTP_FROM = AELA ERP &lt;tucorreo@gmail.com&gt;
+              </code>
               <button
                 type="button"
                 className="btn-secondary"
@@ -421,14 +388,13 @@ export default function ConfiguracionSistema() {
                 {probandoSmtp ? '⏳ Enviando...' : '✉️ Enviar email de prueba'}
               </button>
               <small className="syscfg-hint" style={{ display: 'block', marginTop: '.4rem' }}>
-                Si SMTP no está configurado, el botón te indicará qué variables agregar.
                 El email de prueba se envía a tu correo registrado en el sistema.
               </small>
             </div>
-          </div>
+          )}
         </section>
 
-        {/* ── Resumen ───────────────────────────────────────────────────────── */}
+        {/* ── Resumen ───────────────────────────────────────────────────── */}
         <section className="syscfg-card syscfg-card-wide">
           <h2>Resumen</h2>
           <div className="syscfg-badges">
