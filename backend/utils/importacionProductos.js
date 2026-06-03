@@ -385,10 +385,15 @@ async function obtenerXmlDesdeAutorizacion(claveAcceso) {
   const clave = limpiarTexto(claveAcceso);
   if (!clave) throw new Error('La autorización o clave de acceso es requerida');
 
-  const ambientes = [2, 1];
+  const ambientes = [2, 1]; // 2=producción primero, 1=pruebas como fallback
+  let ultimoError  = null;
+  let sriMensajes  = [];
+  let sriEstado    = null;
+
   for (const ambiente of ambientes) {
     try {
       const respuesta = await sri.autorizarComprobanteSRI(clave, ambiente);
+
       if (respuesta?.xmlAutorizado) {
         return {
           ambiente,
@@ -396,12 +401,30 @@ async function obtenerXmlDesdeAutorizacion(claveAcceso) {
           xml: respuesta.xmlAutorizado,
         };
       }
-    } catch (error) {
-      // Continuar con el otro ambiente.
+
+      // SRI respondió pero sin XML — guardar contexto para el error
+      if (respuesta?.estado) sriEstado = respuesta.estado;
+      if (respuesta?.mensajes?.length) sriMensajes = respuesta.mensajes;
+    } catch (err) {
+      ultimoError = err;
     }
   }
 
-  throw new Error('No se pudo recuperar un XML autorizado desde el SRI con esa clave de acceso');
+  // Construir mensaje de error con el máximo contexto posible
+  let detalle = '';
+  if (sriMensajes.length > 0) {
+    detalle = ` — ${sriMensajes.join('; ')}`;
+  } else if (sriEstado && sriEstado !== 'NO_AUTORIZADO') {
+    detalle = ` — estado SRI: ${sriEstado}`;
+  } else if (ultimoError) {
+    detalle = ` — ${ultimoError.message}`;
+  }
+
+  throw new Error(
+    sriMensajes.length > 0
+      ? `SRI: ${sriMensajes.join('; ')}`
+      : `Comprobante no encontrado en el SRI${detalle}. Verifica que la clave sea correcta y que el portal esté disponible.`
+  );
 }
 
 async function importarProductos({

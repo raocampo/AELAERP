@@ -838,11 +838,17 @@ function soapRequest(url, soapBody, action, namespace) {
     const req = https.request(options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
-      res.on('end', () => resolve(data));
+      res.on('end', () => {
+        if (res.statusCode >= 400) {
+          reject(new Error(`Servicio SRI no disponible (HTTP ${res.statusCode})`));
+          return;
+        }
+        resolve(data);
+      });
     });
 
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout SRI')); });
+    req.on('error', (err) => reject(new Error(`Error de red al contactar el SRI: ${err.message}`)));
+    req.on('timeout', () => { req.destroy(); reject(new Error('El servicio SRI no respondió a tiempo (timeout 30s)')); });
     req.write(envelope);
     req.end();
   });
@@ -906,9 +912,25 @@ async function autorizarComprobanteSRI(claveAcceso, ambiente) {
     mensajes.push(m[1]);
   }
 
-  // El XML autorizado viene embebido en la respuesta
-  const xmlAutMatch = respXml.match(/<comprobante><!\[CDATA\[([\s\S]*?)\]\]><\/comprobante>/i);
-  const xmlAutorizado = xmlAutMatch ? xmlAutMatch[1] : null;
+  // El XML autorizado viene embebido en la respuesta dentro de CDATA
+  // Toleramos: espacios alrededor de CDATA, prefijos de namespace (ns2:comprobante), etc.
+  const xmlAutMatchCdata = respXml.match(
+    /<(?:[\w]*:)?comprobante[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/(?:[\w]*:)?comprobante>/i
+  );
+  let xmlAutorizado = xmlAutMatchCdata ? xmlAutMatchCdata[1].trim() : null;
+
+  // Fallback: el SRI a veces entrega el XML con entidades HTML en vez de CDATA
+  if (!xmlAutorizado) {
+    const xmlEncMatch = respXml.match(
+      /<(?:[\w]*:)?comprobante[^>]*>((?:&lt;|<\?xml)[\s\S]*?)<\/(?:[\w]*:)?comprobante>/i
+    );
+    if (xmlEncMatch) {
+      const decoded = xmlEncMatch[1]
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
+      if (decoded.startsWith('<')) xmlAutorizado = decoded;
+    }
+  }
 
   return {
     autorizado:       estado === 'AUTORIZADO',

@@ -234,7 +234,15 @@ router.post('/consultar', async (req, res) => {
       }
     }
 
-    res.json({ success: true, total: clavesLimpias.length, resultados });
+    // Detectar fallo masivo del servicio SRI (todas las claves nuevas dieron error de red/servicio)
+    const nuevas  = resultados.filter((r) => r.estado !== 'existe');
+    const errores = nuevas.filter((r) => r.estado === 'error');
+    const avisoSri = nuevas.length > 0 && errores.length === nuevas.length &&
+      errores.every((r) => /sri|servicio|timeout|red|http|disponible/i.test(r.error || ''))
+      ? 'El servicio de autorización del SRI no está disponible en este momento. Intenta más tarde o usa "Importar ZIP" con los XMLs descargados de srienlinea.sri.gob.ec.'
+      : null;
+
+    res.json({ success: true, total: clavesLimpias.length, resultados, avisoSri });
   } catch (error) {
     console.error('Error en /buzon/consultar:', error);
     res.status(500).json({ success: false, mensaje: 'Error al consultar el SRI' });

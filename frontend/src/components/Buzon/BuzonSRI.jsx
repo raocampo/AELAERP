@@ -180,16 +180,20 @@ export default function BuzonSRI() {
     .map((c) => c.replace(/\s+/g, '').trim())
     .filter((c) => c.length === 49);
 
+  const [avisoSri, setAvisoSri] = useState(null);
+
   const consultarClaves = async () => {
     const claves = parsearClaves();
     if (claves.length === 0) { toast.error('Ingresa al menos una clave de acceso válida (49 dígitos)'); return; }
     if (claves.length > 50) { toast.error('Máximo 50 claves por lote'); return; }
     setConsultando(true);
+    setAvisoSri(null);
     try {
       const res = await api.post('/buzon/consultar', { claves });
       const resultados = res.data?.resultados || [];
       setResultadosConsulta(resultados);
       setSeleccionados(new Set(resultados.filter((r) => r.estado === 'nuevo').map((r) => r.clave)));
+      setAvisoSri(res.data?.avisoSri || null);
       setPaso(2);
     } catch (err) {
       toast.error(err.response?.data?.mensaje || 'Error al consultar el SRI');
@@ -223,7 +227,7 @@ export default function BuzonSRI() {
     }
   };
 
-  const reiniciar = () => { setTextareaClaves(''); setResultadosConsulta([]); setSeleccionados(new Set()); setResumenImport(null); setPaso(1); };
+  const reiniciar = () => { setTextareaClaves(''); setResultadosConsulta([]); setSeleccionados(new Set()); setResumenImport(null); setAvisoSri(null); setPaso(1); };
 
   const importarZip = async () => {
     if (!archivoZip) { toast.error('Selecciona un archivo ZIP'); return; }
@@ -614,6 +618,13 @@ export default function BuzonSRI() {
               <p className="buzon-step-hint">
                 <strong>{nuevosCount} nuevo(s)</strong> de {resultadosConsulta.length} clave(s) consultadas. Selecciona los que deseas importar.
               </p>
+
+              {avisoSri && (
+                <div className="buzon-alerta-warning" style={{ marginBottom: '1rem' }}>
+                  <strong>⚠️ Servicio SRI no disponible</strong><br />
+                  {avisoSri}
+                </div>
+              )}
 
               {resultadosConsulta.some((r) => r.tipoCod === '01' || r.tipoCod === '03') && (
                 <div className="buzon-opciones">
