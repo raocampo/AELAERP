@@ -50,13 +50,17 @@ async function run() {
 
     let tenantRows = [];
     try {
+      // El campo es "estado" (varchar), no un booleano "activo"
       const { rows } = await masterClient.query(
-        `SELECT slug, "dbName", "dbHost", "dbPort" FROM aela_master.tenants WHERE activo = true`
+        `SELECT slug, "dbName", "dbHost", "dbPort" FROM aela_master.tenants WHERE estado = 'activo'`
       );
       tenantRows = rows;
     } catch (err) {
-      // El schema aela_master puede no existir en instancias sin multi-tenant
-      if (!err.message.includes('does not exist') && !err.message.includes('no existe')) {
+      // Solo ignorar si el schema aela_master no existe (instancias sin multi-tenant)
+      const esSchemaMissing = /schema.*aela_master.*does not exist|relation.*aela_master.*does not exist/i.test(err.message);
+      if (esSchemaMissing) {
+        console.log('[schema-fix] Schema aela_master no encontrado — instancia sin multi-tenant.');
+      } else {
         console.error('[schema-fix] Error al leer tenants:', err.message);
       }
     }
