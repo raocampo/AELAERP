@@ -85,6 +85,7 @@ model empresas {
   contratos             contratos[]
   nominas               nominas[]
   ausencias             ausencias[]
+  tablaUtilidades       tabla_utilidades[]
 
   @@map("empresas")
 }
@@ -1372,4 +1373,24 @@ model ausencias {
   @@index([empresaId])
   @@index([empleadoId])
   @@map("ausencias")
+}
+
+// ====================================
+// TABLA DE UTILIDADES / MÁRGENES
+// Configuración de márgenes de utilidad para calcular PVP desde costo.
+// ====================================
+model tabla_utilidades {
+  id          Int      @id @default(autoincrement())
+  empresaId   Int
+  nombre      String   @db.VarChar(80)   // Ej: "General", "Electrónica", "Alimentos"
+  porcentaje  Decimal  @db.Decimal(7, 2) // Ej: 30.00 = 30%
+  descripcion String?  @db.VarChar(200)
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  empresa empresas @relation(fields: [empresaId], references: [id])
+
+  @@index([empresaId])
+  @@map("tabla_utilidades")
 }

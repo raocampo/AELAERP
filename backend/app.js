@@ -57,6 +57,7 @@ const talentoHumanoRoutes = require('./routes/talentoHumano');
 const puntosEmisionRoutes = require('./routes/puntosEmision');
 const superAdminRoutes    = require('./routes/superAdmin');
 const impresoraRoutes     = require('./routes/impresora');
+const utilidadesRoutes    = require('./routes/utilidades');
 const { soloMediumOPro, soloPro } = require('./middleware/edition');
 const { contarPendientes } = require('./utils/colaSRI');
 const { proteger } = require('./middleware/auth');
@@ -105,6 +106,7 @@ app.use('/api/bancos', bancosRoutes);
 app.use('/api/talento-humano', soloMediumOPro, talentoHumanoRoutes);
 app.use('/api/puntos-emision', puntosEmisionRoutes);
 app.use('/api/super-admin',   superAdminRoutes);
+app.use('/api/utilidades',    utilidadesRoutes);
 
 app.get('/api/cola-sri/estado', proteger, async (req, res) => {
   try {

@@ -163,8 +163,9 @@ const GRUPOS_MENU = [
     icon: '⚙️',
     label: 'Configuración',
     items: [
-      { to: '/configuracion-sri',     icon: '⚙️', label: 'Config SRI',    permiso: 'sri.configurar' },
-      { to: '/configuracion-sistema', icon: '🛠️', label: 'Config Sistema', permiso: 'sistema.configurar' },
+      { to: '/configuracion-sri',          icon: '⚙️', label: 'Config SRI',    permiso: 'sri.configurar' },
+      { to: '/configuracion-sistema',      icon: '🛠️', label: 'Config Sistema', permiso: 'sistema.configurar' },
+      { to: '/configuracion/utilidades',   icon: '📊', label: 'Utilidades',     permiso: 'sistema.configurar' },
     ],
   },
   {
@@ -289,8 +290,10 @@ export default function Layout() {
   }, []);
 
   const handleLogout = () => {
+    const slug = localStorage.getItem('aela_tenant_slug');
     logout();
-    navigate('/login');
+    // Volver al portal del tenant, no al genérico de CorpSimtelec
+    navigate(slug ? `/${slug}` : '/login');
   };
 
   return (
@@ -512,7 +515,12 @@ export default function Layout() {
           <span /><span /><span />
         </button>
         <TrialBanner empresa={empresa} />
-        <QuickBar />
+        <div className="layout-topbar">
+          <QuickBar />
+          <NavLink to="/ayuda" className="layout-help-btn" title="Ayuda del sistema">
+            ❓ Ayuda
+          </NavLink>
+        </div>
         <OutletErrorBoundary>
           <Outlet />
         </OutletErrorBoundary>

@@ -1046,4 +1046,102 @@ router.patch('/:id/anular', async (req, res) => {
   }
 });
 
+// POST /api/compras/:id/registrar-inventario
+// Registra movimientos de inventario para una compra que ya existe pero
+// no los tiene registrados (p.ej. importada del Buzón SRI sin la opción activada).
+router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), async (req, res) => {
+  const compraId  = parseInt(req.params.id, 10);
+  const empresaId = req.empresa.id;
+  const usuarioId = req.usuario?.id || null;
+  const { margenPct } = req.body || {};
+  const usarPvpAuto = margenPct !== undefined && margenPct !== null && !isNaN(Number(margenPct)) && Number(margenPct) >= 0;
+
+  try {
+    const compra = await prisma.facturas_compra.findFirst({
+      where: { id: compraId, empresaId },
+    });
+    if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
+    if (compra.anulada) return res.status(400).json({ success: false, mensaje: 'La compra está anulada' });
+    if ((compra.movimientosInventario || 0) > 0) {
+      return res.status(400).json({ success: false, mensaje: 'Esta compra ya tiene movimientos de inventario registrados' });
+    }
+
+    const detalles = Array.isArray(compra.detalles)
+      ? compra.detalles
+      : (typeof compra.detalles === 'string' ? JSON.parse(compra.detalles || '[]') : []);
+
+    if (!detalles?.length) {
+      return res.status(400).json({ success: false, mensaje: 'La compra no tiene líneas de detalle' });
+    }
+
+    let movimientosRegistrados = 0;
+    const errores = [];
+
+    await prisma.$transaction(async (tx) => {
+      for (const det of detalles) {
+        if (!det.productoId && !det.codigoPrincipal) continue;
+
+        // Buscar el producto
+        let prod = det.productoId
+          ? await tx.productos_servicios.findFirst({ where: { id: det.productoId, empresaId } })
+          : await tx.productos_servicios.findFirst({ where: { codigoPrincipal: det.codigoPrincipal, empresaId } });
+
+        if (!prod) {
+          errores.push(`Producto "${det.codigoPrincipal || det.descripcion || det.productoId}" no encontrado`);
+          continue;
+        }
+
+        if (!prod.inventariable) {
+          continue; // No inventariable — omitir sin error
+        }
+
+        const cantidad = Number(det.cantidad || 0);
+        if (cantidad <= 0) continue;
+
+        await aplicarMovimientoInventario({
+          tx,
+          empresaId,
+          productoId: prod.id,
+          usuarioId,
+          tipo: 'ENTRADA',
+          deltaCantidad: cantidad,
+          referencia: compra.numeroFactura,
+          observacion: `Entrada manual — compra ${compra.numeroFactura}`,
+          costoUnitario: det.precioUnitario || 0,
+          metadata: { compraId, tipo: 'REGISTRO_MANUAL' },
+        });
+
+        if (usarPvpAuto && Number(det.precioUnitario || 0) > 0) {
+          const nuevoPvp = Number((det.precioUnitario * (1 + Number(margenPct) / 100)).toFixed(4));
+          await tx.productos_servicios.update({
+            where: { id: prod.id },
+            data: { precioUnitario: nuevoPvp, costoUnitario: det.precioUnitario },
+          });
+        }
+
+        movimientosRegistrados++;
+      }
+
+      if (movimientosRegistrados > 0) {
+        await tx.facturas_compra.update({
+          where: { id: compraId },
+          data: { movimientosInventario: movimientosRegistrados, registraInventario: true },
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      movimientosRegistrados,
+      errores,
+      mensaje: movimientosRegistrados > 0
+        ? `${movimientosRegistrados} producto(s) registrado(s) en inventario`
+        : 'No se encontraron productos inventariables en esta compra',
+    });
+  } catch (error) {
+    console.error('POST /compras/:id/registrar-inventario:', error);
+    res.status(500).json({ success: false, mensaje: error.message || 'Error al registrar inventario' });
+  }
+});
+
 module.exports = router;

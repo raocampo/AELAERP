@@ -12,7 +12,9 @@ export const SESSION_STORAGE_KEYS = [
   'aela_usuario',
   'aela_empresa',
   'aela_sistema',
-  'aela_tenant_slug',
+  // NOTA: aela_tenant_slug NO se limpia en logout — es un identificador de
+  // enrutamiento, no un secreto. Se preserva para que el usuario regrese
+  // automáticamente al login de su tenant tras expiración de sesión.
 ];
 
 export function inyectarTokenEnConfig(config, storage = globalThis.localStorage) {
@@ -28,13 +30,16 @@ export function limpiarSesion(storage = globalThis.localStorage) {
   SESSION_STORAGE_KEYS.forEach((key) => storage?.removeItem(key));
 }
 
-export function redirigirALogin(location = globalThis.window?.location) {
+export function redirigirALogin(location = globalThis.window?.location, storage = globalThis.localStorage) {
   if (!location) return;
+  // Preservar el slug del tenant para que el usuario regrese a su portal
+  const slug = storage?.getItem('aela_tenant_slug');
+  const destino = slug ? `/${slug}` : '/login';
   if (typeof location.assign === 'function') {
-    location.assign('/login');
+    location.assign(destino);
     return;
   }
-  location.href = '/login';
+  location.href = destino;
 }
 
 export function manejarErrorApi(err, {
@@ -43,7 +48,7 @@ export function manejarErrorApi(err, {
 } = {}) {
   if (err.response?.status === 401) {
     limpiarSesion(storage);
-    redirigirALogin(location);
+    redirigirALogin(location, storage); // slug aún está (no se limpia)
   }
   if (err.response?.status === 402 && err.response?.data?.codigo === 'TRIAL_EXPIRADO') {
     // Mostrar modal de trial expirado vía evento global

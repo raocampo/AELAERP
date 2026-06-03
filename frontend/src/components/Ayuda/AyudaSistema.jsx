@@ -286,6 +286,132 @@ const SECCIONES = [
     ),
   },
   {
+    id: 'buzon-sri',
+    icono: '📥',
+    titulo: 'Buzón SRI — Importar facturas de compra',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>El <strong>Buzón SRI</strong> te permite descargar y registrar automáticamente las facturas electrónicas que tus proveedores te han enviado al SRI.</p>
+
+        <h4>¿Qué es el Buzón SRI?</h4>
+        <p>Es el repositorio oficial del SRI donde se almacenan todos los comprobantes electrónicos emitidos a tu RUC (facturas, liquidaciones de compra, notas de crédito de proveedores, etc.).</p>
+
+        <h4>Cómo importar desde el Buzón SRI</h4>
+        <ol>
+          <li>Ve a <strong>Compras → Buzón SRI</strong>.</li>
+          <li>Selecciona el rango de fechas que deseas importar.</li>
+          <li>Haz clic en <strong>Descargar del SRI</strong>. El sistema consulta el servicio web del SRI con tus credenciales.</li>
+          <li>Revisa los comprobantes encontrados. Los nuevos aparecerán marcados como <em>Pendientes</em>.</li>
+          <li>Haz clic en <strong>Importar seleccionados</strong> para registrarlos como compras en el sistema.</li>
+        </ol>
+
+        <h4>Opciones al importar</h4>
+        <table className="ayuda-tabla">
+          <thead><tr><th>Opción</th><th>Qué hace</th></tr></thead>
+          <tbody>
+            <tr><td>Registrar inventario</td><td>Crea entradas de inventario para cada producto inventariable de la factura</td></tr>
+            <tr><td>Registrar en caja</td><td>Crea un egreso en la Caja Diaria abierta por el total de la compra</td></tr>
+            <tr><td>Crear productos nuevos</td><td>Si un código de producto no existe, lo crea automáticamente en el catálogo</td></tr>
+          </tbody>
+        </table>
+
+        <h4>Importación en lotes</h4>
+        <p>Si tienes muchos comprobantes pendientes, el sistema los procesa en <strong>lotes automáticos</strong> para evitar tiempos de espera excesivos. Verás una barra de progreso durante el procesamiento.</p>
+
+        <h4>Comprobantes duplicados</h4>
+        <p>El sistema verifica la <strong>clave de acceso</strong> de cada comprobante antes de importar. Si ya fue registrado anteriormente, lo omitirá automáticamente para evitar duplicados.</p>
+
+        <div className="ayuda-nota ayuda-nota-warning">
+          ⚠️ Para usar el Buzón SRI necesitas tener configuradas tus <strong>credenciales SRI</strong> en <em>Configuración → SRI</em> (RUC y clave del portal contribuyente).
+        </div>
+
+        <h4>Importar desde archivo XML</h4>
+        <p>También puedes cargar comprobantes manualmente subiendo el archivo <strong>XML</strong> directamente (arrastra el archivo o usa el botón de carga). Útil si el proveedor te envió el XML por correo.</p>
+      </div>
+    ),
+  },
+  {
+    id: 'inventario',
+    icono: '📦',
+    titulo: 'Inventario — Control de stock',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>El módulo de inventario lleva el <strong>control de entradas y salidas de stock</strong> de tus productos. Solo aplica a productos marcados como <em>Inventariables</em>.</p>
+
+        <h4>¿Cómo se actualiza el inventario?</h4>
+        <table className="ayuda-tabla">
+          <thead><tr><th>Acción</th><th>Efecto en inventario</th></tr></thead>
+          <tbody>
+            <tr><td>Compra con "Registrar inventario" activo</td><td>Entrada: suma cantidad comprada al stock</td></tr>
+            <tr><td>Registrar en inventario (compra existente)</td><td>Entrada manual desde el detalle de la compra</td></tr>
+            <tr><td>Venta (factura o nota de venta)</td><td>Salida: resta cantidad vendida del stock</td></tr>
+            <tr><td>POS</td><td>Salida automática al procesar el cobro</td></tr>
+            <tr><td>Anular compra</td><td>Revierte las entradas de inventario asociadas</td></tr>
+          </tbody>
+        </table>
+
+        <h4>Registrar inventario en una compra existente</h4>
+        <ol>
+          <li>Abre el <strong>Detalle de la compra</strong> que no tiene inventario registrado.</li>
+          <li>Haz clic en <strong>📦 Registrar en inventario</strong> (visible cuando la compra no tiene movimientos).</li>
+          <li>Opcionalmente selecciona un <strong>margen de utilidad</strong> para calcular el PVP de cada producto automáticamente.</li>
+          <li>Confirma. El sistema creará las entradas de stock y actualizará el PVP si seleccionaste un margen.</li>
+        </ol>
+
+        <h4>Productos inventariables</h4>
+        <p>Para que un producto participe en el control de stock, debe estar marcado como <strong>Inventariable</strong> en el catálogo de productos. Ve a <em>Productos → editar producto → activar "Es inventariable"</em>.</p>
+
+        <h4>Stock mínimo y alertas</h4>
+        <p>Puedes configurar un <strong>stock mínimo</strong> por producto. Cuando el stock caiga por debajo de ese umbral, el producto aparecerá resaltado en los reportes de inventario.</p>
+
+        <div className="ayuda-nota">
+          💡 El historial completo de movimientos (quién hizo qué, cuándo y por qué referencia) está disponible en <strong>Inventario → Movimientos</strong>.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'utilidades',
+    icono: '📊',
+    titulo: 'Tabla de Utilidades — Márgenes de ganancia',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>La <strong>Tabla de Utilidades</strong> define los márgenes de ganancia que usas para calcular el Precio de Venta al Público (PVP) de tus productos a partir del costo de compra.</p>
+
+        <h4>Fórmula</h4>
+        <div style={{ background: '#f1f5f9', borderRadius: '.5rem', padding: '.6rem 1rem', fontFamily: 'monospace', marginBottom: '.75rem' }}>
+          PVP = Costo × (1 + % Utilidad ÷ 100)
+        </div>
+        <p>Ejemplo: Si el costo es <strong>$80</strong> y tu margen es <strong>25%</strong>, el PVP será <strong>$100</strong>.</p>
+
+        <h4>Dónde configurarla</h4>
+        <p>Ve a <strong>Configuración → Tabla de Utilidades</strong>. Desde allí puedes crear, editar y eliminar márgenes. Puedes tener múltiples márgenes para distintas categorías de productos.</p>
+
+        <h4>Cómo se usa al importar compras</h4>
+        <ol>
+          <li>Importa o registra una factura de compra.</li>
+          <li>En el <strong>Detalle de la compra</strong>, haz clic en <strong>📦 Registrar en inventario</strong>.</li>
+          <li>En el modal, selecciona el margen de utilidad que aplica.</li>
+          <li>El sistema calculará el PVP de cada producto y lo actualizará en el catálogo.</li>
+        </ol>
+
+        <table className="ayuda-tabla">
+          <thead><tr><th>Margen</th><th>Costo</th><th>PVP resultante</th></tr></thead>
+          <tbody>
+            <tr><td>10%</td><td>$100</td><td>$110.00</td></tr>
+            <tr><td>25%</td><td>$100</td><td>$125.00</td></tr>
+            <tr><td>50%</td><td>$100</td><td>$150.00</td></tr>
+            <tr><td>100%</td><td>$100</td><td>$200.00</td></tr>
+          </tbody>
+        </table>
+
+        <div className="ayuda-nota">
+          💡 Puedes crear márgenes por categoría: <em>General (30%), Electrónica (20%), Alimentos (15%)</em>, etc. Selecciona el más adecuado al importar cada compra.
+        </div>
+      </div>
+    ),
+  },
+  {
     id: 'acceso',
     icono: '🔗',
     titulo: 'Acceso al sistema y marcadores',

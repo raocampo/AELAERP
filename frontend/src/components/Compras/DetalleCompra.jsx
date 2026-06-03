@@ -69,6 +69,12 @@ export default function DetalleCompra() {
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [anulando, setAnulando] = useState(false);
 
+  // Modal registrar inventario
+  const [modalInv, setModalInv]         = useState(false);
+  const [utilidades, setUtilidades]     = useState([]);
+  const [margenSelId, setMargenSelId]   = useState('');
+  const [registrandoInv, setRegistrandoInv] = useState(false);
+
   const cargar = async (ignore = false) => {
     setLoading(true);
     try {
@@ -142,6 +148,37 @@ export default function DetalleCompra() {
       toast.error(err.response?.data?.mensaje || 'No se pudo anular');
     } finally {
       setAnulando(false);
+    }
+  };
+
+  const abrirModalInv = async () => {
+    setMargenSelId('');
+    setModalInv(true);
+    try {
+      const res = await api.get('/utilidades');
+      setUtilidades(res.data?.data || []);
+    } catch { /* sin márgenes disponibles */ }
+  };
+
+  const registrarInventario = async () => {
+    setRegistrandoInv(true);
+    try {
+      const body = {};
+      if (margenSelId) {
+        const u = utilidades.find((u) => u.id === Number(margenSelId));
+        if (u) body.margenPct = Number(u.porcentaje);
+      }
+      const res = await api.post(`/compras/${id}/registrar-inventario`, body);
+      const { movimientosRegistrados, errores, mensaje } = res.data;
+      if (movimientosRegistrados > 0) toast.success(mensaje, { duration: 5000 });
+      else toast.error(mensaje);
+      errores?.forEach((e) => toast.error(e, { duration: 4000 }));
+      setModalInv(false);
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al registrar inventario');
+    } finally {
+      setRegistrandoInv(false);
     }
   };
 
@@ -226,6 +263,67 @@ export default function DetalleCompra() {
         </div>
       )}
 
+      {/* MODAL REGISTRAR INVENTARIO */}
+      {modalInv && (() => {
+        const inventariables = detalles.filter((d) => d.inventariable);
+        const margenActual = margenSelId ? utilidades.find((u) => u.id === Number(margenSelId)) : null;
+        return (
+          <div className="dc-modal-overlay">
+            <div className="dc-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+              <h3>📦 Registrar en inventario</h3>
+              <p style={{ color: '#475569', fontSize: '.9rem', marginBottom: '.75rem' }}>
+                Se registrarán entradas de inventario para los productos inventariables de esta compra.
+              </p>
+
+              {inventariables.length === 0 ? (
+                <p style={{ color: '#ef4444', fontSize: '.9rem' }}>
+                  Esta compra no tiene líneas marcadas como inventariables.
+                </p>
+              ) : (
+                <div style={{ background: '#f8fafc', borderRadius: '.5rem', padding: '.6rem .75rem', marginBottom: '.75rem', maxHeight: 180, overflowY: 'auto' }}>
+                  {inventariables.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.85rem', padding: '.25rem 0', borderBottom: i < inventariables.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+                      <span>{d.descripcion || d.codigoPrincipal}</span>
+                      <span style={{ color: '#64748b', marginLeft: '.5rem', whiteSpace: 'nowrap' }}>
+                        {fmtNumero(d.cantidad, 2)} × {fmtMoneda(d.precioUnitario)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <label className="dc-modal-label">
+                Margen de utilidad para actualizar PVP (opcional)
+                <select
+                  style={{ width: '100%', padding: '.45rem .6rem', borderRadius: '.45rem', border: '1.5px solid #e2e8f0', fontSize: '.9rem', marginTop: '.25rem' }}
+                  value={margenSelId}
+                  onChange={(e) => setMargenSelId(e.target.value)}
+                >
+                  <option value="">— No actualizar PVP —</option>
+                  {utilidades.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre} — {Number(u.porcentaje).toFixed(1)}%
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {margenActual && (
+                <p style={{ fontSize: '.8rem', color: '#0891b2', marginTop: '.25rem' }}>
+                  PVP = Costo × {(1 + Number(margenActual.porcentaje) / 100).toFixed(4)} — ej. si costo = $100 → PVP = ${(100 * (1 + Number(margenActual.porcentaje) / 100)).toFixed(2)}
+                </p>
+              )}
+
+              <div className="dc-modal-actions" style={{ marginTop: '1rem' }}>
+                <button className="btn-secondary" onClick={() => setModalInv(false)} disabled={registrandoInv}>Cancelar</button>
+                <button className="btn-primary" onClick={registrarInventario} disabled={registrandoInv || inventariables.length === 0}>
+                  {registrandoInv ? 'Registrando…' : `Registrar ${inventariables.length} producto${inventariables.length === 1 ? '' : 's'}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* MODAL ANULAR */}
       {modalAnular && (
         <div className="dc-modal-overlay">
@@ -275,6 +373,9 @@ export default function DetalleCompra() {
             <button className="btn-secondary" onClick={() => navigate(`/retenciones/nueva?compraId=${compra.id}`)}>
               Emitir retención
             </button>
+          )}
+          {!compra.anulada && (compra.movimientosInventario || 0) === 0 && (
+            <button className="btn-secondary" onClick={abrirModalInv}>📦 Registrar en inventario</button>
           )}
           {!compra.anulada && (
             <button className="btn-secondary" onClick={abrirEditar}>✏️ Editar</button>

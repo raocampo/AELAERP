@@ -7,15 +7,27 @@
 const { Client } = require('pg');
 
 const FIXES = [
-  // Impresora térmica POS — agregadas al schema pero faltantes en BDs antiguas
+  // Impresora térmica POS
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "impresoraIp"          VARCHAR(50)`,
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "impresoraPuerto"      INTEGER DEFAULT 9100`,
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "impresoraAncho"       INTEGER DEFAULT 80`,
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "impresoraHabilitada"  BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "cajaDineroHabilitada" BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "impresionAutoMobile"  BOOLEAN NOT NULL DEFAULT false`,
-  // SBU Ecuador — puede faltar en BDs de tenants creados antes de esta columna
+  // SBU Ecuador
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "sbuEcuador"           DECIMAL(8,2) NOT NULL DEFAULT 460.00`,
+  // Tabla de Utilidades — módulo de márgenes de ganancia para cálculo de PVP
+  `CREATE TABLE IF NOT EXISTS "tabla_utilidades" (
+    "id"          SERIAL PRIMARY KEY,
+    "empresaId"   INTEGER NOT NULL,
+    "nombre"      VARCHAR(80) NOT NULL,
+    "porcentaje"  DECIMAL(7,2) NOT NULL DEFAULT 30.00,
+    "descripcion" VARCHAR(200),
+    "activo"      BOOLEAN NOT NULL DEFAULT true,
+    "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS "tabla_utilidades_empresaId_idx" ON "tabla_utilidades"("empresaId")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

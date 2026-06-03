@@ -149,18 +149,24 @@ export function AuthProvider({ children }) {
     clearTimeout(timerLogout.current);
     clearTimeout(timerAviso.current);
     if (toastAvisoId.current) toast.dismiss(toastAvisoId.current);
+    // Guardar slug ANTES de limpiar — no es un secreto, es un identificador
+    // de enrutamiento que permite volver al portal correcto tras la sesión
+    const slug = localStorage.getItem('aela_tenant_slug');
     localStorage.removeItem('aela_token');
     localStorage.removeItem('token');
     localStorage.removeItem('aela_usuario');
     localStorage.removeItem('aela_empresa');
     localStorage.removeItem('aela_sistema');
-    localStorage.removeItem('aela_tenant_slug');
+    // aela_tenant_slug se mantiene intencionalmente para redirigir al portal correcto
     setUsuario(null);
     setEmpresa(null);
     setSistema(null);
     setEmpresasDisponibles([]);
     if (porInactividad) {
       toast('Sesión cerrada por inactividad. Vuelve a iniciar sesión.', { icon: '🔒', duration: 6000 });
+      // Redirigir al portal del tenant, no al portal genérico de CorpSimtelec
+      const destino = slug ? `/${slug}` : '/login';
+      window.location.assign(destino);
     }
   }, []);
 

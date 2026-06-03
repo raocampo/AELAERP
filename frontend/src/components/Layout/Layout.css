@@ -175,6 +175,44 @@
   min-height: 100vh;
 }
 
+/* ── TopBar: QuickBar + botón Ayuda alineados ── */
+.layout-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.layout-topbar .quickbar {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.layout-help-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.layout-help-btn:hover,
+.layout-help-btn.active {
+  background: #ede9fe;
+  border-color: #7C3AED;
+  color: #7C3AED;
+}
+
 /* ── Badge Plan Lite / Medium / Pro ── */
 .sidebar-plan-badge {
   display: inline-block;
