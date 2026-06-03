@@ -362,7 +362,12 @@ router.get('/exportar/csv', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 15, fechaDesde, fechaHasta, proveedor, busqueda, tipoGasto } = req.query;
+    const {
+      page = 1, limit = 15,
+      fechaDesde, fechaHasta,
+      proveedor, busqueda,
+      tipoGasto, origenRegistro,
+    } = req.query;
     const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const where = { empresaId: req.empresa.id };
 
@@ -385,11 +390,13 @@ router.get('/', async (req, res) => {
       ];
     }
 
-    // ─── Cache de columnas disponibles para evitar errores por migración pendiente ──
+    // Filtro por origen (MANUAL, BUZON_SRI, XML_IMPORTADO, etc.)
+    if (origenRegistro) where.origenRegistro = origenRegistro;
+
+    // ─── Cache de columnas disponibles ──────────────────────────
     const cols = await getColsCompra();
     const usarTipoGasto = cols.tipoGasto;
 
-    // tipoGasto filter (columna puede estar pendiente de migración en producción)
     const whereTipoGasto = { ...where };
     if (usarTipoGasto && tipoGasto) {
       if (tipoGasto === 'SIN_CLASIFICAR') {
@@ -411,7 +418,8 @@ router.get('/', async (req, res) => {
       createdAt: true,
     };
 
-    const [total, items] = await Promise.all([
+    // ─── Consultas en paralelo: paginado + conteo + stats globales ──
+    const [total, items, agr] = await Promise.all([
       prisma.facturas_compra.count({ where: whereTipoGasto }),
       prisma.facturas_compra.findMany({
         where: whereTipoGasto,
@@ -420,13 +428,48 @@ router.get('/', async (req, res) => {
         take: parseInt(limit, 10),
         select: selectConTipoGasto,
       }),
+      // Totales globales del filtro (no solo la página actual)
+      prisma.facturas_compra.aggregate({
+        where: whereTipoGasto,
+        _sum: { subtotal0: true, subtotal5: true, subtotal15: true, totalIva: true, importeTotal: true },
+      }),
     ]);
+
+    // Resumen por clasificación de gasto (todos los registros del filtro)
+    let resumenGrupos = [];
+    if (usarTipoGasto) {
+      try {
+        const grupos = await prisma.facturas_compra.groupBy({
+          by: ['tipoGasto'],
+          where: whereTipoGasto,
+          _count: { id: true },
+          _sum: { subtotal0: true, subtotal5: true, subtotal15: true, totalIva: true, importeTotal: true },
+        });
+        resumenGrupos = grupos.map((g) => ({
+          tipo:   g.tipoGasto || 'SIN_CLASIFICAR',
+          count:  g._count.id,
+          base0:  Number(g._sum.subtotal0  || 0),
+          base15: Number(g._sum.subtotal15 || 0) + Number(g._sum.subtotal5 || 0),
+          iva:    Number(g._sum.totalIva   || 0),
+          total:  Number(g._sum.importeTotal || 0),
+        })).sort((a, b) => b.total - a.total);
+      } catch { /* tipoGasto aún no migrado */ }
+    }
+
+    const totalesGenerales = {
+      base0:  Number(agr._sum.subtotal0   || 0),
+      base15: Number(agr._sum.subtotal15  || 0) + Number(agr._sum.subtotal5 || 0),
+      iva:    Number(agr._sum.totalIva    || 0),
+      total:  Number(agr._sum.importeTotal || 0),
+    };
 
     res.json({
       success: true,
       data: items,
       total,
       pages: Math.ceil(total / parseInt(limit, 10)),
+      totalesGenerales,
+      resumenGrupos,
     });
   } catch (error) {
     // Log completo para diagnóstico en producción

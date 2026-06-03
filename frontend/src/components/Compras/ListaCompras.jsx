@@ -12,6 +12,8 @@ const FILTROS_INICIALES = {
   fechaDesde: '',
   fechaHasta: '',
   tipoGasto: '',
+  origenRegistro: '',
+  page: 1,
 };
 
 const TIPO_GASTO_OPCIONES = [
@@ -61,6 +63,9 @@ export default function ListaCompras() {
   const [filtros, setFiltros] = useState(FILTROS_INICIALES);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
+  const [totalesGenerales, setTotalesGenerales] = useState({ base0: 0, base15: 0, iva: 0, total: 0 });
+  const [resumenGrupos, setResumenGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportando, setExportando] = useState(false);
   const [quickEdit, setQuickEdit] = useState(null); // { id, tipoGasto }
@@ -77,6 +82,9 @@ export default function ListaCompras() {
         if (!ignore) {
           setItems(res.data?.data || []);
           setTotal(res.data?.total || 0);
+          setPages(res.data?.pages || 1);
+          setTotalesGenerales(res.data?.totalesGenerales || { base0: 0, base15: 0, iva: 0, total: 0 });
+          setResumenGrupos(res.data?.resumenGrupos || []);
         }
       } catch (error) {
         if (!ignore) toast.error(error.response?.data?.mensaje || 'No se pudo cargar el módulo de compras');
@@ -90,7 +98,11 @@ export default function ListaCompras() {
   }, [filtros]);
 
   const actualizarFiltro = (campo, valor) => {
-    setFiltros((prev) => ({ ...prev, [campo]: valor }));
+    setFiltros((prev) => ({
+      ...prev,
+      [campo]: valor,
+      ...(campo !== 'page' ? { page: 1 } : {}),
+    }));
   };
 
   const guardarTipoGasto = async () => {
@@ -145,25 +157,17 @@ export default function ListaCompras() {
     }
   };
 
-  const totalCompras   = items.reduce((acc, it) => acc + Number(it.importeTotal || 0), 0);
-  const totalBase0     = items.reduce((acc, it) => acc + Number(it.subtotal0 || 0), 0);
-  const totalBase15    = items.reduce((acc, it) => acc + Number(it.subtotal15 || it.subtotal5 || 0), 0);
-  const totalIvaItems  = items.reduce((acc, it) => acc + Number(it.totalIva || 0), 0);
-  const conInventario  = items.filter((it) => it.movimientosInventario > 0).length;
+  // Stats de la página actual (para "Con inventario" y el conteo visible)
+  const conInventario = items.filter((it) => it.movimientosInventario > 0).length;
 
-  // Resumen agrupado por tipo de gasto (para la tabla de clasificación)
-  const resumenPorTipo = Object.values(
-    items.reduce((acc, it) => {
-      const tipo = it.tipoGasto || 'SIN_CLASIFICAR';
-      if (!acc[tipo]) acc[tipo] = { tipo, count: 0, base0: 0, base15: 0, iva: 0, total: 0 };
-      acc[tipo].count++;
-      acc[tipo].base0  += Number(it.subtotal0  || 0);
-      acc[tipo].base15 += Number(it.subtotal15 || it.subtotal5 || 0);
-      acc[tipo].iva    += Number(it.totalIva   || 0);
-      acc[tipo].total  += Number(it.importeTotal || 0);
-      return acc;
-    }, {})
-  ).sort((a, b) => b.total - a.total);
+  // Totales globales del filtro (vienen del backend, cubren TODOS los registros, no solo esta página)
+  const totalCompras  = totalesGenerales.total;
+  const totalBase0    = totalesGenerales.base0;
+  const totalBase15   = totalesGenerales.base15;
+  const totalIvaItems = totalesGenerales.iva;
+
+  // Resumen por clasificación (backend groupBy — cubre TODOS los registros filtrados)
+  const resumenPorTipo = resumenGrupos;
 
   const exportarResumenCsv = () => {
     const labelDe = (v) => TIPO_GASTO_OPCIONES.find(o => o.value === v)?.label?.replace(/[^\w ]/g, '').trim() || v;
@@ -207,7 +211,7 @@ export default function ListaCompras() {
           <strong>{total}</strong>
         </article>
         <article className="compras-summary-card">
-          <span>Total visible</span>
+          <span>Total período</span>
           <strong>{fmtMoneda(totalCompras)}</strong>
         </article>
         <article className="compras-summary-card">
@@ -265,7 +269,7 @@ export default function ListaCompras() {
             <tfoot>
               <tr>
                 <td><strong>TOTAL</strong></td>
-                <td className="num"><strong>{items.length}</strong></td>
+                <td className="num"><strong>{total}</strong></td>
                 <td className="num"><strong>{fmtMoneda(totalBase0)}</strong></td>
                 <td className="num"><strong>{fmtMoneda(totalBase15)}</strong></td>
                 <td className="num iva-cell"><strong>{fmtMoneda(totalIvaItems)}</strong></td>
@@ -300,8 +304,39 @@ export default function ListaCompras() {
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
+        <button
+          className={`btn-${filtros.origenRegistro === 'BUZON_SRI' ? 'primary' : 'secondary'}`}
+          onClick={() => actualizarFiltro('origenRegistro', filtros.origenRegistro === 'BUZON_SRI' ? '' : 'BUZON_SRI')}
+          title="Mostrar solo facturas importadas desde el Buzón SRI"
+        >
+          {filtros.origenRegistro === 'BUZON_SRI' ? '✅ Buzón SRI' : '📥 Buzón SRI'}
+        </button>
         <button className="btn-secondary" onClick={() => setFiltros(FILTROS_INICIALES)}>Limpiar</button>
       </section>
+
+      {/* ── Paginación ──────────────────────────────────────── */}
+      {pages > 1 && (
+        <div className="compras-pagination">
+          <button
+            className="btn-secondary"
+            disabled={filtros.page <= 1}
+            onClick={() => actualizarFiltro('page', filtros.page - 1)}
+          >
+            ← Anterior
+          </button>
+          <span className="compras-pagination-info">
+            Página <strong>{filtros.page}</strong> de <strong>{pages}</strong>
+            {' '}— mostrando {items.length} de {total} registros
+          </span>
+          <button
+            className="btn-secondary"
+            disabled={filtros.page >= pages}
+            onClick={() => actualizarFiltro('page', filtros.page + 1)}
+          >
+            Siguiente →
+          </button>
+        </div>
+      )}
 
       <section className="compras-card">
         {loading ? (
@@ -383,6 +418,29 @@ export default function ListaCompras() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Paginación inferior */}
+        {pages > 1 && (
+          <div className="compras-pagination compras-pagination--bottom">
+            <button
+              className="btn-secondary"
+              disabled={filtros.page <= 1}
+              onClick={() => actualizarFiltro('page', filtros.page - 1)}
+            >
+              ← Anterior
+            </button>
+            <span className="compras-pagination-info">
+              Página <strong>{filtros.page}</strong> de <strong>{pages}</strong>
+            </span>
+            <button
+              className="btn-secondary"
+              disabled={filtros.page >= pages}
+              onClick={() => actualizarFiltro('page', filtros.page + 1)}
+            >
+              Siguiente →
+            </button>
           </div>
         )}
       </section>

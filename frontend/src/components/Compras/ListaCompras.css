@@ -252,3 +252,23 @@
     flex-direction: column;
   }
 }
+
+/* ── Paginación ──────────────────────────────────────────── */
+.compras-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.compras-pagination--bottom {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 8px;
+  padding-top: 14px;
+}
+
+.compras-pagination-info {
+  font-size: 0.88rem;
+  color: #64748b;
+}
