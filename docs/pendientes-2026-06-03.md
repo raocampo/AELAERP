@@ -41,6 +41,28 @@ Frontend polling cada 3 s → GET /api/buzon/sri/job/:jobId
 
 ---
 
+## ✅ Resuelto en esta sesión (2026-06-03)
+
+### Fix: 401 en `cola-sri/estado` + 500 en `configuracion-sistema` para tenants — commit `0a9718c`
+
+**Bug 1 — 401** (`usePendientesSRI` en Layout.jsx):
+El `fetch()` crudo no enviaba `X-Tenant-Slug`. El middleware detectaba
+`tokenSlug='mprq'` vs `requestSlug=null` → TENANT_MISMATCH → 401.
+Fix: agregar `X-Tenant-Slug` desde `localStorage.aela_tenant_slug`.
+
+**Bug 2 — 500** (`GET /api/configuracion-sistema` para mprq):
+`applySchemaFixes.js` solo corría contra la BD principal (`DATABASE_URL`).
+La BD `aela_mprq` no tenía las columnas nuevas de `configuracion_sistema`
+(`impresoraIp`, `impresoraHabilitada`, `cajaDineroHabilitada`,
+`impresionAutoMobile`, `sbuEcuador`). Prisma fallaba → 500.
+Fix: el script ahora itera `aela_master.tenants` y aplica los mismos
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` a cada BD de tenant.
+
+El fix de `applySchemaFixes.js` corre **al arrancar el servidor** (en `start.sh`).
+Después del deploy de Railway, las columnas quedarán aplicadas automáticamente.
+
+---
+
 ## 🔴 Pendientes urgentes (verificar HOY)
 
 ### 1. Probar la descarga automática en producción
