@@ -412,6 +412,33 @@ select.buzon-input {
   cursor: pointer;
 }
 
+/* ── Chips de resumen en paso 2 del TXT ─────────────────────── */
+.buzon-txt-resumen-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 1rem;
+}
+
+.chip-resumen {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.chip-resumen.chip-nuevo  { background: #dcfce7; color: #16a34a; }
+.chip-resumen.chip-existe { background: #f1f5f9; color: #64748b; }
+.chip-resumen.chip-error  { background: #fee2e2; color: #dc2626; }
+.chip-resumen.chip-total  { background: #ede9fe; color: #7C3AED; }
+
+/* ── Fila "ya existe" en la tabla ─────────────────────────────── */
+.buzon-table tbody tr.row-existe td {
+  opacity: 0.55;
+}
+
 @media (max-width: 700px) {
   .buzon-resumen { flex-direction: column; }
   .buzon-tabs-bar { flex-direction: column; }

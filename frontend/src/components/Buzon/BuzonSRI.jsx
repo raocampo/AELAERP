@@ -121,6 +121,16 @@ export default function BuzonSRI() {
   const [archivoTxt, setArchivoTxt]       = useState(null);
   const [txtInfo, setTxtInfo]             = useState(null); // { total, claves }
 
+  // ── Estado tab TXT (flujo completo propio) ───────────────────
+  const [txtPaso,         setTxtPaso]         = useState(1);
+  const [txtConsultando,  setTxtConsultando]  = useState(false);
+  const [txtProgreso,     setTxtProgreso]     = useState('');
+  const [txtResultados,   setTxtResultados]   = useState([]);
+  const [txtSeleccionados,setTxtSeleccionados]= useState(new Set());
+  const [txtImportando,   setTxtImportando]   = useState(false);
+  const [txtResumen,      setTxtResumen]      = useState(null);
+  const [txtAvisoSri,     setTxtAvisoSri]     = useState(null);
+
   const [historial, setHistorial]             = useState(null);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
@@ -128,19 +138,15 @@ export default function BuzonSRI() {
   const [corrDiagnostico, setCorrDiagnostico] = useState(false);
 
   // ── Parsear archivo TXT del portal SRI ──────────────────────
-  // El SRI descarga archivos TXT/CSV con claves de acceso de 49 dígitos.
-  // Se extraen con regex y se cargan en el textarea de claves.
   const leerTxt = (file) => {
     if (!file) return;
-    setArchivoTxt(file);
     const reader = new FileReader();
     reader.onload = (e) => {
       const contenido = e.target.result || '';
-      // Extraer todas las secuencias de exactamente 49 dígitos numéricos
-      const clavesEncontradas = [...new Set(
-        (contenido.match(/\b\d{49}\b/g) || [])
-      )];
+      const clavesEncontradas = [...new Set((contenido.match(/\b\d{49}\b/g) || []))];
       setTxtInfo({ total: clavesEncontradas.length, claves: clavesEncontradas });
+      setTxtPaso(1);
+      setTxtResultados([]); setTxtSeleccionados(new Set()); setTxtResumen(null); setTxtAvisoSri(null);
       if (clavesEncontradas.length === 0) {
         toast.error('No se encontraron claves de acceso (49 dígitos) en el archivo.');
       } else {
@@ -150,11 +156,68 @@ export default function BuzonSRI() {
     reader.readAsText(file, 'utf-8');
   };
 
-  const cargarClavesDeseTxt = () => {
+  // ── Consultar TODAS las claves del TXT en lotes automáticos ──
+  const consultarClavesTxt = async () => {
     if (!txtInfo?.claves?.length) return;
-    setTextareaClaves(txtInfo.claves.join('\n'));
-    setTab('claves'); // cambiar a la pestaña de claves manuales
-    toast.success(`${txtInfo.claves.length} clave(s) cargadas. Revisa y haz clic en "Consultar".`);
+    setTxtConsultando(true);
+    setTxtAvisoSri(null);
+    const claves = txtInfo.claves;
+    const BATCH  = 50;
+    const total  = Math.ceil(claves.length / BATCH);
+    const todos  = [];
+    let aviso    = null;
+    try {
+      for (let i = 0; i < total; i++) {
+        setTxtProgreso(`Consultando lote ${i + 1} de ${total}...`);
+        const lote = claves.slice(i * BATCH, (i + 1) * BATCH);
+        const res  = await api.post('/buzon/consultar', { claves: lote });
+        todos.push(...(res.data?.resultados || []));
+        if (res.data?.avisoSri) aviso = res.data.avisoSri;
+      }
+      setTxtResultados(todos);
+      setTxtSeleccionados(new Set(todos.filter((r) => r.estado === 'nuevo').map((r) => r.clave)));
+      setTxtAvisoSri(aviso);
+      setTxtPaso(2);
+      const nuevos  = todos.filter((r) => r.estado === 'nuevo').length;
+      const existen = todos.filter((r) => r.estado === 'existe').length;
+      if (nuevos === 0 && existen > 0) {
+        toast('Todos los documentos ya están registrados en el sistema.', { icon: 'ℹ️' });
+      } else if (nuevos > 0) {
+        toast.success(`${nuevos} nuevo(s) de ${claves.length} — ${existen} ya existían`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al consultar el SRI');
+    } finally {
+      setTxtConsultando(false);
+      setTxtProgreso('');
+    }
+  };
+
+  const txtToggle      = (c) => setTxtSeleccionados((p) => { const s = new Set(p); s.has(c) ? s.delete(c) : s.add(c); return s; });
+  const txtToggleTodos = () => {
+    const nuevos = txtResultados.filter((r) => r.estado === 'nuevo').map((r) => r.clave);
+    setTxtSeleccionados(txtSeleccionados.size === nuevos.length ? new Set() : new Set(nuevos));
+  };
+
+  const importarSeleccionadosTxt = async () => {
+    const items = [...txtSeleccionados].map((clave) => ({ clave }));
+    if (items.length === 0) { toast.error('Selecciona al menos un documento'); return; }
+    setTxtImportando(true);
+    try {
+      const res = await api.post('/buzon/importar', { items, opciones });
+      setTxtResumen(res.data);
+      setTxtPaso(3);
+      toast.success(`${res.data.resumen?.creados || 0} documento(s) importado(s)`);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al importar');
+    } finally {
+      setTxtImportando(false);
+    }
+  };
+
+  const txtReiniciar = () => {
+    setArchivoTxt(null); setTxtInfo(null); setTxtPaso(1);
+    setTxtResultados([]); setTxtSeleccionados(new Set()); setTxtResumen(null); setTxtAvisoSri(null);
   };
 
   const importarXml = async () => {
@@ -186,15 +249,22 @@ export default function BuzonSRI() {
   const consultarClaves = async () => {
     const claves = parsearClaves();
     if (claves.length === 0) { toast.error('Ingresa al menos una clave de acceso válida (49 dígitos)'); return; }
-    if (claves.length > 50) { toast.error('Máximo 50 claves por lote'); return; }
     setConsultando(true);
     setAvisoSri(null);
+    const BATCH = 50;
+    const total = Math.ceil(claves.length / BATCH);
+    const todos = [];
+    let aviso   = null;
     try {
-      const res = await api.post('/buzon/consultar', { claves });
-      const resultados = res.data?.resultados || [];
-      setResultadosConsulta(resultados);
-      setSeleccionados(new Set(resultados.filter((r) => r.estado === 'nuevo').map((r) => r.clave)));
-      setAvisoSri(res.data?.avisoSri || null);
+      for (let i = 0; i < total; i++) {
+        const lote = claves.slice(i * BATCH, (i + 1) * BATCH);
+        const res  = await api.post('/buzon/consultar', { claves: lote });
+        todos.push(...(res.data?.resultados || []));
+        if (res.data?.avisoSri) aviso = res.data.avisoSri;
+      }
+      setResultadosConsulta(todos);
+      setSeleccionados(new Set(todos.filter((r) => r.estado === 'nuevo').map((r) => r.clave)));
+      setAvisoSri(aviso);
       setPaso(2);
     } catch (err) {
       toast.error(err.response?.data?.mensaje || 'Error al consultar el SRI');
@@ -709,79 +779,190 @@ export default function BuzonSRI() {
       {/* ── TAB TXT DEL PORTAL SRI ───────────────────────── */}
       {tab === 'txt' && (
         <div className="buzon-card">
-          <div className="buzon-step">
-            <h2 className="buzon-step-title">Importar desde archivo TXT del portal SRI</h2>
-            <p className="buzon-step-hint">
-              El portal SRI en línea permite descargar un reporte en formato <strong>.txt</strong> o <strong>.csv</strong>
-              con el listado de comprobantes electrónicos recibidos. AELA extrae automáticamente las
-              <strong> claves de acceso</strong> de ese archivo y las importa al sistema.
-            </p>
 
-            <div className="buzon-txt-instrucciones">
-              <h4>¿Cómo obtener el archivo TXT del SRI?</h4>
-              <ol>
-                <li>Ingresa a <strong>srienlinea.sri.gob.ec</strong> con tu RUC y contraseña.</li>
-                <li>Ve a <strong>Comprobantes Electrónicos → Documentos Recibidos</strong>.</li>
-                <li>Filtra por rango de fechas y tipo de documento.</li>
-                <li>Haz clic en <strong>Descargar</strong> o <strong>Exportar</strong> (TXT / CSV).</li>
-                <li>Sube ese archivo aquí.</li>
-              </ol>
-              <div className="buzon-txt-nota">
-                💡 El archivo puede tener extensión <code>.txt</code>, <code>.csv</code> o <code>.prn</code>.
-                AELA busca automáticamente todos los números de 49 dígitos (claves de acceso) dentro del archivo.
+          {/* PASO 1 — Subir archivo */}
+          {txtPaso === 1 && (
+            <div className="buzon-step">
+              <h2 className="buzon-step-title">Importar desde archivo TXT del portal SRI</h2>
+              <p className="buzon-step-hint">
+                Descarga el reporte de comprobantes recibidos desde <strong>srienlinea.sri.gob.ec</strong> en formato TXT o CSV.
+                AELA extrae todas las claves de acceso, verifica cuáles ya están registradas y solo importa las nuevas.
+              </p>
+
+              <div className="buzon-txt-instrucciones">
+                <h4>¿Cómo obtener el archivo TXT del SRI?</h4>
+                <ol>
+                  <li>Ingresa a <strong>srienlinea.sri.gob.ec</strong> con tu RUC y contraseña.</li>
+                  <li>Ve a <strong>Comprobantes Electrónicos → Documentos Recibidos</strong>.</li>
+                  <li>Filtra por rango de fechas y tipo de documento.</li>
+                  <li>Haz clic en <strong>Descargar reporte</strong> (TXT / CSV).</li>
+                  <li>Sube ese archivo aquí.</li>
+                </ol>
+                <div className="buzon-txt-nota">
+                  💡 Acepta <code>.txt</code>, <code>.csv</code> o <code>.prn</code>.
+                  Sin límite de claves — el sistema procesa en lotes automáticos y evita duplicados.
+                </div>
+              </div>
+
+              <DropZone
+                accept=".txt,.csv,.prn,text/plain,text/csv"
+                icon="📄"
+                label="Arrastra o selecciona el archivo TXT / CSV del SRI"
+                sublabel="Acepta .txt  .csv  .prn — sin límite de claves"
+                files={archivoTxt ? [archivoTxt] : []}
+                onChange={([f]) => { setArchivoTxt(f || null); setTxtInfo(null); if (f) leerTxt(f); }}
+                style={{ marginTop: '1.25rem' }}
+              />
+
+              {txtInfo && (
+                <div className="buzon-txt-resultado" style={{ marginTop: '1rem' }}>
+                  {txtInfo.total === 0 ? (
+                    <div className="buzon-alerta-warning">
+                      ⚠️ No se encontraron claves de acceso en el archivo. Verifica que sea el archivo correcto del portal SRI.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="buzon-alerta-ok">
+                        ✅ <strong>{txtInfo.total}</strong> clave(s) encontrada(s).
+                        {txtInfo.total > 50 && <span style={{ marginLeft: 8, color: '#475569', fontWeight: 400 }}>Se consultarán en {Math.ceil(txtInfo.total / 50)} lotes automáticos.</span>}
+                      </div>
+                      <ul className="buzon-txt-claves-preview">
+                        {txtInfo.claves.slice(0, 4).map((c) => (
+                          <li key={c}><code>{c.slice(0, 24)}…</code></li>
+                        ))}
+                        {txtInfo.total > 4 && <li style={{ color: '#64748b' }}>…y {txtInfo.total - 4} más</li>}
+                      </ul>
+                      <div className="buzon-step-actions" style={{ marginTop: '1rem' }}>
+                        <button
+                          className="btn-primary"
+                          onClick={consultarClavesTxt}
+                          disabled={txtConsultando}
+                        >
+                          {txtConsultando
+                            ? `⏳ ${txtProgreso || 'Consultando...'}`
+                            : `Verificar ${txtInfo.total} clave(s) en el SRI →`}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* PASO 2 — Revisión y selección */}
+          {txtPaso === 2 && (
+            <div className="buzon-step">
+              <h2 className="buzon-step-title">Paso 2 — Revisión de documentos</h2>
+              {(() => {
+                const nuevos  = txtResultados.filter((r) => r.estado === 'nuevo').length;
+                const existen = txtResultados.filter((r) => r.estado === 'existe').length;
+                const errores = txtResultados.filter((r) => r.estado === 'error').length;
+                return (
+                  <div className="buzon-txt-resumen-chips">
+                    <span className="chip-resumen chip-nuevo">{nuevos} nuevos</span>
+                    <span className="chip-resumen chip-existe">{existen} ya existían</span>
+                    {errores > 0 && <span className="chip-resumen chip-error">{errores} con error</span>}
+                    <span className="chip-resumen chip-total">{txtResultados.length} total</span>
+                  </div>
+                );
+              })()}
+
+              {txtAvisoSri && (
+                <div className="buzon-alerta-warning" style={{ margin: '.75rem 0' }}>
+                  <strong>⚠️ Servicio SRI no disponible</strong><br />{txtAvisoSri}
+                </div>
+              )}
+
+              {txtResultados.some((r) => r.tipoCod === '01' || r.tipoCod === '03') && (
+                <div className="buzon-opciones">
+                  <strong>Opciones para facturas:</strong>
+                  <label><input type="checkbox" checked={opciones.registraInventario} onChange={(e) => setOpciones((p) => ({ ...p, registraInventario: e.target.checked }))} /> Registrar entrada de inventario</label>
+                  <label><input type="checkbox" checked={opciones.creaProductos}      onChange={(e) => setOpciones((p) => ({ ...p, creaProductos: e.target.checked }))} /> Crear productos faltantes</label>
+                  <label><input type="checkbox" checked={opciones.registraCaja}       onChange={(e) => setOpciones((p) => ({ ...p, registraCaja: e.target.checked }))} /> Registrar egreso en caja</label>
+                </div>
+              )}
+
+              <div className="buzon-table-wrap">
+                <table className="buzon-table">
+                  <thead>
+                    <tr>
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={txtSeleccionados.size === txtResultados.filter((r) => r.estado === 'nuevo').length && txtResultados.some((r) => r.estado === 'nuevo')}
+                          onChange={txtToggleTodos}
+                        />
+                      </th>
+                      <th>Tipo</th><th>Emisor / Agente</th><th>Fecha</th><th>Total</th><th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {txtResultados.map((r) => {
+                      const estadoInfo = ESTADO_LABELS[r.estado] || { label: r.estado, cls: '' };
+                      const tipoColor  = TIPO_COLORES[r.tipo] || '';
+                      const esNuevo    = r.estado === 'nuevo';
+                      return (
+                        <tr key={r.clave} className={esNuevo && txtSeleccionados.has(r.clave) ? 'row-selected' : r.estado === 'existe' ? 'row-existe' : ''}>
+                          <td>{esNuevo && <input type="checkbox" checked={txtSeleccionados.has(r.clave)} onChange={() => txtToggle(r.clave)} />}</td>
+                          <td><span className={`buzon-tipo-chip ${tipoColor}`}>{r.tipo || '—'}</span></td>
+                          <td>
+                            <div className="buzon-emisor">
+                              <span>{r.preview?.emisorNombre || '—'}</span>
+                              <small>{r.preview?.emisorRuc || ''}</small>
+                            </div>
+                          </td>
+                          <td>{formatFechaEc(r.preview?.fecha)}</td>
+                          <td className="buzon-total">{r.preview?.total != null ? `$${Number(r.preview.total).toFixed(2)}` : '—'}</td>
+                          <td>
+                            <span className={`buzon-estado-chip ${estadoInfo.cls}`}>{estadoInfo.label}</span>
+                            {r.error && <small className="buzon-error-msg"> {r.error}</small>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="buzon-step-actions">
+                <button className="btn-secondary" onClick={txtReiniciar}>← Volver</button>
+                <span className="buzon-count-hint">{txtSeleccionados.size} seleccionado(s)</span>
+                <button
+                  className="btn-primary"
+                  onClick={importarSeleccionadosTxt}
+                  disabled={txtImportando || txtSeleccionados.size === 0}
+                >
+                  {txtImportando ? 'Importando...' : `Importar ${txtSeleccionados.size} documento(s)`}
+                </button>
               </div>
             </div>
+          )}
 
-            <DropZone
-              accept=".txt,.csv,.prn,text/plain,text/csv"
-              icon="📄"
-              label="Arrastra o selecciona el archivo TXT / CSV del SRI"
-              sublabel="Acepta .txt  .csv  .prn"
-              files={archivoTxt ? [archivoTxt] : []}
-              onChange={([f]) => { setArchivoTxt(f || null); setTxtInfo(null); if (f) leerTxt(f); }}
-              style={{ marginTop: '1.25rem' }}
-            />
-
-            {txtInfo && (
-              <div className="buzon-txt-resultado" style={{ marginTop: '1rem' }}>
-                {txtInfo.total === 0 ? (
-                  <div className="buzon-alerta-warning">
-                    ⚠️ No se encontraron claves de acceso en el archivo. Verifica que sea el archivo correcto del portal SRI.
-                  </div>
-                ) : (
-                  <>
-                    <div className="buzon-alerta-ok">
-                      ✅ Se encontraron <strong>{txtInfo.total}</strong> clave(s) de acceso en el archivo.
-                    </div>
-                    <ul className="buzon-txt-claves-preview">
-                      {txtInfo.claves.slice(0, 5).map((c) => (
-                        <li key={c}><code>{c.slice(0, 20)}…</code></li>
-                      ))}
-                      {txtInfo.total > 5 && <li style={{ color: '#64748b' }}>…y {txtInfo.total - 5} más</li>}
-                    </ul>
-                    {txtInfo.total > 50 && (
-                      <div className="buzon-alerta-warning" style={{ marginTop: '.5rem' }}>
-                        ⚠️ El archivo tiene {txtInfo.total} claves. Se cargarán las primeras 50 (límite por lote).
-                        Divide la importación en varios lotes.
-                      </div>
-                    )}
-                    <button
-                      className="btn-primary"
-                      style={{ marginTop: '1rem' }}
-                      onClick={() => {
-                        const clavesLote = txtInfo.claves.slice(0, 50);
-                        setTextareaClaves(clavesLote.join('\n'));
-                        handleTabChange('claves');
-                        toast.success(`${clavesLote.length} clave(s) cargadas en el panel de claves. Haz clic en "Consultar".`);
-                      }}
-                    >
-                      Cargar {Math.min(txtInfo.total, 50)} claves → Continuar importación
-                    </button>
-                  </>
-                )}
+          {/* PASO 3 — Resultado */}
+          {txtPaso === 3 && txtResumen && (
+            <div className="buzon-step">
+              <h2 className="buzon-step-title">✅ Importación completada</h2>
+              <div className="buzon-resumen">
+                <div className="buzon-resumen-card buzon-resumen--verde"><span>{txtResumen.resumen?.creados || 0}</span><small>Importados</small></div>
+                <div className="buzon-resumen-card buzon-resumen--gris"><span>{txtResumen.resumen?.omitidos || 0}</span><small>Ya existían</small></div>
+                <div className="buzon-resumen-card buzon-resumen--rojo"><span>{txtResumen.resumen?.errores || 0}</span><small>Con error</small></div>
               </div>
-            )}
-          </div>
+              {txtResumen.resultados?.some((r) => r.estado === 'error') && (
+                <div className="buzon-errores-list">
+                  <strong>Documentos con error:</strong>
+                  {txtResumen.resultados.filter((r) => r.estado === 'error').map((r) => (
+                    <div key={r.clave} className="buzon-error-item"><code>{r.clave}</code> — {r.error}</div>
+                  ))}
+                </div>
+              )}
+              <div className="buzon-step-actions">
+                <button className="btn-secondary" onClick={txtReiniciar}>Nueva importación</button>
+                <button className="btn-primary" onClick={() => navigate('/compras')}>Ver en Compras</button>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
