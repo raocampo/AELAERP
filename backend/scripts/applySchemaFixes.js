@@ -16,6 +16,15 @@ const FIXES = [
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "impresionAutoMobile"  BOOLEAN NOT NULL DEFAULT false`,
   // SBU Ecuador
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "sbuEcuador"           DECIMAL(8,2) NOT NULL DEFAULT 460.00`,
+  // facturas_compra — columnas añadidas progresivamente
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "motivoAnulacion"       VARCHAR(500)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "tipoGasto"             VARCHAR(30)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "registraInventario"    BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "creaProductos"         BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "movimientosInventario" INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "egresoCajaRegistrado"  BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "xmlOrigen"             TEXT`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "observaciones"         TEXT`,
   // Tabla de Utilidades — módulo de márgenes de ganancia para cálculo de PVP
   `CREATE TABLE IF NOT EXISTS "tabla_utilidades" (
     "id"          SERIAL PRIMARY KEY,

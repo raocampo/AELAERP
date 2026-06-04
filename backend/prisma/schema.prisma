@@ -487,6 +487,7 @@ model facturas_compra {
   retencionIVA                  Decimal   @default(0) @db.Decimal(14, 2)
   retencionRenta                Decimal   @default(0) @db.Decimal(14, 2)
   anulada                       Boolean   @default(false)
+  motivoAnulacion               String?   @db.VarChar(500)
   detalles                      Json
   pagos                         Json
   origenRegistro                String    @default("MANUAL") @db.VarChar(30)
