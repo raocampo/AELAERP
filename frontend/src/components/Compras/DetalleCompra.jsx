@@ -429,7 +429,7 @@ export default function DetalleCompra() {
           <h2>Comprobante</h2>
           <div className="detalle-compra-row"><span>Fecha emision</span><strong>{fmtFecha(compra.fechaEmision)}</strong></div>
           <div className="detalle-compra-row"><span>Nro. factura</span><strong>{compra.numeroFactura}</strong></div>
-          <div className="detalle-compra-row"><span>Autorizacion</span><span>{compra.numeroAutorizacion || 'Sin autorizacion'}</span></div>
+          <div className="detalle-compra-row"><span>Autorizacion</span><span className="detalle-compra-wrap">{compra.numeroAutorizacion || 'Sin autorizacion'}</span></div>
           <div className="detalle-compra-row"><span>Clave acceso</span><span className="detalle-compra-wrap">{compra.claveAcceso || 'No registrada'}</span></div>
           <div className="detalle-compra-row"><span>Origen</span><span className="detalle-compra-badge">{compra.origenRegistro || 'MANUAL'}</span></div>
         </article>

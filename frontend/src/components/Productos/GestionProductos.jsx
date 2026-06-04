@@ -54,6 +54,13 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
   const [exportandoInv, setExportandoInv] = useState(false);
   const [modalProducto,   setModalProducto]   = useState(false);
   const [modalMovimiento, setModalMovimiento] = useState(false);
+  // Lista — paginación
+  const [listPage,    setListPage]    = useState(1);
+  const [listPerPage, setListPerPage] = useState(15);
+  // Movimientos — filtro + paginación
+  const [movPage,       setMovPage]       = useState(1);
+  const [movPerPage]                      = useState(10);
+  const [movFiltroTipo, setMovFiltroTipo] = useState('');
   const busquedaInicial = useRef(busqueda);
 
   const inventarioActivo = Boolean(sistema?.inventarioHabilitado);
@@ -67,7 +74,7 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       ];
 
       if (inventarioActivo) {
-        consultas.push(api.get('/inventario/movimientos', { params: { limit: 25 } }));
+        consultas.push(api.get('/inventario/movimientos', { params: { limit: 200 } }));
       }
 
       const [productosRes, resumenRes, movimientosRes] = await Promise.all(consultas);
@@ -255,6 +262,21 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
     }
   };
 
+  // Datos derivados para lista paginada
+  const productosPaginados = useMemo(() => {
+    const inicio = (listPage - 1) * listPerPage;
+    return productos.slice(inicio, inicio + listPerPage);
+  }, [productos, listPage, listPerPage]);
+  const listTotalPages = Math.ceil(productos.length / listPerPage);
+
+  // Datos derivados para movimientos filtrados + paginados
+  const movFiltrados = useMemo(() => {
+    if (!movFiltroTipo) return movimientos;
+    return movimientos.filter((m) => m.tipo === movFiltroTipo);
+  }, [movimientos, movFiltroTipo]);
+  const movTotalPages = Math.ceil(movFiltrados.length / movPerPage);
+  const movEnPagina   = movFiltrados.slice((movPage - 1) * movPerPage, movPage * movPerPage);
+
   return (
     <div className="prod-page">
       <div className="prod-header">
@@ -322,49 +344,76 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
 
       {tab === 'lista' && (
         <section className="prod-card">
-          <h2>Listado completo</h2>
+          <div className="prod-section-head">
+            <h2>Listado completo <span className="prod-count">({productos.length})</span></h2>
+            <div className="prod-pag-controls">
+              <label className="prod-perpage-label">
+                Mostrar
+                <select value={listPerPage} onChange={(e) => { setListPerPage(Number(e.target.value)); setListPage(1); }}>
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={9999}>Todos</option>
+                </select>
+              </label>
+            </div>
+          </div>
           {cargando ? (
             <div className="prod-empty">Cargando productos...</div>
           ) : (
-            <div className="prod-table-wrap">
-              <table className="prod-table">
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Nombre</th>
-                    <th>Precio</th>
-                    {inventarioActivo && <th>Stock</th>}
-                    <th>IVA</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {productos.map((producto) => (
-                    <tr key={producto.id}>
-                      <td>{producto.codigoPrincipal}</td>
-                      <td>
-                        <div className="prod-name">{producto.nombre}</div>
-                        {producto.codigoAuxiliar && <small>{producto.codigoAuxiliar}</small>}
-                      </td>
-                      <td>${Number(producto.precioUnitario || 0).toFixed(2)}</td>
-                      {inventarioActivo && <td>{producto.inventariable ? Number(producto.stockActual || 0).toFixed(3) : 'N/A'}</td>}
-                      <td>{producto.tarifaIva}%</td>
-                      <td>{producto.activo ? 'Activo' : 'Inactivo'}</td>
-                      <td className="prod-table-actions">
-                        <div className="tbl-acciones">
-                          <button className="btn-icon ic-editar" title="Editar producto" onClick={() => editarProducto(producto)}><IcEditar/></button>
-                          <button className="btn-icon ic-eliminar" title="Eliminar producto" onClick={() => eliminarProducto(producto.id)}><IcEliminar/></button>
-                        </div>
-                      </td>
+            <>
+              <div className="prod-table-wrap">
+                <table className="prod-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Nombre</th>
+                      <th>Precio</th>
+                      {inventarioActivo && <th className="text-right">Stock</th>}
+                      <th>IVA</th>
+                      <th>Estado</th>
+                      <th></th>
                     </tr>
-                  ))}
-                  {productos.length === 0 && (
-                    <tr><td colSpan={inventarioActivo ? 7 : 6} className="prod-empty">No hay productos para mostrar.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {productosPaginados.map((producto) => (
+                      <tr key={producto.id}>
+                        <td>{producto.codigoPrincipal}</td>
+                        <td>
+                          <div className="prod-name">{producto.nombre}</div>
+                          {producto.codigoAuxiliar && <small style={{ color: '#64748b', fontSize: '.8rem' }}>{producto.codigoAuxiliar}</small>}
+                        </td>
+                        <td>${Number(producto.precioUnitario || 0).toFixed(2)}</td>
+                        {inventarioActivo && (
+                          <td className="text-right" style={{ color: Number(producto.stockActual || 0) < 0 ? '#ef4444' : Number(producto.stockActual || 0) === 0 ? '#f59e0b' : undefined }}>
+                            {producto.inventariable ? Number(producto.stockActual || 0).toFixed(2) : '—'}
+                          </td>
+                        )}
+                        <td>{producto.tarifaIva}%</td>
+                        <td><span style={{ color: producto.activo ? '#16a34a' : '#94a3b8', fontSize: '.82rem', fontWeight: 600 }}>{producto.activo ? 'Activo' : 'Inactivo'}</span></td>
+                        <td className="prod-table-actions">
+                          <div className="tbl-acciones">
+                            <button className="btn-icon ic-editar" title="Editar" onClick={() => editarProducto(producto)}><IcEditar/></button>
+                            <button className="btn-icon ic-eliminar" title="Eliminar" onClick={() => eliminarProducto(producto.id)}><IcEliminar/></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {productos.length === 0 && (
+                      <tr><td colSpan={inventarioActivo ? 7 : 6} className="prod-empty">No hay productos para mostrar.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {listTotalPages > 1 && (
+                <div className="prod-pagination">
+                  <button className="btn-secondary" disabled={listPage <= 1} onClick={() => setListPage((p) => p - 1)}>← Ant.</button>
+                  <span className="prod-pag-info">Pág. <strong>{listPage}</strong> / <strong>{listTotalPages}</strong> — {productos.length} productos</span>
+                  <button className="btn-secondary" disabled={listPage >= listTotalPages} onClick={() => setListPage((p) => p + 1)}>Sig. →</button>
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
@@ -372,7 +421,19 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       {tab === 'inventario' && inventarioActivo && (
         <section className="prod-card">
           <div className="prod-section-head">
-            <h2>Últimos movimientos</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap' }}>
+              <h2 style={{ margin: 0 }}>Movimientos <span className="prod-count">({movFiltrados.length})</span></h2>
+              <select className="prod-filtro-select" value={movFiltroTipo}
+                onChange={(e) => { setMovFiltroTipo(e.target.value); setMovPage(1); }}>
+                <option value="">Todos los tipos</option>
+                <option value="ENTRADA">Entradas</option>
+                <option value="SALIDA">Salidas</option>
+                <option value="AJUSTE_POSITIVO">Ajuste +</option>
+                <option value="AJUSTE_NEGATIVO">Ajuste −</option>
+                <option value="VENTA_FACTURA">Venta factura</option>
+                <option value="VENTA_NOTA">Venta nota</option>
+              </select>
+            </div>
             <div style={{ display: 'flex', gap: '.5rem' }}>
               <button className="btn-secondary" onClick={exportarMovimientosCsv}
                 disabled={exportandoInv || movimientos.length === 0}>
@@ -395,26 +456,35 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 </tr>
               </thead>
               <tbody>
-                {movimientos.map((movimiento) => (
+                {movEnPagina.map((movimiento) => (
                   <tr key={movimiento.id}>
-                    <td>{new Date(movimiento.createdAt).toLocaleString('es-EC')}</td>
-                    <td>{movimiento.producto?.nombre || 'Producto'}</td>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: '.82rem' }}>{new Date(movimiento.createdAt).toLocaleString('es-EC')}</td>
+                    <td>{movimiento.producto?.nombre || '—'}</td>
                     <td><span className="prod-tipo-chip">{movimiento.tipo}</span></td>
-                    <td className="text-right">{Number(movimiento.cantidad || 0).toFixed(3)}</td>
-                    <td className="text-right">{Number(movimiento.stockNuevo || 0).toFixed(3)}</td>
+                    <td className="text-right">{Number(movimiento.cantidad || 0).toFixed(2)}</td>
+                    <td className="text-right">{Number(movimiento.stockNuevo || 0).toFixed(2)}</td>
                   </tr>
                 ))}
-                {movimientos.length === 0 && (
-                  <tr><td colSpan="5" className="prod-empty">No hay movimientos de inventario todavía.</td></tr>
+                {movFiltrados.length === 0 && (
+                  <tr><td colSpan="5" className="prod-empty">
+                    {movFiltroTipo ? 'No hay movimientos de ese tipo.' : 'No hay movimientos de inventario todavía.'}
+                  </td></tr>
                 )}
               </tbody>
             </table>
           </div>
+          {movTotalPages > 1 && (
+            <div className="prod-pagination">
+              <button className="btn-secondary" disabled={movPage <= 1} onClick={() => setMovPage((p) => p - 1)}>← Ant.</button>
+              <span className="prod-pag-info">Pág. <strong>{movPage}</strong> / <strong>{movTotalPages}</strong> — {movFiltrados.length} movimientos</span>
+              <button className="btn-secondary" disabled={movPage >= movTotalPages} onClick={() => setMovPage((p) => p + 1)}>Sig. →</button>
+            </div>
+          )}
         </section>
       )}
 
       {tab === 'importacion' && (
-        <div className="prod-grid">
+        <div className="prod-import-stack-outer">
           <section className="prod-card">
             <h2>Importación masiva</h2>
             <div className="prod-import-stack">
@@ -507,47 +577,58 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
 
           <section className="prod-card">
             <h2>Resultado de importación</h2>
-            {resultadoImportacion ? (
-              <div className="prod-mini-list">
-                <div className="prod-import-summary">
-                  <div><span>Creados</span><strong>{resultadoImportacion.creados || 0}</strong></div>
-                  <div><span>Actualizados</span><strong>{resultadoImportacion.actualizados || 0}</strong></div>
-                  <div><span>Omitidos</span><strong>{resultadoImportacion.omitidos || 0}</strong></div>
-                  <div><span>Movimientos</span><strong>{resultadoImportacion.movimientos || 0}</strong></div>
-                </div>
-                <div className="prod-table-wrap">
-                  <table className="prod-table">
-                    <thead>
-                      <tr>
-                        <th>Código</th>
-                        <th>Nombre</th>
-                        <th>Costo compra</th>
-                        <th>Precio venta</th>
-                        <th>Stock</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(resultadoImportacion.items || []).map((item) => (
-                        <tr key={item.id || item.codigoPrincipal}>
-                          <td>{item.codigoPrincipal}</td>
-                          <td>{item.nombre}</td>
-                          <td>${Number(item.costoUnitario || 0).toFixed(4)}</td>
-                          <td>
-                            {Number(item.precioUnitario || 0) > 0
-                              ? `$${Number(item.precioUnitario).toFixed(4)}`
-                              : <span style={{ color: '#f59e0b' }}>Pendiente</span>}
-                          </td>
-                          <td>{Number(item.stockActual || 0).toFixed(3)}</td>
+            {resultadoImportacion ? (() => {
+              const todosItems = resultadoImportacion.items || [];
+              const LIMITE_IMP = 15;
+              const [verTodosImp, setVerTodosImp] = [false, () => {}]; // placeholder — usamos estado inline
+              const itemsVisibles = todosItems.slice(0, LIMITE_IMP);
+              const hayMas = todosItems.length > LIMITE_IMP;
+              return (
+                <div className="prod-mini-list">
+                  <div className="prod-import-summary">
+                    <div><span>Creados</span><strong>{resultadoImportacion.creados || 0}</strong></div>
+                    <div><span>Actualizados</span><strong>{resultadoImportacion.actualizados || 0}</strong></div>
+                    <div><span>Omitidos</span><strong>{resultadoImportacion.omitidos || 0}</strong></div>
+                    <div><span>Movimientos</span><strong>{resultadoImportacion.movimientos || 0}</strong></div>
+                  </div>
+                  <div className="prod-table-wrap">
+                    <table className="prod-table">
+                      <thead>
+                        <tr>
+                          <th>Código</th>
+                          <th>Nombre</th>
+                          <th>Costo</th>
+                          <th>PVP</th>
+                          <th className="text-right">Stock</th>
                         </tr>
-                      ))}
-                      {(resultadoImportacion.items || []).length === 0 && (
-                        <tr><td colSpan="5" className="prod-empty">La importación no devolvió productos visibles.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {itemsVisibles.map((item) => (
+                          <tr key={item.id || item.codigoPrincipal}>
+                            <td>{item.codigoPrincipal}</td>
+                            <td>{item.nombre}</td>
+                            <td>${Number(item.costoUnitario || 0).toFixed(2)}</td>
+                            <td>{Number(item.precioUnitario || 0) > 0
+                              ? `$${Number(item.precioUnitario).toFixed(2)}`
+                              : <span style={{ color: '#f59e0b', fontSize: '.8rem' }}>Pendiente</span>}
+                            </td>
+                            <td className="text-right">{Number(item.stockActual || 0).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                        {todosItems.length === 0 && (
+                          <tr><td colSpan="5" className="prod-empty">La importación no devolvió productos visibles.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {hayMas && (
+                    <p style={{ fontSize: '.82rem', color: '#64748b', padding: '.5rem 0 0', textAlign: 'center' }}>
+                      Mostrando {LIMITE_IMP} de {todosItems.length} productos importados. Ve a <strong>Lista</strong> para verlos todos.
+                    </p>
+                  )}
                 </div>
-              </div>
-            ) : (
+              );
+            })() : (
               <div className="prod-empty">
                 Aquí verás el resumen de la última importación de productos desde Excel, XML o autorización del SRI.
               </div>
@@ -611,7 +692,7 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 <>
                   <label>
                     <span>Stock actual</span>
-                    <input type="number" min="0" step="0.001" value={form.stockActual} onChange={(e) => setForm((prev) => ({ ...prev, stockActual: e.target.value }))} />
+                    <input type="number" step="0.001" value={form.stockActual} onChange={(e) => setForm((prev) => ({ ...prev, stockActual: e.target.value }))} />
                   </label>
                   <label>
                     <span>Stock mínimo</span>

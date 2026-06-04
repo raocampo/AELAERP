@@ -254,6 +254,52 @@
   padding: 20px;
 }
 
+/* ── Importación apilada (form arriba, resultado abajo) ─────────── */
+.prod-import-stack-outer { display: grid; gap: 1rem; }
+
+/* ── Paginación ─────────────────────────────────────────────────── */
+.prod-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .65rem;
+  padding: .75rem 0 .25rem;
+  flex-wrap: wrap;
+  border-top: 1px solid #f1f5f9;
+  margin-top: .5rem;
+}
+.prod-pag-info { font-size: .82rem; color: #64748b; }
+
+/* ── Selector por página ────────────────────────────────────────── */
+.prod-pag-controls { display: flex; align-items: center; gap: .5rem; }
+.prod-perpage-label {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .82rem;
+  color: #64748b;
+}
+.prod-perpage-label select {
+  padding: .25rem .5rem;
+  border-radius: .4rem;
+  border: 1px solid #e2e8f0;
+  font-size: .82rem;
+  background: #fff;
+}
+
+/* ── Filtro de tipo de movimiento ───────────────────────────────── */
+.prod-filtro-select {
+  padding: .3rem .6rem;
+  border-radius: .5rem;
+  border: 1px solid #e2e8f0;
+  font-size: .82rem;
+  background: #fff;
+  color: #1e293b;
+}
+
+/* ── Conteo ─────────────────────────────────────────────────────── */
+.prod-count { font-size: .85rem; font-weight: 400; color: #64748b; }
+
 /* ── Section head (título + botón) ──────────────────────────────── */
 .prod-section-head {
   display: flex;
