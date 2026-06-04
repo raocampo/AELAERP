@@ -358,60 +358,60 @@ export default function ListaCompras() {
                   <th>Fecha</th>
                   <th>Factura</th>
                   <th>Proveedor</th>
-                  <th>Autorización</th>
+                  <th className="compras-col-auth">Autorización</th>
                   <th>Total</th>
-                  <th>Tipo Gasto</th>
-                  <th>Origen</th>
                   <th>Operación</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.id}>
-                    <td>{fmtFecha(item.fechaEmision)}</td>
-                  <td>
-                    <div>
-                      <strong style={{ textDecoration: item.anulada ? 'line-through' : 'none', color: item.anulada ? '#94a3b8' : undefined }}>
-                        {item.numeroFactura}
-                      </strong>
-                      {item.anulada && <span className="compras-chip anulada" style={{ marginLeft: 6 }}>Anulada</span>}
-                    </div>
-                  </td>
-                    <td>
+                  <tr key={item.id} className={item.anulada ? 'fila-anulada' : ''}>
+                    <td data-label="Fecha">{fmtFecha(item.fechaEmision)}</td>
+                    <td data-label="Factura">
+                      <div>
+                        <strong style={{ textDecoration: item.anulada ? 'line-through' : 'none', color: item.anulada ? '#94a3b8' : undefined }}>
+                          {item.numeroFactura}
+                        </strong>
+                        {item.anulada && <span className="compras-chip anulada" style={{ marginLeft: 6 }}>Anulada</span>}
+                      </div>
+                    </td>
+                    <td data-label="Proveedor">
                       <div className="compras-provider">
                         <strong>{item.razonSocialProveedor}</strong>
                         <span>{item.identificacionProveedor}</span>
                       </div>
                     </td>
-                    <td>{item.numeroAutorizacion || 'Sin autorización'}</td>
-                    <td>{fmtMoneda(item.importeTotal)}</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {item.tipoGasto
-                          ? <span className={`compras-chip tipo-gasto-${item.tipoGasto.toLowerCase()}`}>{item.tipoGasto}</span>
-                          : <span className="compras-chip sin-clasificar">—</span>}
-                        <button className="btn-icon ic-editar" title="Clasificar tipo de gasto"
-                          onClick={() => setQuickEdit({ id: item.id, tipoGasto: item.tipoGasto || '' })}>
-                          <IcEditar/>
-                        </button>
-                      </div>
+                    <td data-label="Autorización" className="compras-col-auth compras-auth-cell">
+                      {item.numeroAutorizacion
+                        ? <span title={item.numeroAutorizacion}>{item.numeroAutorizacion}</span>
+                        : <span className="compras-muted">—</span>}
                     </td>
-                    <td>
-                      <span className={`compras-chip ${String(item.origenRegistro || '').toLowerCase()}`}>
-                        {item.origenRegistro || 'MANUAL'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="compras-operacion">
-                        <div className="compras-flags">
+                    <td data-label="Total"><strong>{fmtMoneda(item.importeTotal)}</strong></td>
+                    <td data-label="Operación">
+                      <div className="compras-op-wrap">
+                        <div className="compras-op-row">
+                          <span className={`compras-chip${item.tipoGasto ? ` tipo-gasto-${item.tipoGasto.toLowerCase()}` : ' sin-clasificar'}`}>
+                            {item.tipoGasto || '—'}
+                          </span>
+                          <button className="btn-icon ic-editar" title="Clasificar tipo de gasto"
+                            onClick={() => setQuickEdit({ id: item.id, tipoGasto: item.tipoGasto || '' })}>
+                            <IcEditar/>
+                          </button>
+                          <span className={`compras-chip ${String(item.origenRegistro || 'manual').toLowerCase()}`}>
+                            {item.origenRegistro || 'MANUAL'}
+                          </span>
+                        </div>
+                        <div className="compras-op-row">
                           {item.movimientosInventario > 0 && <span className="compras-flag ok">Inventario</span>}
                           {item.egresoCajaRegistrado && <span className="compras-flag warn">Caja</span>}
-                          {!item.egresoCajaRegistrado && item.movimientosInventario === 0 && <span className="compras-flag">Solo registro</span>}
+                          {!item.egresoCajaRegistrado && item.movimientosInventario === 0 && (
+                            <span className="compras-flag">Solo registro</span>
+                          )}
+                          <button className="btn-icon ic-ver" title="Ver detalle de compra"
+                            onClick={() => navigate(`/compras/${item.id}`)}>
+                            <IcVer/>
+                          </button>
                         </div>
-                        <button className="btn-icon ic-ver" title="Ver detalle de compra"
-                          onClick={() => navigate(`/compras/${item.id}`)}>
-                          <IcVer/>
-                        </button>
                       </div>
                     </td>
                   </tr>

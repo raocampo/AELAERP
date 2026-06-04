@@ -70,9 +70,10 @@ export default function DetalleCompra() {
   const [anulando, setAnulando] = useState(false);
 
   // Modal registrar inventario
-  const [modalInv, setModalInv]         = useState(false);
-  const [utilidades, setUtilidades]     = useState([]);
-  const [margenSelId, setMargenSelId]   = useState('');
+  const [modalInv, setModalInv]             = useState(false);
+  const [utilidades, setUtilidades]         = useState([]);
+  const [margenSelId, setMargenSelId]       = useState('');
+  const [crearSiNoExiste, setCrearSiNoExiste] = useState(true);
   const [registrandoInv, setRegistrandoInv] = useState(false);
 
   const cargar = async (ignore = false) => {
@@ -153,6 +154,7 @@ export default function DetalleCompra() {
 
   const abrirModalInv = async () => {
     setMargenSelId('');
+    setCrearSiNoExiste(true);
     setModalInv(true);
     try {
       const res = await api.get('/utilidades');
@@ -163,14 +165,14 @@ export default function DetalleCompra() {
   const registrarInventario = async () => {
     setRegistrandoInv(true);
     try {
-      const body = {};
+      const body = { crearSiNoExiste };
       if (margenSelId) {
         const u = utilidades.find((u) => u.id === Number(margenSelId));
         if (u) body.margenPct = Number(u.porcentaje);
       }
       const res = await api.post(`/compras/${id}/registrar-inventario`, body);
-      const { movimientosRegistrados, errores, mensaje } = res.data;
-      if (movimientosRegistrados > 0) toast.success(mensaje, { duration: 5000 });
+      const { movimientosRegistrados, productosCreados = 0, errores, mensaje } = res.data;
+      if (movimientosRegistrados > 0 || productosCreados > 0) toast.success(mensaje, { duration: 5000 });
       else toast.error(mensaje);
       errores?.forEach((e) => toast.error(e, { duration: 4000 }));
       setModalInv(false);
@@ -290,6 +292,23 @@ export default function DetalleCompra() {
                     </div>
                   ))}
                 </div>
+              )}
+
+              <label className="dc-modal-label" style={{ display: 'flex', alignItems: 'center', gap: '.5rem', cursor: 'pointer', marginBottom: '.6rem' }}>
+                <input
+                  type="checkbox"
+                  checked={crearSiNoExiste}
+                  onChange={(e) => setCrearSiNoExiste(e.target.checked)}
+                  style={{ width: 16, height: 16, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: '.88rem', color: '#1e293b' }}>
+                  Crear productos no encontrados en el catálogo
+                </span>
+              </label>
+              {crearSiNoExiste && (
+                <p style={{ fontSize: '.78rem', color: '#64748b', margin: '-.4rem 0 .6rem', paddingLeft: '1.5rem' }}>
+                  Si el código del producto no existe se creará automáticamente como inventariable.
+                </p>
               )}
 
               <label className="dc-modal-label">

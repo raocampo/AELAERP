@@ -52,6 +52,8 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
   const [importando, setImportando] = useState(false);
   const [resultadoImportacion, setResultadoImportacion] = useState(null);
   const [exportandoInv, setExportandoInv] = useState(false);
+  const [modalProducto,   setModalProducto]   = useState(false);
+  const [modalMovimiento, setModalMovimiento] = useState(false);
   const busquedaInicial = useRef(busqueda);
 
   const inventarioActivo = Boolean(sistema?.inventarioHabilitado);
@@ -106,7 +108,7 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       infoAdicional: producto.infoAdicional || '',
       activo: Boolean(producto.activo),
     });
-    setTab('catalogo');
+    setModalProducto(true);
   };
 
   const guardarProducto = async (e) => {
@@ -130,6 +132,7 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       }
 
       limpiarForm();
+      setModalProducto(false);
       await cargar({ busquedaActual: busqueda });
     } catch (error) {
       toast.error(error.response?.data?.mensaje || error.response?.data?.error || 'No se pudo guardar el producto');
@@ -160,8 +163,8 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       });
       toast.success('Movimiento de inventario registrado');
       setMovimientoForm(MOVIMIENTO_INICIAL);
+      setModalMovimiento(false);
       await cargar({ busquedaActual: busqueda });
-      setTab('inventario');
     } catch (error) {
       toast.error(error.response?.data?.mensaje || 'No se pudo registrar el movimiento');
     } finally {
@@ -297,95 +300,24 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       )}
 
       {tab === 'catalogo' && (
-        <div className="prod-grid">
-          <section className="prod-card">
-            <h2>{form.id ? 'Editar producto' : 'Nuevo producto'}</h2>
-            <form className="prod-form" onSubmit={guardarProducto}>
-              <label>
-                <span>Código principal</span>
-                <input value={form.codigoPrincipal} onChange={(e) => setForm((prev) => ({ ...prev, codigoPrincipal: e.target.value }))} required />
-              </label>
-              <label>
-                <span>Código auxiliar</span>
-                <input value={form.codigoAuxiliar} onChange={(e) => setForm((prev) => ({ ...prev, codigoAuxiliar: e.target.value }))} />
-              </label>
-              <label className="full">
-                <span>Nombre</span>
-                <input value={form.nombre} onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))} required />
-              </label>
-              <label>
-                <span>Precio de venta</span>
-                <input type="number" min="0" step="0.01" value={form.precioUnitario} onChange={(e) => setForm((prev) => ({ ...prev, precioUnitario: e.target.value }))} required />
-              </label>
-              <label>
-                <span>Costo unitario</span>
-                <input type="number" min="0" step="0.01" value={form.costoUnitario} onChange={(e) => setForm((prev) => ({ ...prev, costoUnitario: e.target.value }))} />
-              </label>
-              <label>
-                <span>IVA</span>
-                <select value={form.tarifaIva} onChange={(e) => setForm((prev) => ({ ...prev, tarifaIva: Number(e.target.value) }))}>
-                  <option value={0}>0% — Aplica tarifa 0%</option>
-                  <option value={5}>5%</option>
-                  <option value={15}>15%</option>
-                  <option value={6}>No Objeto de IVA (transporte, salud, educación)</option>
-                  <option value={7}>Exento de IVA</option>
-                </select>
-              </label>
-              <label>
-                <span>Unidad</span>
-                <input value={form.unidadMedida} onChange={(e) => setForm((prev) => ({ ...prev, unidadMedida: e.target.value }))} />
-              </label>
-              <label className="full">
-                <span>Información adicional</span>
-                <textarea rows="2" value={form.infoAdicional} onChange={(e) => setForm((prev) => ({ ...prev, infoAdicional: e.target.value }))} />
-              </label>
-
-              <label className="prod-check full">
-                <input type="checkbox" checked={form.inventariable} onChange={(e) => setForm((prev) => ({ ...prev, inventariable: e.target.checked }))} />
-                <span>Este producto maneja stock</span>
-              </label>
-
-              {inventarioActivo && form.inventariable && (
-                <>
-                  <label>
-                    <span>Stock actual</span>
-                    <input type="number" min="0" step="0.001" value={form.stockActual} onChange={(e) => setForm((prev) => ({ ...prev, stockActual: e.target.value }))} />
-                  </label>
-                  <label>
-                    <span>Stock mínimo</span>
-                    <input type="number" min="0" step="0.001" value={form.stockMinimo} onChange={(e) => setForm((prev) => ({ ...prev, stockMinimo: e.target.value }))} />
-                  </label>
-                </>
-              )}
-
-              <label className="prod-check full">
-                <input type="checkbox" checked={form.activo} onChange={(e) => setForm((prev) => ({ ...prev, activo: e.target.checked }))} />
-                <span>Producto activo</span>
-              </label>
-
-              <div className="prod-actions full">
-                <button type="submit" className="btn-primary" disabled={guardando}>
-                  {guardando ? 'Guardando...' : form.id ? 'Actualizar producto' : 'Crear producto'}
-                </button>
-                <button type="button" className="btn-secondary" onClick={limpiarForm}>Limpiar</button>
-              </div>
-            </form>
-          </section>
-
-          <section className="prod-card">
+        <section className="prod-card">
+          <div className="prod-section-head">
             <h2>Productos recientes</h2>
-            <div className="prod-mini-list">
-              {productos.slice(0, 10).map((producto) => (
-                <button key={producto.id} className="prod-mini-item" onClick={() => editarProducto(producto)}>
-                  <strong>{producto.codigoPrincipal}</strong>
-                  <span>{producto.nombre}</span>
-                  <small>${Number(producto.precioUnitario || 0).toFixed(2)}</small>
-                </button>
-              ))}
-              {productos.length === 0 && <div className="prod-empty">No hay productos registrados.</div>}
-            </div>
-          </section>
-        </div>
+            <button className="btn-primary" onClick={() => { limpiarForm(); setModalProducto(true); }}>
+              + Nuevo producto
+            </button>
+          </div>
+          <div className="prod-mini-list">
+            {productos.slice(0, 12).map((producto) => (
+              <button key={producto.id} className="prod-mini-item" onClick={() => editarProducto(producto)}>
+                <strong>{producto.codigoPrincipal}</strong>
+                <span>{producto.nombre}</span>
+                <small>${Number(producto.precioUnitario || 0).toFixed(2)}</small>
+              </button>
+            ))}
+            {productos.length === 0 && <div className="prod-empty">No hay productos registrados.</div>}
+          </div>
+        </section>
       )}
 
       {tab === 'lista' && (
@@ -438,99 +370,47 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       )}
 
       {tab === 'inventario' && inventarioActivo && (
-        <div className="prod-grid">
-          <section className="prod-card">
-            <h2>Registrar movimiento</h2>
-            <form className="prod-form" onSubmit={registrarMovimiento}>
-              <label className="full">
-                <span>Producto</span>
-                <select
-                  value={movimientoForm.productoId}
-                  onChange={(e) => setMovimientoForm((prev) => ({ ...prev, productoId: e.target.value }))}
-                  required
-                >
-                  <option value="">Seleccione un producto</option>
-                  {productosInventariables.map((producto) => (
-                    <option key={producto.id} value={producto.id}>
-                      {producto.codigoPrincipal} - {producto.nombre}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Tipo</span>
-                <select value={movimientoForm.tipo} onChange={(e) => setMovimientoForm((prev) => ({ ...prev, tipo: e.target.value }))}>
-                  <option value="ENTRADA">Entrada</option>
-                  <option value="SALIDA">Salida</option>
-                  <option value="AJUSTE_POSITIVO">Ajuste positivo</option>
-                  <option value="AJUSTE_NEGATIVO">Ajuste negativo</option>
-                </select>
-              </label>
-              <label>
-                <span>Cantidad</span>
-                <input type="number" min="0.001" step="0.001" value={movimientoForm.cantidad} onChange={(e) => setMovimientoForm((prev) => ({ ...prev, cantidad: e.target.value }))} required />
-              </label>
-              <label>
-                <span>Costo unitario</span>
-                <input type="number" min="0" step="0.01" value={movimientoForm.costoUnitario} onChange={(e) => setMovimientoForm((prev) => ({ ...prev, costoUnitario: e.target.value }))} />
-              </label>
-              <label>
-                <span>Referencia</span>
-                <input value={movimientoForm.referencia} onChange={(e) => setMovimientoForm((prev) => ({ ...prev, referencia: e.target.value }))} />
-              </label>
-              <label className="full">
-                <span>Observación</span>
-                <textarea rows="2" value={movimientoForm.observacion} onChange={(e) => setMovimientoForm((prev) => ({ ...prev, observacion: e.target.value }))} />
-              </label>
-              <div className="prod-actions full">
-                <button type="submit" className="btn-primary" disabled={guardandoMovimiento}>
-                  {guardandoMovimiento ? 'Registrando...' : 'Registrar movimiento'}
-                </button>
-              </div>
-            </form>
-          </section>
-
-          <section className="prod-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h2 style={{ margin: 0 }}>Últimos movimientos</h2>
-              <button
-                className="btn-secondary"
-                onClick={exportarMovimientosCsv}
-                disabled={exportandoInv || movimientos.length === 0}
-                style={{ fontSize: '0.88rem' }}
-              >
+        <section className="prod-card">
+          <div className="prod-section-head">
+            <h2>Últimos movimientos</h2>
+            <div style={{ display: 'flex', gap: '.5rem' }}>
+              <button className="btn-secondary" onClick={exportarMovimientosCsv}
+                disabled={exportandoInv || movimientos.length === 0}>
                 {exportandoInv ? 'Exportando…' : '⬇ CSV'}
               </button>
+              <button className="btn-primary" onClick={() => { setMovimientoForm(MOVIMIENTO_INICIAL); setModalMovimiento(true); }}>
+                + Registrar movimiento
+              </button>
             </div>
-            <div className="prod-table-wrap">
-              <table className="prod-table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Producto</th>
-                    <th>Tipo</th>
-                    <th>Cantidad</th>
-                    <th>Stock nuevo</th>
+          </div>
+          <div className="prod-table-wrap">
+            <table className="prod-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Producto</th>
+                  <th>Tipo</th>
+                  <th className="text-right">Cantidad</th>
+                  <th className="text-right">Stock nuevo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movimientos.map((movimiento) => (
+                  <tr key={movimiento.id}>
+                    <td>{new Date(movimiento.createdAt).toLocaleString('es-EC')}</td>
+                    <td>{movimiento.producto?.nombre || 'Producto'}</td>
+                    <td><span className="prod-tipo-chip">{movimiento.tipo}</span></td>
+                    <td className="text-right">{Number(movimiento.cantidad || 0).toFixed(3)}</td>
+                    <td className="text-right">{Number(movimiento.stockNuevo || 0).toFixed(3)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {movimientos.map((movimiento) => (
-                    <tr key={movimiento.id}>
-                      <td>{new Date(movimiento.createdAt).toLocaleString('es-EC')}</td>
-                      <td>{movimiento.producto?.nombre || 'Producto'}</td>
-                      <td>{movimiento.tipo}</td>
-                      <td>{Number(movimiento.cantidad || 0).toFixed(3)}</td>
-                      <td>{Number(movimiento.stockNuevo || 0).toFixed(3)}</td>
-                    </tr>
-                  ))}
-                  {movimientos.length === 0 && (
-                    <tr><td colSpan="5" className="prod-empty">No hay movimientos de inventario todavía.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
+                ))}
+                {movimientos.length === 0 && (
+                  <tr><td colSpan="5" className="prod-empty">No hay movimientos de inventario todavía.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {tab === 'importacion' && (
@@ -673,6 +553,143 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
               </div>
             )}
           </section>
+        </div>
+      )}
+
+      {/* ── MODAL PRODUCTO ── */}
+      {modalProducto && (
+        <div className="prod-modal-overlay" onClick={() => setModalProducto(false)}>
+          <div className="prod-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="prod-modal-head">
+              <h2>{form.id ? 'Editar producto' : 'Nuevo producto'}</h2>
+              <button className="prod-modal-close" onClick={() => setModalProducto(false)}>✕</button>
+            </div>
+            <form className="prod-form prod-modal-body" onSubmit={guardarProducto}>
+              <label>
+                <span>Código principal</span>
+                <input value={form.codigoPrincipal} onChange={(e) => setForm((prev) => ({ ...prev, codigoPrincipal: e.target.value }))} required />
+              </label>
+              <label>
+                <span>Código auxiliar</span>
+                <input value={form.codigoAuxiliar} onChange={(e) => setForm((prev) => ({ ...prev, codigoAuxiliar: e.target.value }))} />
+              </label>
+              <label className="full">
+                <span>Nombre</span>
+                <input value={form.nombre} onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))} required />
+              </label>
+              <label>
+                <span>Precio de venta</span>
+                <input type="number" min="0" step="0.01" value={form.precioUnitario} onChange={(e) => setForm((prev) => ({ ...prev, precioUnitario: e.target.value }))} required />
+              </label>
+              <label>
+                <span>Costo unitario</span>
+                <input type="number" min="0" step="0.01" value={form.costoUnitario} onChange={(e) => setForm((prev) => ({ ...prev, costoUnitario: e.target.value }))} />
+              </label>
+              <label>
+                <span>IVA</span>
+                <select value={form.tarifaIva} onChange={(e) => setForm((prev) => ({ ...prev, tarifaIva: Number(e.target.value) }))}>
+                  <option value={0}>0% — Tarifa 0%</option>
+                  <option value={5}>5%</option>
+                  <option value={15}>15%</option>
+                  <option value={6}>No Objeto de IVA</option>
+                  <option value={7}>Exento de IVA</option>
+                </select>
+              </label>
+              <label>
+                <span>Unidad</span>
+                <input value={form.unidadMedida} onChange={(e) => setForm((prev) => ({ ...prev, unidadMedida: e.target.value }))} />
+              </label>
+              <label className="full">
+                <span>Información adicional</span>
+                <textarea rows="2" value={form.infoAdicional} onChange={(e) => setForm((prev) => ({ ...prev, infoAdicional: e.target.value }))} />
+              </label>
+              <label className="prod-check full">
+                <input type="checkbox" checked={form.inventariable} onChange={(e) => setForm((prev) => ({ ...prev, inventariable: e.target.checked }))} />
+                <span>Este producto maneja stock</span>
+              </label>
+              {inventarioActivo && form.inventariable && (
+                <>
+                  <label>
+                    <span>Stock actual</span>
+                    <input type="number" min="0" step="0.001" value={form.stockActual} onChange={(e) => setForm((prev) => ({ ...prev, stockActual: e.target.value }))} />
+                  </label>
+                  <label>
+                    <span>Stock mínimo</span>
+                    <input type="number" min="0" step="0.001" value={form.stockMinimo} onChange={(e) => setForm((prev) => ({ ...prev, stockMinimo: e.target.value }))} />
+                  </label>
+                </>
+              )}
+              <label className="prod-check full">
+                <input type="checkbox" checked={form.activo} onChange={(e) => setForm((prev) => ({ ...prev, activo: e.target.checked }))} />
+                <span>Producto activo</span>
+              </label>
+              <div className="prod-actions full">
+                <button type="button" className="btn-secondary" onClick={limpiarForm}>Limpiar</button>
+                <button type="submit" className="btn-primary" disabled={guardando}>
+                  {guardando ? 'Guardando...' : form.id ? 'Actualizar producto' : 'Crear producto'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL MOVIMIENTO ── */}
+      {modalMovimiento && (
+        <div className="prod-modal-overlay" onClick={() => setModalMovimiento(false)}>
+          <div className="prod-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="prod-modal-head">
+              <h2>Registrar movimiento</h2>
+              <button className="prod-modal-close" onClick={() => setModalMovimiento(false)}>✕</button>
+            </div>
+            <form className="prod-form prod-modal-body" onSubmit={registrarMovimiento}>
+              <label className="full">
+                <span>Producto</span>
+                <select value={movimientoForm.productoId}
+                  onChange={(e) => setMovimientoForm((prev) => ({ ...prev, productoId: e.target.value }))} required>
+                  <option value="">Seleccione un producto</option>
+                  {productosInventariables.map((p) => (
+                    <option key={p.id} value={p.id}>{p.codigoPrincipal} — {p.nombre}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Tipo</span>
+                <select value={movimientoForm.tipo} onChange={(e) => setMovimientoForm((prev) => ({ ...prev, tipo: e.target.value }))}>
+                  <option value="ENTRADA">Entrada</option>
+                  <option value="SALIDA">Salida</option>
+                  <option value="AJUSTE_POSITIVO">Ajuste positivo</option>
+                  <option value="AJUSTE_NEGATIVO">Ajuste negativo</option>
+                </select>
+              </label>
+              <label>
+                <span>Cantidad</span>
+                <input type="number" min="0.001" step="0.001" value={movimientoForm.cantidad}
+                  onChange={(e) => setMovimientoForm((prev) => ({ ...prev, cantidad: e.target.value }))} required />
+              </label>
+              <label>
+                <span>Costo unitario</span>
+                <input type="number" min="0" step="0.01" value={movimientoForm.costoUnitario}
+                  onChange={(e) => setMovimientoForm((prev) => ({ ...prev, costoUnitario: e.target.value }))} />
+              </label>
+              <label>
+                <span>Referencia</span>
+                <input value={movimientoForm.referencia}
+                  onChange={(e) => setMovimientoForm((prev) => ({ ...prev, referencia: e.target.value }))} />
+              </label>
+              <label className="full">
+                <span>Observación</span>
+                <textarea rows="2" value={movimientoForm.observacion}
+                  onChange={(e) => setMovimientoForm((prev) => ({ ...prev, observacion: e.target.value }))} />
+              </label>
+              <div className="prod-actions full">
+                <button type="button" className="btn-secondary" onClick={() => setModalMovimiento(false)}>Cancelar</button>
+                <button type="submit" className="btn-primary" disabled={guardandoMovimiento}>
+                  {guardandoMovimiento ? 'Registrando...' : 'Registrar movimiento'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

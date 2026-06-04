@@ -1053,7 +1053,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
   const compraId  = parseInt(req.params.id, 10);
   const empresaId = req.empresa.id;
   const usuarioId = req.usuario?.id || null;
-  const { margenPct } = req.body || {};
+  const { margenPct, crearSiNoExiste = false } = req.body || {};
   const usarPvpAuto = margenPct !== undefined && margenPct !== null && !isNaN(Number(margenPct)) && Number(margenPct) >= 0;
 
   try {
@@ -1075,6 +1075,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
     }
 
     let movimientosRegistrados = 0;
+    let productosCreados = 0;
     const errores = [];
 
     await prisma.$transaction(async (tx) => {
@@ -1087,8 +1088,27 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
           : await tx.productos_servicios.findFirst({ where: { codigoPrincipal: det.codigoPrincipal, empresaId } });
 
         if (!prod) {
-          errores.push(`Producto "${det.codigoPrincipal || det.descripcion || det.productoId}" no encontrado`);
-          continue;
+          if (crearSiNoExiste && (det.codigoPrincipal || det.descripcion)) {
+            const codigo = det.codigoPrincipal || `PROD-${Date.now()}`;
+            prod = await tx.productos_servicios.create({
+              data: {
+                empresaId,
+                codigoPrincipal:  codigo,
+                codigoAuxiliar:   det.codigoAuxiliar || null,
+                nombre:           det.descripcion || codigo,
+                precioUnitario:   Number(det.precioUnitario || 0),
+                costoUnitario:    Number(det.precioUnitario || 0),
+                tarifaIva:        Number(det.porcentajeIva || 15),
+                unidadMedida:     'UND',
+                inventariable:    true,
+                activo:           true,
+              },
+            });
+            productosCreados++;
+          } else {
+            errores.push(`Producto "${det.codigoPrincipal || det.descripcion || det.productoId}" no encontrado en catálogo`);
+            continue;
+          }
         }
 
         if (!prod.inventariable) {
@@ -1130,12 +1150,17 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
       }
     });
 
+    const partes = [];
+    if (movimientosRegistrados > 0) partes.push(`${movimientosRegistrados} movimiento(s) de inventario registrado(s)`);
+    if (productosCreados > 0) partes.push(`${productosCreados} producto(s) creado(s) en catálogo`);
+
     res.json({
       success: true,
       movimientosRegistrados,
+      productosCreados,
       errores,
-      mensaje: movimientosRegistrados > 0
-        ? `${movimientosRegistrados} producto(s) registrado(s) en inventario`
+      mensaje: partes.length > 0
+        ? partes.join(' y ')
         : 'No se encontraron productos inventariables en esta compra',
     });
   } catch (error) {

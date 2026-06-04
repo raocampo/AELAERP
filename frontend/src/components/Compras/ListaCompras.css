@@ -1,274 +1,246 @@
-﻿.compras-page {
-  display: grid;
-  gap: 1.25rem;
-}
+/* ── Layout general ─────────────────────────────────────────────── */
+.compras-page { display: grid; gap: 1.25rem; }
 
 .compras-header,
 .compras-summary,
 .compras-filtros,
 .compras-card {
-  background: #ffffff;
+  background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 1.25rem;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8px 24px rgba(15,23,42,.05);
 }
 
+/* ── Header ─────────────────────────────────────────────────────── */
 .compras-header {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
   align-items: center;
-  padding: 1.5rem;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  flex-wrap: wrap;
 }
+.compras-header h1 { margin: 0 0 .2rem; font-size: 1.5rem; color: #1e293b; }
+.compras-header p  { margin: 0; color: #64748b; font-size: .9rem; }
+.compras-header-actions { display: flex; gap: .6rem; flex-wrap: wrap; }
 
-.compras-header h1 {
-  margin: 0 0 0.35rem;
-  color: #1e293b;
-}
-
-.compras-header p {
-  margin: 0;
-  color: #64748b;
-}
-
-.compras-header-actions {
-  display: flex;
-  gap: 0.75rem;
-}
-
+/* ── KPIs ───────────────────────────────────────────────────────── */
 .compras-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1rem;
-  padding: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: .75rem;
+  padding: .9rem 1rem;
 }
-
 .compras-summary-card {
-  background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 1rem;
-  padding: 1rem 1.1rem;
+  border-radius: .9rem;
+  padding: .8rem 1rem;
 }
-
-.compras-summary-card span {
-  display: block;
-  color: #64748b;
-  font-size: 0.92rem;
-}
-
+.compras-summary-card span   { display: block; color: #64748b; font-size: .82rem; }
+.compras-summary-card strong { display: block; margin-top: .3rem; font-size: 1.4rem; color: #1e293b; }
 .compras-summary-card--iva strong { color: #7c3aed; }
 
-/* ── Resumen por clasificación ───────────────────────────────────────────── */
+/* ── Resumen clasificación ──────────────────────────────────────── */
 .compras-resumen-tipo {
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  padding: 1rem 1.25rem;
-  margin: 0 1rem;
+  border-radius: .9rem;
+  padding: .9rem 1.25rem;
 }
-
 .compras-resumen-tipo-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
+  margin-bottom: .65rem;
+  flex-wrap: wrap;
+  gap: .5rem;
 }
+.compras-resumen-tipo-header h3 { font-size: .9rem; font-weight: 600; color: #1e293b; margin: 0; }
 
-.compras-resumen-tipo-header h3 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0;
-}
-
-.compras-resumen-tabla {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
+.compras-resumen-tabla { width: 100%; border-collapse: collapse; font-size: .82rem; }
 .compras-resumen-tabla th,
-.compras-resumen-tabla td {
-  padding: 0.45rem 0.75rem;
-  text-align: left;
-  border-bottom: 1px solid #f1f5f9;
-}
-
+.compras-resumen-tabla td { padding: .4rem .7rem; text-align: left; border-bottom: 1px solid #f1f5f9; }
 .compras-resumen-tabla th { background: #f8fafc; color: #475569; font-weight: 600; }
 .compras-resumen-tabla tfoot td { border-top: 2px solid #e2e8f0; border-bottom: none; }
 .compras-resumen-tabla .num { text-align: right; }
-.compras-resumen-tabla .iva-cell  { color: #7c3aed; }
+.compras-resumen-tabla .iva-cell   { color: #7c3aed; }
 .compras-resumen-tabla .total-cell { color: #0f172a; font-weight: 600; }
 
-.compras-summary-card strong {
-  display: block;
-  margin-top: 0.45rem;
-  font-size: 1.65rem;
-  color: #1e293b;
-}
-
+/* ── Filtros ────────────────────────────────────────────────────── */
 .compras-filtros {
   display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(0, 1fr)) auto;
-  gap: 0.85rem;
-  padding: 1rem;
+  grid-template-columns: minmax(200px, 1.5fr) 1fr 1fr auto auto auto;
+  gap: .75rem;
+  padding: .9rem 1rem;
+  align-items: center;
 }
-
-.compras-filtros input {
+.compras-filtros input,
+.compras-filtros select {
   width: 100%;
-  padding: 0.85rem 0.95rem;
-  border-radius: 0.9rem;
+  padding: .65rem .85rem;
+  border-radius: .75rem;
   border: 1px solid #e2e8f0;
-  background: #ffffff;
+  background: #fff;
   color: #1e293b;
+  font-size: .88rem;
 }
 
-.compras-card {
-  padding: 1rem;
-}
-
+/* ── Tabla principal ────────────────────────────────────────────── */
+.compras-card    { padding: 1rem; }
 .compras-empty {
-  min-height: 220px;
+  min-height: 160px;
   display: grid;
   place-items: center;
   text-align: center;
   color: #64748b;
   padding: 1rem;
+  font-size: .9rem;
 }
 
-.compras-table-wrap {
-  overflow: auto;
-}
-
+.compras-table-wrap { overflow-x: auto; }
 .compras-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 880px;
+  min-width: 620px;
 }
-
 .compras-table th,
 .compras-table td {
-  padding: 0.9rem 0.85rem;
+  padding: .7rem .85rem;
   border-bottom: 1px solid #e2e8f0;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
+  font-size: .875rem;
 }
-
 .compras-table th {
   background: #192C4A;
   color: #fff;
-  font-size: 0.88rem;
+  font-size: .78rem;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.compras-table tr:last-child td { border-bottom: none; }
+.compras-table tr.fila-anulada td { opacity: .55; }
+
+/* Columna autorización — truncada */
+.compras-col-auth { max-width: 170px; }
+.compras-auth-cell span {
+  display: block;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .78rem;
+  color: #475569;
+  font-family: monospace;
 }
 
-.compras-provider {
-  display: grid;
-  gap: 0.2rem;
-}
+/* Proveedor */
+.compras-provider { display: grid; gap: .15rem; }
+.compras-provider span { color: #64748b; font-size: .8rem; }
+.compras-muted { color: #94a3b8; font-size: .8rem; }
 
-.compras-provider span {
+/* ── Columna Operación ──────────────────────────────────────────── */
+.compras-op-wrap { display: flex; flex-direction: column; gap: .35rem; }
+.compras-op-row  { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap; }
+
+/* ── Chips ──────────────────────────────────────────────────────── */
+.compras-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
   color: #64748b;
-  font-size: 0.9rem;
+  font-size: .72rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
+.compras-chip.anulada        { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+.compras-chip.sin-clasificar { background: #fef9c3; border-color: #fde047; color: #a16207; }
+.compras-chip.buzon_sri,
+.compras-chip.xml,
+.compras-chip.autorizacion   { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; }
 
-.compras-chip,
+/* ── Flags de estado ────────────────────────────────────────────── */
 .compras-flag {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 0.3rem 0.65rem;
+  padding: .2rem .55rem;
   border-radius: 999px;
   border: 1px solid #e2e8f0;
-  background: #ffffff;
+  background: #f8fafc;
   color: #64748b;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: .72rem;
+  font-weight: 600;
 }
+.compras-flag.ok   { background: #dcfce7; border-color: #86efac; color: #16a34a; }
+.compras-flag.warn { background: #fef3c7; border-color: #fcd34d; color: #b45309; }
 
-.compras-chip.xml,
-.compras-chip.autorizacion {
-  background: #d1fae5;
-  border-color: rgba(34,197,94,0.3);
-  color: #22C55E;
-}
-
-.compras-chip.anulada {
-  background: #fee2e2;
-  border-color: rgba(239,68,68,0.3);
-  color: #EF4444;
-  font-size: 0.78rem;
-}
-
-
-.compras-flags {
-  display: flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.compras-operacion {
-  display: grid;
-  gap: 0.7rem;
-}
-
-.compras-link {
-  width: fit-content;
-  border: 0;
-  background: transparent;
-  color: #7C3AED;
-  font-weight: 700;
-  padding: 0;
-  cursor: pointer;
-}
-
-.compras-link:hover {
-  text-decoration: underline;
-}
-
-.compras-flag.ok {
-  background: #d1fae5;
-  border-color: rgba(34,197,94,0.3);
-  color: #22C55E;
-}
-
-.compras-flag.warn {
-  background: #fef3c7;
-  border-color: rgba(245,158,11,0.3);
-  color: #F59E0B;
-}
-
-@media (max-width: 920px) {
-  .compras-header,
-  .compras-summary,
-  .compras-filtros {
-    grid-template-columns: 1fr;
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .compras-header-actions {
-    width: 100%;
-    flex-direction: column;
-  }
-}
-
-/* ── Paginación ──────────────────────────────────────────── */
+/* ── Paginación ─────────────────────────────────────────────────── */
 .compras-pagination {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 10px 0;
+  gap: .75rem;
+  padding: .6rem 0;
+  flex-wrap: wrap;
+}
+.compras-pagination--bottom { border-top: 1px solid #e2e8f0; margin-top: .5rem; padding-top: .75rem; }
+.compras-pagination-info { font-size: .85rem; color: #64748b; }
+
+/* ── Responsive tablet ──────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .compras-filtros { grid-template-columns: 1fr 1fr; }
+  .compras-header-actions { width: 100%; }
 }
 
-.compras-pagination--bottom {
-  border-top: 1px solid #e2e8f0;
-  margin-top: 8px;
-  padding-top: 14px;
-}
+/* ── Responsive móvil ───────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .compras-header { padding: 1rem; }
+  .compras-header h1 { font-size: 1.2rem; }
+  .compras-filtros { grid-template-columns: 1fr; }
 
-.compras-pagination-info {
-  font-size: 0.88rem;
-  color: #64748b;
+  /* Ocultar columna autorización */
+  .compras-col-auth { display: none; }
+
+  /* Tabla → tarjetas */
+  .compras-table      { min-width: unset; }
+  .compras-table thead { display: none; }
+
+  .compras-table tbody tr {
+    display: block;
+    border: 1px solid #e2e8f0;
+    border-radius: .75rem;
+    margin-bottom: .65rem;
+    padding: .5rem .75rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  }
+  .compras-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid #f1f5f9;
+    padding: .4rem 0;
+    font-size: .85rem;
+    gap: .5rem;
+  }
+  .compras-table tbody td:last-child { border-bottom: none; }
+  .compras-table tbody td::before {
+    content: attr(data-label);
+    color: #94a3b8;
+    font-size: .74rem;
+    font-weight: 600;
+    min-width: 68px;
+    flex-shrink: 0;
+    padding-top: .15rem;
+  }
+
+  .compras-summary { grid-template-columns: repeat(3, 1fr); }
+  .compras-summary-card strong { font-size: 1.1rem; }
+
+  .compras-resumen-tabla { font-size: .75rem; }
+  .compras-resumen-tabla th,
+  .compras-resumen-tabla td { padding: .3rem .4rem; }
 }
