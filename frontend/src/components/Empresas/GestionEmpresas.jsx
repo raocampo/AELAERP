@@ -291,20 +291,24 @@ export default function GestionEmpresas() {
                     </td>
                     <td>
                       <div className="ge-acciones">
-                        <button className="ge-btn-sm" onClick={() => abrirEditar(e)}>✏️ Editar</button>
-                        <button
-                          className={`ge-btn-sm ${empresaUsuarios === e.id ? 'active' : ''}`}
-                          onClick={() => togglePanelUsuarios(e.id)}
-                          title="Gestionar usuarios con acceso a esta empresa"
-                        >
-                          👥 Usuarios
-                        </button>
-                        <button
-                          className={`ge-btn-sm ${e.activo ? 'danger' : ''}`}
-                          onClick={() => toggleActivo(e)}
-                        >
-                          {e.activo ? '🔴 Desactivar' : '🟢 Activar'}
-                        </button>
+                        {tienePermiso(e.rolUsuario, 'usuarios.gestionar') && (
+                          <>
+                            <button className="ge-btn-sm" onClick={() => abrirEditar(e)}>✏️ Editar</button>
+                            <button
+                              className={`ge-btn-sm ${empresaUsuarios === e.id ? 'active' : ''}`}
+                              onClick={() => togglePanelUsuarios(e.id)}
+                              title="Gestionar usuarios con acceso a esta empresa"
+                            >
+                              👥 Usuarios
+                            </button>
+                            <button
+                              className={`ge-btn-sm ${e.activo ? 'danger' : ''}`}
+                              onClick={() => toggleActivo(e)}
+                            >
+                              {e.activo ? '🔴 Desactivar' : '🟢 Activar'}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

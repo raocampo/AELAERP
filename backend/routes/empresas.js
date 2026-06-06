@@ -19,17 +19,59 @@ const {
   asegurarConfiguracionSistemaEmpresa,
 } = require('../utils/configuracionSistema');
 const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
+const { normalizarRol, tienePermiso } = require('../utils/roles');
 
-// GET /api/empresas — listar todas (super-admin)
+// Helper: determina el rol del usuario en una empresa específica.
+// Devuelve el rol de usuario_empresas si existe, o el rol base si es su empresa default.
+async function rolEnEmpresa(prisma, usuarioId, baseEmpresaId, baseRol, empresaIdTarget) {
+  if (baseEmpresaId === empresaIdTarget) return normalizarRol(baseRol);
+  const acceso = await prisma.usuario_empresas.findUnique({
+    where: { usuarioId_empresaId: { usuarioId, empresaId: empresaIdTarget } },
+    select: { rol: true },
+  });
+  return acceso ? normalizarRol(acceso.rol) : null;
+}
+
+// GET /api/empresas — empresas a las que el usuario tiene acceso
 router.get('/', proteger, soloAdmin, async (req, res) => {
   try {
-    const empresas = await req.prisma.empresas.findMany({
-      orderBy: { razonSocial: 'asc' },
-      include: {
-        _count: { select: { usuarios: true, facturas: true } },
-      },
+    // Rol y empresa base del usuario (desde la BD, no desde el JWT)
+    const usuarioBase = await req.prisma.usuarios.findUnique({
+      where: { id: req.usuario.id },
+      select: { empresaId: true, rol: true },
     });
-    res.json({ success: true, data: empresas });
+
+    // Accesos extra vía usuario_empresas
+    const accesos = await req.prisma.usuario_empresas.findMany({
+      where: { usuarioId: req.usuario.id },
+      select: { empresaId: true, rol: true },
+    });
+
+    // Mapa empresaId → rolUsuario
+    const rolPorEmpresa = new Map();
+    if (usuarioBase?.empresaId) {
+      rolPorEmpresa.set(usuarioBase.empresaId, normalizarRol(usuarioBase.rol));
+    }
+    for (const a of accesos) {
+      rolPorEmpresa.set(a.empresaId, normalizarRol(a.rol));
+    }
+
+    if (rolPorEmpresa.size === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const empresas = await req.prisma.empresas.findMany({
+      where: { id: { in: [...rolPorEmpresa.keys()] }, activo: true },
+      orderBy: { razonSocial: 'asc' },
+      include: { _count: { select: { usuarios: true, facturas: true } } },
+    });
+
+    const data = empresas.map(e => ({
+      ...e,
+      rolUsuario: rolPorEmpresa.get(e.id) || 'operador',
+    }));
+
+    res.json({ success: true, data });
   } catch (err) {
     res.status(500).json({ success: false, mensaje: 'Error al listar empresas' });
   }
@@ -344,6 +386,17 @@ router.put('/:id', proteger, soloAdmin, async (req, res) => {
 router.get('/:id/usuarios', proteger, soloAdmin, async (req, res) => {
   try {
     const empresaId = parseInt(req.params.id, 10);
+
+    // Verificar que el usuario tiene rol de admin en ESTA empresa específica
+    const usuarioBase = await req.prisma.usuarios.findUnique({
+      where: { id: req.usuario.id },
+      select: { empresaId: true, rol: true },
+    });
+    const rol = await rolEnEmpresa(req.prisma, req.usuario.id, usuarioBase?.empresaId, usuarioBase?.rol, empresaId);
+    if (!rol || !tienePermiso(rol, 'usuarios.gestionar')) {
+      return res.status(403).json({ success: false, mensaje: 'No tienes permisos de administrador en esta empresa' });
+    }
+
     const empresa = await req.prisma.empresas.findUnique({ where: { id: empresaId } });
     if (!empresa) return res.status(404).json({ success: false, mensaje: 'Empresa no encontrada' });
 
