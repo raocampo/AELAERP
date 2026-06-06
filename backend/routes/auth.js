@@ -35,7 +35,7 @@ const emitirToken = (usuario, opts = {}) => jwt.sign(
     id: usuario.id,
     email: usuario.email,
     username: usuario.username,
-    rol: normalizarRol(usuario.rol),
+    rol: normalizarRol(opts.rol ?? usuario.rol),
     empresaId: opts.empresaId ?? usuario.empresaId ?? null,
     tenantSlug: opts.tenantSlug ?? null,
   },
@@ -448,13 +448,22 @@ router.post('/cambiar-empresa', proteger, async (req, res) => {
       return res.status(403).json({ success: false, mensaje: 'No tienes acceso a esa empresa o está inactiva' });
     }
 
+    // Rol efectivo: el asignado en usuario_empresas para esta empresa,
+    // o el rol base del usuario si está accediendo a su propia empresa.
+    const usuarioBase = await req.prisma.usuarios.findUnique({
+      where: { id: req.usuario.id },
+      select: { rol: true },
+    });
+    const rolEfectivo = normalizarRol(accesoExtra?.rol ?? usuarioBase?.rol ?? req.usuario.rol);
+
     const tenantSlug = req.tenant?.slug || null;
-    const token = emitirToken(req.usuario, { empresaId: empresa.id, tenantSlug });
+    const token = emitirToken(req.usuario, { empresaId: empresa.id, tenantSlug, rol: rolEfectivo });
 
     res.json({
       success: true,
       token,
       tenantSlug,
+      usuario: { rol: rolEfectivo },
       empresa: {
         id: empresa.id,
         ruc: empresa.ruc,

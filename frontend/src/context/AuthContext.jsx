@@ -174,13 +174,20 @@ export function AuthProvider({ children }) {
     try {
       const res = await api.post('/auth/cambiar-empresa', { empresaId });
       if (!res.data.success) throw new Error(res.data.mensaje || 'Error al cambiar empresa');
-      const { token, empresa: nuevaEmpresa, tenantSlug } = res.data;
+      const { token, empresa: nuevaEmpresa, tenantSlug, usuario: datosUsuario } = res.data;
       localStorage.setItem('aela_token', token);
       localStorage.setItem('token', token);
       if (tenantSlug) {
         localStorage.setItem('aela_tenant_slug', tenantSlug);
       } else {
         localStorage.removeItem('aela_tenant_slug');
+      }
+      // Actualizar el rol efectivo para esta empresa en state y localStorage
+      if (datosUsuario?.rol) {
+        const usuarioActual = JSON.parse(localStorage.getItem('aela_usuario') || '{}');
+        const usuarioActualizado = { ...usuarioActual, rol: datosUsuario.rol };
+        setUsuario(usuarioActualizado);
+        localStorage.setItem('aela_usuario', JSON.stringify(usuarioActualizado));
       }
       setEmpresa(nuevaEmpresa);
       localStorage.setItem('aela_empresa', JSON.stringify(nuevaEmpresa));
