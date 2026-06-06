@@ -35,19 +35,29 @@ async function rolEnEmpresa(prisma, usuarioId, baseEmpresaId, baseRol, empresaId
 // GET /api/empresas — empresas a las que el usuario tiene acceso
 router.get('/', proteger, soloAdmin, async (req, res) => {
   try {
-    // Rol y empresa base del usuario (desde la BD, no desde el JWT)
     const usuarioBase = await req.prisma.usuarios.findUnique({
       where: { id: req.usuario.id },
       select: { empresaId: true, rol: true },
     });
 
-    // Accesos extra vía usuario_empresas
+    const esAdminMacro = normalizarRol(usuarioBase?.rol) === 'admin';
+
+    if (esAdminMacro) {
+      // Admin macro (admin de su empresa base): ve TODAS las empresas activas
+      const empresas = await req.prisma.empresas.findMany({
+        where: { activo: true },
+        orderBy: { razonSocial: 'asc' },
+        include: { _count: { select: { usuarios: true, facturas: true } } },
+      });
+      return res.json({ success: true, data: empresas.map(e => ({ ...e, rolUsuario: 'admin' })) });
+    }
+
+    // No admin macro: solo empresas con acceso explícito
     const accesos = await req.prisma.usuario_empresas.findMany({
       where: { usuarioId: req.usuario.id },
       select: { empresaId: true, rol: true },
     });
 
-    // Mapa empresaId → rolUsuario
     const rolPorEmpresa = new Map();
     if (usuarioBase?.empresaId) {
       rolPorEmpresa.set(usuarioBase.empresaId, normalizarRol(usuarioBase.rol));
@@ -66,12 +76,10 @@ router.get('/', proteger, soloAdmin, async (req, res) => {
       include: { _count: { select: { usuarios: true, facturas: true } } },
     });
 
-    const data = empresas.map(e => ({
-      ...e,
-      rolUsuario: rolPorEmpresa.get(e.id) || 'operador',
-    }));
-
-    res.json({ success: true, data });
+    res.json({
+      success: true,
+      data: empresas.map(e => ({ ...e, rolUsuario: rolPorEmpresa.get(e.id) || 'operador' })),
+    });
   } catch (err) {
     res.status(500).json({ success: false, mensaje: 'Error al listar empresas' });
   }
@@ -387,14 +395,18 @@ router.get('/:id/usuarios', proteger, soloAdmin, async (req, res) => {
   try {
     const empresaId = parseInt(req.params.id, 10);
 
-    // Verificar que el usuario tiene rol de admin en ESTA empresa específica
     const usuarioBase = await req.prisma.usuarios.findUnique({
       where: { id: req.usuario.id },
       select: { empresaId: true, rol: true },
     });
-    const rol = await rolEnEmpresa(req.prisma, req.usuario.id, usuarioBase?.empresaId, usuarioBase?.rol, empresaId);
-    if (!rol || !tienePermiso(rol, 'usuarios.gestionar')) {
-      return res.status(403).json({ success: false, mensaje: 'No tienes permisos de administrador en esta empresa' });
+    const esAdminMacro = normalizarRol(usuarioBase?.rol) === 'admin';
+
+    // Si no es admin macro, verificar que tiene admin en ESA empresa específica
+    if (!esAdminMacro) {
+      const rol = await rolEnEmpresa(req.prisma, req.usuario.id, usuarioBase?.empresaId, usuarioBase?.rol, empresaId);
+      if (!rol || !tienePermiso(rol, 'usuarios.gestionar')) {
+        return res.status(403).json({ success: false, mensaje: 'No tienes permisos de administrador en esta empresa' });
+      }
     }
 
     const empresa = await req.prisma.empresas.findUnique({ where: { id: empresaId } });
@@ -414,12 +426,26 @@ router.get('/:id/usuarios', proteger, soloAdmin, async (req, res) => {
       select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, empresaId: true },
     });
 
-    // Combinar: default + acceso extra (sin duplicados)
+    // Admins macro: usuarios con rol admin en la empresa base (Corp Simtelec / empresa raíz).
+    // Aparecen en TODAS las empresas como administradores implícitos y no se pueden quitar.
+    const macroAdmins = usuarioBase?.empresaId
+      ? await req.prisma.usuarios.findMany({
+          where: { empresaId: usuarioBase.empresaId, rol: 'admin', activo: true },
+          select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, empresaId: true },
+        })
+      : [];
+
+    // Combinar sin duplicados
     const mapa = new Map();
     usuariosDefault.forEach(u => mapa.set(u.id, { ...u, tipoAcceso: 'default' }));
     accesos.forEach(a => {
       if (!mapa.has(a.usuarioId)) {
         mapa.set(a.usuarioId, { ...a.usuario, tipoAcceso: 'asignado', rolAsignado: a.rol });
+      }
+    });
+    macroAdmins.forEach(u => {
+      if (!mapa.has(u.id)) {
+        mapa.set(u.id, { ...u, tipoAcceso: 'macro', rolAsignado: 'admin' });
       }
     });
 

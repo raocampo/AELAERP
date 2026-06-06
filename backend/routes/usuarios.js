@@ -35,9 +35,12 @@ const normalizarUsuarioSalida = (usuario) => ({
 });
 
 // GET /api/usuarios
+// ?scope=pool → devuelve usuarios de la empresa BASE del usuario (pool asignable en macro empresa)
 router.get('/', proteger, soloAdmin, async (req, res) => {
   try {
-    const empresaId = obtenerEmpresaActual(req);
+    const empresaId = req.query.scope === 'pool'
+      ? (req.usuario.empresaId || obtenerEmpresaActual(req))
+      : obtenerEmpresaActual(req);
     const usuarios = await prisma.usuarios.findMany({
       where: { empresaId },
       select: {

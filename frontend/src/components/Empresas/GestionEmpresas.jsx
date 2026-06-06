@@ -45,7 +45,7 @@ export default function GestionEmpresas() {
     try {
       const [resEmp, resUsr] = await Promise.all([
         api.get('/empresas'),
-        api.get('/usuarios').catch(() => ({ data: { data: [] } })),
+        api.get('/usuarios?scope=pool').catch(() => ({ data: { data: [] } })),
       ]);
       setEmpresas(resEmp.data.data || []);
       setTodosUsuarios(resUsr.data.data || []);
@@ -384,7 +384,9 @@ export default function GestionEmpresas() {
                                     <td style={{ textAlign: 'center' }}>
                                       {u.tipoAcceso === 'default'
                                         ? <span className="ge-chip ge-chip-matriz" title="Esta es su empresa principal">Empresa base</span>
-                                        : <span className="ge-chip" style={{ background: '#f0fdf4', color: '#16a34a' }}>Asignado</span>
+                                        : u.tipoAcceso === 'macro'
+                                          ? <span className="ge-chip ge-chip-full" title="Admin de la empresa macro — acceso implícito">Admin Macro</span>
+                                          : <span className="ge-chip" style={{ background: '#f0fdf4', color: '#16a34a' }}>Asignado</span>
                                       }
                                     </td>
                                     <td style={{ textAlign: 'center' }}>
