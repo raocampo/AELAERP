@@ -1076,13 +1076,52 @@ Acceda desde el menú lateral: **Administración → Usuarios**.
 
 Acceda desde el menú lateral: **Administración → Empresas**.
 
-Si el sistema está en modo **Multiempresa**, desde aquí puede:
+#### ¿Qué empresas puede ver?
 
-1. Ver todas las empresas registradas.
-2. Crear una nueva empresa con su configuración SRI y plan de cuentas independiente.
-3. Cambiar la empresa activa.
+El sistema filtra automáticamente la lista según el acceso real del usuario:
 
-> ⚠ Cada empresa tiene su propia configuración SRI, sus propios documentos, clientes, productos y contabilidad. Los usuarios se asignan a empresas específicas.
+| Situación del usuario | Empresas que ve | Botones de gestión |
+|----------------------|-----------------|-------------------|
+| **Admin de Corp Simtelec** (Admin Macro) | **Todas** las empresas activas | ✅ En todas |
+| **Admin asignado en empresa X** | Empresa X + su empresa base | ✅ Solo en X |
+| **Contador / Supervisor en empresa X** | Empresa X + su empresa base | ❌ Solo lectura |
+
+> 💡 **Admin Macro:** Si su usuario tiene rol Administrador en la empresa principal (Corp Simtelec), es automáticamente administrador de TODAS las empresas del sistema. Aparecerá en el panel de usuarios de cualquier empresa con el chip **"Admin Macro"**. Este acceso es implícito y no puede quitarse.
+
+#### Crear una nueva empresa
+
+1. Haga clic en **+ Nueva Empresa**.
+2. Complete los datos: RUC, Razón Social, Nombre Comercial, Dirección, Plan.
+3. Active **Crear configuración SRI** si la empresa necesita facturación electrónica.
+4. Haga clic en **Guardar**. El sistema crea automáticamente la estructura de datos.
+
+#### Asignar usuarios a una empresa
+
+1. En la lista de empresas, expanda la empresa haciendo clic en **👥 Usuarios**.
+2. En el selector **"Seleccionar usuario"**, aparecen todos los usuarios disponibles.
+3. Elija el usuario, seleccione su **rol en esta empresa** y haga clic en **+ Asignar**.
+
+> ⚠ El rol que se asigna aquí es **específico para esa empresa**. Un mismo usuario puede ser Contador en una empresa y Administrador en otra. Al cambiar de empresa activa, el sistema aplica automáticamente el rol correspondiente.
+
+#### Tipos de acceso en el panel de usuarios
+
+| Chip | Significado | ¿Se puede quitar? |
+|------|-------------|------------------|
+| **Empresa base** | Esta es la empresa principal del usuario | ❌ No |
+| **Asignado** | Acceso otorgado manualmente | ✅ Sí (botón Quitar) |
+| **Admin Macro** | Admin de Corp Simtelec — acceso implícito | ❌ No |
+
+#### Cambiar de empresa activa (EmpresaSwitcher)
+
+Si tiene acceso a más de una empresa, verá el nombre de la empresa activa en la parte
+superior del menú lateral. Haga clic en él para abrir el selector de empresas.
+
+Al cambiar de empresa:
+- El sistema carga los datos de la nueva empresa (facturas, clientes, productos, etc.)
+- Su rol en el menú lateral se actualiza según el rol que tenga en esa empresa
+- Aparecen o desaparecen módulos según el plan de la empresa activa
+
+> ⚠ Cada empresa tiene su propia configuración SRI, sus propios documentos, clientes, productos y contabilidad.
 
 ### 16.3 Activar o desactivar módulos
 

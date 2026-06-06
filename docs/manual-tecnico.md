@@ -314,21 +314,77 @@ Los tokens JWT incluyen:
   "username": "admin",
   "rol": "admin",
   "empresaId": 1,
-  "tenantSlug": "mprq"
+  "tenantSlug": null
 }
 ```
 
-**Validación TENANT_MISMATCH:** `proteger` middleware verifica que `decoded.tenantSlug === req.tenant?.slug`. Un token de un tenant no puede usarse en otro.
+- `rol`: **rol efectivo para la empresa activa** (puede diferir del rol base en `usuarios.rol`)
+- `empresaId`: empresa actualmente activa (cambia con `cambiarEmpresa`)
+- `tenantSlug`: `null` en monoinstancia, slug del tenant en SaaS multitenancy
 
-### Roles
+**Validación TENANT_MISMATCH:** `proteger` verifica `decoded.tenantSlug === req.tenant?.slug`.
 
-| Rol | Permisos |
-|-----|---------|
-| `admin` | Todo el sistema |
-| `supervisor` | Ventas, compras, inventario, caja, RRHH (sin config) |
-| `contador` | Contabilidad, ATS, retenciones, liquidaciones, nómina |
-| `facturador` | Facturas, notas de venta, clientes |
-| `operador` | Solo POS y notas de venta |
+### Sistema de roles (actualizado 2026-06-05)
+
+#### Rol base vs Rol efectivo
+
+| Concepto | Fuente | Descripción |
+|----------|--------|-------------|
+| **Rol base** | `usuarios.rol` (BD) | Rol permanente del usuario en su empresa principal |
+| **Rol efectivo** | `usuario_empresas.rol` | Rol asignado para una empresa específica en multiempresa |
+| **Rol en JWT** | `decoded.rol` | Rol activo (base o efectivo según empresa seleccionada) |
+
+En `backend/middleware/auth.js`, `proteger` usa `decoded.rol ?? usuario.rol` para
+`req.usuario.rol`. Esto garantiza que todos los middlewares de autorización (`soloAdmin`,
+`autorizarPermiso`, etc.) vean el rol efectivo de la empresa activa.
+
+#### Tabla de roles y permisos
+
+| Rol | `facturacion.emitir` | `compras` | `contabilidad` | `usuarios.gestionar` |
+|-----|---------------------|-----------|----------------|---------------------|
+| `admin` | ✅ | ✅ | ✅ | ✅ |
+| `supervisor` | ✅ | ✅ | ✅ (ver) | ❌ |
+| `contador` | ❌ | ✅ | ✅ | ❌ |
+| `facturador` | ✅ | ❌ | ❌ | ❌ |
+| `secretaria` | ✅ | ❌ | ✅ (ver) | ❌ |
+| `operador` | ❌ | ❌ | ❌ | ❌ |
+
+Definición completa en `frontend/src/utils/roles.js` (PERMISSIONS object).
+El backend usa el mismo `normalizarRol` y `tienePermiso` de `backend/utils/roles.js`.
+
+### Flujo cambiarEmpresa (multiempresa)
+
+```
+1. POST /auth/cambiar-empresa { empresaId }
+   → proteger: extrae req.usuario (base rol del DB)
+   → consulta usuarioBase.rol (base role)
+   → consulta usuario_empresas para empresaId → accesoExtra.rol
+   → rolEfectivo = accesoExtra?.rol ?? usuarioBase.rol
+   → emitirToken(req.usuario, { empresaId, tenantSlug, rol: rolEfectivo })
+   → responde { token, empresa, usuario: { rol: rolEfectivo } }
+
+2. Frontend AuthContext.cambiarEmpresa()
+   → guarda nuevo token en localStorage
+   → setUsuario({ ...usuarioActual, rol: rolEfectivo })  ← rerender inmediato
+   → setEmpresa(nuevaEmpresa)
+   → recargarSistema(nuevaEmpresa)
+   → cargarEmpresasDisponibles()  ← refresca EmpresaSwitcher
+```
+
+### Admin Macro (implementado 2026-06-05)
+
+Un usuario con `rol base = 'admin'` (campo `usuarios.rol`) es el **Admin Macro** de
+toda la instalación. Tiene:
+
+- **Acceso a TODAS las empresas** en `GET /api/empresas` (sin importar `usuario_empresas`)
+- **Aparece implícitamente** en el panel de usuarios de cualquier empresa con `tipoAcceso: 'macro'`
+- **No puede ser removido** de ninguna empresa (es implícito, no tiene registro en `usuario_empresas`)
+- **Rol siempre `admin`** en cualquier empresa que consulte
+
+```js
+// backend/routes/empresas.js — helper
+const esAdminMacro = normalizarRol(usuarioBase?.rol) === 'admin';
+```
 
 ### Timeout de sesión
 
