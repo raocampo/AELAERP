@@ -192,13 +192,14 @@ export function AuthProvider({ children }) {
       setEmpresa(nuevaEmpresa);
       localStorage.setItem('aela_empresa', JSON.stringify(nuevaEmpresa));
       await recargarSistema(nuevaEmpresa);
+      cargarEmpresasDisponibles();
       toast.success(`Empresa activa: ${nuevaEmpresa.nombreComercial || nuevaEmpresa.razonSocial}`);
       return { success: true };
     } catch (err) {
       toast.error(err.response?.data?.mensaje || err.message || 'Error al cambiar empresa');
       return { success: false };
     }
-  }, [recargarSistema]);
+  }, [recargarSistema, cargarEmpresasDisponibles]);
 
   // ── Cierre automático por inactividad ──────────────────────────────────────
   const reiniciarTimerInactividad = useCallback(() => {

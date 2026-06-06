@@ -44,9 +44,11 @@ const proteger = async (req, res, next) => {
       return res.status(401).json({ success: false, mensaje: 'No autorizado — usuario inactivo o inexistente' });
     }
 
+    // Usar el rol del JWT (efectivo para la empresa activa) en lugar del rol base de la BD.
+    // En login normal ambos coinciden; en cambiarEmpresa el JWT tiene el rol de usuario_empresas.
     req.usuario = {
       ...usuario,
-      rol: normalizarRol(usuario.rol),
+      rol: normalizarRol(decoded.rol ?? usuario.rol),
     };
 
     // ── Inyectar empresa ─────────────────────────────────────────────────────
