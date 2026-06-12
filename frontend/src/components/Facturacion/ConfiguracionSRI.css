@@ -330,6 +330,45 @@
   font-size: 1.1rem;
 }
 
+.sri-cert-validez {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+}
+
+.sri-cert-validez-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.sri-cert-badge {
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.sri-cert-cn {
+  color: #1e293b;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.sri-cert-validez-detalle {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: #475569;
+  font-size: 0.82rem;
+}
+
+.sri-cert-emisor { color: #94a3b8; }
+
 .sri-cert-upload {
   margin-top: 8px;
 }

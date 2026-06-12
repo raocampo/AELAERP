@@ -13,6 +13,42 @@ import './ConfiguracionSRI.css';
 // El logo ahora se guarda como data URI en la BD (no requiere URL del servidor)
 const SERVER_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5600').replace(/\/api$/, '');
 
+const FMT_FECHA = (iso) => {
+  if (!iso) return '?';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+function CertValidezPanel({ certInfo }) {
+  const { estado, cn, emisorCN, validoHasta, diasRestantes } = certInfo;
+  const colorMap = { VIGENTE: '#16a34a', POR_VENCER: '#d97706', VENCIDO: '#dc2626', ERROR_PARSEO: '#64748b' };
+  const bgMap    = { VIGENTE: '#f0fdf4', POR_VENCER: '#fffbeb', VENCIDO: '#fef2f2', ERROR_PARSEO: '#f8fafc' };
+  const color    = colorMap[estado] || '#64748b';
+  const bg       = bgMap[estado]    || '#f8fafc';
+
+  const badgeLabel = estado === 'VIGENTE'      ? `${diasRestantes} días restantes`
+                   : estado === 'POR_VENCER'   ? `⚠️ Vence en ${diasRestantes} días`
+                   : estado === 'VENCIDO'       ? `❌ VENCIDO hace ${Math.abs(diasRestantes)} días`
+                   : 'No se pudo leer el cert';
+
+  return (
+    <div className="sri-cert-validez" style={{ background: bg, borderColor: color + '40' }}>
+      <div className="sri-cert-validez-row">
+        <span className="sri-cert-badge" style={{ background: color + '18', color }}>
+          {badgeLabel}
+        </span>
+        {cn && <span className="sri-cert-cn" title="Titular del certificado">{cn}</span>}
+      </div>
+      {validoHasta && (
+        <div className="sri-cert-validez-detalle">
+          <span>Vence el <strong>{FMT_FECHA(validoHasta)}</strong></span>
+          {emisorCN && <span className="sri-cert-emisor">Emitido por: {emisorCN}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const ConfiguracionSRI = () => {
   const navigate  = useNavigate();
   const location = useLocation();
@@ -138,7 +174,8 @@ const ConfiguracionSRI = () => {
           emailNotificaciones:   d.emailNotificaciones   || '',
           telefono:              d.telefono              || '',
         });
-        setCertInfo({ cargado: !!(d.certificadoP12 || d.certificadoP12Data) });
+        const ci = res.data.certInfo || {};
+        setCertInfo({ cargado: !!(d.certificadoP12 || d.certificadoP12Data), ...ci });
         setLogoUrl(d.logoUrl || null);
         setTipoCertificado(d.tipoCertificado || 'archivo');
       }
@@ -217,10 +254,10 @@ const ConfiguracionSRI = () => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       toast.success('Certificado cargado correctamente');
-      setCertInfo({ cargado: true, archivo: certFile.name });
       setCertFile(null);
       setCertClave('');
       if (certRef.current) certRef.current.value = '';
+      await cargar(); // recargar para obtener certInfo actualizada
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al subir certificado');
     }
@@ -495,6 +532,10 @@ const ConfiguracionSRI = () => {
                 : <><span>⚠️</span> Sin certificado — las facturas quedarán en estado <strong>PENDIENTE_FIRMA</strong></>
               }
             </div>
+
+            {certInfo?.cargado && certInfo?.estado && certInfo.estado !== 'SIN_CERTIFICADO' && (
+              <CertValidezPanel certInfo={certInfo} />
+            )}
 
             {!certInfo?.cargado && (
               <div className="sri-cert-upload">

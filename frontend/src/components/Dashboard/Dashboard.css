@@ -124,6 +124,67 @@
   font-weight: 600;
 }
 
+/* ── Certificado SRI ── */
+.dash-cert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid;
+  margin-bottom: 18px;
+  font-size: 0.88rem;
+}
+
+.dash-cert.vigente    { background: #f0fdf4; border-color: #86efac; }
+.dash-cert.por-vencer { background: #fffbeb; border-color: #fcd34d; }
+.dash-cert.vencido    { background: #fef2f2; border-color: #fca5a5; }
+
+.dash-cert-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dash-cert-icono { font-size: 1.4rem; flex-shrink: 0; }
+
+.dash-cert-titulo {
+  display: block;
+  font-size: 0.92rem;
+  color: #1e293b;
+}
+
+.dash-cert-cn {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+.dash-cert-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.dash-cert-fecha {
+  color: #475569;
+  font-size: 0.82rem;
+}
+
+.dash-cert-dias {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.dash-cert.vigente    .dash-cert-dias { color: #16a34a; }
+.dash-cert.por-vencer .dash-cert-dias { color: #d97706; }
+.dash-cert.vencido    .dash-cert-dias { color: #dc2626; }
+
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

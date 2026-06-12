@@ -10,17 +10,32 @@ const fmt = (n) =>
 
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
+const FMT_FECHA_CERT = (iso) => {
+  if (!iso) return '?';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
 export default function Dashboard() {
   const { usuario, empresa, sistema, modoMulti, planLabel, esLite, esMedium } = useAuth();
-  const [stats, setStats] = useState(null);
+  const [stats,    setStats]    = useState(null);
+  const [certInfo, setCertInfo] = useState(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     let ignore = false;
-    api.get('/empresas/estadisticas')
-      .then((res) => { if (!ignore && res.data?.success) setStats(res.data.data); })
-      .catch(() => {})
-      .finally(() => { if (!ignore) setCargando(false); });
+    Promise.allSettled([
+      api.get('/empresas/estadisticas'),
+      api.get('/facturas/configuracion/cert-status'),
+    ]).then(([statsRes, certRes]) => {
+      if (ignore) return;
+      if (statsRes.status === 'fulfilled' && statsRes.value.data?.success) {
+        setStats(statsRes.value.data.data);
+      }
+      if (certRes.status === 'fulfilled' && certRes.value.data?.certInfo) {
+        setCertInfo(certRes.value.data.certInfo);
+      }
+    }).finally(() => { if (!ignore) setCargando(false); });
     return () => { ignore = true; };
   }, []);
 
@@ -142,6 +157,55 @@ export default function Dashboard() {
               ⚠️ Estás cerca del límite anual de tu plan {planLabel}. Considera actualizar a un plan superior.
             </p>
           )}
+        </div>
+      )}
+
+      {/* CERTIFICADO SRI */}
+      {!esLite && certInfo && certInfo.estado !== 'SIN_CERTIFICADO' && tienePermiso(usuario?.rol, 'facturacion.ver', usuario?.permisosExtra) && (
+        <div className={`dash-cert ${certInfo.estado === 'VIGENTE' ? 'vigente' : certInfo.estado === 'POR_VENCER' ? 'por-vencer' : 'vencido'}`}>
+          <div className="dash-cert-left">
+            <span className="dash-cert-icono">
+              {certInfo.estado === 'VIGENTE' ? '🔐' : certInfo.estado === 'POR_VENCER' ? '⚠️' : '❌'}
+            </span>
+            <div>
+              <strong className="dash-cert-titulo">
+                Firma Electrónica SRI
+                {certInfo.estado === 'VIGENTE'    && ` — Vigente`}
+                {certInfo.estado === 'POR_VENCER' && ` — Por vencer`}
+                {certInfo.estado === 'VENCIDO'    && ` — VENCIDA`}
+                {certInfo.estado === 'ERROR_PARSEO' && ` — No se pudo leer`}
+              </strong>
+              {certInfo.cn && <span className="dash-cert-cn">{certInfo.cn}</span>}
+            </div>
+          </div>
+          <div className="dash-cert-right">
+            {certInfo.validoHasta && (
+              <span className="dash-cert-fecha">
+                Vence el {FMT_FECHA_CERT(certInfo.validoHasta)}
+              </span>
+            )}
+            {certInfo.diasRestantes != null && (
+              <span className="dash-cert-dias">
+                {certInfo.diasRestantes >= 0
+                  ? `${certInfo.diasRestantes} días`
+                  : `Expiró hace ${Math.abs(certInfo.diasRestantes)} días`}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Sin certificado — aviso suave solo para quien puede configurarlo */}
+      {!esLite && certInfo?.estado === 'SIN_CERTIFICADO' && tienePermiso(usuario?.rol, 'sri.configurar') && (
+        <div className="dash-cert vencido" style={{ cursor: 'pointer' }} onClick={() => window.location.href = '/configuracion-sri'}>
+          <div className="dash-cert-left">
+            <span className="dash-cert-icono">⚠️</span>
+            <div>
+              <strong className="dash-cert-titulo">Sin certificado de firma electrónica</strong>
+              <span className="dash-cert-cn">Las facturas no se enviarán al SRI automáticamente</span>
+            </div>
+          </div>
+          <span className="dash-cert-fecha">Ir a Configuración SRI →</span>
         </div>
       )}
 

@@ -22,7 +22,7 @@ const { siguienteSecuencial } = require('../utils/secuenciales');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
 const { esErrorConectividad } = require('../utils/colaSRI');
-const { getCertBuffer, tieneCertificado } = require('../utils/certUtils');
+const { getCertBuffer, tieneCertificado, getCertInfo } = require('../utils/certUtils');
 const { enviarDocumentoFiscal } = require('../utils/email');
 
 // Aplicar autenticación JWT a todas las rutas
@@ -377,11 +377,24 @@ async function procesarNCEnSRI(ncId, xmlGenerado, config) {
 // CONFIGURACIÓN SRI
 // ────────────────────────────────────────────────────────────────────────────
 
+// GET /api/facturas/configuracion/cert-status — accesible a cualquier usuario autenticado (para el Dashboard)
+router.get('/configuracion/cert-status', async (req, res) => {
+  try {
+    const config = await getConfigSRI(req.empresa.id);
+    if (!config) return res.json({ ok: true, certInfo: { estado: 'SIN_CERTIFICADO' } });
+    const certInfo = getCertInfo(config);
+    res.json({ ok: true, certInfo });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // GET /api/facturas/configuracion
 router.get('/configuracion', permitirConfigurarSri, async (req, res) => {
   try {
-    const config = await getConfigSRIEditable(req.empresa.id);
-    res.json({ ok: true, data: config });
+    const config   = await getConfigSRIEditable(req.empresa.id);
+    const certInfo = getCertInfo(config);
+    res.json({ ok: true, data: config, certInfo });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

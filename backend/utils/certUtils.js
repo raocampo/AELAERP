@@ -8,7 +8,8 @@
 //  (campo certificadoP12Data) y usarlo como fallback.
 // ============================================================
 
-const fs = require('fs');
+const fs    = require('fs');
+const forge = require('node-forge');
 
 /**
  * Retorna un Buffer con el contenido del certificado P12.
@@ -42,4 +43,55 @@ function tieneCertificado(config) {
   return false;
 }
 
-module.exports = { getCertBuffer, tieneCertificado };
+/**
+ * Parsea el certificado P12 y devuelve metadata de validez sin lanzar excepciones.
+ * Umbrales: > 30 días → VIGENTE, 0-30 días → POR_VENCER, < 0 → VENCIDO.
+ *
+ * @param {object} config  Fila de configuracion_sri (incluye claveCertificado)
+ * @returns {{ estado: string, cn?: string, emisorCN?: string, validoDesde?: Date, validoHasta?: Date, diasRestantes?: number }}
+ */
+function getCertInfo(config) {
+  try {
+    const p12Buffer = getCertBuffer(config);
+    if (!p12Buffer) return { estado: 'SIN_CERTIFICADO' };
+
+    const claveP12 = config.claveCertificado || '';
+    const p12Asn1  = forge.asn1.fromDer(p12Buffer.toString('binary'));
+    const p12Obj   = forge.pkcs12.pkcs12FromAsn1(p12Asn1, claveP12);
+
+    const certs = [];
+    for (const sc of p12Obj.safeContents) {
+      for (const sb of sc.safeBags) {
+        if (sb.type === forge.pki.oids.certBag && sb.cert) {
+          certs.push(sb.cert);
+        }
+      }
+    }
+    if (!certs.length) return { estado: 'SIN_CERTIFICADO' };
+
+    // Preferir certificado de entidad final (no CA)
+    const cert = certs.find(c => !c.getExtension('basicConstraints')?.cA) || certs[0];
+
+    const ahora         = new Date();
+    const validoHasta   = cert.validity.notAfter;
+    const validoDesde   = cert.validity.notBefore;
+    const diasRestantes = Math.floor((validoHasta - ahora) / (1000 * 60 * 60 * 24));
+
+    const estado = diasRestantes < 0   ? 'VENCIDO'
+                 : diasRestantes <= 30 ? 'POR_VENCER'
+                 : 'VIGENTE';
+
+    return {
+      estado,
+      cn:             cert.subject.getField('CN')?.value  || null,
+      emisorCN:       cert.issuer.getField('CN')?.value   || null,
+      validoDesde,
+      validoHasta,
+      diasRestantes,
+    };
+  } catch {
+    return { estado: 'ERROR_PARSEO' };
+  }
+}
+
+module.exports = { getCertBuffer, tieneCertificado, getCertInfo };
