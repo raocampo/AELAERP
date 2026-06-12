@@ -374,6 +374,93 @@ async function procesarNCEnSRI(ncId, xmlGenerado, config) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// ADMIN — Transferencia de certificado entre tenants
+// Solo admin. Copia el cert del tenant actual a otro tenant y lo borra del actual.
+// ────────────────────────────────────────────────────────────────────────────
+
+// POST /api/facturas/admin/transferir-cert
+router.post('/admin/transferir-cert', autorizarPermiso('sri.configurar'), async (req, res) => {
+  const { toTenantSlug, dryRun = false } = req.body;
+  if (!toTenantSlug) return res.status(400).json({ ok: false, error: 'Falta toTenantSlug' });
+
+  try {
+    const { getPrismaMaster } = require('../config/prismaMaster');
+    const { getTenantPrisma }  = require('../config/prismaTenant');
+    const { descifrar }        = require('../utils/cifrado');
+
+    // 1. Leer cert de la empresa actual
+    const configActual = await getConfigSRI(req.empresa.id);
+    if (!configActual?.certificadoP12Data) {
+      return res.status(400).json({ ok: false, error: 'La empresa actual no tiene certificado almacenado' });
+    }
+    const certInfoActual = getCertInfo(configActual);
+
+    // 2. Encontrar el tenant destino en aela_master
+    const master = getPrismaMaster();
+    if (!master) return res.status(503).json({ ok: false, error: 'BD master no disponible (modo monoinstancia)' });
+
+    const tenantDestino = await master.tenants.findUnique({ where: { slug: toTenantSlug } });
+    if (!tenantDestino) return res.status(404).json({ ok: false, error: `Tenant '${toTenantSlug}' no encontrado` });
+
+    // 3. Conectar a la BD del destino y encontrar su configuracion_sri
+    const prismaDestino = getTenantPrisma(tenantDestino);
+    const configDestino = await prismaDestino.configuracion_sri.findFirst({ orderBy: { id: 'asc' } });
+    if (!configDestino) {
+      return res.status(400).json({ ok: false, error: `El tenant '${toTenantSlug}' no tiene configuracion_sri. Configura primero el RUC.` });
+    }
+
+    const certInfoDestino = configDestino.certificadoP12Data ? getCertInfo(configDestino) : { estado: 'SIN_CERTIFICADO' };
+
+    if (dryRun) {
+      return res.json({
+        ok: true,
+        dryRun: true,
+        origen: {
+          empresa: req.empresa.razonSocial || req.empresa.id,
+          certCN:  certInfoActual.cn,
+          certHasta: certInfoActual.validoHasta,
+        },
+        destino: {
+          tenant:  toTenantSlug,
+          empresa: configDestino.razonSocial,
+          certActual: certInfoDestino.estado === 'SIN_CERTIFICADO' ? null : certInfoDestino.cn,
+        },
+        accion: 'Copiar cert al destino y borrar del origen',
+      });
+    }
+
+    // 4. Escribir cert en destino
+    await prismaDestino.configuracion_sri.update({
+      where: { id: configDestino.id },
+      data: {
+        certificadoP12Data: configActual.certificadoP12Data,
+        claveCertificado:   configActual.claveCertificado,
+        certificadoP12:     null,
+      },
+    });
+
+    // 5. Limpiar cert del origen
+    await prisma.configuracion_sri.update({
+      where: { id: configActual.id },
+      data: {
+        certificadoP12Data: null,
+        certificadoP12:     null,
+        claveCertificado:   null,
+      },
+    });
+
+    res.json({
+      ok:      true,
+      mensaje: `Certificado de "${certInfoActual.cn}" transferido correctamente a ${toTenantSlug}. Corp Simtelec quedó sin certificado — sube el correcto.`,
+      certTransferido: { cn: certInfoActual.cn, validoHasta: certInfoActual.validoHasta },
+    });
+  } catch (err) {
+    console.error('[admin/transferir-cert]', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // CONFIGURACIÓN SRI
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -489,18 +576,34 @@ router.post('/configuracion/certificado', permitirConfigurarSri, uploadCert.sing
       fs.unlinkSync(config.certificadoP12);
     }
 
+    const certB64 = req.file.buffer
+      ? req.file.buffer.toString('base64')
+      : fs.readFileSync(req.file.path).toString('base64');
+
     const updated = await prisma.configuracion_sri.update({
       where: { id: config.id },
       data: {
         certificadoP12:     req.file.path,
-        // Guardar base64 en BD para sobrevivir deploys (Railway filesystem efímero)
-        certificadoP12Data: req.file.buffer
-          ? req.file.buffer.toString('base64')
-          : fs.readFileSync(req.file.path).toString('base64'),
-        claveCertificado: req.body.clave || '',
+        certificadoP12Data: certB64,
+        claveCertificado:   req.body.clave || '',
       },
     });
-    res.json({ ok: true, data: { certificadoCargado: true, archivo: req.file.filename } });
+
+    const certInfo = getCertInfo({ certificadoP12Data: certB64, claveCertificado: req.body.clave || '' });
+
+    // Detectar mismatch: ¿alguna palabra del CN del cert aparece en la razonSocial?
+    let advertencia = null;
+    if (certInfo.cn && config.razonSocial) {
+      const normalize = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const certWords = normalize(certInfo.cn).split(/\s+/).filter(w => w.length > 3);
+      const empresa   = normalize(config.razonSocial);
+      const mismatch  = certWords.length > 0 && !certWords.some(w => empresa.includes(w));
+      if (mismatch) {
+        advertencia = `El CN del certificado "${certInfo.cn}" no coincide con la empresa "${config.razonSocial}". Verifica que subiste el .p12 correcto.`;
+      }
+    }
+
+    res.json({ ok: true, data: { certificadoCargado: true, archivo: req.file.filename }, certInfo, advertencia });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

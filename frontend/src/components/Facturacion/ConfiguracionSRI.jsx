@@ -19,7 +19,15 @@ const FMT_FECHA = (iso) => {
   return d.toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-function CertValidezPanel({ certInfo }) {
+function hayMismatch(cn, razonSocial) {
+  if (!cn || !razonSocial) return false;
+  const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const certWords = normalize(cn).split(/\s+/).filter(w => w.length > 3);
+  const empresa   = normalize(razonSocial);
+  return certWords.length > 0 && !certWords.some(w => empresa.includes(w));
+}
+
+function CertValidezPanel({ certInfo, razonSocial }) {
   const { estado, cn, emisorCN, validoHasta, diasRestantes } = certInfo;
   const colorMap = { VIGENTE: '#16a34a', POR_VENCER: '#d97706', VENCIDO: '#dc2626', ERROR_PARSEO: '#64748b' };
   const bgMap    = { VIGENTE: '#f0fdf4', POR_VENCER: '#fffbeb', VENCIDO: '#fef2f2', ERROR_PARSEO: '#f8fafc' };
@@ -31,21 +39,37 @@ function CertValidezPanel({ certInfo }) {
                    : estado === 'VENCIDO'       ? `❌ VENCIDO hace ${Math.abs(diasRestantes)} días`
                    : 'No se pudo leer el cert';
 
+  const mismatch = hayMismatch(cn, razonSocial);
+
   return (
-    <div className="sri-cert-validez" style={{ background: bg, borderColor: color + '40' }}>
-      <div className="sri-cert-validez-row">
-        <span className="sri-cert-badge" style={{ background: color + '18', color }}>
-          {badgeLabel}
-        </span>
-        {cn && <span className="sri-cert-cn" title="Titular del certificado">{cn}</span>}
-      </div>
-      {validoHasta && (
-        <div className="sri-cert-validez-detalle">
-          <span>Vence el <strong>{FMT_FECHA(validoHasta)}</strong></span>
-          {emisorCN && <span className="sri-cert-emisor">Emitido por: {emisorCN}</span>}
+    <>
+      {mismatch && (
+        <div className="sri-cert-validez" style={{ background: '#fef9c3', borderColor: '#fbbf24', marginBottom: 8 }}>
+          <div className="sri-cert-validez-row">
+            <span className="sri-cert-badge" style={{ background: '#fde68a', color: '#92400e', fontWeight: 700 }}>
+              ⚠️ El certificado no corresponde a esta empresa
+            </span>
+          </div>
+          <div className="sri-cert-validez-detalle">
+            <span>El CN del cert es <strong>"{cn}"</strong> pero la empresa es <strong>"{razonSocial}"</strong>. Esto causará error de firma en el SRI.</span>
+          </div>
         </div>
       )}
-    </div>
+      <div className="sri-cert-validez" style={{ background: bg, borderColor: color + '40' }}>
+        <div className="sri-cert-validez-row">
+          <span className="sri-cert-badge" style={{ background: color + '18', color }}>
+            {badgeLabel}
+          </span>
+          {cn && <span className="sri-cert-cn" title="Titular del certificado">{cn}</span>}
+        </div>
+        {validoHasta && (
+          <div className="sri-cert-validez-detalle">
+            <span>Vence el <strong>{FMT_FECHA(validoHasta)}</strong></span>
+            {emisorCN && <span className="sri-cert-emisor">Emitido por: {emisorCN}</span>}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -250,14 +274,18 @@ const ConfiguracionSRI = () => {
     fd.append('certificado', certFile);
     fd.append('clave', certClave);
     try {
-      await api.post('/facturas/configuracion/certificado', fd, {
+      const res = await api.post('/facturas/configuracion/certificado', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      toast.success('Certificado cargado correctamente');
+      if (res.data.advertencia) {
+        toast(res.data.advertencia, { icon: '⚠️', duration: 8000, style: { background: '#fef9c3', color: '#92400e', border: '1px solid #fbbf24' } });
+      } else {
+        toast.success('Certificado cargado correctamente');
+      }
       setCertFile(null);
       setCertClave('');
       if (certRef.current) certRef.current.value = '';
-      await cargar(); // recargar para obtener certInfo actualizada
+      await cargar();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al subir certificado');
     }
@@ -534,7 +562,7 @@ const ConfiguracionSRI = () => {
             </div>
 
             {certInfo?.cargado && certInfo?.estado && certInfo.estado !== 'SIN_CERTIFICADO' && (
-              <CertValidezPanel certInfo={certInfo} />
+              <CertValidezPanel certInfo={certInfo} razonSocial={form.razonSocial} />
             )}
 
             {!certInfo?.cargado && (

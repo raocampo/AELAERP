@@ -865,8 +865,19 @@ function soapRequest(url, soapBody, action, namespace) {
       });
     });
 
-    req.on('error', (err) => reject(new Error(`Error de red al contactar el SRI: ${err.message}`)));
-    req.on('timeout', () => { req.destroy(); reject(new Error('El servicio SRI no respondió a tiempo (timeout 30s)')); });
+    req.on('error', (err) => {
+      // Preservar el código original (ECONNRESET, ETIMEDOUT, etc.) para que
+      // esErrorConectividad pueda clasificarlo correctamente como reintentable.
+      const wrapped = new Error(`Error de red al contactar el SRI: ${err.message}`);
+      wrapped.code = err.code;
+      reject(wrapped);
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      const tout = new Error('El servicio SRI no respondió a tiempo (timeout 30s)');
+      tout.code = 'ETIMEDOUT';
+      reject(tout);
+    });
     req.write(envelope);
     req.end();
   });

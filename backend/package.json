@@ -19,7 +19,9 @@
     "db:migrate:dev:safe": "node scripts/dbMaintenance.js migrate-dev",
     "catastro:check": "node scripts/importarCatastroSRI.js --dry-run",
     "catastro:import": "node scripts/importarCatastroSRI.js",
-    "catastro:replace": "node scripts/dbMaintenance.js backup && node scripts/importarCatastroSRI.js --replace"
+    "catastro:replace": "node scripts/dbMaintenance.js backup && node scripts/importarCatastroSRI.js --replace",
+    "fix-cert:check": "node scripts/fixCertMismatch.js --from main --to mprq --dry-run",
+    "fix-cert:apply": "node scripts/fixCertMismatch.js --from main --to mprq"
   },
   "keywords": [
     "sri",
