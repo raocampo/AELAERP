@@ -379,79 +379,89 @@ async function procesarNCEnSRI(ncId, xmlGenerado, config) {
 // ────────────────────────────────────────────────────────────────────────────
 
 // POST /api/facturas/admin/transferir-cert
+// Usa pg directo (no Prisma master) para funcionar en modo MONOEMPRESA también.
 router.post('/admin/transferir-cert', autorizarPermiso('sri.configurar'), async (req, res) => {
   const { toTenantSlug, dryRun = false } = req.body;
   if (!toTenantSlug) return res.status(400).json({ ok: false, error: 'Falta toTenantSlug' });
 
-  try {
-    const { getPrismaMaster } = require('../config/prismaMaster');
-    const { getTenantPrisma }  = require('../config/prismaTenant');
-    const { descifrar }        = require('../utils/cifrado');
+  const { Client } = require('pg');
 
-    // 1. Leer cert de la empresa actual
+  try {
+    // 1. Leer cert de la empresa actual (vía Prisma del tenant actual)
     const configActual = await getConfigSRI(req.empresa.id);
     if (!configActual?.certificadoP12Data) {
       return res.status(400).json({ ok: false, error: 'La empresa actual no tiene certificado almacenado' });
     }
     const certInfoActual = getCertInfo(configActual);
 
-    // 2. Encontrar el tenant destino en aela_master
-    const master = getPrismaMaster();
-    if (!master) return res.status(503).json({ ok: false, error: 'BD master no disponible (modo monoinstancia)' });
+    // 2. Buscar el tenant destino en aela_master vía pg directo
+    const mainUrl = process.env.DATABASE_URL;
+    const masterDb = new Client({ connectionString: mainUrl });
+    await masterDb.connect();
+    const { rows: tenantRows } = await masterDb.query(
+      `SELECT "dbName","dbHost","dbPort","dbUser","dbPass"
+       FROM aela_master.tenants WHERE slug=$1 AND estado='activo' LIMIT 1`,
+      [toTenantSlug]
+    );
+    await masterDb.end();
 
-    const tenantDestino = await master.tenants.findUnique({ where: { slug: toTenantSlug } });
-    if (!tenantDestino) return res.status(404).json({ ok: false, error: `Tenant '${toTenantSlug}' no encontrado` });
-
-    // 3. Conectar a la BD del destino y encontrar su configuracion_sri
-    const prismaDestino = getTenantPrisma(tenantDestino);
-    const configDestino = await prismaDestino.configuracion_sri.findFirst({ orderBy: { id: 'asc' } });
-    if (!configDestino) {
-      return res.status(400).json({ ok: false, error: `El tenant '${toTenantSlug}' no tiene configuracion_sri. Configura primero el RUC.` });
+    if (!tenantRows.length) {
+      return res.status(404).json({ ok: false, error: `Tenant '${toTenantSlug}' no encontrado en aela_master` });
     }
 
-    const certInfoDestino = configDestino.certificadoP12Data ? getCertInfo(configDestino) : { estado: 'SIN_CERTIFICADO' };
+    // 3. Construir URL de la BD destino
+    const u  = new URL(mainUrl);
+    const t  = tenantRows[0];
+    const pass = t.dbPass ? t.dbPass : decodeURIComponent(u.password);
+    const host = t.dbHost || u.hostname;
+    const port = t.dbPort || u.port || 5432;
+    const user = t.dbUser || u.username;
+    const toUrl = `postgresql://${user}:${encodeURIComponent(pass)}@${host}:${port}/${t.dbName}`;
+
+    // 4. Leer configuracion_sri del destino
+    const toDb = new Client({ connectionString: toUrl });
+    await toDb.connect();
+    const { rows: cfgRows } = await toDb.query(
+      `SELECT id, "ruc", "razonSocial", "certificadoP12Data"
+       FROM configuracion_sri ORDER BY id LIMIT 1`
+    );
+    if (!cfgRows.length) {
+      await toDb.end();
+      return res.status(400).json({ ok: false, error: `El tenant '${toTenantSlug}' no tiene configuracion_sri — configura primero el RUC.` });
+    }
+    const cfgDestino = cfgRows[0];
+    const certInfoDestino = cfgDestino.certificadoP12Data
+      ? getCertInfo({ certificadoP12Data: cfgDestino.certificadoP12Data, claveCertificado: '' })
+      : { estado: 'SIN_CERTIFICADO' };
 
     if (dryRun) {
+      await toDb.end();
       return res.json({
-        ok: true,
-        dryRun: true,
-        origen: {
-          empresa: req.empresa.razonSocial || req.empresa.id,
-          certCN:  certInfoActual.cn,
-          certHasta: certInfoActual.validoHasta,
-        },
-        destino: {
-          tenant:  toTenantSlug,
-          empresa: configDestino.razonSocial,
-          certActual: certInfoDestino.estado === 'SIN_CERTIFICADO' ? null : certInfoDestino.cn,
-        },
-        accion: 'Copiar cert al destino y borrar del origen',
+        ok: true, dryRun: true,
+        origen:  { empresa: req.empresa.razonSocial, certCN: certInfoActual.cn, certHasta: certInfoActual.validoHasta },
+        destino: { tenant: toTenantSlug, empresa: cfgDestino.razonSocial, certActual: certInfoDestino.cn || null },
+        accion:  'Copiar cert al destino y borrar del origen',
       });
     }
 
-    // 4. Escribir cert en destino
-    await prismaDestino.configuracion_sri.update({
-      where: { id: configDestino.id },
-      data: {
-        certificadoP12Data: configActual.certificadoP12Data,
-        claveCertificado:   configActual.claveCertificado,
-        certificadoP12:     null,
-      },
-    });
+    // 5. Escribir cert en destino
+    await toDb.query(
+      `UPDATE configuracion_sri
+       SET "certificadoP12Data"=$1,"claveCertificado"=$2,"certificadoP12"=NULL,"updatedAt"=NOW()
+       WHERE id=$3`,
+      [configActual.certificadoP12Data, configActual.claveCertificado, cfgDestino.id]
+    );
+    await toDb.end();
 
-    // 5. Limpiar cert del origen
+    // 6. Limpiar cert del origen (vía Prisma del tenant actual)
     await prisma.configuracion_sri.update({
       where: { id: configActual.id },
-      data: {
-        certificadoP12Data: null,
-        certificadoP12:     null,
-        claveCertificado:   null,
-      },
+      data:  { certificadoP12Data: null, certificadoP12: null, claveCertificado: null },
     });
 
     res.json({
       ok:      true,
-      mensaje: `Certificado de "${certInfoActual.cn}" transferido correctamente a ${toTenantSlug}. Corp Simtelec quedó sin certificado — sube el correcto.`,
+      mensaje: `Cert "${certInfoActual.cn}" transferido a ${toTenantSlug}. Esta empresa quedó sin certificado — sube el .p12 correcto.`,
       certTransferido: { cn: certInfoActual.cn, validoHasta: certInfoActual.validoHasta },
     });
   } catch (err) {
