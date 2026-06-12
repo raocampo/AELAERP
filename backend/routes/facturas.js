@@ -378,10 +378,11 @@ async function procesarNCEnSRI(ncId, xmlGenerado, config) {
 // Solo admin. Copia el cert del tenant actual a otro tenant y lo borra del actual.
 // ────────────────────────────────────────────────────────────────────────────
 
-// POST /api/facturas/configuracion/mover-cert
+// GET /api/facturas/configuracion/mover-cert?to=<slug>&dry=1
 // Usa pg directo (no Prisma master) para funcionar en modo MONOEMPRESA también.
-router.post('/configuracion/mover-cert', autorizarPermiso('sri.configurar'), async (req, res) => {
-  const { toTenantSlug, dryRun = false } = req.body;
+router.get('/configuracion/mover-cert', autorizarPermiso('sri.configurar'), async (req, res) => {
+  const toTenantSlug = req.query.to;
+  const dryRun = req.query.dry === '1' || req.query.dry === 'true';
   if (!toTenantSlug) return res.status(400).json({ ok: false, error: 'Falta toTenantSlug' });
 
   const { Client } = require('pg');
