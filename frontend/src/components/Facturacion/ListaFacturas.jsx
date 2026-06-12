@@ -104,7 +104,14 @@ const TabFacturas = ({ navigate, onIrNC }) => {
     try {
       const res = await api.post(`/facturas/${factura.id}/reenviar`);
       toast.dismiss(tid);
-      toast.success(res.data.mensaje || 'Reenviado');
+      const estadoFinal = res.data.data?.estadoSri || '';
+      if (estadoFinal === 'AUTORIZADO') {
+        toast.success('¡Factura autorizada por el SRI!');
+      } else if (estadoFinal === 'RECHAZADO') {
+        toast.error(res.data.mensaje || 'Rechazado por el SRI');
+      } else {
+        toast.success(res.data.mensaje || 'Procesado');
+      }
       await cargar();
     } catch (err) {
       toast.dismiss(tid);

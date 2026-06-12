@@ -123,7 +123,14 @@ const DetalleFactura = () => {
     try {
       const res = await api.post(`/facturas/${id}/reenviar`);
       toast.dismiss(tid);
-      toast.success(res.data.mensaje);
+      const estadoFinal = res.data.data?.estadoSri || '';
+      if (estadoFinal === 'AUTORIZADO') {
+        toast.success('¡Factura autorizada por el SRI!');
+      } else if (estadoFinal === 'RECHAZADO') {
+        toast.error(res.data.mensaje || 'Rechazado por el SRI');
+      } else {
+        toast.success(res.data.mensaje || 'Procesado');
+      }
       await cargar();
     } catch (err) {
       toast.dismiss(tid);
@@ -232,7 +239,25 @@ const DetalleFactura = () => {
         {factura.estadoSri === 'RECHAZADO' && mensajes && (
           <div className="det-errores">
             <strong>Mensajes del SRI:</strong>
-            <pre>{JSON.stringify(mensajes, null, 2)}</pre>
+            {(() => {
+              const msgs = mensajes.mensajes || mensajes.recepcion?.mensajes;
+              if (Array.isArray(msgs) && msgs.length > 0) {
+                return (
+                  <ul className="sri-error-list">
+                    {msgs.map((m, i) => (
+                      <li key={i}>
+                        {m.identificador && <code className="sri-error-code">{m.identificador}</code>}
+                        {m.identificador ? ' ' : ''}{m.mensaje}
+                        {m.informacionAdicional && (
+                          <small className="sri-error-info"> — {m.informacionAdicional}</small>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                );
+              }
+              return <pre>{JSON.stringify(mensajes, null, 2)}</pre>;
+            })()}
           </div>
         )}
         <div className="det-clave">

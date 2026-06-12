@@ -138,7 +138,7 @@ const ConfiguracionSRI = () => {
           emailNotificaciones:   d.emailNotificaciones   || '',
           telefono:              d.telefono              || '',
         });
-        setCertInfo({ cargado: !!d.certificadoP12 });
+        setCertInfo({ cargado: !!(d.certificadoP12 || d.certificadoP12Data) });
         setLogoUrl(d.logoUrl || null);
         setTipoCertificado(d.tipoCertificado || 'archivo');
       }

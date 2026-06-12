@@ -744,7 +744,13 @@ router.post('/:id/reenviar', permitirEmitirFacturacion, async (req, res) => {
 
     await procesarFacturaEnSRI(factura.id, factura.xmlGenerado || factura.xmlFirmado, config);
     const updated = await prisma.facturas.findUnique({ where: { id: factura.id } });
-    res.json({ ok: true, data: updated, mensaje: `Estado actual: ${updated.estadoSri}` });
+    const msj = updated.mensajesSri;
+    const errDetalle = (() => {
+      const msgs = msj?.mensajes || msj?.recepcion?.mensajes;
+      if (!Array.isArray(msgs) || !msgs.length) return '';
+      return ' — ' + msgs.map(m => m.identificador ? `${m.identificador}: ${m.mensaje}` : m.mensaje).join('; ');
+    })();
+    res.json({ ok: true, data: updated, mensaje: `Estado actual: ${updated.estadoSri}${errDetalle}` });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -1160,7 +1166,13 @@ router.post('/notas-credito/:id/reenviar', permitirEmitirFacturacion, async (req
     // Procesar de forma síncrona (igual que factura reenviar) para devolver el estado real
     await procesarNCEnSRI(nc.id, nc.xmlGenerado || nc.xmlFirmado, config);
     const updated = await prisma.notas_credito.findUnique({ where: { id: nc.id } });
-    res.json({ ok: true, data: updated, mensaje: `Estado actual: ${updated.estadoSri}` });
+    const msjNc = updated.mensajesSri;
+    const errDetalleNc = (() => {
+      const msgs = msjNc?.mensajes || msjNc?.recepcion?.mensajes;
+      if (!Array.isArray(msgs) || !msgs.length) return '';
+      return ' — ' + msgs.map(m => m.identificador ? `${m.identificador}: ${m.mensaje}` : m.mensaje).join('; ');
+    })();
+    res.json({ ok: true, data: updated, mensaje: `Estado actual: ${updated.estadoSri}${errDetalleNc}` });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

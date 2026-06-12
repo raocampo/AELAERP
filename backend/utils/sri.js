@@ -639,6 +639,19 @@ function firmarXML(xmlString, p12Buffer, claveP12) {
     certificate = certs.find(c => !c.getExtension('basicConstraints')?.cA) || certs[0];
   }
 
+  // Validar vigencia antes de firmar
+  const now = new Date();
+  if (now < certificate.validity.notBefore || now > certificate.validity.notAfter) {
+    const expired = now > certificate.validity.notAfter;
+    throw new Error(
+      `Certificado digital ${expired ? 'VENCIDO' : 'aún no válido'}: ` +
+      `válido desde ${certificate.validity.notBefore.toISOString().slice(0, 10)} ` +
+      `hasta ${certificate.validity.notAfter.toISOString().slice(0, 10)}`
+    );
+  }
+  const certCN = certificate.subject.getField('CN');
+  console.log(`[SRI] Firmando: CN="${certCN?.value || '?'}", serial=${certificate.serialNumber}, válido hasta ${certificate.validity.notAfter.toISOString().slice(0, 10)}`);
+
   // ── 2. Datos del certificado de firma ─────────────────────────────────────
   const certDer    = forge.asn1.toDer(forge.pki.certificateToAsn1(certificate)).getBytes();
   const certB64    = forge.util.encode64(certDer);
@@ -648,11 +661,16 @@ function firmarXML(xmlString, p12Buffer, claveP12) {
   // Serial en decimal (el P12 del BCE almacena el serial en hex)
   const serialDecimal = BigInt('0x' + certificate.serialNumber.replace(/\s/g, '')).toString(10);
 
-  // Issuer en RFC 2253 (orden inverso de como aparece en el cert) — solo attrs conocidos
+  // Issuer en RFC 2253: orden inverso del cert, todos los atributos incluidos.
+  // OIDs sin shortName conocido usan notación "OID.x.x.x".
+  // Los valores se escapan según RFC 2253 (comas, barras, comillas, etc.).
+  const escRfc2253 = (v) => String(v)
+    .replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/\+/g, '\\+')
+    .replace(/"/g, '\\"').replace(/</g, '\\<').replace(/>/g, '\\>')
+    .replace(/;/g, '\\;').replace(/^([ #])/, '\\$1').replace(/ $/, '\\ ');
   const issuerName = [...certificate.issuer.attributes]
     .reverse()
-    .filter(a => a.shortName)
-    .map(a => `${a.shortName}=${a.value}`)
+    .map(a => `${a.shortName || `OID.${a.type}`}=${escRfc2253(a.value)}`)
     .join(',');
 
   // ── 3. IDs y timestamp ────────────────────────────────────────────────────
@@ -873,11 +891,31 @@ async function enviarComprobanteSRI(xmlFirmado, ambiente) {
   const estadoMatch = respXml.match(/<estado>([^<]+)<\/estado>/i);
   const estado      = estadoMatch ? estadoMatch[1] : 'DESCONOCIDO';
 
+  // El SRI devuelve errores estructurados: <identificador>, <mensaje> (texto), <tipo>, <informacionAdicional>
   const mensajes = [];
-  const mensRgx  = /<mensaje>([^<]+)<\/mensaje>/gi;
-  let m;
-  while ((m = mensRgx.exec(respXml)) !== null) {
-    mensajes.push(m[1]);
+  const ids   = [...respXml.matchAll(/<identificador>([^<]+)<\/identificador>/gi)].map(m => m[1].trim());
+  const txts  = [...respXml.matchAll(/<mensaje>([^<]+)<\/mensaje>/gi)].map(m => m[1].trim());
+  const tipos = [...respXml.matchAll(/<tipo>([^<]+)<\/tipo>/gi)].map(m => m[1].trim());
+  const infos = [...respXml.matchAll(/<informacionAdicional>([^<]*)<\/informacionAdicional>/gi)].map(m => m[1].trim());
+
+  if (ids.length > 0) {
+    ids.forEach((id, i) => mensajes.push({
+      identificador:        id,
+      mensaje:              txts[i]  || '',
+      tipo:                 tipos[i] || null,
+      informacionAdicional: infos[i] || null,
+    }));
+  } else {
+    txts.forEach((t, i) => mensajes.push({
+      identificador:        null,
+      mensaje:              t,
+      tipo:                 tipos[i] || null,
+      informacionAdicional: null,
+    }));
+  }
+
+  if (mensajes.length) {
+    console.log(`[SRI] Recepción ${estado}:`, JSON.stringify(mensajes));
   }
 
   return { estado, mensajes, rawXml: respXml };
@@ -906,10 +944,25 @@ async function autorizarComprobanteSRI(claveAcceso, ambiente) {
   const fechaAutorizacion  = fechaAutMatch ? new Date(fechaAutMatch[1]) : null;
 
   const mensajes = [];
-  const mensRgx  = /<mensaje>([^<]+)<\/mensaje>/gi;
-  let m;
-  while ((m = mensRgx.exec(respXml)) !== null) {
-    mensajes.push(m[1]);
+  const authIds   = [...respXml.matchAll(/<identificador>([^<]+)<\/identificador>/gi)].map(m => m[1].trim());
+  const authTxts  = [...respXml.matchAll(/<mensaje>([^<]+)<\/mensaje>/gi)].map(m => m[1].trim());
+  const authTipos = [...respXml.matchAll(/<tipo>([^<]+)<\/tipo>/gi)].map(m => m[1].trim());
+  const authInfos = [...respXml.matchAll(/<informacionAdicional>([^<]*)<\/informacionAdicional>/gi)].map(m => m[1].trim());
+
+  if (authIds.length > 0) {
+    authIds.forEach((id, i) => mensajes.push({
+      identificador:        id,
+      mensaje:              authTxts[i]  || '',
+      tipo:                 authTipos[i] || null,
+      informacionAdicional: authInfos[i] || null,
+    }));
+  } else {
+    authTxts.forEach((t, i) => mensajes.push({
+      identificador:        null,
+      mensaje:              t,
+      tipo:                 authTipos[i] || null,
+      informacionAdicional: null,
+    }));
   }
 
   // El XML autorizado viene embebido en la respuesta dentro de CDATA
