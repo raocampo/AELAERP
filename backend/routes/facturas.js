@@ -378,9 +378,9 @@ async function procesarNCEnSRI(ncId, xmlGenerado, config) {
 // Solo admin. Copia el cert del tenant actual a otro tenant y lo borra del actual.
 // ────────────────────────────────────────────────────────────────────────────
 
-// POST /api/facturas/admin/transferir-cert
+// POST /api/facturas/configuracion/mover-cert
 // Usa pg directo (no Prisma master) para funcionar en modo MONOEMPRESA también.
-router.post('/admin/transferir-cert', autorizarPermiso('sri.configurar'), async (req, res) => {
+router.post('/configuracion/mover-cert', autorizarPermiso('sri.configurar'), async (req, res) => {
   const { toTenantSlug, dryRun = false } = req.body;
   if (!toTenantSlug) return res.status(400).json({ ok: false, error: 'Falta toTenantSlug' });
 
@@ -465,7 +465,7 @@ router.post('/admin/transferir-cert', autorizarPermiso('sri.configurar'), async 
       certTransferido: { cn: certInfoActual.cn, validoHasta: certInfoActual.validoHasta },
     });
   } catch (err) {
-    console.error('[admin/transferir-cert]', err.message);
+    console.error('[configuracion/mover-cert]', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
