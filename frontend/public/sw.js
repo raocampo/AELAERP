@@ -137,8 +137,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Resto de API GETs → Network Only (datos sensibles/tiempo real)
-  // Las escrituras (POST/PUT/DELETE) las maneja el frontend directamente con offlineDB
+  // 3. Todo lo demás de /api/ → siempre red directa, nunca caché
+  if (new URL(url).pathname.startsWith('/api/')) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // 4. Resto (no /api/) → Network First con fallback a caché del app shell
 });
 
 // ─── Background Sync ─────────────────────────────────────────
