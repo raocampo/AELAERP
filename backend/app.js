@@ -131,6 +131,11 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ ok: true, status: 'healthy', ts: Date.now() });
 });
 
+// Diagnóstico temporal — verificar que el nuevo código está corriendo
+app.get('/api/diag-cert', (req, res) => {
+  res.json({ ok: true, build: 'new', ts: Date.now(), msg: 'Si ves esto, el backend nuevo está corriendo' });
+});
+
 app.use((err, req, res, next) => {
   console.error('Error no manejado:', err);
   res.status(500).json({
