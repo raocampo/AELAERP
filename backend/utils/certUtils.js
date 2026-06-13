@@ -89,8 +89,12 @@ function getCertInfo(config) {
       validoHasta,
       diasRestantes,
     };
-  } catch {
-    return { estado: 'ERROR_PARSEO' };
+  } catch (err) {
+    const msg = err?.message || '';
+    if (msg.includes('Invalid password') || msg.includes('PKCS#12') || msg.includes('mac verify') || msg.includes('decryption')) {
+      return { estado: 'CLAVE_INCORRECTA', error: 'La contraseña del certificado es incorrecta' };
+    }
+    return { estado: 'ERROR_PARSEO', error: msg || 'No se pudo leer el certificado' };
   }
 }
 

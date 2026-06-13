@@ -29,14 +29,15 @@ function hayMismatch(cn, razonSocial) {
 
 function CertValidezPanel({ certInfo, razonSocial }) {
   const { estado, cn, emisorCN, validoHasta, diasRestantes } = certInfo;
-  const colorMap = { VIGENTE: '#16a34a', POR_VENCER: '#d97706', VENCIDO: '#dc2626', ERROR_PARSEO: '#64748b' };
-  const bgMap    = { VIGENTE: '#f0fdf4', POR_VENCER: '#fffbeb', VENCIDO: '#fef2f2', ERROR_PARSEO: '#f8fafc' };
+  const colorMap = { VIGENTE: '#16a34a', POR_VENCER: '#d97706', VENCIDO: '#dc2626', ERROR_PARSEO: '#64748b', CLAVE_INCORRECTA: '#dc2626' };
+  const bgMap    = { VIGENTE: '#f0fdf4', POR_VENCER: '#fffbeb', VENCIDO: '#fef2f2', ERROR_PARSEO: '#f8fafc', CLAVE_INCORRECTA: '#fef2f2' };
   const color    = colorMap[estado] || '#64748b';
   const bg       = bgMap[estado]    || '#f8fafc';
 
-  const badgeLabel = estado === 'VIGENTE'      ? `${diasRestantes} días restantes`
-                   : estado === 'POR_VENCER'   ? `⚠️ Vence en ${diasRestantes} días`
-                   : estado === 'VENCIDO'       ? `❌ VENCIDO hace ${Math.abs(diasRestantes)} días`
+  const badgeLabel = estado === 'VIGENTE'          ? `${diasRestantes} días restantes`
+                   : estado === 'POR_VENCER'       ? `⚠️ Vence en ${diasRestantes} días`
+                   : estado === 'VENCIDO'           ? `❌ VENCIDO hace ${Math.abs(diasRestantes)} días`
+                   : estado === 'CLAVE_INCORRECTA'  ? '🔑 Contraseña incorrecta'
                    : 'No se pudo leer el cert';
 
   const mismatch = hayMismatch(cn, razonSocial);

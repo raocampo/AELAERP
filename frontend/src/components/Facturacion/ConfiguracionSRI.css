@@ -289,7 +289,9 @@
 .sri-form-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: -8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
 }
 
 /* Certificado */

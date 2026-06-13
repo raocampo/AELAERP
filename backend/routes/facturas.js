@@ -591,7 +591,16 @@ router.post('/configuracion/certificado', permitirConfigurarSri, uploadCert.sing
       ? req.file.buffer.toString('base64')
       : fs.readFileSync(req.file.path).toString('base64');
 
-    const updated = await prisma.configuracion_sri.update({
+    // Validar el cert ANTES de guardar — si la clave es incorrecta, rechazar con 400
+    const certInfoPreview = getCertInfo({ certificadoP12Data: certB64, claveCertificado: req.body.clave || '' });
+    if (certInfoPreview.estado === 'CLAVE_INCORRECTA') {
+      return res.status(400).json({ ok: false, error: 'La contraseña del certificado es incorrecta. Verifica la clave del .p12.' });
+    }
+    if (certInfoPreview.estado === 'ERROR_PARSEO') {
+      return res.status(400).json({ ok: false, error: `El archivo .p12 no se pudo leer: ${certInfoPreview.error || 'formato inválido'}` });
+    }
+
+    await prisma.configuracion_sri.update({
       where: { id: config.id },
       data: {
         certificadoP12:     req.file.path,
@@ -600,7 +609,7 @@ router.post('/configuracion/certificado', permitirConfigurarSri, uploadCert.sing
       },
     });
 
-    const certInfo = getCertInfo({ certificadoP12Data: certB64, claveCertificado: req.body.clave || '' });
+    const certInfo = certInfoPreview;
 
     // Detectar mismatch: ¿alguna palabra del CN del cert aparece en la razonSocial?
     let advertencia = null;
