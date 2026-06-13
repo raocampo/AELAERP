@@ -23,6 +23,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const { Client } = require('pg');
 const forge      = require('node-forge');
+const { descifrar } = require('../utils/cifrado');
 
 const args    = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
@@ -63,13 +64,13 @@ async function obtenerUrlTenant(slug, mainUrl) {
     if (!rows.length) throw new Error(`Tenant '${slug}' no encontrado en aela_master.`);
 
     const t = rows[0];
-    // Si las credenciales del tenant coinciden con el main, reusar la contraseña del main
     const u = new URL(mainUrl);
-    const pass = t.dbPass ? decodeURIComponent(t.dbPass) : decodeURIComponent(u.password);
+    // dbPass puede estar cifrado con AES-256-GCM — usar descifrar() como prismaTenant.js
+    const rawPass = t.dbPass ? descifrar(t.dbPass) : decodeURIComponent(u.password);
     const host = t.dbHost || u.hostname;
     const port = t.dbPort || u.port || 5432;
     const user = t.dbUser || u.username;
-    return `postgresql://${user}:${encodeURIComponent(pass)}@${host}:${port}/${t.dbName}`;
+    return `postgresql://${user}:${encodeURIComponent(rawPass)}@${host}:${port}/${t.dbName}`;
   } finally {
     await master.end().catch(() => {});
   }
