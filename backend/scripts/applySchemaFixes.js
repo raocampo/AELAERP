@@ -15,7 +15,7 @@ const FIXES = [
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "cajaDineroHabilitada" BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "impresionAutoMobile"  BOOLEAN NOT NULL DEFAULT false`,
   // SBU Ecuador
-  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "sbuEcuador"           DECIMAL(8,2) NOT NULL DEFAULT 460.00`,
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "sbuEcuador"           DECIMAL(8,2) NOT NULL DEFAULT 480.00`,
   // facturas_compra — columnas añadidas progresivamente
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "motivoAnulacion"       VARCHAR(500)`,
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "tipoGasto"             VARCHAR(30)`,

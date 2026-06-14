@@ -78,7 +78,9 @@ function limitesPlan(plan) {
 // ─── Configuración base al crear empresa ─────────────────────────────────────
 function construirConfiguracionSistemaBase(empresa = {}) {
   const tipoSistema    = normalizarTipoSistema(empresa.plan || process.env.AELA_EDITION || 'pro');
-  const modoOperacion  = normalizarModoOperacion(process.env.MODO_EMPRESA || 'monoempresa');
+  const modoOperacion  = tipoSistema === 'pro'
+    ? 'multiempresa'
+    : normalizarModoOperacion(process.env.MODO_EMPRESA || 'monoempresa');
   const caps           = capacidadesPlan(tipoSistema);
 
   return {
@@ -91,7 +93,7 @@ function construirConfiguracionSistemaBase(empresa = {}) {
     impresionAutoReciboPos:  false,
     impresoraKiosko:         '',
     permitirStockNegativo:   false,
-    sbuEcuador:              460.00,
+    sbuEcuador:              480.00,
     ...caps,
   };
 }
@@ -137,7 +139,9 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
     ...config,
     empresaId:   empresa.id,
     tipoSistema,
-    modoOperacion: normalizarModoOperacion(config?.modoOperacion || await obtenerModoOperacionGlobal(tx)),
+    modoOperacion: tipoSistema === 'pro'
+      ? 'multiempresa'
+      : normalizarModoOperacion(config?.modoOperacion || await obtenerModoOperacionGlobal(tx)),
     impresionAutoReciboPos:  Boolean(config?.impresionAutoReciboPos ?? false),
     impresoraKiosko:         String(config?.impresoraKiosko || '').trim(),
     // Forzar a false los módulos que el plan no permite
@@ -150,7 +154,7 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
     liquidacionesHabilitadas: caps.liquidacionesHabilitadas && Boolean(config?.liquidacionesHabilitadas ?? true),
     atsHabilitado:            caps.atsHabilitado            && Boolean(config?.atsHabilitado            ?? true),
     talentoHumanoHabilitado:  caps.talentoHumanoHabilitado  && Boolean(config?.talentoHumanoHabilitado  ?? false),
-    sbuEcuador:               parseFloat(config?.sbuEcuador) || 460.00,
+    sbuEcuador:               parseFloat(config?.sbuEcuador) || 480.00,
   };
 }
 
@@ -176,7 +180,9 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
 
   return {
     tipoSistema,
-    modoOperacion:            normalizarModoOperacion(reqBody.modoOperacion, actual.modoOperacion),
+    modoOperacion:            tipoSistema === 'pro'
+                                ? 'multiempresa'
+                                : normalizarModoOperacion(reqBody.modoOperacion, actual.modoOperacion),
     cajaNombre:               reqBody.cajaNombre?.trim() || actual.cajaNombre || 'Caja General',
     cajaDiariaHabilitada:     flag('cajaDiariaHabilitada', true),
     cierreCajaObligatorio:    Boolean(reqBody.cierreCajaObligatorio !== undefined ? reqBody.cierreCajaObligatorio : actual.cierreCajaObligatorio),
@@ -196,7 +202,7 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
     talentoHumanoHabilitado:  flag('talentoHumanoHabilitado', false),
     sbuEcuador:               parseFloat(reqBody.sbuEcuador) > 0
                                 ? parseFloat(reqBody.sbuEcuador)
-                                : parseFloat(actual.sbuEcuador) || 460.00,
+                                : parseFloat(actual.sbuEcuador) || 480.00,
   };
 }
 

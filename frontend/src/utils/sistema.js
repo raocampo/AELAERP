@@ -74,7 +74,7 @@ export function construirSistemaFallback(empresaActual = null, {
     liquidacionesHabilitadas: esPro,
     atsHabilitado: esPro,
     talentoHumanoHabilitado: esPro || esMedium,
-    sbuEcuador: 460.00,
+    sbuEcuador: 480.00,
   };
 }
 

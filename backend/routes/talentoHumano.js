@@ -14,7 +14,7 @@ const gestionarRRHH = [proteger, autorizarPermiso('rrhh.gestionar')];
 const nominaRRHH   = [proteger, autorizarPermiso('rrhh.nomina')];
 
 // ─── SBU Ecuador (actualizar anualmente) ─────────────────────────────────────
-const SBU_ECUADOR = 460.00; // SBU 2024 — ajustar cada año o llevar a config
+const SBU_ECUADOR = 480.00; // SBU 2025
 const APORTE_PERSONAL_IESS = 0.0945;
 const APORTE_PATRONAL_IESS = 0.1115;
 

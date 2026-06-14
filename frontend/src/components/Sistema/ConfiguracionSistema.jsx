@@ -44,7 +44,7 @@ const FORM_INICIAL = {
   liquidacionesHabilitadas: true,
   atsHabilitado: true,
   talentoHumanoHabilitado: false,
-  sbuEcuador: '460.00',
+  sbuEcuador: '480.00',
 };
 
 export default function ConfiguracionSistema() {
@@ -342,7 +342,7 @@ export default function ConfiguracionSistema() {
                   onChange={(e) => actualizar('sbuEcuador', e.target.value)}
                   style={{ maxWidth: '140px' }}
                   disabled={!caps.talentoHumanoHabilitado}
-                  placeholder="460.00"
+                  placeholder="480.00"
                 />
               </div>
               <small className="syscfg-hint">
