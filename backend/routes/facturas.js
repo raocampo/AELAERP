@@ -28,6 +28,14 @@ const { enviarDocumentoFiscal } = require('../utils/email');
 // Aplicar autenticación JWT a todas las rutas
 router.use(proteger);
 
+// Detecta si un mensajesSri contiene el error 90 "LIMITE DE INTENTOS"
+function tieneError90SRI(msj) {
+  if (!msj) return false;
+  const arr = msj.mensajes || msj.recepcion?.mensajes || [];
+  if (!Array.isArray(arr)) return false;
+  return arr.some(m => String(m.identificador) === '90' || String(m.mensaje || '').includes('LIMITE DE INTENTOS'));
+}
+
 const permitirConfigurarSri = autorizarPermiso('sri.configurar');
 const permitirVerFacturacion = autorizarPermiso('facturacion.ver');
 const permitirEmitirFacturacion = autorizarPermiso('facturacion.emitir');
@@ -873,6 +881,28 @@ router.post('/:id/reenviar', permitirEmitirFacturacion, async (req, res) => {
     if (!factura) return res.status(404).json({ ok: false, error: 'Factura no encontrada' });
     if (factura.estadoSri === 'AUTORIZADO') {
       return res.status(400).json({ ok: false, error: 'La factura ya está autorizada' });
+    }
+
+    // Si el rechazo fue por límite diario del SRI (error 90), encolar para mañana
+    if (tieneError90SRI(factura.mensajesSri)) {
+      const t = new Date();
+      t.setDate(t.getDate() + 1);
+      t.setHours(0, 5, 0, 0);
+      const reintentarDesde = t.toISOString();
+      await prisma.facturas.update({
+        where: { id: factura.id },
+        data: {
+          estadoSri:   'FIRMADO_PENDIENTE_ENVIO',
+          xmlFirmado:  null,
+          mensajesSri: { reintentarDesde, limiteError: true },
+        },
+      });
+      const updated = await prisma.facturas.findUnique({ where: { id: factura.id } });
+      return res.json({
+        ok: true,
+        data: updated,
+        mensaje: `Límite diario del SRI (error 90). La factura se reenviará automáticamente mañana a las 00:05.`,
+      });
     }
 
     const config = await getConfigSRI(req.empresa.id);

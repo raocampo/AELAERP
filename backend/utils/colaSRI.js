@@ -13,6 +13,31 @@ const fs     = require('fs');
 const path   = require('path');
 const { getCertBuffer, tieneCertificado } = require('./certUtils');
 
+// ─── Helpers de error ──────────────────────────────────────
+
+// Detecta error 90 "LIMITE DE INTENTOS NO AUTORIZADOS POR DIA"
+function esLimiteError(mensajes) {
+  if (!Array.isArray(mensajes)) return false;
+  return mensajes.some(m =>
+    String(m.identificador) === '90' ||
+    String(m.mensaje || '').includes('LIMITE DE INTENTOS')
+  );
+}
+
+// Mañana a las 00:05 AM (hora local del servidor)
+function reintentarDesdeManana() {
+  const t = new Date();
+  t.setDate(t.getDate() + 1);
+  t.setHours(0, 5, 0, 0);
+  return t.toISOString();
+}
+
+// ¿El comprobante está en espera por límite diario del SRI?
+function estaEnEspera(msj) {
+  if (!msj?.reintentarDesde) return false;
+  return new Date(msj.reintentarDesde) > new Date();
+}
+
 // Errores que indican problema de conectividad (no rechazo SRI)
 const ERRORES_CONECTIVIDAD = new Set([
   'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET',
@@ -54,6 +79,13 @@ async function getConfigSRI(empresaId) {
 
 // ─── Reintento: Factura ─────────────────────────────────────
 async function reintentarFactura(factura) {
+  // Espera por límite diario del SRI (error 90)
+  if (estaEnEspera(factura.mensajesSri)) {
+    const hasta = factura.mensajesSri.reintentarDesde;
+    console.log(`[ColaSRI] Factura #${factura.id} en espera hasta ${hasta} (límite SRI error 90)`);
+    return;
+  }
+
   const config = await getConfigSRI(factura.empresaId);
   if (!config || config.tipoCertificado === 'token') return;
   if (!tieneCertificado(config)) return;
@@ -114,6 +146,20 @@ async function reintentarFactura(factura) {
 
     const recepcion = await sri.enviarComprobanteSRI(xmlFirmado, config.ambiente);
     if (recepcion.estado !== 'RECIBIDA') {
+      const mensajes = recepcion.mensajes || recepcion.recepcion?.mensajes || [];
+      if (esLimiteError(mensajes)) {
+        const reintentar = reintentarDesdeManana();
+        await prisma.facturas.update({
+          where: { id: factura.id },
+          data: {
+            estadoSri:   'FIRMADO_PENDIENTE_ENVIO',
+            xmlFirmado:  null, // re-firmar mañana con el cert correcto
+            mensajesSri: { ...recepcion, reintentarDesde: reintentar, limiteError: true },
+          },
+        });
+        console.log(`[ColaSRI] Factura #${factura.id} — error 90 SRI, reintentará ${reintentar}`);
+        return;
+      }
       await prisma.facturas.update({
         where: { id: factura.id },
         data:  { estadoSri: 'RECHAZADO', mensajesSri: recepcion },
@@ -184,6 +230,11 @@ async function reintentarFactura(factura) {
 
 // ─── Reintento: Retención ───────────────────────────────────
 async function reintentarRetencion(retencion) {
+  if (estaEnEspera(retencion.mensajesSri)) {
+    console.log(`[ColaSRI] Retención #${retencion.id} en espera hasta ${retencion.mensajesSri.reintentarDesde} (límite SRI error 90)`);
+    return;
+  }
+
   const config = await getConfigSRI(retencion.empresaId);
   if (!config || config.tipoCertificado === 'token') return;
   if (!tieneCertificado(config)) return;
@@ -202,6 +253,20 @@ async function reintentarRetencion(retencion) {
 
     const recepcion = await sri.enviarComprobanteSRI(xmlFirmado, config.ambiente);
     if (recepcion.estado !== 'RECIBIDA') {
+      const mensajes = recepcion.mensajes || recepcion.recepcion?.mensajes || [];
+      if (esLimiteError(mensajes)) {
+        const reintentar = reintentarDesdeManana();
+        await prisma.retenciones.update({
+          where: { id: retencion.id },
+          data: {
+            estadoSri:   'FIRMADO_PENDIENTE_ENVIO',
+            xmlFirmado:  null,
+            mensajesSri: { ...recepcion, reintentarDesde: reintentar, limiteError: true },
+          },
+        });
+        console.log(`[ColaSRI] Retención #${retencion.id} — error 90 SRI, reintentará ${reintentar}`);
+        return;
+      }
       await prisma.retenciones.update({
         where: { id: retencion.id },
         data:  { estadoSri: 'RECHAZADO', mensajesSri: recepcion },
@@ -266,6 +331,11 @@ async function reintentarRetencion(retencion) {
 
 // ─── Reintento: Liquidación de compra ───────────────────────
 async function reintentarLiquidacion(liq) {
+  if (estaEnEspera(liq.mensajesSri)) {
+    console.log(`[ColaSRI] Liquidación #${liq.id} en espera hasta ${liq.mensajesSri.reintentarDesde} (límite SRI error 90)`);
+    return;
+  }
+
   const config = await getConfigSRI(liq.empresaId);
   if (!config || config.tipoCertificado === 'token') return;
   if (!tieneCertificado(config)) return;
@@ -284,6 +354,20 @@ async function reintentarLiquidacion(liq) {
 
     const recepcion = await sri.enviarComprobanteSRI(xmlFirmado, config.ambiente);
     if (recepcion.estado !== 'RECIBIDA') {
+      const mensajes = recepcion.mensajes || recepcion.recepcion?.mensajes || [];
+      if (esLimiteError(mensajes)) {
+        const reintentar = reintentarDesdeManana();
+        await prisma.liquidaciones_compra.update({
+          where: { id: liq.id },
+          data: {
+            estadoSri:   'FIRMADO_PENDIENTE_ENVIO',
+            xmlFirmado:  null,
+            mensajesSri: { ...recepcion, reintentarDesde: reintentar, limiteError: true },
+          },
+        });
+        console.log(`[ColaSRI] Liquidación #${liq.id} — error 90 SRI, reintentará ${reintentar}`);
+        return;
+      }
       await prisma.liquidaciones_compra.update({
         where: { id: liq.id },
         data:  { estadoSri: 'RECHAZADO', mensajesSri: recepcion },
@@ -327,6 +411,11 @@ async function reintentarLiquidacion(liq) {
 
 // ─── Reintento: Nota de Débito ──────────────────────────────
 async function reintentarNotaDebito(nd) {
+  if (estaEnEspera(nd.mensajesSri)) {
+    console.log(`[ColaSRI] Nota Débito #${nd.id} en espera hasta ${nd.mensajesSri.reintentarDesde} (límite SRI error 90)`);
+    return;
+  }
+
   const config = await getConfigSRI(nd.empresaId);
   if (!config || config.tipoCertificado === 'token') return;
   if (!tieneCertificado(config)) return;
@@ -342,6 +431,20 @@ async function reintentarNotaDebito(nd) {
 
     const recepcion = await sri.enviarComprobanteSRI(xmlFirmado, config.ambiente);
     if (recepcion.estado !== 'RECIBIDA') {
+      const mensajes = recepcion.mensajes || recepcion.recepcion?.mensajes || [];
+      if (esLimiteError(mensajes)) {
+        const reintentar = reintentarDesdeManana();
+        await prisma.notas_debito.update({
+          where: { id: nd.id },
+          data: {
+            estadoSri:   'FIRMADO_PENDIENTE_ENVIO',
+            xmlFirmado:  null,
+            mensajesSri: { ...recepcion, reintentarDesde: reintentar, limiteError: true },
+          },
+        });
+        console.log(`[ColaSRI] Nota Débito #${nd.id} — error 90 SRI, reintentará ${reintentar}`);
+        return;
+      }
       await prisma.notas_debito.update({ where: { id: nd.id }, data: { estadoSri: 'RECHAZADO', mensajesSri: recepcion } });
       return;
     }
@@ -377,6 +480,11 @@ async function reintentarNotaDebito(nd) {
 
 // ─── Reintento: Nota de Crédito ─────────────────────────────
 async function reintentarNotaCredito(nc) {
+  if (estaEnEspera(nc.mensajesSri)) {
+    console.log(`[ColaSRI] Nota Crédito #${nc.id} en espera hasta ${nc.mensajesSri.reintentarDesde} (límite SRI error 90)`);
+    return;
+  }
+
   const config = await getConfigSRI(nc.empresaId);
   if (!config || config.tipoCertificado === 'token') return;
   if (!tieneCertificado(config)) return;
@@ -395,6 +503,20 @@ async function reintentarNotaCredito(nc) {
 
     const recepcion = await sri.enviarComprobanteSRI(xmlFirmado, config.ambiente);
     if (recepcion.estado !== 'RECIBIDA') {
+      const mensajes = recepcion.mensajes || recepcion.recepcion?.mensajes || [];
+      if (esLimiteError(mensajes)) {
+        const reintentar = reintentarDesdeManana();
+        await prisma.notas_credito.update({
+          where: { id: nc.id },
+          data: {
+            estadoSri:   'FIRMADO_PENDIENTE_ENVIO',
+            xmlFirmado:  null,
+            mensajesSri: { ...recepcion, reintentarDesde: reintentar, limiteError: true },
+          },
+        });
+        console.log(`[ColaSRI] Nota Crédito #${nc.id} — error 90 SRI, reintentará ${reintentar}`);
+        return;
+      }
       await prisma.notas_credito.update({
         where: { id: nc.id },
         data:  { estadoSri: 'RECHAZADO', mensajesSri: recepcion },
@@ -462,7 +584,7 @@ async function ejecutarCiclo() {
         where:   { estadoSri: 'FIRMADO_PENDIENTE_ENVIO' },
         select:  {
           id: true, empresaId: true, emisorId: true, claveAcceso: true,
-          xmlGenerado: true, xmlFirmado: true, fechaEmision: true,
+          xmlGenerado: true, xmlFirmado: true, fechaEmision: true, mensajesSri: true,
         },
         orderBy: { createdAt: 'asc' },
         take:    20,
@@ -471,7 +593,7 @@ async function ejecutarCiclo() {
         where:   { estadoSri: 'FIRMADO_PENDIENTE_ENVIO' },
         select:  {
           id: true, empresaId: true, emisorId: true, claveAcceso: true,
-          xmlGenerado: true, xmlFirmado: true, fechaEmision: true,
+          xmlGenerado: true, xmlFirmado: true, fechaEmision: true, mensajesSri: true,
         },
         orderBy: { createdAt: 'asc' },
         take:    20,
@@ -480,7 +602,7 @@ async function ejecutarCiclo() {
         where:   { estadoSri: 'FIRMADO_PENDIENTE_ENVIO' },
         select:  {
           id: true, empresaId: true, claveAcceso: true,
-          xmlGenerado: true, xmlFirmado: true,
+          xmlGenerado: true, xmlFirmado: true, mensajesSri: true,
         },
         orderBy: { createdAt: 'asc' },
         take:    20,
@@ -489,7 +611,7 @@ async function ejecutarCiclo() {
         where:   { estadoSri: 'FIRMADO_PENDIENTE_ENVIO' },
         select:  {
           id: true, empresaId: true, claveAcceso: true,
-          xmlGenerado: true, xmlFirmado: true, motivos: true,
+          xmlGenerado: true, xmlFirmado: true, motivos: true, mensajesSri: true,
         },
         orderBy: { createdAt: 'asc' },
         take:    20,
@@ -498,7 +620,7 @@ async function ejecutarCiclo() {
         where:   { estadoSri: 'FIRMADO_PENDIENTE_ENVIO' },
         select:  {
           id: true, empresaId: true, claveAcceso: true,
-          xmlGenerado: true, xmlFirmado: true,
+          xmlGenerado: true, xmlFirmado: true, mensajesSri: true,
         },
         orderBy: { createdAt: 'asc' },
         take:    20,
