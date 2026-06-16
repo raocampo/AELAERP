@@ -217,7 +217,7 @@ const ConfiguracionSRI = () => {
   };
 
   const handleGuardar = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     if (!form.ruc || !form.razonSocial || !form.dirMatriz) {
       return toast.error('RUC, Razón Social y Dirección son obligatorios');
     }
@@ -332,12 +332,15 @@ const ConfiguracionSRI = () => {
             Los datos básicos de empresa se precargan desde el registro inicial y aquí se afinan solo para emisión electrónica.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn-secondary" onClick={() => navigate('/facturas')}>
             ← Volver
           </button>
           <button className="btn-secondary" onClick={handleProbarConexion} disabled={probando}>
             {probando ? 'Verificando...' : '🔗 Probar conexión'}
+          </button>
+          <button className="btn-primary" onClick={handleGuardar} disabled={saving}>
+            {saving ? 'Guardando...' : '💾 Guardar Configuración'}
           </button>
         </div>
       </div>
@@ -501,11 +504,6 @@ const ConfiguracionSRI = () => {
           </div>
         </div>
 
-        <div className="sri-form-actions">
-          <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Guardando...' : '💾 Guardar Configuración'}
-          </button>
-        </div>
       </form>
 
       {/* ─── Firma Electrónica ─── */}

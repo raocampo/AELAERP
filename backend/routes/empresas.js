@@ -87,9 +87,30 @@ router.get('/', proteger, soloAdmin, async (req, res) => {
 
 // GET /api/empresas/mis-empresas — todas las empresas a las que el usuario tiene acceso
 // Incluye su empresa default + las registradas en usuario_empresas
+// Admin Macro (rol base = 'admin'): devuelve TODAS las empresas activas
 router.get('/mis-empresas', proteger, async (req, res) => {
   try {
     const CAMPOS_EMPRESA = { id: true, ruc: true, razonSocial: true, nombreComercial: true, plan: true, activo: true, esMatriz: true, parentEmpresaId: true };
+
+    const usuarioBase = await req.prisma.usuarios.findUnique({
+      where: { id: req.usuario.id },
+      select: { empresaId: true, rol: true },
+    });
+
+    const esAdminMacro = normalizarRol(usuarioBase?.rol) === 'admin';
+
+    if (esAdminMacro) {
+      const empresas = await req.prisma.empresas.findMany({
+        where: { activo: true },
+        orderBy: { razonSocial: 'asc' },
+        select: CAMPOS_EMPRESA,
+      });
+      return res.json({
+        success: true,
+        data: empresas.map(e => ({ ...e, esDefault: e.id === usuarioBase.empresaId, rol: 'admin' })),
+        empresaActivaId: req.empresa.id,
+      });
+    }
 
     const [defaultEmpresa, accesos] = await Promise.all([
       req.prisma.empresas.findUnique({ where: { id: req.usuario.empresaId }, select: CAMPOS_EMPRESA }),
