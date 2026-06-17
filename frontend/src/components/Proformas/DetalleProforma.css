@@ -1,0 +1,270 @@
+/* ====================================
+   DETALLE DE PROFORMA
+   ==================================== */
+
+.prf-det-container {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.prf-det-loading {
+  text-align: center;
+  padding: 60px;
+  color: #64748b;
+}
+
+/* Header */
+.prf-det-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.prf-det-back {
+  background: none;
+  border: none;
+  color: #7c3aed;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.prf-det-back:hover { text-decoration: underline; }
+
+.prf-det-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0 0 8px;
+  font-family: monospace;
+}
+
+.prf-det-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.prf-det-badge-sm {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.prf-det-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.prf-btn-rechazar { color: #dc2626 !important; border-color: #dc2626 !important; }
+.prf-btn-rechazar:hover { background: #dc2626 !important; color: white !important; }
+
+.prf-btn-anular { color: #dc2626 !important; border-color: #fca5a5 !important; }
+.prf-btn-anular:hover { background: #fee2e2 !important; }
+
+.prf-btn-print { color: #374151; }
+
+/* Documento imprimible */
+.prf-det-doc {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 32px;
+  font-size: 0.88rem;
+}
+
+/* Cabecera del documento */
+.prf-det-doc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #192C4A;
+  flex-wrap: wrap;
+}
+
+.prf-det-empresa h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0;
+}
+
+.prf-det-doc-info { text-align: right; }
+
+.prf-det-doc-info h3 {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #7c3aed;
+  letter-spacing: 0.06em;
+  margin: 0 0 10px;
+}
+
+.prf-det-meta-tbl { font-size: 0.82rem; border-collapse: collapse; margin-left: auto; }
+.prf-det-meta-tbl td { padding: 2px 8px; color: #374151; }
+.prf-det-meta-tbl td:first-child { color: #94a3b8; text-align: right; }
+
+/* Cliente */
+.prf-det-cliente-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+
+.prf-det-cliente-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.06em;
+  margin: 0 0 4px;
+}
+
+.prf-det-cliente-nombre {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0 0 3px;
+}
+
+.prf-det-cliente-id,
+.prf-det-cliente-dir,
+.prf-det-cliente-email,
+.prf-det-cliente-tel {
+  font-size: 0.82rem;
+  color: #64748b;
+  margin: 1px 0;
+}
+
+/* Tabla de ítems */
+.prf-det-items {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0;
+  font-size: 0.85rem;
+}
+
+.prf-det-items thead tr {
+  background: #192C4A;
+  color: white;
+}
+
+.prf-det-items th {
+  padding: 9px 10px;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.prf-det-items td {
+  padding: 10px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #374151;
+  vertical-align: top;
+}
+
+.prf-det-items tbody tr:last-child td { border-bottom: none; }
+.prf-det-items tbody tr:hover { background: #faf5ff; }
+
+.prf-det-num { text-align: right; white-space: nowrap; }
+.prf-det-total { font-weight: 700; color: #192C4A; }
+
+/* Totales */
+.prf-det-totales {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.prf-det-totales-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 5px 28px;
+  text-align: right;
+  font-size: 0.88rem;
+  color: #374151;
+  min-width: 240px;
+}
+
+.prf-det-desc { color: #dc2626; }
+
+.prf-det-tot-label {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #192C4A;
+  padding-top: 8px;
+  border-top: 2px solid #192C4A;
+}
+
+.prf-det-tot-valor {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #7c3aed;
+  padding-top: 8px;
+  border-top: 2px solid #192C4A;
+}
+
+/* Observaciones */
+.prf-det-obs {
+  margin-top: 20px;
+  padding: 14px 18px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+}
+
+.prf-det-obs-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+}
+
+.prf-det-obs-txt {
+  font-size: 0.85rem;
+  color: #374151;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* Pie del documento */
+.prf-det-footer-doc {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px dashed #e2e8f0;
+  text-align: center;
+  font-size: 0.76rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* ─── Print ─── */
+@media print {
+  .prf-det-header-actions,
+  .prf-det-back { display: none !important; }
+  .prf-det-container { padding: 0; max-width: 100%; }
+  .prf-det-doc { border: none; padding: 0; box-shadow: none; }
+  body { background: white; }
+}

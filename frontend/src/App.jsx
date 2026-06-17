@@ -103,6 +103,9 @@ const Cargos             = lazy(() => import('./components/TalentoHumano/Cargos'
 const Nomina             = lazy(() => import('./components/TalentoHumano/Nomina'));
 const Ausencias          = lazy(() => import('./components/TalentoHumano/Ausencias'));
 const AyudaSistema       = lazy(() => import('./components/Ayuda/AyudaSistema'));
+const ListaProformas     = lazy(() => import('./components/Proformas/ListaProformas'));
+const FormProforma       = lazy(() => import('./components/Proformas/FormProforma'));
+const DetalleProforma    = lazy(() => import('./components/Proformas/DetalleProforma'));
 const AccesoTenant       = lazy(() => import('./components/Tenant/AccesoTenant'));
 const PanelSuperAdmin    = lazy(() => import('./components/SuperAdmin/PanelSuperAdmin'));
 
@@ -183,6 +186,12 @@ function App() {
               }>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
+
+                {/* Proformas — todos los planes */}
+                <Route path="proformas"          element={<PermissionRoute permission="proformas.gestionar"><ListaProformas /></PermissionRoute>} />
+                <Route path="proformas/nueva"    element={<PermissionRoute permission="proformas.gestionar"><FormProforma /></PermissionRoute>} />
+                <Route path="proformas/:id"      element={<PermissionRoute permission="proformas.gestionar"><DetalleProforma /></PermissionRoute>} />
+                <Route path="proformas/:id/editar" element={<PermissionRoute permission="proformas.gestionar"><FormProforma /></PermissionRoute>} />
 
                 {/* Facturas — requieren Medium o superior */}
                 <Route path="facturas"          element={<MediumRoute><PermissionRoute permission="facturacion.ver"><ListaFacturas /></PermissionRoute></MediumRoute>} />

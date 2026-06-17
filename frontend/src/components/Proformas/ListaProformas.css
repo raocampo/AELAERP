@@ -1,0 +1,193 @@
+/* ====================================
+   LISTA DE PROFORMAS
+   ==================================== */
+
+.prf-lista-container {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.prf-lista-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.prf-lista-header h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #192C4A;
+  margin: 0 0 4px;
+}
+
+.prf-lista-subtitle {
+  color: #64748b;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* Filtros */
+.prf-filtros {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.prf-filtro-search {
+  flex: 1;
+  min-width: 220px;
+  padding: 9px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9px;
+  font-size: 0.9rem;
+  color: #1e293b;
+  outline: none;
+}
+
+.prf-filtro-search:focus { border-color: #7c3aed; }
+
+.prf-filtro-estados {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.prf-filtro-btn {
+  padding: 6px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: white;
+  color: #64748b;
+  transition: all 0.15s;
+}
+
+.prf-filtro-btn:hover { border-color: #7c3aed; color: #7c3aed; }
+.prf-filtro-btn.activo { font-weight: 700; }
+
+/* Badge estado */
+.prf-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+/* Tabla */
+.prf-tabla-wrap {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.prf-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.prf-tabla thead tr {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.prf-tabla th {
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.prf-tabla td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; }
+.prf-tabla tbody tr:last-child td { border-bottom: none; }
+
+.prf-fila { cursor: pointer; transition: background 0.1s; }
+.prf-fila:hover { background: #faf5ff; }
+
+.prf-numero { font-weight: 700; color: #7c3aed; font-family: monospace; font-size: 0.85rem; }
+
+.prf-cliente { display: flex; flex-direction: column; gap: 2px; }
+.prf-cliente-nombre { font-weight: 600; color: #1e293b; }
+.prf-cliente-id { font-size: 0.78rem; color: #94a3b8; }
+
+.prf-monto { font-weight: 700; color: #1e293b; }
+
+.prf-acciones { display: flex; gap: 6px; }
+
+.prf-btn-ver,
+.prf-btn-editar {
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1.5px solid;
+}
+
+.prf-btn-ver    { color: #7c3aed; border-color: #7c3aed; background: white; }
+.prf-btn-ver:hover { background: #7c3aed; color: white; }
+.prf-btn-editar { color: #2563eb; border-color: #2563eb; background: white; }
+.prf-btn-editar:hover { background: #2563eb; color: white; }
+
+/* Estado vacío */
+.prf-vacio {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 60px 24px;
+  text-align: center;
+  color: #64748b;
+}
+
+.prf-vacio p { font-size: 1.1rem; margin-bottom: 16px; }
+
+.prf-loading {
+  text-align: center;
+  padding: 60px;
+  color: #64748b;
+}
+
+/* Paginación */
+.prf-paginacion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.prf-pag-btns { display: flex; gap: 8px; align-items: center; }
+.prf-pag-btns button {
+  padding: 5px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 7px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #374151;
+  transition: all 0.15s;
+}
+.prf-pag-btns button:hover:not(:disabled) { border-color: #7c3aed; color: #7c3aed; }
+.prf-pag-btns button:disabled { opacity: 0.4; cursor: default; }
+
+@media (max-width: 640px) {
+  .prf-tabla th:nth-child(5),
+  .prf-tabla td:nth-child(5),
+  .prf-tabla th:nth-child(6),
+  .prf-tabla td:nth-child(6) { display: none; }
+}

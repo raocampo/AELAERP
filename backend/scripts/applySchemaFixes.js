@@ -39,6 +39,37 @@ const FIXES = [
     "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE INDEX IF NOT EXISTS "tabla_utilidades_empresaId_idx" ON "tabla_utilidades"("empresaId")`,
+  // Proformas — cotizaciones / presupuestos
+  `CREATE TABLE IF NOT EXISTS "proformas" (
+    "id"                  SERIAL PRIMARY KEY,
+    "empresaId"           INTEGER NOT NULL DEFAULT 1,
+    "numero"              VARCHAR(20) NOT NULL,
+    "secuencial"          INTEGER NOT NULL DEFAULT 1,
+    "tipoIdentificacion"  VARCHAR(2) NOT NULL DEFAULT '07',
+    "identificacion"      VARCHAR(20) NOT NULL DEFAULT '9999999999999',
+    "razonSocial"         VARCHAR(300) NOT NULL,
+    "direccion"           VARCHAR(300),
+    "email"               VARCHAR(150),
+    "telefono"            VARCHAR(20),
+    "clienteId"           INTEGER,
+    "subtotal0"           DECIMAL(14,2) NOT NULL DEFAULT 0,
+    "subtotal5"           DECIMAL(14,2) NOT NULL DEFAULT 0,
+    "subtotal15"          DECIMAL(14,2) NOT NULL DEFAULT 0,
+    "totalDescuento"      DECIMAL(14,2) NOT NULL DEFAULT 0,
+    "totalIva"            DECIMAL(14,2) NOT NULL DEFAULT 0,
+    "importeTotal"        DECIMAL(14,2) NOT NULL DEFAULT 0,
+    "detalles"            JSONB NOT NULL DEFAULT '[]',
+    "observaciones"       TEXT,
+    "vigenciaDesde"       TIMESTAMP(3),
+    "vigenciaHasta"       TIMESTAMP(3),
+    "estado"              VARCHAR(20) NOT NULL DEFAULT 'BORRADOR',
+    "facturaId"           INTEGER,
+    "creadoPor"           INTEGER,
+    "createdAt"           TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"           TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS "proformas_empresaId_idx" ON "proformas"("empresaId")`,
+  `CREATE INDEX IF NOT EXISTS "proformas_estado_idx"    ON "proformas"("estado")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

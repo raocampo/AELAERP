@@ -81,6 +81,10 @@ const PERMISSIONS = {
   'rrhh.ver':             ['admin', 'supervisor', 'contador'],
   'rrhh.gestionar':       ['admin', 'supervisor'],
   'rrhh.nomina':          ['admin', 'contador'],
+
+  'proformas.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],
+  'proformas.convertir':  ['admin', 'supervisor', 'facturador'],
+  'proformas.anular':     ['admin', 'supervisor'],
 };
 
 const DEFAULT_ROLE = 'operador';

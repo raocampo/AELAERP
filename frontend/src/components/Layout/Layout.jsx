@@ -104,6 +104,7 @@ const GRUPOS_MENU = [
     label: 'Ventas',
     items: [
       { to: '/facturas',        icon: '🧾', label: 'Facturas',           planMin: 'medium', permiso: 'facturacion.ver' },
+      { to: '/proformas',       icon: '📋', label: 'Proformas',          permiso: 'proformas.gestionar' },
       { to: '/notas-venta',     icon: '🗒️', label: 'Notas de Venta',    permiso: 'notasVenta.gestionar' },
       { to: '/notas-debito',    icon: '🔴', label: 'Notas de Débito',   planMin: 'pro',    permiso: 'facturacion.emitir' },
       { to: '/guias-remision',  icon: '🚚', label: 'Guías de Remisión', planMin: 'medium', permiso: 'facturacion.ver' },
