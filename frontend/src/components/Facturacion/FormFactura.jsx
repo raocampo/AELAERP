@@ -4,7 +4,7 @@
 // ====================================
 
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -237,6 +237,10 @@ const ModalPago = ({ inicial, onGuardar, onCerrar }) => {
 // ─── Componente principal ─────────────────────────────────────────────────────
 const FormFactura = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // ID de proforma origen (cuando se llega desde "Convertir a Factura")
+  const [proformaId, setProformaId] = useState(null);
 
   // ── Datos del cliente ─────────────────────────────────────────────────────
   const [tipoId,      setTipoId]      = useState('05');
@@ -278,6 +282,42 @@ const FormFactura = () => {
   const [submitting,    setSubmitting] = useState(false);
 
   const totales = calcularTotales(detalles);
+
+  // ── Pre-llenado desde Proforma (location.state.proforma) ────────────────
+  useEffect(() => {
+    const proforma = location.state?.proforma;
+    if (!proforma) return;
+
+    setProformaId(proforma.id);
+
+    // Cliente
+    const tipoIdMap = { '04': '04', '05': '05', '06': '06', '07': '07' };
+    const tipoIdOrigen = tipoIdMap[proforma.tipoIdentificacion] || '05';
+    setTipoId(tipoIdOrigen);
+    setIdComprador(proforma.identificacion || '');
+    setRazonSocial(proforma.razonSocial || '');
+    setDireccion(proforma.direccion || '');
+    setEmail(proforma.email || '');
+    setTelefono(proforma.telefono || '');
+    if (proforma.clienteId) setClienteId(proforma.clienteId);
+    setBusqCliente(proforma.razonSocial || '');
+    setMensajeSRI(`✓ Pre-llenado desde proforma ${proforma.numero}`);
+
+    // Detalles
+    const dets = (proforma.detalles || []).map(d => ({
+      codigoPrincipal: d.codigoPrincipal || d.codigo_principal || 'SRV001',
+      codigoAuxiliar:  d.codigoAuxiliar  || d.codigo_auxiliar  || '',
+      descripcion:     d.descripcion     || '',
+      cantidad:        String(d.cantidad        ?? 1),
+      precioUnitario:  String(d.precioUnitario  ?? d.precio_unitario ?? 0),
+      descuento:       String(d.descuento       ?? 0),
+      ivaPorcentaje:   d.ivaPorcentaje   ?? d.iva_porcentaje   ?? 0,
+    }));
+    if (dets.length > 0) setDetalles(dets);
+
+    if (proforma.observaciones) setObs(proforma.observaciones);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Autocomplete cliente (BD) ─────────────────────────────────────────────
   useEffect(() => {
@@ -501,9 +541,17 @@ const FormFactura = () => {
         }));
       }
 
-      toast.success('Factura emitida correctamente');
       const factId = res.data.data.id;
-      // Navegar al detalle — desde ahí se puede imprimir el recibo POS
+
+      if (proformaId) {
+        try {
+          await api.post(`/proformas/${proformaId}/marcar-convertida`, { facturaId: factId });
+        } catch {
+          // No bloquear el flujo si falla el marcado
+        }
+      }
+
+      toast.success('Factura emitida correctamente');
       navigate(`/facturas/${factId}`);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al emitir factura');
@@ -520,8 +568,20 @@ const FormFactura = () => {
           <h1>🧾 Nueva Factura</h1>
           <p className="form-fact-subtitle">Comprobante electrónico — SRI Ecuador</p>
         </div>
-        <button className="btn-secondary" onClick={() => navigate('/facturas')}>← Volver</button>
+        <button className="btn-secondary" onClick={() => navigate(proformaId ? `/proformas/${proformaId}` : '/facturas')}>
+          ← Volver
+        </button>
       </div>
+
+      {proformaId && (
+        <div style={{
+          background: '#ede9fe', border: '1px solid #a78bfa', borderRadius: 8,
+          padding: '10px 16px', marginBottom: 16, color: '#5b21b6', fontSize: 14,
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          📋 Convirtiendo proforma a factura — los datos han sido pre-llenados. Revisa y completa la forma de pago.
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
 

@@ -117,6 +117,7 @@ export default function DetalleProforma() {
           direccion:          proforma.direccion,
           email:              proforma.email,
           telefono:           proforma.telefono,
+          numero:             proforma.numero,
           clienteId:          proforma.clienteid || proforma.clienteId,
           detalles:           proforma.detalles,
           observaciones:      proforma.observaciones,

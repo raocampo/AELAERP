@@ -59,6 +59,10 @@ const PERMISSIONS = {
   'rrhh.ver':             ['admin', 'supervisor', 'contador'],
   'rrhh.gestionar':       ['admin', 'supervisor'],
   'rrhh.nomina':          ['admin', 'contador'],
+
+  'proformas.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],
+  'proformas.convertir':  ['admin', 'supervisor', 'facturador'],
+  'proformas.anular':     ['admin', 'supervisor'],
 };
 
 export const normalizarRol = (rol) => {
@@ -85,6 +89,7 @@ export const PERMISOS_POR_MODULO = [
   { modulo: 'Bancos',          permisos: ['bancos.ver', 'bancos.gestionar', 'cheques.gestionar'] },
   { modulo: 'Clientes',        permisos: ['clientes.gestionar'] },
   { modulo: 'Productos',       permisos: ['productos.ver', 'productos.gestionar', 'productos.eliminar'] },
+  { modulo: 'Proformas',        permisos: ['proformas.gestionar', 'proformas.convertir', 'proformas.anular'] },
   { modulo: 'Ventas / Caja',   permisos: ['notasVenta.gestionar', 'caja.ver', 'caja.gestionar', 'pos.usar'] },
   { modulo: 'Inventario',      permisos: ['inventario.ver', 'inventario.gestionar'] },
   { modulo: 'RRHH / Nómina',   permisos: ['rrhh.ver', 'rrhh.gestionar', 'rrhh.nomina'] },
@@ -118,4 +123,7 @@ export const PERMISO_LABELS = {
   'rrhh.ver':              'Ver RRHH',
   'rrhh.gestionar':        'Gestionar RRHH',
   'rrhh.nomina':           'Nómina',
+  'proformas.gestionar':   'Gestionar proformas',
+  'proformas.convertir':   'Convertir proforma a factura',
+  'proformas.anular':      'Anular proformas',
 };
