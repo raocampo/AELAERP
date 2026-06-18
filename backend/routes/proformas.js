@@ -8,6 +8,7 @@ const router  = express.Router();
 const { proteger, permitir } = require('../middleware/auth');
 const { normalizarRol }      = require('../utils/roles');
 const { pg: pgPool }         = require('../config/prisma');
+const { enviarConFallback }  = require('../utils/email');
 
 // Todas las rutas requieren autenticación
 router.use(proteger);
@@ -275,6 +276,131 @@ router.post('/:id/marcar-convertida', async (req, res) => {
     res.json({ ok: true, data: row });
   } catch (err) {
     res.status(500).json({ ok: false, mensaje: 'Error al marcar proforma como convertida' });
+  }
+});
+
+// ─── POST /:id/enviar-email — enviar proforma por correo al cliente ───────────
+router.post('/:id/enviar-email', async (req, res) => {
+  try {
+    const id        = parseInt(req.params.id);
+    const empresaId = req.empresa.id;
+    const { emailDestino } = req.body; // opcional: sobreescribe el email del cliente
+
+    const [p] = await req.prisma.$queryRawUnsafe(
+      `SELECT p.*, e."razonSocial" AS "razonSocialEmisor", e."nombreComercial" AS "nombreComercialEmisor"
+       FROM proformas p
+       LEFT JOIN empresas e ON e.id = p."empresaId"
+       WHERE p.id = $1 AND p."empresaId" = $2`,
+      id, empresaId
+    );
+    if (!p) return res.status(404).json({ ok: false, mensaje: 'Proforma no encontrada' });
+
+    const destino = emailDestino || p.email;
+    if (!destino) return res.status(400).json({ ok: false, mensaje: 'El cliente no tiene email registrado. Ingresa un correo manualmente.' });
+
+    // Construir tabla de detalles en HTML
+    const detalles = typeof p.detalles === 'string' ? JSON.parse(p.detalles) : (p.detalles || []);
+    const filasDetalle = detalles.map(d => {
+      const cant   = parseFloat(d.cantidad       || 1);
+      const precio = parseFloat(d.precioUnitario || 0);
+      const desc   = parseFloat(d.descuento      || 0);
+      const total  = (cant * precio - desc).toFixed(2);
+      return `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">${d.descripcion || ''}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${cant}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right">$${parseFloat(precio).toFixed(2)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600">$${total}</td>
+      </tr>`;
+    }).join('');
+
+    const vigencia = p.vigenciaHasta
+      ? new Date(p.vigenciaHasta).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : null;
+    const emisorLabel = p.nombreComercialEmisor || p.razonSocialEmisor || 'AELA ERP';
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.10);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#7C3AED,#6d28d9);padding:36px 40px 28px;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:22px;font-weight:800">${emisorLabel}</h1>
+            <p style="color:rgba(255,255,255,.7);margin:6px 0 0;font-size:13px">AELA ERP · by CorpSimtelec</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px 28px;">
+            <p style="color:#64748b;margin:0 0 4px;font-size:14px">Estimado/a cliente,</p>
+            <h2 style="color:#1e293b;margin:0 0 6px;font-size:20px;font-weight:700">
+              Proforma <span style="color:#7C3AED">${p.numero}</span>
+            </h2>
+            <p style="color:#475569;margin:0 0 28px;font-size:14px;line-height:1.6">
+              Le enviamos la cotización/presupuesto detallada a continuación.<br/>
+              ${vigencia ? `Esta proforma tiene validez hasta el <strong>${vigencia}</strong>.` : ''}
+            </p>
+            <!-- Datos cliente -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;margin-bottom:24px;">
+              <tr><td style="padding:16px 20px;">
+                <p style="margin:0 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;color:#94a3b8">Cliente</p>
+                <p style="margin:0;font-size:15px;font-weight:600;color:#1e293b">${p.razonSocial || ''}</p>
+                ${p.identificacion && p.tipoIdentificacion !== '07' ? `<p style="margin:4px 0 0;font-size:13px;color:#64748b">${p.identificacion}</p>` : ''}
+              </td></tr>
+            </table>
+            <!-- Tabla de detalles -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th style="padding:10px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;border-bottom:1px solid #e2e8f0">Descripción</th>
+                  <th style="padding:10px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;border-bottom:1px solid #e2e8f0">Cant.</th>
+                  <th style="padding:10px 12px;text-align:right;font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;border-bottom:1px solid #e2e8f0">P. Unit.</th>
+                  <th style="padding:10px 12px;text-align:right;font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;border-bottom:1px solid #e2e8f0">Total</th>
+                </tr>
+              </thead>
+              <tbody>${filasDetalle}</tbody>
+            </table>
+            <!-- Total -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+              <tr><td style="text-align:right;padding:4px 0;color:#64748b;font-size:13px">IVA incluido</td></tr>
+              <tr><td style="text-align:right;padding:8px 0;">
+                <span style="font-size:22px;font-weight:800;color:#7C3AED">TOTAL: $${parseFloat(p.importeTotal || 0).toFixed(2)}</span>
+              </td></tr>
+            </table>
+            ${p.observaciones ? `<p style="color:#475569;font-size:13px;background:#f8fafc;padding:12px 16px;border-radius:8px;border-left:3px solid #7C3AED;margin-bottom:24px">${p.observaciones}</p>` : ''}
+            <p style="color:#94a3b8;font-size:13px;margin:0">Si tiene consultas sobre esta proforma, contáctenos por los medios indicados abajo.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 40px;text-align:center;">
+            <p style="color:#94a3b8;font-size:13px;margin:0 0 6px">¿Necesitas ayuda? Estamos disponibles <strong>24/7</strong>.</p>
+            <p style="margin:0;font-size:13px">
+              <a href="https://wa.me/5930978893520" style="color:#16a34a;font-weight:600;text-decoration:none">WhatsApp</a>
+              &nbsp;·&nbsp;
+              <a href="mailto:info@corpsimtelec.com" style="color:#7C3AED;font-weight:600;text-decoration:none">info@corpsimtelec.com</a>
+            </p>
+            <p style="color:#cbd5e1;font-size:12px;margin:14px 0 0">AELA ERP © ${new Date().getFullYear()} CorpSimtelec · Ecuador</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    await enviarConFallback({
+      from:    process.env.SMTP_FROM || `${emisorLabel} <info@corpsimtelec.com>`,
+      to:      destino,
+      subject: `Proforma ${p.numero} — ${emisorLabel}`,
+      html,
+    });
+
+    res.json({ ok: true, mensaje: `Proforma enviada a ${destino}` });
+  } catch (err) {
+    console.error('[proformas] POST /:id/enviar-email', err.message);
+    const esEmailFail = /sin método|resend|smtp/i.test(err.message);
+    res.status(esEmailFail ? 503 : 500).json({ ok: false, mensaje: esEmailFail ? 'No hay configuración de email activa en el servidor.' : 'Error al enviar email' });
   }
 });
 

@@ -42,6 +42,9 @@ export default function DetalleProforma() {
   const [proforma, setProforma] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
+  const [modalEmail, setModalEmail] = useState(false);
+  const [emailDestino, setEmailDestino] = useState('');
+  const [enviandoEmail, setEnviandoEmail] = useState(false);
 
   const puedeConvertir = tienePermiso(usuario?.rol, 'proformas.convertir');
   const puedeAnular    = tienePermiso(usuario?.rol, 'proformas.anular');
@@ -128,6 +131,46 @@ export default function DetalleProforma() {
 
   const imprimir = () => window.print();
 
+  const abrirModalEmail = () => {
+    setEmailDestino(proforma.email || '');
+    setModalEmail(true);
+  };
+
+  const enviarEmail = async () => {
+    if (!emailDestino.trim()) return toast.error('Ingresa un correo electrónico');
+    setEnviandoEmail(true);
+    try {
+      await api.post(`/proformas/${id}/enviar-email`, { emailDestino: emailDestino.trim() });
+      toast.success(`Proforma enviada a ${emailDestino.trim()}`);
+      setModalEmail(false);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al enviar email');
+    } finally {
+      setEnviandoEmail(false);
+    }
+  };
+
+  const compartirWhatsApp = () => {
+    const detalles = proforma.detalles || [];
+    const lineas   = detalles.map(d => {
+      const total = (parseFloat(d.cantidad || 1) * parseFloat(d.precioUnitario || 0) - parseFloat(d.descuento || 0)).toFixed(2);
+      return `  • ${d.descripcion} x${d.cantidad} = $${total}`;
+    }).join('\n');
+
+    const vigencia = proforma.vigenciaHasta
+      ? `\nVigencia hasta: ${fmtFecha(proforma.vigenciaHasta)}`
+      : '';
+
+    const texto = `*PROFORMA ${proforma.numero}*\nCliente: ${proforma.razonSocial}\n\n*Detalle:*\n${lineas}\n\n*TOTAL: $${parseFloat(proforma.importeTotal || 0).toFixed(2)}*${vigencia}${proforma.observaciones ? `\n\n${proforma.observaciones}` : ''}`;
+
+    const telefono = (proforma.telefono || '').replace(/\D/g, '');
+    const url      = telefono
+      ? `https://wa.me/593${telefono.replace(/^0/, '')}?text=${encodeURIComponent(texto)}`
+      : `https://wa.me/?text=${encodeURIComponent(texto)}`;
+
+    window.open(url, '_blank');
+  };
+
   if (cargando) return <div className="prf-det-loading">Cargando proforma...</div>;
   if (!proforma) return null;
 
@@ -180,6 +223,13 @@ export default function DetalleProforma() {
               🧾 Ver Factura
             </button>
           )}
+          {/* Compartir */}
+          <button className="btn-secondary" onClick={compartirWhatsApp} title="Enviar por WhatsApp">
+            💬 WhatsApp
+          </button>
+          <button className="btn-secondary" onClick={abrirModalEmail} title="Enviar por Email">
+            📧 Email
+          </button>
           {/* Imprimir */}
           <button className="btn-secondary prf-btn-print" onClick={imprimir}>🖨️ Imprimir</button>
           {/* Anular */}
@@ -294,6 +344,39 @@ export default function DetalleProforma() {
           <p>Este documento es una cotización / presupuesto y no tiene validez tributaria. Para emitir un comprobante válido, convierta esta proforma a Factura.</p>
         </div>
       </div>
+
+      {/* ── Modal envío por Email ── */}
+      {modalEmail && (
+        <div className="modal-overlay" onClick={() => setModalEmail(false)}>
+          <div className="modal-content" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>📧 Enviar proforma por email</h3>
+              <button className="btn-close" onClick={() => setModalEmail(false)}>✕</button>
+            </div>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+              Se enviará la proforma <strong>{proforma.numero}</strong> al correo indicado.
+            </p>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              Correo electrónico *
+            </label>
+            <input
+              type="email"
+              value={emailDestino}
+              onChange={e => setEmailDestino(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && enviarEmail()}
+              placeholder="cliente@empresa.com"
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #c8d8ef', fontSize: 14, boxSizing: 'border-box', marginBottom: 20 }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={() => setModalEmail(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={enviarEmail} disabled={enviandoEmail}>
+                {enviandoEmail ? 'Enviando...' : '📧 Enviar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

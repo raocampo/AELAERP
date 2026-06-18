@@ -424,4 +424,4 @@ async function enviarDocumentoFiscal({
   }
 }
 
-module.exports = { enviarEmailBienvenida, enviarAlertaSoporte, enviarDocumentoFiscal };
+module.exports = { enviarEmailBienvenida, enviarAlertaSoporte, enviarDocumentoFiscal, enviarConFallback };
