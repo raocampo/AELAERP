@@ -163,4 +163,7 @@ async function run() {
   }
 }
 
-run();
+// Ejecutar directamente si es el script principal
+if (require.main === module) run();
+
+module.exports = { applyFixesToDb, run };

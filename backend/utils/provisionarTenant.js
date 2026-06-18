@@ -21,6 +21,7 @@ const { getPrismaMaster }  = require('../config/prismaMaster');
 const { getTenantPrisma }  = require('../config/prismaTenant');
 const { limitesPlan }      = require('./configuracionSistema');
 const { cifrar }           = require('./cifrado');
+const { applyFixesToDb }   = require('../scripts/applySchemaFixes');
 
 // ─── Genera un slug URL-safe a partir del nombre de empresa ──────────────────
 function generarSlug(nombre) {
@@ -184,6 +185,9 @@ async function provisionarTenant({
     const adminConn = parsearDbUrl(adminUrlParaSchema);
     const dbUrl = `postgresql://${adminConn.user}:${encodeURIComponent(adminConn.password)}@${adminConn.host}:${adminConn.port}/${dbName}`;
     aplicarSchemaTenant(dbUrl);
+
+    // 4b. Aplicar schema fixes adicionales (tablas fuera del schema.prisma: proformas, tabla_utilidades, etc.)
+    await applyFixesToDb(dbUrl, `tenant-new:${slug}`);
 
     // 5. Actualizar estado → activo
     const tenantActivo = await master.tenants.update({
