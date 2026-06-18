@@ -20,10 +20,6 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
-echo "--- Aplicando correcciones de schema (SQL directo, idempotente) ---"
-node scripts/applySchemaFixes.js
-
-echo ""
 echo "--- Verificando historial de migraciones (baseline si es necesario) ---"
 node scripts/baselineMigrations.js
 
@@ -48,6 +44,11 @@ fi
 echo ""
 echo "--- Corrigiendo credenciales de tenants (fixTenantCredentials.js) ---"
 node scripts/fixTenantCredentials.js
+
+echo ""
+echo "--- Aplicando correcciones de schema (SQL directo, idempotente) ---"
+node scripts/applySchemaFixes.js
+
 echo ""
 echo "--- Iniciando servidor Node.js ---"
 exec node server.js

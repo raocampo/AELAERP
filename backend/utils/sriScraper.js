@@ -598,15 +598,31 @@ async function obtenerRecibidosScraper({
     throw new Error('Se requiere rango de fechas (fechaDesde, fechaHasta)');
   }
 
-  const session = await scraperSriLogin(identificacion, password);
-  const { items } = await scraperSriRecibidos(session, {
-    ruc: identificacion,
-    fechaDesde,
-    fechaHasta,
-    tipoComprobante,
-  });
+  // Timeout global de 3 minutos para evitar que el job quede colgado indefinidamente
+  const TIMEOUT_TOTAL_MS = 3 * 60 * 1000;
 
-  return items;
+  const scraperPromise = (async () => {
+    const session = await scraperSriLogin(identificacion, password);
+    const { items } = await scraperSriRecibidos(session, {
+      ruc: identificacion,
+      fechaDesde,
+      fechaHasta,
+      tipoComprobante,
+    });
+    return items;
+  })();
+
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(
+      () => reject(new Error(
+        'Tiempo de espera agotado (3 min). El portal SRI no respondió a tiempo. ' +
+        'Prueba más tarde o descarga el ZIP manualmente desde srienlinea.sri.gob.ec → Comprobantes electrónicos → Recibidos → Descargar XML e impórtalo con "Importar ZIP".'
+      )),
+      TIMEOUT_TOTAL_MS
+    )
+  );
+
+  return Promise.race([scraperPromise, timeoutPromise]);
 }
 
 module.exports = {

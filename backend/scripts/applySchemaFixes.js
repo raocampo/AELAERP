@@ -88,29 +88,35 @@ async function applyFixesToDb(connectionString, label) {
 }
 
 async function run() {
-  const mainUrl = process.env.DATABASE_URL;
+  const mainUrl   = process.env.DATABASE_URL;
+  // DATABASE_MASTER_URL puede apuntar a un DB diferente que contiene aela_master.tenants
+  const masterUrl = process.env.DATABASE_MASTER_URL || mainUrl;
+
   if (!mainUrl) {
     console.error('[schema-fix] DATABASE_URL no definida — omitiendo.');
     return;
   }
 
-  // 1. BD principal
+  // 1. BD principal (DATABASE_URL)
   await applyFixesToDb(mainUrl, 'BD_principal');
 
-  // 2. BDs de tenants activos (todos en el mismo servidor Railway)
-  const masterClient = new Client({ connectionString: mainUrl });
+  // 2. Si DATABASE_MASTER_URL ≠ DATABASE_URL, también aplicar allí
+  if (masterUrl && masterUrl !== mainUrl) {
+    await applyFixesToDb(masterUrl, 'BD_master');
+  }
+
+  // 3. BDs de tenants activos — buscar en DATABASE_MASTER_URL (donde está aela_master)
+  const masterClient = new Client({ connectionString: masterUrl });
   try {
     await masterClient.connect();
 
     let tenantRows = [];
     try {
-      // El campo es "estado" (varchar), no un booleano "activo"
       const { rows } = await masterClient.query(
-        `SELECT slug, "dbName", "dbHost", "dbPort" FROM aela_master.tenants WHERE estado = 'activo'`
+        `SELECT slug, "dbName", "dbHost", "dbPort", "dbUser", "dbPass" FROM aela_master.tenants WHERE estado = 'activo'`
       );
       tenantRows = rows;
     } catch (err) {
-      // Solo ignorar si el schema aela_master no existe (instancias sin multi-tenant)
       const esSchemaMissing = /schema.*aela_master.*does not exist|relation.*aela_master.*does not exist/i.test(err.message);
       if (esSchemaMissing) {
         console.log('[schema-fix] Schema aela_master no encontrado — instancia sin multi-tenant.');
@@ -124,17 +130,30 @@ async function run() {
       return;
     }
 
-    // Reusar credenciales del DATABASE_URL (mismo servidor, diferente BD)
+    // Credenciales base de DATABASE_URL (mismo servidor, diferente DB por tenant)
     const parsed   = new URL(mainUrl);
-    const user     = parsed.username;
-    const pass     = parsed.password;
+    const baseUser = parsed.username;
+    const basePass = parsed.password;
     const mainHost = parsed.hostname;
     const mainPort = parsed.port || '5432';
 
     for (const t of tenantRows) {
-      const host     = t.dbHost || mainHost;
-      const port     = t.dbPort || mainPort;
-      const tenantUrl = `postgresql://${user}:${pass}@${host}:${port}/${t.dbName}`;
+      const host = t.dbHost || mainHost;
+      const port = t.dbPort || mainPort;
+
+      // Usar credenciales propias del tenant si están disponibles; fallback a las del DB principal
+      let tenantUser = t.dbUser || baseUser;
+      let tenantPass = basePass;
+      if (t.dbPass) {
+        try {
+          const { descifrar } = require('../utils/cifrado');
+          tenantPass = encodeURIComponent(descifrar(t.dbPass));
+        } catch {
+          // Si no se puede descifrar, usar credenciales del DB principal
+        }
+      }
+
+      const tenantUrl = `postgresql://${tenantUser}:${tenantPass}@${host}:${port}/${t.dbName}`;
       await applyFixesToDb(tenantUrl, `tenant:${t.slug}`);
     }
   } catch (err) {

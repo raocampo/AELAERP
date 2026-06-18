@@ -90,6 +90,7 @@ export default function FormProforma() {
   const [productoQuery, setProductoQuery]   = useState('');
   const [productosResult, setProductosResult] = useState([]);
   const [filaProducto, setFilaProducto]     = useState(null);
+  const [dropdownPos, setDropdownPos]       = useState(null);
   const buscadorRef = useRef();
 
   // ── Metadatos ─────────────────────────────────────────────────────────────
@@ -351,12 +352,12 @@ export default function FormProforma() {
                           <input
                             value={d.descripcion}
                             onChange={e => { handleDetalleChange(i, 'descripcion', e.target.value); setFilaProducto(i); setProductoQuery(e.target.value); }}
-                            onFocus={() => setFilaProducto(i)}
+                            onFocus={e => { setFilaProducto(i); const r = e.target.getBoundingClientRect(); setDropdownPos({ top: r.bottom + window.scrollY, left: r.left + window.scrollX, width: r.width }); }}
                             placeholder="Buscar producto o escribir..."
                             className="prf-input-desc"
                           />
-                          {filaProducto === i && productosResult.length > 0 && (
-                            <ul className="prf-dropdown-productos" ref={buscadorRef}>
+                          {filaProducto === i && productosResult.length > 0 && dropdownPos && (
+                            <ul className="prf-dropdown-productos" ref={buscadorRef} style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width, zIndex: 9999 }}>
                               {productosResult.slice(0, 8).map(p => (
                                 <li key={p.id} onMouseDown={() => seleccionarProducto(i, p)}>
                                   <span className="prf-prod-nombre">{p.nombre}</span>

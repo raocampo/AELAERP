@@ -574,6 +574,8 @@ router.get('/sri/diagnostico', async (req, res) => {
 // Polling del estado de un job de scraper iniciado con POST /sri/consultar.
 // Devuelve { status: 'pending'|'done'|'error', ... }
 router.get('/sri/job/:jobId', (req, res) => {
+  // Evitar caché HTTP (304 Not Modified) para que el frontend siempre reciba el estado actual
+  res.set('Cache-Control', 'no-store');
   const job = SCRAPER_JOBS.get(req.params.jobId);
   if (!job) return res.status(404).json({ success: false, mensaje: 'Job no encontrado o expirado' });
   if (job.status === 'pending') return res.json({ status: 'pending', mensaje: job.mensaje });
