@@ -352,12 +352,23 @@ export default function FormProforma() {
                           <input
                             value={d.descripcion}
                             onChange={e => { handleDetalleChange(i, 'descripcion', e.target.value); setFilaProducto(i); setProductoQuery(e.target.value); }}
-                            onFocus={e => { setFilaProducto(i); const r = e.target.getBoundingClientRect(); setDropdownPos({ top: r.bottom + window.scrollY, left: r.left + window.scrollX, width: r.width }); }}
+                            onFocus={e => {
+                              setFilaProducto(i);
+                              const r = e.target.getBoundingClientRect();
+                              // Abrir hacia arriba si hay menos de 220px bajo el input
+                              const abrirArriba = (window.innerHeight - r.bottom) < 220;
+                              setDropdownPos({
+                                top:    abrirArriba ? 'auto' : r.bottom,
+                                bottom: abrirArriba ? (window.innerHeight - r.top) : 'auto',
+                                left:   r.left,
+                                width:  r.width,
+                              });
+                            }}
                             placeholder="Buscar producto o escribir..."
                             className="prf-input-desc"
                           />
                           {filaProducto === i && productosResult.length > 0 && dropdownPos && (
-                            <ul className="prf-dropdown-productos" ref={buscadorRef} style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width, zIndex: 9999 }}>
+                            <ul className="prf-dropdown-productos" ref={buscadorRef} style={{ position: 'fixed', top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, width: dropdownPos.width, zIndex: 9999 }}>
                               {productosResult.slice(0, 8).map(p => (
                                 <li key={p.id} onMouseDown={() => seleccionarProducto(i, p)}>
                                   <span className="prf-prod-nombre">{p.nombre}</span>

@@ -62,7 +62,20 @@ async function consultarSriAutomatico(payload, onProgreso) {
   const MAX_INTENTOS = 80; // máx ~4 min de polling (80 × 3 s)
   for (let i = 0; i < MAX_INTENTOS; i++) {
     await new Promise((r) => setTimeout(r, 3000));
-    const { data: estado } = await api.get(`/buzon/sri/job/${inicio.jobId}`);
+    let estado;
+    try {
+      const { data } = await api.get(`/buzon/sri/job/${inicio.jobId}`);
+      estado = data;
+    } catch (pollErr) {
+      // 422 = job terminó en error; extraer el mensaje del body
+      if (pollErr.response?.status === 422) {
+        const d = pollErr.response.data || {};
+        const e = new Error(d.mensaje || 'Error en el scraper SRI');
+        e.response = { data: d };
+        throw e;
+      }
+      throw pollErr;
+    }
     if (onProgreso) onProgreso(estado.mensaje || 'Procesando...');
     if (estado.status === 'done') return { data: estado };
     if (estado.status === 'error') {

@@ -7,11 +7,15 @@ const express = require('express');
 const router  = express.Router();
 const { proteger, permitir } = require('../middleware/auth');
 const { normalizarRol }      = require('../utils/roles');
-const { pg: pgPool }         = require('../config/prisma');
+const prisma                 = require('../config/prisma');
 const { enviarConFallback }  = require('../utils/email');
 
 // Todas las rutas requieren autenticación
 router.use(proteger);
+
+// Fallback: en modo monoempresa (sin tenant resuelto) req.prisma es undefined;
+// usar el proxy global que apunta a DATABASE_URL
+router.use((req, _res, next) => { if (!req.prisma) req.prisma = prisma; next(); });
 
 // ─── Helper: siguiente secuencial ────────────────────────────────────────────
 async function siguienteSecuencial(prisma, empresaId) {

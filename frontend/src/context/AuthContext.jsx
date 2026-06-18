@@ -67,6 +67,12 @@ export function AuthProvider({ children }) {
       if (empresaSesion) setEmpresa(empresaSesion);
       if (sistemaSesion) setSistema(sistemaSesion);
       recargarSistema(empresaSesion).catch(() => {});
+
+      // Restaurar lista de empresas inmediatamente desde localStorage (antes de la llamada API)
+      const listaGuardada = localStorage.getItem('aela_empresas_disponibles');
+      if (listaGuardada) {
+        try { setEmpresasDisponibles(JSON.parse(listaGuardada)); } catch {}
+      }
     }
 
     setCargando(false);
@@ -75,7 +81,11 @@ export function AuthProvider({ children }) {
   const cargarEmpresasDisponibles = useCallback(async () => {
     try {
       const res = await api.get('/empresas/mis-empresas');
-      if (res.data?.success) setEmpresasDisponibles(res.data.data || []);
+      if (res.data?.success) {
+        const lista = res.data.data || [];
+        setEmpresasDisponibles(lista);
+        localStorage.setItem('aela_empresas_disponibles', JSON.stringify(lista));
+      }
     } catch {
       // sin acceso a múltiples empresas — no es error crítico
     }
@@ -157,6 +167,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('aela_usuario');
     localStorage.removeItem('aela_empresa');
     localStorage.removeItem('aela_sistema');
+    localStorage.removeItem('aela_empresas_disponibles');
     // aela_tenant_slug se mantiene intencionalmente para redirigir al portal correcto
     setUsuario(null);
     setEmpresa(null);
@@ -192,8 +203,10 @@ export function AuthProvider({ children }) {
       setEmpresa(nuevaEmpresa);
       localStorage.setItem('aela_empresa', JSON.stringify(nuevaEmpresa));
       await recargarSistema(nuevaEmpresa);
-      cargarEmpresasDisponibles();
+      // No llamar cargarEmpresasDisponibles aquí — el reload recarga todo.
+      // La lista persistida en localStorage garantiza que el switcher siga visible.
       toast.success(`Empresa activa: ${nuevaEmpresa.nombreComercial || nuevaEmpresa.razonSocial}`);
+      setTimeout(() => window.location.reload(), 600);
       return { success: true };
     } catch (err) {
       toast.error(err.response?.data?.mensaje || err.message || 'Error al cambiar empresa');
