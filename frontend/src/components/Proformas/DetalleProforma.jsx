@@ -70,6 +70,7 @@ export default function DetalleProforma() {
         vigenciaDesde:      p.vigenciadesde      || p.vigenciaDesde,
         vigenciaHasta:      p.vigenciahasta      || p.vigenciaHasta,
         facturaId:          p.facturaid          || p.facturaId,
+        formaPago:          p.formapago          || p.formaPago || null,
         detalles:           typeof p.detalles === 'string' ? JSON.parse(p.detalles) : (p.detalles || []),
       });
     } catch {
@@ -161,7 +162,7 @@ export default function DetalleProforma() {
       ? `\nVigencia hasta: ${fmtFecha(proforma.vigenciaHasta)}`
       : '';
 
-    const texto = `*PROFORMA ${proforma.numero}*\nCliente: ${proforma.razonSocial}\n\n*Detalle:*\n${lineas}\n\n*TOTAL: $${parseFloat(proforma.importeTotal || 0).toFixed(2)}*${vigencia}${proforma.observaciones ? `\n\n${proforma.observaciones}` : ''}`;
+    const texto = `*PROFORMA ${proforma.numero}*\nCliente: ${proforma.razonSocial}\n\n*Detalle:*\n${lineas}\n\n*TOTAL: $${parseFloat(proforma.importeTotal || 0).toFixed(2)}*${vigencia}${proforma.formaPago ? `\nForma de pago: ${proforma.formaPago}` : ''}${proforma.observaciones ? `\n\n${proforma.observaciones}` : ''}`;
 
     const telefono = (proforma.telefono || '').replace(/\D/g, '');
     const url      = telefono
@@ -330,6 +331,14 @@ export default function DetalleProforma() {
             <span className="prf-det-tot-valor">{fmtMonto(proforma.importeTotal)}</span>
           </div>
         </div>
+
+        {/* Forma de pago */}
+        {proforma.formaPago && (
+          <div className="prf-det-obs" style={{ background: '#f5f3ff', borderLeft: '3px solid #7c3aed' }}>
+            <p className="prf-det-obs-label">Forma de pago</p>
+            <p className="prf-det-obs-txt" style={{ fontWeight: 600 }}>{proforma.formaPago}</p>
+          </div>
+        )}
 
         {/* Observaciones */}
         {proforma.observaciones && (

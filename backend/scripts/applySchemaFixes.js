@@ -70,18 +70,27 @@ const FIXES = [
   )`,
   `CREATE INDEX IF NOT EXISTS "proformas_empresaId_idx" ON "proformas"("empresaId")`,
   `CREATE INDEX IF NOT EXISTS "proformas_estado_idx"    ON "proformas"("estado")`,
+  // Forma de pago en proformas (campo agregado 2026-06-18)
+  `ALTER TABLE "proformas" ADD COLUMN IF NOT EXISTS "formaPago" VARCHAR(100)`,
 ];
 
 async function applyFixesToDb(connectionString, label) {
   const client = new Client({ connectionString });
   try {
     await client.connect();
+    let errores = 0;
     for (const sql of FIXES) {
-      await client.query(sql);
+      try {
+        await client.query(sql);
+      } catch (sqlErr) {
+        // Cada SQL es independiente: si uno falla no bloqueamos los demás
+        errores++;
+        console.warn(`[schema-fix] ${label} advertencia: ${sqlErr.message.split('\n')[0]}`);
+      }
     }
-    console.log(`[schema-fix] ${label}: ${FIXES.length} columna(s) verificadas/aplicadas.`);
+    console.log(`[schema-fix] ${label}: ${FIXES.length} sentencias verificadas${errores ? ` (${errores} advertencias)` : ''}.`);
   } catch (err) {
-    console.error(`[schema-fix] Error en ${label}:`, err.message);
+    console.error(`[schema-fix] Error de conexión en ${label}:`, err.message);
   } finally {
     await client.end().catch(() => {});
   }

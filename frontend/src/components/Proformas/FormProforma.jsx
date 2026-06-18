@@ -11,6 +11,16 @@ import './FormProforma.css';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
+const FORMAS_PAGO = [
+  { valor: '',                             label: '— Sin especificar —' },
+  { valor: 'Contra Entrega',              label: 'Contra Entrega' },
+  { valor: '50% anticipo / 50% entrega', label: '50% anticipo / 50% entrega' },
+  { valor: 'Prefactura',                  label: 'Prefactura' },
+  { valor: 'Crédito 15 días',            label: 'Crédito 15 días' },
+  { valor: 'Crédito 30 días',            label: 'Crédito 30 días' },
+  { valor: 'Transferencia bancaria',     label: 'Transferencia bancaria' },
+];
+
 const TIPOS_ID = [
   { valor: '05', label: 'Cédula' },
   { valor: '04', label: 'RUC' },
@@ -93,10 +103,22 @@ export default function FormProforma() {
   const [dropdownPos, setDropdownPos]       = useState(null);
   const buscadorRef = useRef();
 
+  const calcDropdownPos = (el) => {
+    const r = el.getBoundingClientRect();
+    const abrirArriba = (window.innerHeight - r.bottom) < 240;
+    setDropdownPos({
+      top:    abrirArriba ? 'auto' : r.bottom + 2,
+      bottom: abrirArriba ? (window.innerHeight - r.top + 2) : 'auto',
+      left:   r.left,
+      width:  r.width,
+    });
+  };
+
   // ── Metadatos ─────────────────────────────────────────────────────────────
   const [vigenciaDesde, setVigenciaDesde] = useState('');
   const [vigenciaHasta, setVigenciaHasta] = useState('');
   const [observaciones, setObservaciones] = useState('');
+  const [formaPago,     setFormaPago]     = useState('');
 
   // ── Cargar proforma para edición ──────────────────────────────────────────
   useEffect(() => {
@@ -119,6 +141,7 @@ export default function FormProforma() {
         setVigenciaDesde(p.vigenciadesde ? p.vigenciadesde.substring(0, 10) : '');
         setVigenciaHasta(p.vigenciahasta ? p.vigenciahasta.substring(0, 10) : '');
         setObservaciones(p.observaciones || '');
+        setFormaPago(p.formapago || p.formaPago || '');
       } catch {
         toast.error('Error al cargar proforma');
         navigate('/proformas');
@@ -210,6 +233,7 @@ export default function FormProforma() {
         vigenciaDesde: vigenciaDesde || null,
         vigenciaHasta: vigenciaHasta || null,
         observaciones: observaciones || null,
+        formaPago:     formaPago     || null,
       };
       if (esEdicion) {
         await api.put(`/proformas/${id}`, body);
@@ -351,19 +375,13 @@ export default function FormProforma() {
                         <div style={{ position: 'relative' }}>
                           <input
                             value={d.descripcion}
-                            onChange={e => { handleDetalleChange(i, 'descripcion', e.target.value); setFilaProducto(i); setProductoQuery(e.target.value); }}
-                            onFocus={e => {
+                            onChange={e => {
+                              handleDetalleChange(i, 'descripcion', e.target.value);
                               setFilaProducto(i);
-                              const r = e.target.getBoundingClientRect();
-                              // Abrir hacia arriba si hay menos de 220px bajo el input
-                              const abrirArriba = (window.innerHeight - r.bottom) < 220;
-                              setDropdownPos({
-                                top:    abrirArriba ? 'auto' : r.bottom,
-                                bottom: abrirArriba ? (window.innerHeight - r.top) : 'auto',
-                                left:   r.left,
-                                width:  r.width,
-                              });
+                              setProductoQuery(e.target.value);
+                              calcDropdownPos(e.target);
                             }}
+                            onFocus={e => { setFilaProducto(i); calcDropdownPos(e.target); }}
                             placeholder="Buscar producto o escribir..."
                             className="prf-input-desc"
                           />
@@ -441,9 +459,9 @@ export default function FormProforma() {
           </div>
         </div>
 
-        {/* ─── Sección Vigencia y Observaciones ─── */}
+        {/* ─── Sección Vigencia, Forma de Pago y Observaciones ─── */}
         <div className="prf-section">
-          <h2>📅 Vigencia y Observaciones</h2>
+          <h2>📅 Vigencia y Condiciones</h2>
           <div className="prf-grid-2">
             <div className="prf-field">
               <label>Válida desde</label>
@@ -455,11 +473,19 @@ export default function FormProforma() {
               <span className="prf-hint">Si se vence, se recomienda anularla y crear una nueva</span>
             </div>
             <div className="prf-field prf-field-full">
-              <label>Observaciones / Condiciones</label>
+              <label>Forma de pago</label>
+              <select value={formaPago} onChange={e => setFormaPago(e.target.value)}>
+                {FORMAS_PAGO.map(fp => (
+                  <option key={fp.valor} value={fp.valor}>{fp.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="prf-field prf-field-full">
+              <label>Observaciones / Condiciones adicionales</label>
               <textarea
                 value={observaciones}
                 onChange={e => setObservaciones(e.target.value)}
-                placeholder="Condiciones de pago, garantías, tiempos de entrega..."
+                placeholder="Garantías, tiempos de entrega, notas adicionales..."
                 rows={3}
                 className="prf-textarea"
               />

@@ -21,7 +21,10 @@ export default function EmpresaSwitcher() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  if (!empresasDisponibles || empresasDisponibles.length < 2) return null;
+  // Mostrar solo empresas activas (activo !== false cubre tanto true como ausencia del campo)
+  const activas = (empresasDisponibles || []).filter(e => e.activo !== false);
+
+  if (activas.length < 2) return null;
 
   const handleSeleccionar = async (empresaId) => {
     if (empresaId === empresa?.id || cargando) return;
@@ -48,7 +51,7 @@ export default function EmpresaSwitcher() {
       {abierto && (
         <div className="emp-switcher-dropdown">
           <div className="emp-switcher-label">Empresas disponibles</div>
-          {empresasDisponibles.map((emp) => (
+          {activas.map((emp) => (
             <button
               key={emp.id}
               className={`emp-switcher-item ${emp.id === empresa?.id ? 'active' : ''}`}

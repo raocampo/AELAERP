@@ -68,11 +68,13 @@ export function AuthProvider({ children }) {
       if (sistemaSesion) setSistema(sistemaSesion);
       recargarSistema(empresaSesion).catch(() => {});
 
-      // Restaurar lista de empresas inmediatamente desde localStorage (antes de la llamada API)
+      // Restaurar lista desde localStorage de inmediato (evita parpadeo)
       const listaGuardada = localStorage.getItem('aela_empresas_disponibles');
       if (listaGuardada) {
         try { setEmpresasDisponibles(JSON.parse(listaGuardada)); } catch {}
       }
+      // Refrescar desde API (actualiza lista si hay empresas nuevas o desactivadas)
+      cargarEmpresasDisponibles();
     }
 
     setCargando(false);

@@ -110,6 +110,7 @@ router.post('/', async (req, res) => {
       detalles = [],
       observaciones,
       vigenciaDesde, vigenciaHasta,
+      formaPago,
     } = req.body;
 
     if (!razonSocial?.trim()) return res.status(400).json({ ok: false, mensaje: 'Razón social requerida' });
@@ -129,10 +130,10 @@ router.post('/', async (req, res) => {
         "totalDescuento", "totalIva", "importeTotal",
         "detalles", "observaciones",
         "vigenciaDesde", "vigenciaHasta",
-        "estado", "creadoPor"
+        "estado", "creadoPor", "formaPago"
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22
+        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23
       ) RETURNING *
     `,
       empresaId, numero, sec,
@@ -142,13 +143,13 @@ router.post('/', async (req, res) => {
       totales.totalDescuento, totales.totalIva, totales.importeTotal,
       JSON.stringify(detalles), observaciones || null,
       vigenciaDesde || null, vigenciaHasta || null,
-      'BORRADOR', req.usuario.id,
+      'BORRADOR', req.usuario.id, formaPago || null,
     );
 
     res.status(201).json({ ok: true, data: row });
   } catch (err) {
-    console.error('[proformas] POST /', err.message);
-    res.status(500).json({ ok: false, mensaje: 'Error al crear proforma' });
+    console.error('[proformas] POST /', err.message, err.stack);
+    res.status(500).json({ ok: false, mensaje: err.message || 'Error al crear proforma' });
   }
 });
 
@@ -182,6 +183,7 @@ router.put('/:id', async (req, res) => {
       tipoIdentificacion, identificacion, razonSocial,
       direccion, email, telefono, clienteId,
       detalles = [], observaciones, vigenciaDesde, vigenciaHasta,
+      formaPago,
     } = req.body;
 
     if (!razonSocial?.trim()) return res.status(400).json({ ok: false, mensaje: 'Razón social requerida' });
@@ -197,7 +199,7 @@ router.put('/:id', async (req, res) => {
         "totalDescuento" = $13, "totalIva" = $14, "importeTotal" = $15,
         "detalles" = $16, "observaciones" = $17,
         "vigenciaDesde" = $18, "vigenciaHasta" = $19,
-        "updatedAt" = NOW()
+        "formaPago" = $20, "updatedAt" = NOW()
       WHERE id = $1 AND "empresaId" = $2
       RETURNING *
     `,
@@ -208,12 +210,13 @@ router.put('/:id', async (req, res) => {
       totales.totalDescuento, totales.totalIva, totales.importeTotal,
       JSON.stringify(detalles), observaciones || null,
       vigenciaDesde || null, vigenciaHasta || null,
+      formaPago || null,
     );
 
     res.json({ ok: true, data: row });
   } catch (err) {
-    console.error('[proformas] PUT /:id', err.message);
-    res.status(500).json({ ok: false, mensaje: 'Error al actualizar proforma' });
+    console.error('[proformas] PUT /:id', err.message, err.stack);
+    res.status(500).json({ ok: false, mensaje: err.message || 'Error al actualizar proforma' });
   }
 });
 
