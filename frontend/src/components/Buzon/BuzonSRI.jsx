@@ -150,6 +150,9 @@ export default function BuzonSRI() {
   const [diagnostico, setDiagnostico]         = useState(null);
   const [corrDiagnostico, setCorrDiagnostico] = useState(false);
 
+  const [screenshot,         setScreenshot]         = useState(null);
+  const [cargandoScreenshot, setCargandoScreenshot] = useState(false);
+
   // ── Parsear archivo TXT del portal SRI ──────────────────────
   const leerTxt = (file) => {
     if (!file) return;
@@ -414,6 +417,20 @@ export default function BuzonSRI() {
     }
   };
 
+  const tomarScreenshot = async () => {
+    setCargandoScreenshot(true);
+    setScreenshot(null);
+    try {
+      toast('Iniciando Chrome y navegando al portal SRI… (~10 seg)', { icon: '🌐', duration: 12000 });
+      const res = await api.get('/buzon/sri/screenshot');
+      setScreenshot(res.data || null);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al capturar el portal SRI');
+    } finally {
+      setCargandoScreenshot(false);
+    }
+  };
+
   const cargarHistorial = useCallback(async () => {
     setCargandoHistorial(true);
     try {
@@ -434,14 +451,24 @@ export default function BuzonSRI() {
           <h1>📥 Buzón SRI</h1>
           <p>Importa documentos electrónicos recibidos: facturas de proveedores, retenciones de clientes, notas de crédito y débito.</p>
         </div>
-        <button
-          className="btn-secondary"
-          onClick={ejecutarDiagnostico}
-          disabled={corrDiagnostico}
-          title="Verifica la conexión con el portal SRI y el estado de Chrome"
-        >
-          {corrDiagnostico ? '⏳ Verificando…' : '🔍 Diagnóstico SRI'}
-        </button>
+        <div style={{ display: 'flex', gap: '.5rem' }}>
+          <button
+            className="btn-secondary"
+            onClick={ejecutarDiagnostico}
+            disabled={corrDiagnostico}
+            title="Verifica la conexión con el portal SRI y el estado de Chrome"
+          >
+            {corrDiagnostico ? '⏳ Verificando…' : '🔍 Diagnóstico SRI'}
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={tomarScreenshot}
+            disabled={cargandoScreenshot}
+            title="Captura lo que ve Puppeteer al navegar al portal SRI — útil para diagnosticar cambios en el portal"
+          >
+            {cargandoScreenshot ? '⏳ Cargando…' : '📸 Ver portal'}
+          </button>
+        </div>
       </div>
 
       {diagnostico && (
@@ -475,6 +502,75 @@ export default function BuzonSRI() {
             })()}
           </div>
           <button className="btn-secondary" style={{ marginTop: '.5rem', fontSize: '.8rem' }} onClick={() => setDiagnostico(null)}>Cerrar</button>
+        </div>
+      )}
+
+      {screenshot && (
+        <div className="buzon-diagnostico">
+          <h4>📸 Vista del portal SRI (Puppeteer en Railway)</h4>
+          <div style={{ fontSize: '.8rem', color: '#555', marginBottom: '.5rem' }}>
+            <strong>URL:</strong> {screenshot.url} &nbsp;|&nbsp; <strong>Título:</strong> {screenshot.title}
+          </div>
+          {screenshot.screenshot && (
+            <img
+              src={`data:image/png;base64,${screenshot.screenshot}`}
+              alt="Portal SRI visto desde Railway"
+              style={{ maxWidth: '100%', border: '1px solid #ddd', borderRadius: 4, marginBottom: '.75rem' }}
+            />
+          )}
+          {screenshot.inputs?.length > 0 && (
+            <div style={{ marginBottom: '.5rem' }}>
+              <strong style={{ fontSize: '.8rem' }}>Campos input detectados ({screenshot.inputs.length}):</strong>
+              <table style={{ fontSize: '.75rem', width: '100%', borderCollapse: 'collapse', marginTop: '.25rem' }}>
+                <thead>
+                  <tr style={{ background: '#f0f0f0' }}>
+                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>type</th>
+                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>id</th>
+                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>name</th>
+                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>placeholder</th>
+                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>visible</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {screenshot.inputs.map((inp, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid #eee', background: inp.visible ? '#fff' : '#fafafa' }}>
+                      <td style={{ padding: '3px 6px' }}>{inp.type}</td>
+                      <td style={{ padding: '3px 6px', fontFamily: 'monospace' }}>{inp.id || '—'}</td>
+                      <td style={{ padding: '3px 6px', fontFamily: 'monospace' }}>{inp.name || '—'}</td>
+                      <td style={{ padding: '3px 6px' }}>{inp.placeholder || '—'}</td>
+                      <td style={{ padding: '3px 6px' }}>{inp.visible ? '✅' : '❌'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {screenshot.buttons?.length > 0 && (
+            <div style={{ marginBottom: '.5rem' }}>
+              <strong style={{ fontSize: '.8rem' }}>Botones detectados ({screenshot.buttons.length}):</strong>
+              <table style={{ fontSize: '.75rem', width: '100%', borderCollapse: 'collapse', marginTop: '.25rem' }}>
+                <thead>
+                  <tr style={{ background: '#f0f0f0' }}>
+                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>tag</th>
+                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>id</th>
+                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>texto</th>
+                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>visible</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {screenshot.buttons.map((btn, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid #eee' }}>
+                      <td style={{ padding: '3px 6px', fontFamily: 'monospace' }}>{btn.tag}</td>
+                      <td style={{ padding: '3px 6px', fontFamily: 'monospace' }}>{btn.id || '—'}</td>
+                      <td style={{ padding: '3px 6px' }}>{btn.text || '—'}</td>
+                      <td style={{ padding: '3px 6px' }}>{btn.visible ? '✅' : '❌'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <button className="btn-secondary" style={{ marginTop: '.5rem', fontSize: '.8rem' }} onClick={() => setScreenshot(null)}>Cerrar</button>
         </div>
       )}
 
