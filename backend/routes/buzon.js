@@ -505,73 +505,87 @@ router.get('/historial', async (req, res) => {
 // ─── GET /sri/screenshot ─────────────────────────────────────
 // Diagnóstico visual: captura lo que ve Puppeteer/Chromium en el portal SRI.
 // Devuelve { screenshot (base64), url, title, inputs[], buttons[] }
-// Usado para verificar si el portal cambió su estructura de login.
+// IMPORTANTE: usa waitUntil:'commit' para no colgarse si el portal no dispara
+// domcontentloaded, y un Promise.race de 45 s para responder antes del timeout
+// del proxy de Railway (evita el CORS error por 499).
 router.get('/sri/screenshot', async (req, res) => {
-  let browser;
-  try {
-    const puppeteer = require('puppeteer');
-    const { execSync } = require('child_process');
-    const nodePath = require('path');
+  const TIMEOUT_MS = 45_000;
 
-    const raw = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROMIUM_PATH;
-    let execPath = null;
-    if (raw) {
-      if (nodePath.isAbsolute(raw)) {
-        execPath = raw;
-      } else {
-        try {
-          execPath = execSync(`which "${raw}" 2>/dev/null`, { timeout: 3000, encoding: 'utf8' }).trim() || raw;
-        } catch { execPath = raw; }
+  const capturar = async () => {
+    let browser;
+    try {
+      const puppeteer = require('puppeteer');
+      const { execSync } = require('child_process');
+      const nodePath = require('path');
+
+      const raw = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROMIUM_PATH;
+      let execPath = null;
+      if (raw) {
+        execPath = nodePath.isAbsolute(raw) ? raw : (() => {
+          try { return execSync(`which "${raw}" 2>/dev/null`, { timeout: 3000, encoding: 'utf8' }).trim() || raw; }
+          catch { return raw; }
+        })();
       }
+
+      const opts = {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+               '--disable-gpu', '--no-zygote', '--window-size=1280,800'],
+        defaultViewport: { width: 1280, height: 800 },
+        timeout: 30000,
+      };
+      if (execPath) opts.executablePath = execPath;
+
+      browser = await puppeteer.launch(opts);
+      const page = await browser.newPage();
+      // Timeouts individuales cortos para no colgarse en ninguna operación
+      page.setDefaultNavigationTimeout(15000);
+      page.setDefaultTimeout(10000);
+      page.on('requestfailed', () => {});
+      await page.setExtraHTTPHeaders({ 'Accept-Language': 'es-EC,es;q=0.9' });
+
+      // 'commit' resuelve en cuanto llegan los primeros bytes HTTP — no puede colgarse
+      // esperando que el DOM termine de cargar como sí lo haría 'domcontentloaded'
+      await page.goto('https://srienlinea.sri.gob.ec/', {
+        waitUntil: 'commit', timeout: 15000,
+      }).catch(() => {});
+
+      // Dar tiempo al JS para renderizar (JSF/Angular pueden tardar)
+      await new Promise((r) => setTimeout(r, 4000));
+
+      const url   = page.url();
+      const title = await page.title().catch(() => '');
+
+      const inputs = await page.$$eval('input', (els) => els.map((e) => ({
+        type: e.type, id: e.id, name: e.name,
+        class: (e.className || '').substring(0, 100),
+        placeholder: e.placeholder,
+        visible: e.offsetParent !== null,
+      }))).catch(() => []);
+
+      const buttons = await page.$$eval('button, input[type="submit"], input[type="button"]', (els) => els.map((e) => ({
+        tag: e.tagName, type: e.type || '',
+        id: e.id, name: e.name || '',
+        text: (e.textContent || e.value || '').trim().substring(0, 80),
+        visible: e.offsetParent !== null,
+      }))).catch(() => []);
+
+      const screenshot = await page.screenshot({ encoding: 'base64', fullPage: false }).catch(() => null);
+
+      return { success: true, url, title, inputs, buttons, screenshot };
+    } finally {
+      if (browser) await browser.close().catch(() => {});
     }
+  };
 
-    const opts = {
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-             '--disable-gpu', '--no-zygote', '--window-size=1280,800'],
-      defaultViewport: { width: 1280, height: 800 },
-      timeout: 30000,
-    };
-    if (execPath) opts.executablePath = execPath;
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Timeout 45s: el navegador no respondió. Puede que Railway no alcance el portal SRI con Puppeteer.')), TIMEOUT_MS)
+  );
 
-    browser = await puppeteer.launch(opts);
-    const page = await browser.newPage();
-    page.on('requestfailed', () => {});
-    await page.setExtraHTTPHeaders({ 'Accept-Language': 'es-EC,es;q=0.9',
-      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36' });
-
-    await page.goto('https://srienlinea.sri.gob.ec/', {
-      waitUntil: 'domcontentloaded', timeout: 30000,
-    }).catch(() => {});
-
-    // Esperar JS render (portales JSF/Angular pueden tardar)
-    await new Promise((r) => setTimeout(r, 5000));
-
-    const url   = page.url();
-    const title = await page.title().catch(() => '');
-
-    const inputs = await page.$$eval('input', (els) => els.map((e) => ({
-      type: e.type, id: e.id, name: e.name,
-      class: (e.className || '').substring(0, 100),
-      placeholder: e.placeholder,
-      visible: e.offsetParent !== null,
-    }))).catch(() => []);
-
-    const buttons = await page.$$eval('button, input[type="submit"], input[type="button"]', (els) => els.map((e) => ({
-      tag: e.tagName, type: e.type || '',
-      id: e.id, name: e.name || '',
-      text: (e.textContent || e.value || '').trim().substring(0, 80),
-      visible: e.offsetParent !== null,
-    }))).catch(() => []);
-
-    const screenshot = await page.screenshot({ encoding: 'base64', fullPage: false }).catch(() => null);
-
-    await browser.close();
-    browser = null;
-
-    res.json({ success: true, url, title, inputs, buttons, screenshot });
+  try {
+    const resultado = await Promise.race([capturar(), timeoutPromise]);
+    res.json(resultado);
   } catch (err) {
-    if (browser) await browser.close().catch(() => {});
     res.status(500).json({ success: false, mensaje: err.message });
   }
 });
