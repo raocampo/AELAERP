@@ -531,7 +531,8 @@ router.get('/sri/screenshot', async (req, res) => {
         headless: true,
         args: [
           '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-          '--disable-gpu', '--no-proxy-server', '--ignore-certificate-errors',
+          '--disable-gpu', '--no-zygote',   // requerido en Docker/Railway para iniciar Chrome
+          '--no-proxy-server', '--ignore-certificate-errors',
           '--disable-extensions', '--window-size=1280,800',
         ],
         defaultViewport: { width: 1280, height: 800 },

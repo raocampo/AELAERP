@@ -79,15 +79,13 @@ async function _lanzarNavegador() {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      // NOTA: --no-zygote y --disable-background-networking eliminados:
-      // en contenedores Docker/Railway aislan el proceso de red de Chrome
-      // impidiendo que navegue a sitios externos.
-      '--no-proxy-server',          // evitar detección automática de proxy que puede colgar
+      '--no-zygote',              // requerido en Docker/Railway: sin él Chrome no puede iniciarse
+      '--no-proxy-server',        // evitar detección automática de proxy (puede colgar)
+      '--ignore-certificate-errors',
       '--disable-extensions',
       '--disable-sync',
       '--disable-translate',
       '--mute-audio',
-      '--ignore-certificate-errors', // tolerar errores SSL del portal SRI
       '--window-size=1280,800',
     ],
     timeout: 30_000,

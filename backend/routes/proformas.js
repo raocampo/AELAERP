@@ -133,7 +133,7 @@ router.post('/', async (req, res) => {
         "estado", "creadoPor", "formaPago"
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-        $11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23
+        $11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19::timestamp,$20::timestamp,$21,$22,$23
       ) RETURNING *
     `,
       empresaId, numero, sec,
@@ -198,7 +198,7 @@ router.put('/:id', async (req, res) => {
         "subtotal0" = $10, "subtotal5" = $11, "subtotal15" = $12,
         "totalDescuento" = $13, "totalIva" = $14, "importeTotal" = $15,
         "detalles" = $16::jsonb, "observaciones" = $17,
-        "vigenciaDesde" = $18, "vigenciaHasta" = $19,
+        "vigenciaDesde" = $18::timestamp, "vigenciaHasta" = $19::timestamp,
         "formaPago" = $20, "updatedAt" = NOW()
       WHERE id = $1 AND "empresaId" = $2
       RETURNING *
