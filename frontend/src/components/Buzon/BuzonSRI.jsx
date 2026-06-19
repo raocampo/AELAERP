@@ -509,7 +509,22 @@ export default function BuzonSRI() {
         <div className="buzon-diagnostico">
           <h4>📸 Vista del portal SRI (Puppeteer en Railway)</h4>
           <div style={{ fontSize: '.8rem', color: '#555', marginBottom: '.5rem' }}>
-            <strong>URL:</strong> {screenshot.url} &nbsp;|&nbsp; <strong>Título:</strong> {screenshot.title}
+            <strong>URL:</strong> {screenshot.url || '(vacía)'} &nbsp;|&nbsp; <strong>Título:</strong> {screenshot.title || '(vacío)'}
+          </div>
+          {/* Diagnóstico de red Chrome */}
+          <div style={{ background: '#f8f8f8', border: '1px solid #e0e0e0', borderRadius: 4, padding: '8px 12px', marginBottom: '.75rem', fontSize: '.8rem' }}>
+            <div style={{ marginBottom: 4 }}>
+              <strong>Chrome → example.com:</strong>{' '}
+              {screenshot.exampleOk
+                ? <span style={{ color: '#16a34a' }}>✅ OK ({screenshot.exampleUrl})</span>
+                : <span style={{ color: '#dc2626' }}>❌ Sin acceso a internet</span>}
+            </div>
+            <div>
+              <strong>Chrome → portal SRI:</strong>{' '}
+              {!screenshot.gotoError && screenshot.url && screenshot.url !== 'about:blank'
+                ? <span style={{ color: '#16a34a' }}>✅ OK</span>
+                : <span style={{ color: '#dc2626' }}>❌ {screenshot.gotoError || 'URL resultó about:blank'}</span>}
+            </div>
           </div>
           {screenshot.screenshot && (
             <img

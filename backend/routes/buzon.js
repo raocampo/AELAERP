@@ -544,14 +544,24 @@ router.get('/sri/screenshot', async (req, res) => {
       page.on('requestfailed', () => {});
       await page.setExtraHTTPHeaders({ 'Accept-Language': 'es-EC,es;q=0.9' });
 
-      // 'commit' resuelve en cuanto llegan los primeros bytes HTTP — no puede colgarse
-      // esperando que el DOM termine de cargar como sí lo haría 'domcontentloaded'
+      // ── Test 1: example.com para verificar si Chrome tiene red ──
+      let exampleOk = false;
+      let exampleUrl = '';
+      const pageEx = await browser.newPage();
+      pageEx.setDefaultNavigationTimeout(10000);
+      await pageEx.goto('https://example.com', { waitUntil: 'commit', timeout: 10000 })
+        .then(() => { exampleOk = true; exampleUrl = pageEx.url(); })
+        .catch(() => {});
+      await pageEx.close().catch(() => {});
+
+      // ── Test 2: navegar al portal SRI, capturando el error ────
+      let gotoError = null;
       await page.goto('https://srienlinea.sri.gob.ec/', {
         waitUntil: 'commit', timeout: 15000,
-      }).catch(() => {});
+      }).catch((err) => { gotoError = err.message || String(err); });
 
       // Dar tiempo al JS para renderizar (JSF/Angular pueden tardar)
-      await new Promise((r) => setTimeout(r, 4000));
+      await new Promise((r) => setTimeout(r, 3000));
 
       const url   = page.url();
       const title = await page.title().catch(() => '');
@@ -572,7 +582,7 @@ router.get('/sri/screenshot', async (req, res) => {
 
       const screenshot = await page.screenshot({ encoding: 'base64', fullPage: false }).catch(() => null);
 
-      return { success: true, url, title, inputs, buttons, screenshot };
+      return { success: true, url, title, inputs, buttons, screenshot, gotoError, exampleOk, exampleUrl };
     } finally {
       if (browser) await browser.close().catch(() => {});
     }
