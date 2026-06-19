@@ -506,211 +506,123 @@ export default function BuzonSRI() {
         <button className={`buzon-tab ${tab === 'historial' ? 'active' : ''}`} onClick={() => handleTabChange('historial')}>Historial</button>
       </div>
 
-      {/* ── TAB DESCARGA AUTOMÁTICA ───────────────────────── */}
+      {/* ── TAB DESCARGA AUTOMÁTICA — PRÓXIMAMENTE ────────── */}
       {tab === 'descarga' && (
-        <div className="buzon-card">
+        <div className="buzon-card buzon-proximamente-card">
 
-          {/* Banner permanente — limitación Railway */}
+          {/* Badge próximamente */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+            <span style={{
+              background: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
+              color: '#fff', fontWeight: 700, fontSize: '.8rem',
+              letterSpacing: '.08em', textTransform: 'uppercase',
+              padding: '4px 14px', borderRadius: 20,
+            }}>
+              🚀 Próximamente
+            </span>
+          </div>
+
+          {/* Título e icono central */}
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <div style={{ fontSize: '3rem', marginBottom: 12 }}>🔗</div>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b', margin: '0 0 8px' }}>
+              Descarga automática de comprobantes SRI
+            </h2>
+            <p style={{ color: '#64748b', fontSize: '.92rem', maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
+              Esta función permitirá conectarse directamente al portal SRI en línea para descargar
+              automáticamente todos tus comprobantes electrónicos recibidos ingresando tus credenciales.
+            </p>
+          </div>
+
+          {/* Qué incluirá */}
           <div style={{
-            background: '#fff7ed', border: '1.5px solid #f97316', borderRadius: 10,
-            padding: '14px 18px', marginBottom: 20, display: 'flex', gap: 12, alignItems: 'flex-start',
+            background: '#f8f7ff', border: '1px solid #ede9fe', borderRadius: 12,
+            padding: '18px 22px', marginBottom: 24, maxWidth: 560, margin: '0 auto 24px',
           }}>
-            <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>⚠️</span>
-            <div>
-              <strong style={{ color: '#c2410c', fontSize: '.95rem' }}>Descarga automática no disponible desde el servidor</strong>
-              <p style={{ margin: '4px 0 0', fontSize: '.87rem', color: '#7c2d12', lineHeight: 1.5 }}>
-                El servicio está alojado en Railway, que no permite que el navegador automático (Chrome/Puppeteer)
-                acceda a sitios externos como el portal SRI. El proceso termina siempre con error de conexión.
-              </p>
-              <p style={{ margin: '8px 0 0', fontSize: '.87rem', color: '#92400e', fontWeight: 600 }}>
-                ✅ Alternativas recomendadas:
-              </p>
-              <ul style={{ margin: '4px 0 0 18px', fontSize: '.85rem', color: '#7c2d12', lineHeight: 1.7 }}>
-                <li>
-                  <strong>📄 Importar TXT del SRI</strong> — descarga el archivo desde{' '}
-                  <em>srienlinea.sri.gob.ec → Servicios en línea → Comprobantes recibidos → Descargar reporte TXT</em>,
-                  luego usa la pestaña <strong>"Importar TXT del SRI"</strong>.
+            <p style={{ fontSize: '.82rem', fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 12 }}>
+              ¿Qué incluirá esta función?
+            </p>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                ['🔐', 'Inicio de sesión seguro con tus credenciales del portal SRI'],
+                ['📅', 'Filtro por rango de fechas y tipo de comprobante'],
+                ['⚡', 'Descarga e importación automática en un solo clic'],
+                ['📦', 'Compatible con facturas, retenciones, notas de crédito y más'],
+              ].map(([icon, text]) => (
+                <li key={text} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: '.88rem', color: '#374151' }}>
+                  <span style={{ flexShrink: 0 }}>{icon}</span>
+                  <span>{text}</span>
                 </li>
-                <li>
-                  <strong>📦 Importar ZIP</strong> — descarga el ZIP de XMLs desde el portal SRI e impórtalo
-                  en la pestaña <strong>"Importar ZIP"</strong>.
-                </li>
-              </ul>
+              ))}
+            </ul>
+          </div>
+
+          {/* Formulario deshabilitado con overlay */}
+          <div style={{ position: 'relative', opacity: 0.38, pointerEvents: 'none', userSelect: 'none', maxWidth: 560, margin: '0 auto 24px' }}>
+            <div style={{ position: 'absolute', inset: 0, zIndex: 2, borderRadius: 8 }} />
+            <div className="buzon-form-grid" style={{ pointerEvents: 'none' }}>
+              <div className="buzon-form-field">
+                <label>RUC / Cédula (portal SRI)</label>
+                <input type="text" className="buzon-input" placeholder="Ej: 1713175071001" disabled />
+              </div>
+              <div className="buzon-form-field">
+                <label>Clave del portal SRI</label>
+                <input type="password" className="buzon-input" placeholder="Contraseña de srienlinea.sri.gob.ec" disabled />
+              </div>
+              <div className="buzon-form-field">
+                <label>Fecha desde</label>
+                <input type="date" className="buzon-input" disabled />
+              </div>
+              <div className="buzon-form-field">
+                <label>Fecha hasta</label>
+                <input type="date" className="buzon-input" disabled />
+              </div>
+              <div className="buzon-form-field buzon-form-field--full">
+                <label>Tipo de comprobante</label>
+                <select className="buzon-input" disabled>
+                  <option>Todos los tipos</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ marginTop: 16, textAlign: 'right' }}>
+              <button className="btn-primary" disabled style={{ opacity: 1 }}>Consultar portal SRI →</button>
             </div>
           </div>
 
-          {/* PASO 1 — Credenciales + filtros */}
-          {dmPaso === 1 && (
-            <div className="buzon-step">
-              <h2 className="buzon-step-title">Descarga automática de comprobantes del SRI</h2>
-              <p className="buzon-step-hint">
-                Ingresa tus credenciales del portal <strong>srienlinea.sri.gob.ec</strong> y el período a consultar.
-                (Actualmente esta opción no funciona desde Railway — ver aviso arriba.)
-              </p>
-
-              <div className="buzon-credentials-note">
-                🔒 Tus credenciales se usan únicamente para consultar el portal SRI y no se almacenan.
+          {/* Alternativas mientras tanto */}
+          <div style={{
+            background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10,
+            padding: '14px 18px', maxWidth: 560, margin: '0 auto',
+          }}>
+            <p style={{ fontSize: '.82rem', fontWeight: 700, color: '#15803d', margin: '0 0 10px' }}>
+              ✅ Mientras tanto puedes usar estas opciones disponibles:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 12px', background: '#fff', borderRadius: 8, border: '1px solid #d1fae5' }}
+                onClick={() => handleTabChange('txt')}
+              >
+                <span style={{ fontSize: '1.3rem' }}>📄</span>
+                <div>
+                  <div style={{ fontSize: '.88rem', fontWeight: 600, color: '#065f46' }}>Importar TXT del SRI</div>
+                  <div style={{ fontSize: '.78rem', color: '#6b7280' }}>Descarga el reporte TXT desde srienlinea.sri.gob.ec e impórtalo aquí</div>
+                </div>
+                <span style={{ marginLeft: 'auto', color: '#7c3aed', fontWeight: 700 }}>→</span>
               </div>
-
-              <div className="buzon-form-grid">
-                <div className="buzon-form-field">
-                  <label>RUC / Cédula (portal SRI)</label>
-                  <input
-                    type="text"
-                    className="buzon-input"
-                    placeholder="Ej: 1713175071001"
-                    value={dmIdentificacion}
-                    onChange={(e) => setDmIdentificacion(e.target.value)}
-                    maxLength={13}
-                  />
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 12px', background: '#fff', borderRadius: 8, border: '1px solid #d1fae5' }}
+                onClick={() => handleTabChange('zip')}
+              >
+                <span style={{ fontSize: '1.3rem' }}>📦</span>
+                <div>
+                  <div style={{ fontSize: '.88rem', fontWeight: 600, color: '#065f46' }}>Importar ZIP de XMLs</div>
+                  <div style={{ fontSize: '.78rem', color: '#6b7280' }}>Descarga el ZIP de comprobantes desde el portal SRI e impórtalo</div>
                 </div>
-                <div className="buzon-form-field">
-                  <label>Clave del portal SRI</label>
-                  <input
-                    type="password"
-                    className="buzon-input"
-                    placeholder="Contraseña de srienlinea.sri.gob.ec"
-                    value={dmPassword}
-                    onChange={(e) => setDmPassword(e.target.value)}
-                    autoComplete="current-password"
-                  />
-                </div>
-                <div className="buzon-form-field">
-                  <label>Fecha desde</label>
-                  <input type="date" className="buzon-input" value={dmFechaDesde} onChange={(e) => setDmFechaDesde(e.target.value)} />
-                </div>
-                <div className="buzon-form-field">
-                  <label>Fecha hasta</label>
-                  <input type="date" className="buzon-input" value={dmFechaHasta} onChange={(e) => setDmFechaHasta(e.target.value)} />
-                </div>
-                <div className="buzon-form-field buzon-form-field--full">
-                  <label>Tipo de comprobante</label>
-                  <select className="buzon-input" value={dmTipo} onChange={(e) => setDmTipo(e.target.value)}>
-                    {TIPOS_COMP_SRI.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="buzon-step-actions">
-                <button
-                  className="btn-primary"
-                  onClick={dmConsultar}
-                  disabled={dmConsultando || !dmIdentificacion.trim() || !dmPassword.trim()}
-                >
-                  {dmConsultando ? `🤖 ${dmProgreso || 'Navegando el portal SRI...'}` : 'Consultar portal SRI →'}
-                </button>
+                <span style={{ marginLeft: 'auto', color: '#7c3aed', fontWeight: 700 }}>→</span>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* PASO 2 — Revisión y selección */}
-          {dmPaso === 2 && (
-            <div className="buzon-step">
-              <h2 className="buzon-step-title">Paso 2 — Selecciona los comprobantes a importar</h2>
-              <p className="buzon-step-hint">
-                Se encontraron <strong>{dmResultados.length}</strong> comprobante(s).
-                Los marcados como <span style={{ color: '#22C55E', fontWeight: 600 }}>Nuevo</span> no están en el sistema aún.
-              </p>
-
-              {dmResultados.some((r) => r.tipoCod === '01' || r.tipoCod === '03') && (
-                <div className="buzon-opciones">
-                  <strong>Opciones para facturas:</strong>
-                  <label><input type="checkbox" checked={opciones.registraInventario} onChange={(e) => setOpciones((p) => ({ ...p, registraInventario: e.target.checked }))} /> Registrar entrada de inventario</label>
-                  <label><input type="checkbox" checked={opciones.creaProductos} onChange={(e) => setOpciones((p) => ({ ...p, creaProductos: e.target.checked }))} /> Crear productos faltantes</label>
-                  <label><input type="checkbox" checked={opciones.registraCaja} onChange={(e) => setOpciones((p) => ({ ...p, registraCaja: e.target.checked }))} /> Registrar egreso en caja</label>
-                </div>
-              )}
-
-              <div className="buzon-table-wrap">
-                <table className="buzon-table">
-                  <thead>
-                    <tr>
-                      <th>
-                        <input
-                          type="checkbox"
-                          checked={dmSeleccionados.size === dmResultados.filter((r) => r.estado === 'nuevo').length && dmResultados.some((r) => r.estado === 'nuevo')}
-                          onChange={dmToggleTodos}
-                        />
-                      </th>
-                      <th>Tipo</th>
-                      <th>Emisor / Agente</th>
-                      <th>Fecha</th>
-                      <th>Total</th>
-                      <th>Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dmResultados.map((r) => {
-                      const estadoInfo = ESTADO_LABELS[r.estado] || { label: r.estado, cls: '' };
-                      const tipoColor  = TIPO_COLORES[r.tipo] || '';
-                      return (
-                        <tr key={r.clave} className={r.estado === 'nuevo' && dmSeleccionados.has(r.clave) ? 'row-selected' : ''}>
-                          <td>
-                            {r.estado === 'nuevo' && (
-                              <input type="checkbox" checked={dmSeleccionados.has(r.clave)} onChange={() => dmToggle(r.clave)} />
-                            )}
-                          </td>
-                          <td><span className={`buzon-tipo-chip ${tipoColor}`}>{r.tipo || r.preview?.tipo || '—'}</span></td>
-                          <td>
-                            <div className="buzon-emisor">
-                              <span>{r.preview?.emisorNombre || '—'}</span>
-                              <small>{r.preview?.emisorRuc || ''}</small>
-                            </div>
-                          </td>
-                          <td>{formatFechaEc(r.preview?.fecha)}</td>
-                          <td className="buzon-total">
-                            {r.preview?.total != null ? `$${Number(r.preview.total).toFixed(2)}` : '—'}
-                          </td>
-                          <td>
-                            <span className={`buzon-estado-chip ${estadoInfo.cls}`}>{estadoInfo.label}</span>
-                            {r.error && <small className="buzon-error-msg"> {r.error}</small>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="buzon-step-actions">
-                <button className="btn-secondary" onClick={dmReiniciar}>← Volver</button>
-                <span className="buzon-count-hint">{dmSeleccionados.size} seleccionado(s)</span>
-                <button
-                  className="btn-primary"
-                  onClick={dmImportar}
-                  disabled={dmImportando || dmSeleccionados.size === 0}
-                >
-                  {dmImportando ? 'Importando...' : `Importar ${dmSeleccionados.size} documento(s)`}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* PASO 3 — Resultado importación */}
-          {dmPaso === 3 && dmResumen && (
-            <div className="buzon-step">
-              <h2 className="buzon-step-title">✅ Importación completada</h2>
-              <div className="buzon-resumen">
-                <div className="buzon-resumen-card buzon-resumen--verde"><span>{dmResumen.resumen?.creados || 0}</span><small>Importados</small></div>
-                <div className="buzon-resumen-card buzon-resumen--gris"><span>{dmResumen.resumen?.omitidos || 0}</span><small>Ya existían</small></div>
-                <div className="buzon-resumen-card buzon-resumen--rojo"><span>{dmResumen.resumen?.errores || 0}</span><small>Con error</small></div>
-              </div>
-              {dmResumen.resultados?.some((r) => r.estado === 'error') && (
-                <div className="buzon-errores-list">
-                  <strong>Documentos con error:</strong>
-                  {dmResumen.resultados.filter((r) => r.estado === 'error').map((r) => (
-                    <div key={r.clave} className="buzon-error-item"><code>{r.clave}</code> — {r.error}</div>
-                  ))}
-                </div>
-              )}
-              <div className="buzon-step-actions">
-                <button className="btn-secondary" onClick={dmReiniciar}>Nueva descarga</button>
-                <button className="btn-primary" onClick={() => navigate('/compras')}>Ver en Compras</button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
