@@ -372,7 +372,7 @@ export default function DetalleProforma() {
         )}
 
         {/* Pie del documento */}
-        <div className="prf-det-footer-doc">
+        <div className="prf-det-footer-doc prf-det-footer-disc">
           <p>Este documento es una cotización / presupuesto y no tiene validez tributaria. Para emitir un comprobante válido, convierta esta proforma a Factura.</p>
         </div>
       </div>

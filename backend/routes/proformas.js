@@ -3,214 +3,332 @@
 // backend/routes/proformas.js
 // ====================================
 
-const express  = require('express');
-const router   = express.Router();
-const fs       = require('fs');
-const os       = require('os');
-const nodePath = require('path');
+const express     = require('express');
+const router      = express.Router();
+const fs          = require('fs');
+const os          = require('os');
+const nodePath    = require('path');
+const PDFDocument = require('pdfkit');
 const { proteger, permitir } = require('../middleware/auth');
 const { normalizarRol }      = require('../utils/roles');
 const prisma                 = require('../config/prisma');
 const { enviarConFallback }  = require('../utils/email');
 
-// ─── Helper: generar HTML de la proforma (para PDF y email adjunto) ───────────
-function _htmlProforma(p, empresaNombre) {
-  const detalles = Array.isArray(p.detalles) ? p.detalles
-    : (typeof p.detalles === 'string' ? JSON.parse(p.detalles) : []);
-
-  const fmtFecha = (d) => {
-    if (!d) return '—';
-    const f = new Date(d);
-    return f.toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  };
-  const fmtMoney = (v) => `$${parseFloat(v || 0).toFixed(2)}`;
-
-  const filas = detalles.map((d, i) => {
-    const cant   = parseFloat(d.cantidad || 1);
-    const precio = parseFloat(d.precioUnitario || 0);
-    const desc   = parseFloat(d.descuento || 0);
-    const total  = cant * precio - desc;
-    return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f8f7ff'}">
-      <td style="padding:6px 10px;font-size:9.5pt;border-bottom:1px solid #f1f5f9">
-        ${d.descripcion || ''}
-        ${d.codigo ? `<br/><span style="font-size:8pt;color:#94a3b8">${d.codigo}</span>` : ''}
-      </td>
-      <td style="padding:6px 10px;text-align:center;font-size:9.5pt;border-bottom:1px solid #f1f5f9">${cant}</td>
-      <td style="padding:6px 10px;text-align:right;font-size:9.5pt;border-bottom:1px solid #f1f5f9">${fmtMoney(precio)}</td>
-      <td style="padding:6px 10px;text-align:right;font-size:9.5pt;border-bottom:1px solid #f1f5f9">${desc > 0 ? fmtMoney(desc) : '—'}</td>
-      <td style="padding:6px 10px;text-align:right;font-size:9.5pt;font-weight:600;border-bottom:1px solid #f1f5f9">${fmtMoney(total)}</td>
-    </tr>`;
-  }).join('');
-
-  const tieneDesc  = parseFloat(p.totalDescuento || 0) > 0;
-  const tiene0     = parseFloat(p.subtotal0  || 0) > 0;
-  const tiene5     = parseFloat(p.subtotal5  || 0) > 0;
-  const tiene15    = parseFloat(p.subtotal15 || 0) > 0;
-
-  return `<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="UTF-8">
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:Arial,Helvetica,sans-serif; font-size:10pt; color:#1e293b; padding:28px 36px; }
-</style>
-</head>
-<body>
-<!-- HEADER -->
-<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:3px solid #7c3aed;padding-bottom:14px;margin-bottom:20px">
-  <tr>
-    <td style="vertical-align:top">
-      <div style="font-size:15pt;font-weight:bold;color:#7c3aed">${empresaNombre || 'AELA ERP'}</div>
-      <div style="font-size:8.5pt;color:#64748b;margin-top:4px;line-height:1.7">
-        ${p.empresaRuc ? `RUC: ${p.empresaRuc}<br/>` : ''}
-        ${p.empresaDireccion ? `${p.empresaDireccion}<br/>` : ''}
-        ${p.empresaEmail ? `${p.empresaEmail}` : ''}
-      </div>
-    </td>
-    <td style="text-align:right;vertical-align:top">
-      <div style="font-size:14pt;font-weight:bold;color:#7c3aed">PROFORMA</div>
-      <div style="font-size:11pt;font-weight:600;margin-top:4px">${p.numero || ''}</div>
-      <div style="display:inline-block;background:#7c3aed;color:#fff;padding:2px 10px;border-radius:12px;font-size:8.5pt;margin-top:6px">${p.estado || 'BORRADOR'}</div>
-      <div style="font-size:8.5pt;color:#64748b;margin-top:6px">Fecha: ${fmtFecha(p.createdAt)}</div>
-    </td>
-  </tr>
-</table>
-
-<!-- CLIENTE -->
-<div style="margin-bottom:16px">
-  <div style="font-size:8.5pt;font-weight:bold;text-transform:uppercase;color:#7c3aed;letter-spacing:0.5px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin-bottom:10px">Cliente</div>
-  <table width="100%" cellpadding="0" cellspacing="0">
-    <tr>
-      <td style="width:50%;padding-right:12px">
-        <div style="font-size:8pt;color:#94a3b8;text-transform:uppercase;margin-bottom:2px">Razón Social</div>
-        <div style="font-size:10.5pt;font-weight:600">${p.razonSocial || 'CONSUMIDOR FINAL'}</div>
-      </td>
-      <td style="width:25%;padding-right:12px">
-        <div style="font-size:8pt;color:#94a3b8;text-transform:uppercase;margin-bottom:2px">Identificación</div>
-        <div style="font-size:10pt">${p.tipoIdentificacion === '07' ? '—' : (p.identificacion || '—')}</div>
-      </td>
-      <td style="width:25%">
-        <div style="font-size:8pt;color:#94a3b8;text-transform:uppercase;margin-bottom:2px">Teléfono</div>
-        <div style="font-size:10pt">${p.telefono || '—'}</div>
-      </td>
-    </tr>
-    ${p.direccion ? `<tr><td colspan="3" style="padding-top:8px">
-      <div style="font-size:8pt;color:#94a3b8;text-transform:uppercase;margin-bottom:2px">Dirección</div>
-      <div style="font-size:10pt">${p.direccion}</div>
-    </td></tr>` : ''}
-  </table>
-</div>
-
-<!-- DETALLE PRODUCTOS -->
-<div style="margin-bottom:16px">
-  <div style="font-size:8.5pt;font-weight:bold;text-transform:uppercase;color:#7c3aed;letter-spacing:0.5px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin-bottom:10px">Detalle de productos / servicios</div>
-  <table width="100%" cellpadding="0" cellspacing="0">
-    <thead>
-      <tr style="background:#7c3aed">
-        <th style="padding:7px 10px;color:#fff;font-size:9pt;text-align:left;font-weight:600">Descripción</th>
-        <th style="padding:7px 10px;color:#fff;font-size:9pt;text-align:center;font-weight:600;width:60px">Cant.</th>
-        <th style="padding:7px 10px;color:#fff;font-size:9pt;text-align:right;font-weight:600;width:90px">P. Unit.</th>
-        <th style="padding:7px 10px;color:#fff;font-size:9pt;text-align:right;font-weight:600;width:80px">Desc.</th>
-        <th style="padding:7px 10px;color:#fff;font-size:9pt;text-align:right;font-weight:600;width:90px">Total</th>
-      </tr>
-    </thead>
-    <tbody>${filas}</tbody>
-  </table>
-</div>
-
-<!-- TOTALES -->
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px">
-  <tr>
-    <td></td>
-    <td style="width:240px">
-      ${tiene0  ? `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:9.5pt"><span style="color:#64748b">Subtotal 0%</span><span>${fmtMoney(p.subtotal0)}</span></div>` : ''}
-      ${tiene5  ? `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:9.5pt"><span style="color:#64748b">Subtotal 5%</span><span>${fmtMoney(p.subtotal5)}</span></div>` : ''}
-      ${tiene15 ? `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:9.5pt"><span style="color:#64748b">Subtotal 15%</span><span>${fmtMoney(p.subtotal15)}</span></div>` : ''}
-      ${tieneDesc ? `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:9.5pt"><span style="color:#64748b">Descuento</span><span>-${fmtMoney(p.totalDescuento)}</span></div>` : ''}
-      <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:9.5pt"><span style="color:#64748b">IVA</span><span>${fmtMoney(p.totalIva)}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13pt;font-weight:bold;color:#7c3aed;border-top:2px solid #7c3aed;margin-top:4px">
-        <span>TOTAL</span><span>${fmtMoney(p.importeTotal)}</span>
-      </div>
-    </td>
-  </tr>
-</table>
-
-<!-- VIGENCIA Y CONDICIONES -->
-${(p.vigenciaDesde || p.vigenciaHasta || p.formaPago || p.formapago) ? `
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px">
-  <tr>
-    ${p.vigenciaDesde || p.vigenciaHasta ? `
-    <td style="width:50%;padding-right:12px">
-      <div style="background:#f8f7ff;border-left:3px solid #7c3aed;padding:10px 14px;border-radius:0 6px 6px 0">
-        <div style="font-size:8.5pt;font-weight:bold;color:#7c3aed;margin-bottom:4px">Vigencia</div>
-        <div style="font-size:10pt">${fmtFecha(p.vigenciaDesde)} al ${fmtFecha(p.vigenciaHasta)}</div>
-      </div>
-    </td>` : '<td></td>'}
-    ${(p.formaPago || p.formapago) ? `
-    <td style="width:50%">
-      <div style="background:#f8f7ff;border-left:3px solid #7c3aed;padding:10px 14px;border-radius:0 6px 6px 0">
-        <div style="font-size:8.5pt;font-weight:bold;color:#7c3aed;margin-bottom:4px">Forma de pago</div>
-        <div style="font-size:10pt;font-weight:600">${p.formaPago || p.formapago}</div>
-      </div>
-    </td>` : '<td></td>'}
-  </tr>
-</table>` : ''}
-
-<!-- OBSERVACIONES -->
-${p.observaciones ? `
-<div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:10px 14px;border-radius:0 6px 6px 0;margin-bottom:14px">
-  <div style="font-size:8.5pt;font-weight:bold;color:#b45309;margin-bottom:4px">Observaciones / Condiciones</div>
-  <div style="font-size:10pt;color:#1e293b">${p.observaciones}</div>
-</div>` : ''}
-
-<!-- FOOTER -->
-<table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e2e8f0;padding-top:10px;margin-top:8px">
-  <tr>
-    <td style="font-size:8.5pt;color:#94a3b8">Documento generado por AELA ERP · CorpSimtelec</td>
-    <td style="text-align:right;font-size:8.5pt;color:#94a3b8">${p.numero} · ${fmtFecha(p.createdAt)}</td>
-  </tr>
-</table>
-</body>
-</html>`;
+// ─── Helper: resolver logo (igual que sri.js) ─────────────────────────────────
+function _resolverLogo(logoUrl) {
+  if (!logoUrl) return { logoData: null, tienelogo: false };
+  if (logoUrl.startsWith('data:')) {
+    try {
+      const b64 = logoUrl.replace(/^data:image\/\w+;base64,/, '');
+      return { logoData: Buffer.from(b64, 'base64'), tienelogo: true };
+    } catch { return { logoData: null, tienelogo: false }; }
+  }
+  const logoPath = nodePath.join(__dirname, '..', logoUrl.replace(/^\//, ''));
+  const existe   = fs.existsSync(logoPath);
+  return { logoData: existe ? logoPath : null, tienelogo: existe };
 }
 
-// ─── Helper: generar PDF Buffer con Puppeteer ─────────────────────────────────
-async function _generarPdfBuffer(htmlContent) {
-  const puppeteer = require('puppeteer');
-  const { execSync } = require('child_process');
+// ─── Helper: generar PDF de proforma con PDFKit (misma técnica que RIDE) ──────
+function _generarPdfProforma(p, configSri, outputPath) {
+  return new Promise((resolve, reject) => {
+    const cfg = configSri || {};
+    const detalles = Array.isArray(p.detalles) ? p.detalles
+      : (typeof p.detalles === 'string' ? JSON.parse(p.detalles) : []);
 
-  const raw = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROMIUM_PATH;
-  let execPath = null;
-  if (raw) {
-    execPath = nodePath.isAbsolute(raw) ? raw : (() => {
-      try { return execSync(`which "${raw}" 2>/dev/null`, { timeout: 3000, encoding: 'utf8' }).trim() || raw; }
-      catch { return raw; }
-    })();
-  }
+    const fmtFecha = (d) => {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
 
-  const opts = {
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-           '--disable-gpu', '--no-zygote', '--no-proxy-server'],
-    timeout: 30000,
-  };
-  if (execPath) opts.executablePath = execPath;
+    const doc    = new PDFDocument({ size: 'A4', margins: { top: 20, bottom: 20, left: 28, right: 28 }, autoFirstPage: true });
+    const stream = fs.createWriteStream(outputPath);
+    doc.pipe(stream);
 
-  let browser;
-  try {
-    browser = await puppeteer.launch(opts);
-    const page = await browser.newPage();
-    page.setDefaultTimeout(20000);
-    await page.setContent(htmlContent, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    const pdf = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '0', right: '0', bottom: '0', left: '0' },
+    const ML    = 28;
+    const PW    = doc.page.width;
+    const PH    = doc.page.height;
+    const W     = PW - ML * 2;
+
+    const MORADO = '#6d28d9';
+    const GRIS   = '#555555';
+    const NEGRO  = '#000000';
+    const BLANCO = '#FFFFFF';
+    const BG_ALT = '#f5f3ff';
+
+    const { logoData, tienelogo } = _resolverLogo(cfg.logoUrl);
+
+    // ── HEADER ────────────────────────────────────────────────────────────────
+    let y = 20;
+    const LP   = Math.floor(W * 0.44);
+    const GAP  = 8;
+    const RP_X = ML + LP + GAP;
+    const RP_W = W - LP - GAP;
+
+    // Panel izquierdo: logo + emisor
+    let yL = y;
+    if (tienelogo) {
+      try { doc.image(logoData, ML, yL, { fit: [LP - 4, 65] }); yL += 70; }
+      catch { /* logo inválido */ }
+    }
+    doc.fontSize(8.5).font('Helvetica-Bold').fillColor(NEGRO)
+       .text((cfg.razonSocial || '').toUpperCase(), ML, yL, { width: LP - 4, lineBreak: false });
+    yL += 13;
+    if (cfg.nombreComercial) {
+      doc.fontSize(7.5).font('Helvetica').fillColor(GRIS)
+         .text(cfg.nombreComercial, ML, yL, { width: LP - 4, lineBreak: false });
+      yL += 11;
+    }
+    doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
+       .text(`Dir.: ${cfg.dirMatriz || cfg.dirEstablecimiento || ''}`, ML, yL, { width: LP - 4 });
+    yL = doc.y + 2;
+    if (cfg.telefono) {
+      doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
+         .text(`Telf.: ${cfg.telefono}`, ML, yL, { width: LP - 4, lineBreak: false });
+      yL += 10;
+    }
+    if (cfg.email) {
+      doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
+         .text(cfg.email, ML, yL, { width: LP - 4, lineBreak: false });
+      yL += 10;
+    }
+    if (cfg.contribuyenteRimpe) {
+      const rimpeLabel = cfg.negocioPopular
+        ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
+        : 'CONTRIBUYENTE RÉGIMEN RIMPE';
+      doc.fontSize(6).font('Helvetica-Bold').fillColor(MORADO)
+         .text(rimpeLabel, ML, yL, { width: LP - 4, lineBreak: false });
+      yL += 10;
+    }
+
+    // Panel derecho: RUC + PROFORMA + número + fechas
+    let yR = y;
+    doc.fontSize(7).font('Helvetica-Bold').fillColor(GRIS)
+       .text('R.U.C.:', RP_X, yR, { lineBreak: false });
+    doc.fontSize(7).font('Helvetica').fillColor(NEGRO)
+       .text(`  ${cfg.ruc || ''}`, RP_X + 32, yR, { lineBreak: false });
+    yR += 13;
+
+    doc.fontSize(14).font('Helvetica-Bold').fillColor(MORADO)
+       .text('PROFORMA', RP_X, yR, { width: RP_W, align: 'center', lineBreak: false });
+    yR += 20;
+
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(NEGRO)
+       .text(`No. ${p.numero || ''}`, RP_X, yR, { width: RP_W, align: 'center', lineBreak: false });
+    yR += 14;
+
+    doc.moveTo(RP_X, yR).lineTo(RP_X + RP_W, yR).lineWidth(0.4).stroke('#CCCCCC');
+    yR += 6;
+
+    // Recuadro con fechas
+    const BOX_H = 54;
+    doc.rect(RP_X, yR, RP_W, BOX_H).lineWidth(0.7).stroke('#AAAAAA');
+    const colW  = RP_W / 2 - 4;
+    const datosRight = [
+      { l: 'FECHA DE EMISIÓN',     v: fmtFecha(p.createdat || p.createdAt) },
+      { l: 'VÁLIDA DESDE',         v: fmtFecha(p.vigenciadesde || p.vigenciaDesde) },
+      { l: 'VÁLIDA HASTA',         v: fmtFecha(p.vigenciahasta || p.vigenciaHasta), bold: true },
+      { l: 'ESTADO',               v: (p.estado || 'BORRADOR') },
+    ];
+    let yDat = yR + 5;
+    datosRight.forEach((d, i) => {
+      const col = i % 2 === 0 ? 0 : 1;
+      const xd  = RP_X + 4 + col * (colW + 8);
+      if (i === 2) { yDat += 14; }
+      doc.fontSize(5.5).font('Helvetica-Bold').fillColor(GRIS)
+         .text(d.l + ':', xd, yDat, { width: colW, lineBreak: false });
+      doc.fontSize(7).font(d.bold ? 'Helvetica-Bold' : 'Helvetica').fillColor(d.bold ? MORADO : NEGRO)
+         .text(d.v, xd, yDat + 7, { width: colW, lineBreak: false });
+      if (i === 1) yDat += 14;
     });
-    return pdf;
-  } finally {
-    if (browser) await browser.close().catch(() => {});
-  }
+    yR += BOX_H + 4;
+
+    y = Math.max(yL, yR) + 6;
+
+    // ── DATOS DEL CLIENTE ────────────────────────────────────────────────────
+    const COMP_H = p.direccion ? 52 : 38;
+    doc.rect(ML, y, W, COMP_H).lineWidth(0.5).stroke('#AAAAAA');
+    doc.moveTo(ML, y + 20).lineTo(ML + W, y + 20).lineWidth(0.3).stroke('#CCCCCC');
+
+    const COL_ID_W = W * 0.55;
+    doc.moveTo(ML + COL_ID_W, y + 20).lineTo(ML + COL_ID_W, y + (p.direccion ? COMP_H : COMP_H))
+       .lineWidth(0.3).stroke('#CCCCCC');
+
+    doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS)
+       .text('RAZÓN SOCIAL / NOMBRES Y APELLIDOS:', ML + 3, y + 3, { lineBreak: false });
+    doc.fontSize(8).font('Helvetica').fillColor(NEGRO)
+       .text(p.razonSocial || 'CONSUMIDOR FINAL', ML + 3, y + 12, { width: W - 6, lineBreak: false });
+
+    doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS)
+       .text('RUC / IDENTIFICACIÓN:', ML + 3, y + 23, { lineBreak: false });
+    doc.fontSize(7.5).font('Helvetica').fillColor(NEGRO)
+       .text(p.tipoIdentificacion === '07' ? '—' : (p.identificacion || '—'),
+             ML + 3, y + 32, { width: COL_ID_W - 6, lineBreak: false });
+
+    doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS)
+       .text('TELÉFONO:', ML + COL_ID_W + 3, y + 23, { lineBreak: false });
+    doc.fontSize(7.5).font('Helvetica').fillColor(NEGRO)
+       .text(p.telefono || '—', ML + COL_ID_W + 3, y + 32, { lineBreak: false });
+
+    if (p.direccion) {
+      doc.moveTo(ML, y + 38).lineTo(ML + W, y + 38).lineWidth(0.3).stroke('#CCCCCC');
+      doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS)
+         .text('DIRECCIÓN:', ML + 3, y + 41, { lineBreak: false });
+      doc.fontSize(7.5).font('Helvetica').fillColor(NEGRO)
+         .text(p.direccion, ML + 70, y + 41, { width: W - 74, lineBreak: false });
+    }
+    y += COMP_H + 4;
+
+    // ── TABLA DE DETALLES ────────────────────────────────────────────────────
+    const COLS = [
+      { h: 'Cód.',         w: 46,  al: 'left'  },
+      { h: 'Cantidad',     w: 36,  al: 'right' },
+      { h: 'Descripción',  w: 0,   al: 'left'  },
+      { h: 'P. Unitario',  w: 52,  al: 'right' },
+      { h: 'Descuento',    w: 44,  al: 'right' },
+      { h: '% IVA',        w: 28,  al: 'right' },
+      { h: 'Total',        w: 52,  al: 'right' },
+    ];
+    const fixedW = COLS.filter(c => c.w > 0).reduce((s, c) => s + c.w, 0);
+    COLS.find(c => c.w === 0).w = W - fixedW;
+
+    const TH_H = 18;
+    doc.rect(ML, y, W, TH_H).fill(MORADO);
+    let cx = ML;
+    COLS.forEach(col => {
+      doc.fontSize(5.5).font('Helvetica-Bold').fillColor(BLANCO)
+         .text(col.h, cx + 2, y + 5, { width: col.w - 4, align: col.al, lineBreak: false });
+      cx += col.w;
+    });
+    y += TH_H;
+
+    detalles.forEach((det, idx) => {
+      const cant   = parseFloat(det.cantidad)      || 0;
+      const prec   = parseFloat(det.precioUnitario) || 0;
+      const desc   = parseFloat(det.descuento)     || 0;
+      const ivaPct = parseInt(det.ivaPorcentaje)   || 0;
+      const tot    = cant * prec - desc;
+      const ROW_H  = 13;
+
+      if (y > PH - 150) { doc.addPage(); y = 30; }
+
+      doc.rect(ML, y, W, ROW_H).fill(idx % 2 === 0 ? BLANCO : BG_ALT);
+      doc.rect(ML, y, W, ROW_H).lineWidth(0.2).stroke('#DDDDDD');
+
+      const vals = [
+        { v: det.codigo || det.codigoPrincipal || '',  al: 'left'  },
+        { v: cant.toFixed(2),                          al: 'right' },
+        { v: det.descripcion || '',                    al: 'left'  },
+        { v: prec.toFixed(2),                          al: 'right' },
+        { v: desc > 0 ? desc.toFixed(2) : '—',        al: 'right' },
+        { v: `${ivaPct}%`,                             al: 'right' },
+        { v: tot.toFixed(2),                           al: 'right' },
+      ];
+      cx = ML;
+      vals.forEach((v, vi) => {
+        doc.fontSize(6.5).font('Helvetica').fillColor(NEGRO)
+           .text(v.v, cx + 2, y + 3, { width: COLS[vi].w - 4, align: v.al, lineBreak: false });
+        cx += COLS[vi].w;
+      });
+      y += ROW_H;
+    });
+
+    // ── FOOTER: info izq + totales der ──────────────────────────────────────
+    y += 8;
+    const FP_W  = Math.floor(W * 0.50);
+    const TOT_X = ML + FP_W + 4;
+    const TOT_W = W - FP_W - 4;
+    let yLeft = y;
+
+    // Información adicional (vigencia, forma de pago, correo, teléfono, obs)
+    const camposIA = [];
+    if (p.vigenciadesde || p.vigenciaDesde) {
+      camposIA.push({ n: 'Válida desde', v: fmtFecha(p.vigenciadesde || p.vigenciaDesde) });
+    }
+    if (p.vigenciahasta || p.vigenciaHasta) {
+      camposIA.push({ n: 'Válida hasta', v: fmtFecha(p.vigenciahasta || p.vigenciaHasta) });
+    }
+    if (p.formapago || p.formaPago) {
+      camposIA.push({ n: 'Forma de pago', v: p.formapago || p.formaPago });
+    }
+    if (p.email) camposIA.push({ n: 'Correo', v: p.email });
+    if (p.observaciones) camposIA.push({ n: 'Observaciones', v: p.observaciones });
+
+    if (camposIA.length > 0) {
+      doc.fontSize(7).font('Helvetica-Bold').fillColor(MORADO)
+         .text('INFORMACIÓN ADICIONAL', ML, yLeft, { lineBreak: false });
+      yLeft += 11;
+
+      const IA_H    = 12;
+      const LABEL_W = FP_W * 0.35;
+      const VAL_W   = FP_W - LABEL_W;
+
+      doc.rect(ML, yLeft, FP_W, IA_H).fill(MORADO);
+      doc.fontSize(6).font('Helvetica-Bold').fillColor(BLANCO)
+         .text('Campo', ML + 3, yLeft + 3, { width: LABEL_W - 6, lineBreak: false });
+      doc.fontSize(6).font('Helvetica-Bold').fillColor(BLANCO)
+         .text('Valor', ML + LABEL_W + 3, yLeft + 3, { width: VAL_W - 6, lineBreak: false });
+      yLeft += IA_H;
+
+      camposIA.forEach((campo, idx) => {
+        doc.rect(ML, yLeft, FP_W, IA_H).fill(idx % 2 === 0 ? BLANCO : BG_ALT);
+        doc.rect(ML, yLeft, FP_W, IA_H).lineWidth(0.2).stroke('#DDDDDD');
+        doc.fontSize(6.5).font('Helvetica-Bold').fillColor(GRIS)
+           .text(campo.n, ML + 3, yLeft + 2, { width: LABEL_W - 6, lineBreak: false });
+        doc.fontSize(6.5).font('Helvetica').fillColor(NEGRO)
+           .text(campo.v, ML + LABEL_W + 3, yLeft + 2, { width: VAL_W - 6, lineBreak: false });
+        yLeft += IA_H;
+      });
+    }
+
+    // Caja de totales
+    const st0   = parseFloat(p.subtotal0  || 0);
+    const st5   = parseFloat(p.subtotal5  || 0);
+    const st15  = parseFloat(p.subtotal15 || 0);
+    const desc  = parseFloat(p.totalDescuento || 0);
+    const iva   = parseFloat(p.totalIva   || 0);
+    const total = parseFloat(p.importetotal || p.importeTotal || 0);
+
+    const TOT_ROWS = [
+      ...(st0  > 0 ? [{ l: 'SUBTOTAL 0%',    v: st0  }] : []),
+      ...(st5  > 0 ? [{ l: 'SUBTOTAL 5%',    v: st5  }] : []),
+      ...(st15 > 0 ? [{ l: 'SUBTOTAL 15%',   v: st15 }] : []),
+      ...(desc > 0 ? [{ l: 'TOTAL DESCUENTO', v: desc }] : []),
+      { l: 'IVA',         v: iva   },
+      { l: 'VALOR TOTAL', v: total, bold: true },
+    ];
+
+    const TR_H       = 13;
+    const TOT_BOX_H  = TOT_ROWS.length * TR_H + 4;
+    doc.rect(TOT_X, y, TOT_W, TOT_BOX_H).lineWidth(0.5).stroke('#AAAAAA');
+
+    let yT = y + 2;
+    TOT_ROWS.forEach((row, ri) => {
+      if (ri > 0) doc.moveTo(TOT_X, yT).lineTo(TOT_X + TOT_W, yT).lineWidth(0.2).stroke('#DDDDDD');
+      const fn = row.bold ? 'Helvetica-Bold' : 'Helvetica';
+      const fc = row.bold ? MORADO : NEGRO;
+      const bg = row.bold ? '#ede9fe' : (ri % 2 === 0 ? BLANCO : BG_ALT);
+      doc.rect(TOT_X, yT, TOT_W, TR_H).fill(bg);
+      doc.fontSize(6.5).font(fn).fillColor(fc)
+         .text(row.l, TOT_X + 3, yT + 3, { width: TOT_W * 0.65 - 3, align: 'left', lineBreak: false });
+      doc.fontSize(6.5).font(fn).fillColor(fc)
+         .text(`$${row.v.toFixed(2)}`, TOT_X + TOT_W * 0.65, yT + 3, { width: TOT_W * 0.35 - 3, align: 'right', lineBreak: false });
+      yT += TR_H;
+    });
+
+    // ── PIE DE PÁGINA ────────────────────────────────────────────────────────
+    const bottomY = Math.max(yLeft, yT) + 12;
+    doc.moveTo(ML, bottomY).lineTo(ML + W, bottomY).lineWidth(0.4).stroke('#CCCCCC');
+    doc.fontSize(6).font('Helvetica').fillColor('#888888')
+       .text(
+         'Este documento es una cotización / presupuesto y no tiene validez tributaria. ' +
+         'Para emitir un comprobante válido, convierta esta proforma a Factura.',
+         ML, bottomY + 5, { width: W, align: 'center' }
+       );
+
+    doc.end();
+    stream.on('finish', resolve);
+    stream.on('error', reject);
+  });
 }
 
 // Todas las rutas requieren autenticación
@@ -505,6 +623,8 @@ router.post('/:id/enviar-email', async (req, res) => {
     );
     if (!p) return res.status(404).json({ ok: false, mensaje: 'Proforma no encontrada' });
 
+    const configSri = await req.prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } }) || {};
+
     const destino = emailDestino || p.email;
     if (!destino) return res.status(400).json({ ok: false, mensaje: 'El cliente no tiene email registrado. Ingresa un correo manualmente.' });
 
@@ -599,15 +719,13 @@ router.post('/:id/enviar-email', async (req, res) => {
 </body>
 </html>`;
 
-    // Generar PDF y adjuntar al email
+    // Generar PDF con PDFKit y adjuntar al email
     let pdfTmpPath = null;
     const attachments = [];
     try {
-      const pdfHtml = _htmlProforma(p, emisorLabel);
-      const pdfBuf  = await _generarPdfBuffer(pdfHtml);
       pdfTmpPath = nodePath.join(os.tmpdir(), `prf-${id}-${Date.now()}.pdf`);
-      fs.writeFileSync(pdfTmpPath, pdfBuf);
-      attachments.push({ filename: `${p.numero || 'proforma'}.pdf`, path: pdfTmpPath });
+      await _generarPdfProforma(p, configSri, pdfTmpPath);
+      attachments.push({ filename: `${(p.numero || 'proforma').replace(/\//g, '-')}.pdf`, path: pdfTmpPath });
     } catch (pdfErr) {
       console.warn('[proformas] email: PDF no generado, se envía sin adjunto:', pdfErr.message);
     }
@@ -663,30 +781,31 @@ router.post('/:id/anular', async (req, res) => {
 
 // ─── GET /:id/pdf — descargar proforma como PDF ───────────────────────────────
 router.get('/:id/pdf', async (req, res) => {
+  let tmpPath = null;
   try {
     const id        = parseInt(req.params.id);
     const empresaId = req.empresa.id;
 
     const [p] = await req.prisma.$queryRawUnsafe(
-      `SELECT p.*, e."razonSocial" AS "razonSocialEmisor", e."nombreComercial" AS "nombreComercialEmisor",
-              e.ruc AS "empresaRuc", e.direccion AS "empresaDireccion", e.email AS "empresaEmail"
-       FROM proformas p
-       LEFT JOIN empresas e ON e.id = p."empresaId"
-       WHERE p.id = $1 AND p."empresaId" = $2`,
+      `SELECT p.* FROM proformas p WHERE p.id = $1 AND p."empresaId" = $2`,
       id, empresaId
     );
     if (!p) return res.status(404).json({ ok: false, mensaje: 'Proforma no encontrada' });
 
-    const emisorLabel = p.nombreComercialEmisor || p.razonSocialEmisor || 'AELA ERP';
-    const html = _htmlProforma(p, emisorLabel);
-    const pdfBuf = await _generarPdfBuffer(html);
+    const configSri = await req.prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } }) || {};
 
     const nombre = `${(p.numero || 'proforma').replace(/\//g, '-')}.pdf`;
+    tmpPath = nodePath.join(os.tmpdir(), `prf-dl-${id}-${Date.now()}.pdf`);
+
+    await _generarPdfProforma(p, configSri, tmpPath);
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
-    res.setHeader('Content-Length', pdfBuf.length);
-    res.send(pdfBuf);
+    fs.createReadStream(tmpPath).pipe(res).on('finish', () => {
+      fs.unlink(tmpPath, () => {});
+    });
   } catch (err) {
+    if (tmpPath) fs.unlink(tmpPath, () => {});
     console.error('[proformas] GET /:id/pdf', err.message);
     res.status(500).json({ ok: false, mensaje: 'Error al generar PDF: ' + err.message });
   }

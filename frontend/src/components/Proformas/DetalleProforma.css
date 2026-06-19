@@ -262,9 +262,68 @@
 
 /* ─── Print ─── */
 @media print {
-  .prf-det-header-actions,
-  .prf-det-back { display: none !important; }
-  .prf-det-container { padding: 0; max-width: 100%; }
-  .prf-det-doc { border: none; padding: 0; box-shadow: none; }
-  body { background: white; }
+  @page { size: A4; margin: 12mm 14mm; }
+
+  body { background: white !important; margin: 0; padding: 0; }
+
+  /* Ocultar toda la UI excepto el documento */
+  .prf-det-header,
+  .prf-det-modal-overlay,
+  .prf-modal-email { display: none !important; }
+
+  .prf-det-container {
+    padding: 0;
+    max-width: 100%;
+    margin: 0;
+  }
+
+  .prf-det-doc {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Cabecera del documento */
+  .prf-det-doc-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2.5pt solid #6d28d9;
+    padding-bottom: 8pt;
+    margin-bottom: 12pt;
+  }
+
+  .prf-det-empresa h2 {
+    font-size: 13pt;
+    font-weight: 700;
+    color: #6d28d9;
+    margin: 0 0 4pt;
+  }
+
+  .prf-det-doc-info h3 {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #6d28d9;
+    margin: 0 0 4pt;
+    text-align: right;
+  }
+
+  /* Tabla de productos */
+  .prf-det-items thead tr { background: #6d28d9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .prf-det-items thead th { color: white !important; font-size: 7pt; padding: 5pt 4pt; }
+  .prf-det-items tbody td { font-size: 8pt; padding: 4pt; }
+  .prf-det-items tbody tr:nth-child(even) td { background: #f5f3ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Totales */
+  .prf-det-totals { font-size: 8pt; }
+  .prf-det-total-final td { font-size: 10pt; font-weight: 700; color: #6d28d9; border-top: 1.5pt solid #6d28d9; }
+
+  /* Vigencia / forma de pago */
+  .prf-det-vigencia-box,
+  .prf-det-fp-box { border-left: 3pt solid #6d28d9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Footer disclaimer */
+  .prf-det-footer-disc { color: #555; font-size: 7pt; border-top: 0.5pt solid #ccc; margin-top: 12pt; padding-top: 6pt; text-align: center; }
 }
