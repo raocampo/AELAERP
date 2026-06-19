@@ -460,14 +460,6 @@ export default function BuzonSRI() {
           >
             {corrDiagnostico ? '⏳ Verificando…' : '🔍 Diagnóstico SRI'}
           </button>
-          <button
-            className="btn-secondary"
-            onClick={tomarScreenshot}
-            disabled={cargandoScreenshot}
-            title="Captura lo que ve Puppeteer al navegar al portal SRI — útil para diagnosticar cambios en el portal"
-          >
-            {cargandoScreenshot ? '⏳ Cargando…' : '📸 Ver portal'}
-          </button>
         </div>
       </div>
 
@@ -505,90 +497,6 @@ export default function BuzonSRI() {
         </div>
       )}
 
-      {screenshot && (
-        <div className="buzon-diagnostico">
-          <h4>📸 Vista del portal SRI (Puppeteer en Railway)</h4>
-          <div style={{ fontSize: '.8rem', color: '#555', marginBottom: '.5rem' }}>
-            <strong>URL:</strong> {screenshot.url || '(vacía)'} &nbsp;|&nbsp; <strong>Título:</strong> {screenshot.title || '(vacío)'}
-          </div>
-          {/* Diagnóstico de red Chrome */}
-          <div style={{ background: '#f8f8f8', border: '1px solid #e0e0e0', borderRadius: 4, padding: '8px 12px', marginBottom: '.75rem', fontSize: '.8rem' }}>
-            <div style={{ marginBottom: 4 }}>
-              <strong>Chrome → example.com:</strong>{' '}
-              {screenshot.exampleOk
-                ? <span style={{ color: '#16a34a' }}>✅ OK ({screenshot.exampleUrl})</span>
-                : <span style={{ color: '#dc2626' }}>❌ Sin acceso a internet</span>}
-            </div>
-            <div>
-              <strong>Chrome → portal SRI:</strong>{' '}
-              {!screenshot.gotoError && screenshot.url && screenshot.url !== 'about:blank'
-                ? <span style={{ color: '#16a34a' }}>✅ OK</span>
-                : <span style={{ color: '#dc2626' }}>❌ {screenshot.gotoError || 'URL resultó about:blank'}</span>}
-            </div>
-          </div>
-          {screenshot.screenshot && (
-            <img
-              src={`data:image/png;base64,${screenshot.screenshot}`}
-              alt="Portal SRI visto desde Railway"
-              style={{ maxWidth: '100%', border: '1px solid #ddd', borderRadius: 4, marginBottom: '.75rem' }}
-            />
-          )}
-          {screenshot.inputs?.length > 0 && (
-            <div style={{ marginBottom: '.5rem' }}>
-              <strong style={{ fontSize: '.8rem' }}>Campos input detectados ({screenshot.inputs.length}):</strong>
-              <table style={{ fontSize: '.75rem', width: '100%', borderCollapse: 'collapse', marginTop: '.25rem' }}>
-                <thead>
-                  <tr style={{ background: '#f0f0f0' }}>
-                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>type</th>
-                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>id</th>
-                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>name</th>
-                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>placeholder</th>
-                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>visible</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {screenshot.inputs.map((inp, i) => (
-                    <tr key={i} style={{ borderTop: '1px solid #eee', background: inp.visible ? '#fff' : '#fafafa' }}>
-                      <td style={{ padding: '3px 6px' }}>{inp.type}</td>
-                      <td style={{ padding: '3px 6px', fontFamily: 'monospace' }}>{inp.id || '—'}</td>
-                      <td style={{ padding: '3px 6px', fontFamily: 'monospace' }}>{inp.name || '—'}</td>
-                      <td style={{ padding: '3px 6px' }}>{inp.placeholder || '—'}</td>
-                      <td style={{ padding: '3px 6px' }}>{inp.visible ? '✅' : '❌'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {screenshot.buttons?.length > 0 && (
-            <div style={{ marginBottom: '.5rem' }}>
-              <strong style={{ fontSize: '.8rem' }}>Botones detectados ({screenshot.buttons.length}):</strong>
-              <table style={{ fontSize: '.75rem', width: '100%', borderCollapse: 'collapse', marginTop: '.25rem' }}>
-                <thead>
-                  <tr style={{ background: '#f0f0f0' }}>
-                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>tag</th>
-                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>id</th>
-                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>texto</th>
-                    <th style={{ padding: '3px 6px', textAlign: 'left' }}>visible</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {screenshot.buttons.map((btn, i) => (
-                    <tr key={i} style={{ borderTop: '1px solid #eee' }}>
-                      <td style={{ padding: '3px 6px', fontFamily: 'monospace' }}>{btn.tag}</td>
-                      <td style={{ padding: '3px 6px', fontFamily: 'monospace' }}>{btn.id || '—'}</td>
-                      <td style={{ padding: '3px 6px' }}>{btn.text || '—'}</td>
-                      <td style={{ padding: '3px 6px' }}>{btn.visible ? '✅' : '❌'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <button className="btn-secondary" style={{ marginTop: '.5rem', fontSize: '.8rem' }} onClick={() => setScreenshot(null)}>Cerrar</button>
-        </div>
-      )}
-
       <div className="buzon-tabs-bar">
         <button className={`buzon-tab ${tab === 'descarga' ? 'active' : ''}`} onClick={() => handleTabChange('descarga')}>🔗 Descarga automática SRI</button>
         <button className={`buzon-tab ${tab === 'txt' ? 'active' : ''}`} onClick={() => handleTabChange('txt')}>📄 Importar TXT del SRI</button>
@@ -602,24 +510,46 @@ export default function BuzonSRI() {
       {tab === 'descarga' && (
         <div className="buzon-card">
 
+          {/* Banner permanente — limitación Railway */}
+          <div style={{
+            background: '#fff7ed', border: '1.5px solid #f97316', borderRadius: 10,
+            padding: '14px 18px', marginBottom: 20, display: 'flex', gap: 12, alignItems: 'flex-start',
+          }}>
+            <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>⚠️</span>
+            <div>
+              <strong style={{ color: '#c2410c', fontSize: '.95rem' }}>Descarga automática no disponible desde el servidor</strong>
+              <p style={{ margin: '4px 0 0', fontSize: '.87rem', color: '#7c2d12', lineHeight: 1.5 }}>
+                El servicio está alojado en Railway, que no permite que el navegador automático (Chrome/Puppeteer)
+                acceda a sitios externos como el portal SRI. El proceso termina siempre con error de conexión.
+              </p>
+              <p style={{ margin: '8px 0 0', fontSize: '.87rem', color: '#92400e', fontWeight: 600 }}>
+                ✅ Alternativas recomendadas:
+              </p>
+              <ul style={{ margin: '4px 0 0 18px', fontSize: '.85rem', color: '#7c2d12', lineHeight: 1.7 }}>
+                <li>
+                  <strong>📄 Importar TXT del SRI</strong> — descarga el archivo desde{' '}
+                  <em>srienlinea.sri.gob.ec → Servicios en línea → Comprobantes recibidos → Descargar reporte TXT</em>,
+                  luego usa la pestaña <strong>"Importar TXT del SRI"</strong>.
+                </li>
+                <li>
+                  <strong>📦 Importar ZIP</strong> — descarga el ZIP de XMLs desde el portal SRI e impórtalo
+                  en la pestaña <strong>"Importar ZIP"</strong>.
+                </li>
+              </ul>
+            </div>
+          </div>
+
           {/* PASO 1 — Credenciales + filtros */}
           {dmPaso === 1 && (
             <div className="buzon-step">
               <h2 className="buzon-step-title">Descarga automática de comprobantes del SRI</h2>
               <p className="buzon-step-hint">
                 Ingresa tus credenciales del portal <strong>srienlinea.sri.gob.ec</strong> y el período a consultar.
-                El sistema obtendrá automáticamente las claves de todos los comprobantes recibidos.
+                (Actualmente esta opción no funciona desde Railway — ver aviso arriba.)
               </p>
 
               <div className="buzon-credentials-note">
                 🔒 Tus credenciales se usan únicamente para consultar el portal SRI y no se almacenan.
-              </div>
-
-              <div className="buzon-sri-aviso">
-                <strong>🤖 Modo automático:</strong> El sistema navega el portal SRI en segundo plano con un navegador automático (Puppeteer/Chromium). El proceso puede tardar entre 30 y 90 segundos.
-                Si falla, descarga el ZIP manualmente desde{' '}
-                <strong>srienlinea.sri.gob.ec → Comprobantes electrónicos → Recibidos → Descargar XML</strong>{' '}
-                e impórtalo en la pestaña <strong>Importar ZIP</strong>.
               </div>
 
               <div className="buzon-form-grid">

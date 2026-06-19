@@ -45,6 +45,7 @@ export default function DetalleProforma() {
   const [modalEmail, setModalEmail] = useState(false);
   const [emailDestino, setEmailDestino] = useState('');
   const [enviandoEmail, setEnviandoEmail] = useState(false);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
 
   const puedeConvertir = tienePermiso(usuario?.rol, 'proformas.convertir');
   const puedeAnular    = tienePermiso(usuario?.rol, 'proformas.anular');
@@ -132,6 +133,25 @@ export default function DetalleProforma() {
 
   const imprimir = () => window.print();
 
+  const descargarPdf = async () => {
+    setDescargandoPdf(true);
+    try {
+      const res = await api.get(`/proformas/${id}/pdf`, { responseType: 'blob' });
+      const url  = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href     = url;
+      link.download = `${proforma.numero?.replace(/\//g, '-') || 'proforma'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Error al generar el PDF. Intenta de nuevo.');
+    } finally {
+      setDescargandoPdf(false);
+    }
+  };
+
   const abrirModalEmail = () => {
     setEmailDestino(proforma.email || '');
     setModalEmail(true);
@@ -141,8 +161,8 @@ export default function DetalleProforma() {
     if (!emailDestino.trim()) return toast.error('Ingresa un correo electrónico');
     setEnviandoEmail(true);
     try {
-      await api.post(`/proformas/${id}/enviar-email`, { emailDestino: emailDestino.trim() });
-      toast.success(`Proforma enviada a ${emailDestino.trim()}`);
+      const res = await api.post(`/proformas/${id}/enviar-email`, { emailDestino: emailDestino.trim() });
+      toast.success(res.data?.mensaje || `Proforma enviada a ${emailDestino.trim()}`);
       setModalEmail(false);
     } catch (err) {
       toast.error(err.response?.data?.mensaje || 'Error al enviar email');
@@ -228,10 +248,13 @@ export default function DetalleProforma() {
           <button className="btn-secondary" onClick={compartirWhatsApp} title="Enviar por WhatsApp">
             💬 WhatsApp
           </button>
-          <button className="btn-secondary" onClick={abrirModalEmail} title="Enviar por Email">
+          <button className="btn-secondary" onClick={abrirModalEmail} title="Enviar por Email (con PDF adjunto)">
             📧 Email
           </button>
-          {/* Imprimir */}
+          {/* PDF y Print */}
+          <button className="btn-secondary" onClick={descargarPdf} disabled={descargandoPdf} title="Descargar PDF">
+            {descargandoPdf ? '⏳ Generando...' : '⬇️ PDF'}
+          </button>
           <button className="btn-secondary prf-btn-print" onClick={imprimir}>🖨️ Imprimir</button>
           {/* Anular */}
           {puedeAnular && !['CONVERTIDA', 'ANULADA'].includes(proforma.estado) && (
