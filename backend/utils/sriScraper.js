@@ -27,8 +27,8 @@ const SRI_LOGIN_JSF     = `${SRI_BASE}/sri-en-linea/SriLoginInternet/ConsultaRuc
 // URL real de comprobantes recibidos (confirmada 2026-06-02)
 const SRI_RECIBIDOS_URL = `${SRI_BASE}/comprobantes-electronicos-internet/pages/consultas/menu.jsf`;
 
-const TIMEOUT_NAV  = 40_000;
-const TIMEOUT_SEL  = 15_000;
+const TIMEOUT_NAV  = 20_000;   // reducido de 40s: falla más rápido si el portal no responde
+const TIMEOUT_SEL  = 12_000;
 const MAX_PAGINAS  = 30;   // máx 3 000 docs (30 páginas × 100)
 
 // ── Detectar si la URL es la página de login ─────────────────
@@ -79,12 +79,15 @@ async function _lanzarNavegador() {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--no-zygote',
+      // NOTA: --no-zygote y --disable-background-networking eliminados:
+      // en contenedores Docker/Railway aislan el proceso de red de Chrome
+      // impidiendo que navegue a sitios externos.
+      '--no-proxy-server',          // evitar detección automática de proxy que puede colgar
       '--disable-extensions',
-      '--disable-background-networking',
       '--disable-sync',
       '--disable-translate',
       '--mute-audio',
+      '--ignore-certificate-errors', // tolerar errores SSL del portal SRI
       '--window-size=1280,800',
     ],
     timeout: 30_000,

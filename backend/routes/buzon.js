@@ -529,8 +529,11 @@ router.get('/sri/screenshot', async (req, res) => {
 
       const opts = {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-               '--disable-gpu', '--no-zygote', '--window-size=1280,800'],
+        args: [
+          '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+          '--disable-gpu', '--no-proxy-server', '--ignore-certificate-errors',
+          '--disable-extensions', '--window-size=1280,800',
+        ],
         defaultViewport: { width: 1280, height: 800 },
         timeout: 30000,
       };
@@ -548,8 +551,8 @@ router.get('/sri/screenshot', async (req, res) => {
       let exampleOk = false;
       let exampleUrl = '';
       const pageEx = await browser.newPage();
-      pageEx.setDefaultNavigationTimeout(10000);
-      await pageEx.goto('https://example.com', { waitUntil: 'commit', timeout: 10000 })
+      pageEx.setDefaultNavigationTimeout(12000);
+      await pageEx.goto('https://example.com', { waitUntil: 'domcontentloaded', timeout: 12000 })
         .then(() => { exampleOk = true; exampleUrl = pageEx.url(); })
         .catch(() => {});
       await pageEx.close().catch(() => {});
@@ -557,7 +560,7 @@ router.get('/sri/screenshot', async (req, res) => {
       // ── Test 2: navegar al portal SRI, capturando el error ────
       let gotoError = null;
       await page.goto('https://srienlinea.sri.gob.ec/', {
-        waitUntil: 'commit', timeout: 15000,
+        waitUntil: 'domcontentloaded', timeout: 15000,
       }).catch((err) => { gotoError = err.message || String(err); });
 
       // Dar tiempo al JS para renderizar (JSF/Angular pueden tardar)
