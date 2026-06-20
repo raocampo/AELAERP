@@ -1,23 +1,167 @@
 // ============================================================
 //  AELA — sriScraper.js
-//  Scraping del portal SRI en línea con Puppeteer.
 //
-//  Flujo:
-//    1. scraperSriLogin(ruc, password)        → { cookies }
-//    2. scraperSriRecibidos(cookies, params)  → { total, items[] }
-//    3. obtenerRecibidosScraper(params)       → items[] (por mes)
+//  ESTRATEGIA ACTUAL (2026-06-20):
+//    1. Keycloak ROPC fetch (preferido, sin Puppeteer)
+//       - sriLoginKeycloak(ruc, password)      → { token, expiresAt }
+//       - sriGetComprobantesRecibidos(token)   → items[] (TBD: URL pendiente)
+//    2. Puppeteer legacy (fallback)
+//       - scraperSriLogin / scraperSriRecibidos
 //
-//  Portal confirmado 2026-06-02:
-//    Login : srienlinea.sri.gob.ec/  (redirige a JSF login)
-//    Docs  : srienlinea.sri.gob.ec/comprobantes-electronicos-internet/pages/consultas/menu.jsf
-//    El portal usa filtro AÑO + MES (no rango de fechas).
+//  Datos confirmados del JWT (2026-06-20):
+//    Auth:      https://srienlinea.sri.gob.ec/auth/realms/Internet
+//    client_id: app-sri-claves-angular
+//    TTL token: 300 s
+//    Endpoint obligaciones/vigentes:
+//      https://srienlinea.sri.gob.ec/sri-obligacion-beneficio-servicio-internet/
+//      rest/privado/obligaciones/tributarias/vigentes
+//
+//  Pendiente: URL de comprobantes recibidos. El usuario debe navegar a la
+//  sección "Comprobantes Electrónicos → Recibidos" del portal SRI y capturar
+//  la request en DevTools → Network → Fetch/XHR.
 // ============================================================
 
-const puppeteer = require('puppeteer');
+const puppeteer  = require('puppeteer');
 const nodePath   = require('path');
 const { execSync } = require('child_process');
 
 const SRI_BASE = 'https://srienlinea.sri.gob.ec';
+
+// ═══════════════════════════════════════════════════════════════
+//  BLOQUE 1 — AUTENTICACIÓN KEYCLOAK (fetch puro, sin Puppeteer)
+// ═══════════════════════════════════════════════════════════════
+
+const SRI_KEYCLOAK_TOKEN_URL =
+  `${SRI_BASE}/auth/realms/Internet/protocol/openid-connect/token`;
+
+// URL de vigentes confirmada 2026-06-20
+const SRI_OBLIGACIONES_VIGENTES =
+  `${SRI_BASE}/sri-obligacion-beneficio-servicio-internet/rest/privado/obligaciones/tributarias/vigentes`;
+
+// URL de comprobantes recibidos — PENDIENTE CONFIRMAR
+// El usuario debe navegar a Comprobantes Electrónicos → Recibidos en el portal
+// y capturar la request Fetch/XHR con "recibido" o "comprobante" en la URL.
+const SRI_COMPROBANTES_RECIBIDOS_URL = null; // TODO: completar con URL capturada
+
+/**
+ * Obtiene un token JWT de Keycloak usando ROPC (Resource Owner Password Credentials).
+ * Requiere que el cliente `app-sri-claves-angular` tenga Direct Grant habilitado en
+ * el realm `Internet`. Si el SRI no lo permite, lanza error con instrucciones claras.
+ *
+ * @param {string} ruc       RUC o cédula del contribuyente
+ * @param {string} password  Contraseña del portal srienlinea.sri.gob.ec
+ * @returns {{ token: string, expiresAt: number, scope: string }}
+ */
+async function sriLoginKeycloak(ruc, password) {
+  const body = new URLSearchParams({
+    grant_type: 'password',
+    client_id:  'app-sri-claves-angular',
+    username:   ruc,
+    password:   password,
+    scope:      'openid',
+  });
+
+  let res;
+  try {
+    res = await fetch(SRI_KEYCLOAK_TOKEN_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    body.toString(),
+      signal:  AbortSignal.timeout(20_000),
+    });
+  } catch (err) {
+    throw new Error(
+      `No se pudo conectar con el servidor de autenticación del SRI: ${err.message}`
+    );
+  }
+
+  if (!res.ok) {
+    let detalle = '';
+    try {
+      const json = await res.json();
+      detalle = json.error_description || json.error || '';
+    } catch { /* respuesta no-JSON */ }
+
+    if (res.status === 400 && detalle.includes('grant type not enabled')) {
+      throw new Error(
+        'El portal SRI no permite autenticación directa (Direct Grant deshabilitado). ' +
+        'Descarga el ZIP de comprobantes desde srienlinea.sri.gob.ec e impórtalo con "Importar ZIP".'
+      );
+    }
+    if (res.status === 401 || (detalle && detalle.toLowerCase().includes('invalid'))) {
+      throw new Error('Credenciales del portal SRI incorrectas. Verifica RUC y contraseña.');
+    }
+    throw new Error(`Error autenticando con SRI (${res.status}): ${detalle || res.statusText}`);
+  }
+
+  const json = await res.json();
+  return {
+    token:     json.access_token,
+    expiresAt: Date.now() + (json.expires_in || 300) * 1000,
+    scope:     json.scope || '',
+  };
+}
+
+/**
+ * Obtiene comprobantes recibidos usando el token Keycloak.
+ * Requiere que SRI_COMPROBANTES_RECIBIDOS_URL esté configurada.
+ *
+ * @param {string} token   access_token de sriLoginKeycloak
+ * @returns {Array}
+ */
+async function sriGetComprobantesRecibidos(token) {
+  if (!SRI_COMPROBANTES_RECIBIDOS_URL) {
+    throw new Error(
+      'URL de comprobantes recibidos no configurada. ' +
+      'Navega a Comprobantes Electrónicos → Recibidos en srienlinea.sri.gob.ec, ' +
+      'abre DevTools → Network → Fetch/XHR y copia la URL de la request "recibido" o "comprobante".'
+    );
+  }
+
+  const res = await fetch(SRI_COMPROBANTES_RECIBIDOS_URL, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept':        'application/json',
+      'Cache-Control': 'no-cache',
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Error consultando comprobantes SRI (${res.status}): ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  // Normalizar la respuesta (la estructura exacta depende del endpoint — TBD)
+  return Array.isArray(data) ? data : (data.data || data.items || data.comprobantes || []);
+}
+
+/**
+ * Flujo completo fetch-based: login + comprobantes recibidos.
+ * Si la URL de recibidos no está configurada, usa Puppeteer como fallback.
+ */
+async function obtenerRecibidosFetch({ identificacion, password, fechaDesde, fechaHasta } = {}) {
+  if (!identificacion || !password) {
+    throw new Error('Se requiere identificación y contraseña del portal SRI');
+  }
+
+  // Si no tenemos la URL de recibidos, avisar claramente (no ejecutar Puppeteer)
+  if (!SRI_COMPROBANTES_RECIBIDOS_URL) {
+    throw new Error(
+      'Buzón SRI automático en desarrollo. ' +
+      'Falta configurar la URL de comprobantes recibidos (ver comentario en sriScraper.js). ' +
+      'Por ahora descarga el ZIP desde srienlinea.sri.gob.ec e impórtalo con "Importar ZIP".'
+    );
+  }
+
+  const { token } = await sriLoginKeycloak(identificacion, password);
+  const items = await sriGetComprobantesRecibidos(token);
+  return items;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BLOQUE 2 — LEGACY PUPPETEER (mantenido como referencia)
+// ═══════════════════════════════════════════════════════════════
 
 // ── URLs confirmadas del portal SRI (JSF, vigente al 2026-06-02) ─
 const SRI_LOGIN_URL     = `${SRI_BASE}/`;                 // redirige al login JSF si no autenticado
@@ -627,6 +771,11 @@ async function obtenerRecibidosScraper({
 }
 
 module.exports = {
+  // Fetch-based (Keycloak, sin Puppeteer) — preferido
+  sriLoginKeycloak,
+  sriGetComprobantesRecibidos,
+  obtenerRecibidosFetch,
+  // Legacy Puppeteer
   obtenerRecibidosScraper,
   scraperSriLogin,
   scraperSriRecibidos,

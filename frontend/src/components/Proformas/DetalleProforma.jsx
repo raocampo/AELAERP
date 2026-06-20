@@ -46,6 +46,7 @@ export default function DetalleProforma() {
   const [emailDestino, setEmailDestino] = useState('');
   const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const [imprimiendo,   setImprimiendo]   = useState(false);
   const [modalWA, setModalWA] = useState(false);
   const [waMensaje, setWaMensaje] = useState('');
 
@@ -133,7 +134,21 @@ export default function DetalleProforma() {
     });
   };
 
-  const imprimir = () => window.print();
+  const imprimir = async () => {
+    setImprimiendo(true);
+    try {
+      const res = await api.get(`/proformas/${id}/pdf`, { responseType: 'blob' });
+      const url  = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const win  = window.open(url, '_blank');
+      // Revocar el object URL después de que el visor lo haya cargado
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      if (!win) toast('Permite ventanas emergentes para imprimir', { icon: 'ℹ️' });
+    } catch {
+      toast.error('Error al generar el PDF para imprimir.');
+    } finally {
+      setImprimiendo(false);
+    }
+  };
 
   const descargarPdf = async () => {
     setDescargandoPdf(true);
@@ -323,7 +338,9 @@ export default function DetalleProforma() {
           <button className="btn-secondary" onClick={descargarPdf} disabled={descargandoPdf} title="Descargar PDF">
             {descargandoPdf ? '⏳ Generando...' : '⬇️ PDF'}
           </button>
-          <button className="btn-secondary prf-btn-print" onClick={imprimir}>🖨️ Imprimir</button>
+          <button className="btn-secondary prf-btn-print" onClick={imprimir} disabled={imprimiendo}>
+            {imprimiendo ? '⏳ Generando...' : '🖨️ Imprimir'}
+          </button>
           {/* Anular */}
           {puedeAnular && !['CONVERTIDA', 'ANULADA'].includes(proforma.estado) && (
             <button className="btn-secondary prf-btn-anular" disabled={procesando} onClick={anular}>
