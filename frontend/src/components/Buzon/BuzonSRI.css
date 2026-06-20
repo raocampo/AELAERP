@@ -355,6 +355,110 @@
 
 .btn-secondary:hover { background: #f1f5f9; }
 
+/* ── Toggle modo (automático / portal) ──────────────────────── */
+.buzon-modo-tabs {
+  display: flex;
+  gap: 0.35rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.65rem;
+  padding: 0.3rem;
+}
+
+.buzon-modo-tab {
+  flex: 1;
+  padding: 0.45rem 0.85rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.buzon-modo-tab:hover { background: rgba(124,58,237,0.07); color: #7C3AED; }
+.buzon-modo-tab.active { background: #7C3AED; color: #fff; font-weight: 600; }
+
+/* ── Sync portal SRI ─────────────────────────────────────────── */
+.buzon-sync-container { display: grid; gap: 1rem; }
+.buzon-sync-pasos     { display: grid; gap: 1.25rem; }
+
+.buzon-sync-paso {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.buzon-sync-num {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: #7C3AED;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.buzon-sync-link {
+  display: inline-block;
+  margin-left: 0.65rem;
+  color: #7C3AED;
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.buzon-sync-script-wrap {
+  margin-top: 0.65rem;
+  background: #0f172a;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  position: relative;
+}
+
+.buzon-sync-script {
+  flex: 1;
+  font-family: 'Courier New', monospace;
+  font-size: 0.72rem;
+  color: #a5f3fc;
+  word-break: break-all;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  overflow: hidden;
+  max-height: 4.5rem;
+}
+
+.buzon-sync-copy {
+  flex-shrink: 0;
+  padding: 0.35rem 0.75rem;
+  background: #7C3AED;
+  color: #fff;
+  border: none;
+  border-radius: 0.4rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.buzon-sync-copy:hover { background: #6D28D9; }
+
+.buzon-sync-nota {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
 /* ── Descarga automática ─────────────────────────────────── */
 .buzon-credentials-note {
   padding: 0.7rem 1rem;

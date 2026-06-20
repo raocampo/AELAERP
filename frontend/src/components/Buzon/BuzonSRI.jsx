@@ -109,6 +109,13 @@ export default function BuzonSRI() {
   const [dmResumen,        setDmResumen]        = useState(null);
   const [dmImportando,     setDmImportando]     = useState(false);
 
+  // ── Estado modo "Conectar desde portal SRI" ──────────────────
+  const [syncModo,   setSyncModo]   = useState(false);  // false=automático, true=portal
+  const [syncToken,  setSyncToken]  = useState(null);
+  const [syncFase,   setSyncFase]   = useState('idle'); // idle|generando|esperando|procesando|error
+  const [syncError,  setSyncError]  = useState('');
+  const [syncTotal,  setSyncTotal]  = useState(null);
+
   const [textareaClaves, setTextareaClaves] = useState('');
   const [consultando, setConsultando] = useState(false);
   const [resultadosConsulta, setResultadosConsulta] = useState([]);
@@ -402,6 +409,62 @@ export default function BuzonSRI() {
 
   const dmReiniciar = () => {
     setDmPassword(''); setDmResultados([]); setDmSeleccionados(new Set()); setDmResumen(null); setDmPaso(1);
+    setSyncToken(null); setSyncFase('idle'); setSyncError(''); setSyncTotal(null);
+  };
+
+  // ── Funciones modo "Conectar desde portal SRI" ──────────────
+  const _BACKEND = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
+
+  const generarScript = (tokenId) =>
+    `(function(){var c=[...new Set((document.body.innerText.match(/\\d{49}/g)||[]))];` +
+    `if(!c.length){alert('No se encontraron comprobantes en esta página. Realiza la consulta en el portal SRI primero.');return;}` +
+    `navigator.sendBeacon('${_BACKEND}/api/buzon/sri/sync/${tokenId}/recibir',` +
+    `new Blob([new URLSearchParams({payload:JSON.stringify({claves:c})}).toString()],` +
+    `{type:'application/x-www-form-urlencoded'}));` +
+    `alert('✅ '+c.length+' comprobante(s) enviado(s) a AELA. Regresa al sistema.');})()`;
+
+  const dmIniciarSync = async () => {
+    setSyncFase('generando');
+    try {
+      const res = await api.post('/buzon/sri/sync/iniciar', {});
+      const token = res.data.tokenId;
+      setSyncToken(token);
+      setSyncFase('esperando');
+
+      const iv = setInterval(async () => {
+        try {
+          const s = await api.get(`/buzon/sri/sync/${token}/estado`);
+          const { status, total, result, error } = s.data;
+          if (status === 'procesando') { setSyncFase('procesando'); setSyncTotal(total); }
+          if (status === 'done') {
+            clearInterval(iv);
+            setSyncFase('done');
+            const resultados = result?.resultados || [];
+            setDmResultados(resultados);
+            setDmSeleccionados(new Set(resultados.filter((r) => r.estado === 'nuevo').map((r) => r.clave)));
+            setDmPaso(2);
+            const nuevos = result?.nuevos ?? resultados.filter((r) => r.estado === 'nuevo').length;
+            toast.success(`${nuevos} nuevos de ${total} comprobantes recibidos del portal SRI`);
+          }
+          if (status === 'error') {
+            clearInterval(iv);
+            setSyncFase('error');
+            setSyncError(error || 'Error procesando comprobantes');
+          }
+          if (status === 'expirado') {
+            clearInterval(iv);
+            setSyncFase('error');
+            setSyncError('La sesión expiró (30 min). Genera un nuevo script.');
+          }
+        } catch { /* continuar polling */ }
+      }, 3000);
+
+      // Limpiar polling tras 35 min
+      setTimeout(() => clearInterval(iv), 35 * 60 * 1000);
+    } catch (err) {
+      setSyncFase('error');
+      setSyncError(err.response?.data?.mensaje || 'No se pudo generar el script de sincronización');
+    }
   };
 
   const ejecutarDiagnostico = async () => {
@@ -510,97 +573,160 @@ export default function BuzonSRI() {
       {tab === 'descarga' && (
         <div className="buzon-card">
 
-          {/* PASO 1 — Credenciales y filtros */}
+          {/* PASO 1 — Credenciales o modo portal */}
           {dmPaso === 1 && (
             <div className="buzon-step">
               <h2 className="buzon-step-title">Descarga automática de comprobantes SRI</h2>
-              <p className="buzon-step-hint">
-                Ingresa tus credenciales del portal <strong>srienlinea.sri.gob.ec</strong>. AELA se conecta,
-                consulta los comprobantes recibidos en el período indicado e importa los nuevos automáticamente.
-                Tu contraseña nunca se almacena.
-              </p>
 
-              <div className="buzon-form-grid">
-                <div className="buzon-form-field">
-                  <label>RUC / Cédula (portal SRI)</label>
-                  <input
-                    type="text"
-                    className="buzon-input"
-                    placeholder="Ej: 1713175071001"
-                    value={dmIdentificacion}
-                    onChange={(e) => setDmIdentificacion(e.target.value)}
-                    disabled={dmConsultando}
-                    autoComplete="username"
-                  />
-                </div>
-                <div className="buzon-form-field">
-                  <label>Clave del portal SRI</label>
-                  <input
-                    type="password"
-                    className="buzon-input"
-                    placeholder="Contraseña de srienlinea.sri.gob.ec"
-                    value={dmPassword}
-                    onChange={(e) => setDmPassword(e.target.value)}
-                    disabled={dmConsultando}
-                    autoComplete="current-password"
-                  />
-                </div>
-                <div className="buzon-form-field">
-                  <label>Fecha desde</label>
-                  <input
-                    type="date"
-                    className="buzon-input"
-                    value={dmFechaDesde}
-                    onChange={(e) => setDmFechaDesde(e.target.value)}
-                    disabled={dmConsultando}
-                  />
-                </div>
-                <div className="buzon-form-field">
-                  <label>Fecha hasta</label>
-                  <input
-                    type="date"
-                    className="buzon-input"
-                    value={dmFechaHasta}
-                    onChange={(e) => setDmFechaHasta(e.target.value)}
-                    disabled={dmConsultando}
-                  />
-                </div>
-                <div className="buzon-form-field buzon-form-field--full">
-                  <label>Tipo de comprobante</label>
-                  <select
-                    className="buzon-input"
-                    value={dmTipo}
-                    onChange={(e) => setDmTipo(e.target.value)}
-                    disabled={dmConsultando}
-                  >
-                    {TIPOS_COMP_SRI.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {dmConsultando && dmProgreso && (
-                <div className="buzon-alerta-info" style={{ marginTop: '1rem' }}>
-                  ⏳ {dmProgreso}
-                </div>
-              )}
-
-              <div className="buzon-step-actions" style={{ marginTop: '1.25rem' }}>
+              {/* Toggle de modo */}
+              <div className="buzon-modo-tabs">
                 <button
-                  className="btn-primary"
-                  onClick={dmConsultar}
-                  disabled={dmConsultando}
+                  className={`buzon-modo-tab${!syncModo ? ' active' : ''}`}
+                  onClick={() => { setSyncModo(false); setSyncFase('idle'); setSyncToken(null); setSyncError(''); }}
                 >
-                  {dmConsultando ? `⏳ ${dmProgreso || 'Consultando portal SRI...'}` : 'Consultar portal SRI →'}
+                  🔑 Ingreso automático
+                </button>
+                <button
+                  className={`buzon-modo-tab${syncModo ? ' active' : ''}`}
+                  onClick={() => setSyncModo(true)}
+                >
+                  🌐 Conectar desde portal SRI
                 </button>
               </div>
 
-              <div style={{ marginTop: '1.25rem', padding: '10px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '.8rem', color: '#64748b' }}>
-                🔒 Tus credenciales se usan solo para esta consulta y no se guardan en ningún lado.
-                Si prefieres no ingresar tu clave aquí, usa la pestaña
-                <button className="buzon-link-btn" onClick={() => handleTabChange('txt')}>📄 Importar TXT del SRI</button>.
-              </div>
+              {/* ── MODO AUTOMÁTICO ── */}
+              {!syncModo && (<>
+                <p className="buzon-step-hint">
+                  Ingresa tus credenciales del portal <strong>srienlinea.sri.gob.ec</strong>. AELA se conecta,
+                  consulta los comprobantes recibidos e importa los nuevos. Tu contraseña nunca se almacena.
+                </p>
+                <div className="buzon-form-grid">
+                  <div className="buzon-form-field">
+                    <label>RUC / Cédula (portal SRI)</label>
+                    <input type="text" className="buzon-input" placeholder="Ej: 1713175071001"
+                      value={dmIdentificacion} onChange={(e) => setDmIdentificacion(e.target.value)}
+                      disabled={dmConsultando} autoComplete="username" />
+                  </div>
+                  <div className="buzon-form-field">
+                    <label>Clave del portal SRI</label>
+                    <input type="password" className="buzon-input" placeholder="Contraseña de srienlinea.sri.gob.ec"
+                      value={dmPassword} onChange={(e) => setDmPassword(e.target.value)}
+                      disabled={dmConsultando} autoComplete="current-password" />
+                  </div>
+                  <div className="buzon-form-field">
+                    <label>Fecha desde</label>
+                    <input type="date" className="buzon-input" value={dmFechaDesde}
+                      onChange={(e) => setDmFechaDesde(e.target.value)} disabled={dmConsultando} />
+                  </div>
+                  <div className="buzon-form-field">
+                    <label>Fecha hasta</label>
+                    <input type="date" className="buzon-input" value={dmFechaHasta}
+                      onChange={(e) => setDmFechaHasta(e.target.value)} disabled={dmConsultando} />
+                  </div>
+                  <div className="buzon-form-field buzon-form-field--full">
+                    <label>Tipo de comprobante</label>
+                    <select className="buzon-input" value={dmTipo}
+                      onChange={(e) => setDmTipo(e.target.value)} disabled={dmConsultando}>
+                      {TIPOS_COMP_SRI.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {dmConsultando && dmProgreso && (
+                  <div className="buzon-alerta-info" style={{ marginTop: '1rem' }}>⏳ {dmProgreso}</div>
+                )}
+                <div className="buzon-step-actions" style={{ marginTop: '1.25rem' }}>
+                  <button className="btn-primary" onClick={dmConsultar} disabled={dmConsultando}>
+                    {dmConsultando ? `⏳ ${dmProgreso || 'Consultando portal SRI...'}` : 'Consultar portal SRI →'}
+                  </button>
+                </div>
+                <div style={{ marginTop: '1.25rem', padding: '10px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '.8rem', color: '#64748b' }}>
+                  🔒 Tus credenciales se usan solo para esta consulta y no se guardan.
+                  Si prefieres, usa{' '}
+                  <button className="buzon-link-btn" onClick={() => { setSyncModo(true); setSyncFase('idle'); }}>
+                    🌐 Conectar desde portal SRI
+                  </button>{' '}o{' '}
+                  <button className="buzon-link-btn" onClick={() => handleTabChange('txt')}>📄 Importar TXT</button>.
+                </div>
+              </>)}
+
+              {/* ── MODO PORTAL (script de consola) ── */}
+              {syncModo && (
+                <div className="buzon-sync-container">
+                  {syncFase === 'idle' && (
+                    <>
+                      <p className="buzon-step-hint">
+                        Tú inicias sesión en el portal SRI en <strong>tu propio navegador</strong> y ejecutas
+                        un mini-script en la consola (F12) que envía las claves de acceso directamente a AELA.
+                        Sin compartir contraseñas. Sin restricciones de IP.
+                      </p>
+                      <div className="buzon-step-actions" style={{ marginTop: '1rem' }}>
+                        <button className="btn-primary" onClick={dmIniciarSync}
+                          disabled={syncFase === 'generando'}>
+                          Generar script de conexión →
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {(syncFase === 'esperando' || syncFase === 'procesando') && syncToken && (
+                    <div className="buzon-sync-pasos">
+                      <div className="buzon-sync-paso">
+                        <span className="buzon-sync-num">1</span>
+                        <div>
+                          <strong>Abre el portal SRI</strong>
+                          <a className="buzon-sync-link" href="https://srienlinea.sri.gob.ec/comprobantes-electronicos-internet/pages/consultas/recibidos/comprobantesRecibidos.jsf"
+                            target="_blank" rel="noopener noreferrer">
+                            Abrir Comprobantes Recibidos ↗
+                          </a>
+                        </div>
+                      </div>
+                      <div className="buzon-sync-paso">
+                        <span className="buzon-sync-num">2</span>
+                        <div><strong>Inicia sesión</strong> si te lo pide, luego selecciona el período y haz clic en <em>Consultar</em>.</div>
+                      </div>
+                      <div className="buzon-sync-paso">
+                        <span className="buzon-sync-num">3</span>
+                        <div>
+                          <strong>Abre la consola del navegador</strong> con <kbd>F12</kbd> → pestaña <em>Consola</em> y pega este script:
+                          <div className="buzon-sync-script-wrap">
+                            <code className="buzon-sync-script">{generarScript(syncToken)}</code>
+                            <button className="buzon-sync-copy"
+                              onClick={() => { navigator.clipboard.writeText(generarScript(syncToken)); toast.success('Script copiado'); }}>
+                              📋 Copiar
+                            </button>
+                          </div>
+                          <p className="buzon-sync-nota">
+                            El script busca los números de 49 dígitos (claves de acceso) en la página y los envía a AELA. No accede a tu contraseña ni a datos personales.
+                          </p>
+                        </div>
+                      </div>
+
+                      {syncFase === 'esperando' && (
+                        <div className="buzon-alerta-info" style={{ marginTop: '1rem' }}>
+                          ⏳ Esperando datos del portal SRI... (esta ventana se actualiza sola)
+                        </div>
+                      )}
+                      {syncFase === 'procesando' && (
+                        <div className="buzon-alerta-ok" style={{ marginTop: '1rem' }}>
+                          ✅ Script ejecutado · {syncTotal} clave(s) recibidas · Consultando el SRI...
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {syncFase === 'error' && (
+                    <div className="buzon-alerta-warning" style={{ marginTop: '1rem' }}>
+                      ❌ {syncError}
+                      <div style={{ marginTop: '.75rem' }}>
+                        <button className="btn-secondary"
+                          onClick={() => { setSyncFase('idle'); setSyncToken(null); setSyncError(''); }}>
+                          Intentar de nuevo
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

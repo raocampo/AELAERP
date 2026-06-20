@@ -45,9 +45,67 @@ function _limpiarJobsViejos() {
   }
 }
 
+// ─── Store sync portal-SRI (sin Keycloak) ─────────────────────
+// El usuario inicia sesión en su propio navegador en srienlinea.sri.gob.ec,
+// ejecuta un mini-script en la consola que extrae las claves de acceso (49 dígitos)
+// y las envía aquí via sendBeacon. No hay credenciales involucradas.
+const SYNC_SESSIONS = new Map();
+function _limpiarSyncViejas() {
+  const limite = Date.now() - 30 * 60 * 1000;
+  for (const [id, s] of SYNC_SESSIONS) if (s.createdAt < limite) SYNC_SESSIONS.delete(id);
+}
+
+// ── Recibir claves desde el script de consola (PÚBLICO — el token es el auth) ──
+router.post('/sri/sync/:tokenId/recibir', (req, res) => {
+  const s = SYNC_SESSIONS.get(req.params.tokenId);
+  if (!s || s.status !== 'pending') return res.status(404).end();
+  try {
+    const { claves } = JSON.parse(req.body?.payload || '{}');
+    const clavesLimpias = [...new Set((claves || []).filter((c) => /^\d{49}$/.test(c)))];
+    if (!clavesLimpias.length) {
+      SYNC_SESSIONS.set(req.params.tokenId, {
+        ...s, status: 'error',
+        error: 'No se encontraron claves de acceso (49 dígitos) en la página. Realiza la consulta en el portal primero.',
+      });
+      return res.status(200).end();
+    }
+    SYNC_SESSIONS.set(req.params.tokenId, { ...s, status: 'procesando', claves: clavesLimpias });
+    res.status(200).end();
+
+    (async () => {
+      try {
+        const docsPortal = clavesLimpias.map((c) => ({ claveAcceso: c }));
+        const respuesta  = await armarRespuestaConsultaRecibidos(s.empresaId, docsPortal);
+        SYNC_SESSIONS.set(req.params.tokenId, {
+          ...s, status: 'done', result: { ...respuesta, metodo: 'portal-sync' },
+        });
+      } catch (err) {
+        SYNC_SESSIONS.set(req.params.tokenId, { ...s, status: 'error', error: err.message });
+      }
+    })();
+  } catch {
+    res.status(400).end();
+  }
+});
+
+// ── Polling estado (PÚBLICO — token = auth) ────────────────────
+router.get('/sri/sync/:tokenId/estado', (req, res) => {
+  const s = SYNC_SESSIONS.get(req.params.tokenId);
+  if (!s) return res.json({ status: 'expirado' });
+  res.json({ status: s.status, error: s.error, result: s.result, total: s.claves?.length });
+});
+
 router.use(proteger);
 router.use(requiereModulo('comprasHabilitadas'));
 router.use(autorizarPermiso('compras.gestionar'));
+
+// ── Crear sesión de sync (AUTENTICADO) ────────────────────────
+router.post('/sri/sync/iniciar', (req, res) => {
+  _limpiarSyncViejas();
+  const tokenId = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  SYNC_SESSIONS.set(tokenId, { status: 'pending', createdAt: Date.now(), empresaId: req.empresa.id });
+  res.json({ tokenId, expiresIn: 1800 });
+});
 
 // ─── Normalizar clave ────────────────────────────────────────
 function limpiarClave(texto) {
