@@ -258,6 +258,8 @@
 .buzon-txt-nota code { background: #f1f5f9; padding: .1rem .3rem; border-radius: .25rem; font-size: .8rem; }
 .buzon-alerta-ok      { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: .5rem; padding: .75rem 1rem; color: #166534; font-size: .875rem; }
 .buzon-alerta-warning { background: #fffbeb; border: 1px solid #fde68a; border-radius: .5rem; padding: .75rem 1rem; color: #92400e; font-size: .875rem; }
+.buzon-alerta-info    { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: .5rem; padding: .75rem 1rem; color: #075985; font-size: .875rem; }
+.buzon-link-btn { background: none; border: none; padding: 0 4px; cursor: pointer; color: #7c3aed; font-size: inherit; text-decoration: underline; }
 .buzon-txt-claves-preview { margin: .5rem 0 0; padding-left: 1.25rem; font-size: .8rem; color: #475569; }
 .buzon-txt-claves-preview code { font-family: monospace; background: #f1f5f9; padding: .1rem .3rem; border-radius: .25rem; }
 

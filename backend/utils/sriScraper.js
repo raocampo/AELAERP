@@ -28,136 +28,432 @@ const { execSync } = require('child_process');
 const SRI_BASE = 'https://srienlinea.sri.gob.ec';
 
 // ═══════════════════════════════════════════════════════════════
-//  BLOQUE 1 — AUTENTICACIÓN KEYCLOAK (fetch puro, sin Puppeteer)
+//  BLOQUE 1 — SCRAPER FETCH+JSF (sin Puppeteer)
+//
+//  Flujo confirmado 2026-06-20:
+//    1. GET /comprobantes-electronicos-internet/.../comprobantesRecibidos.jsf
+//       → 302 a Keycloak login (realm Internet)
+//    2. GET Keycloak auth page → 200 con form HTML
+//    3. POST credenciales → 302 de vuelta a la app → cookies con JSESSIONID
+//    4. GET página JSF → extraer ViewState + nombres de campos dinámicos
+//    5. POST JSF AJAX (faces-request: partial/ajax) → XML con tabla de resultados
+//    6. Parsear XML → extraer claves de acceso
 // ═══════════════════════════════════════════════════════════════
 
-const SRI_KEYCLOAK_TOKEN_URL =
-  `${SRI_BASE}/auth/realms/Internet/protocol/openid-connect/token`;
+const SRI_JSF_URL =
+  `${SRI_BASE}/comprobantes-electronicos-internet/pages/consultas/recibidos/comprobantesRecibidos.jsf`;
 
-// URL de vigentes confirmada 2026-06-20
-const SRI_OBLIGACIONES_VIGENTES =
-  `${SRI_BASE}/sri-obligacion-beneficio-servicio-internet/rest/privado/obligaciones/tributarias/vigentes`;
+// Headers que imitan un navegador real (necesarios para que el portal no rechace)
+const _HEADERS = {
+  'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36',
+  'Accept-Language': 'es-EC,es;q=0.9,en;q=0.8',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Connection':      'keep-alive',
+};
 
-// URL de comprobantes recibidos — PENDIENTE CONFIRMAR
-// El usuario debe navegar a Comprobantes Electrónicos → Recibidos en el portal
-// y capturar la request Fetch/XHR con "recibido" o "comprobante" en la URL.
-const SRI_COMPROBANTES_RECIBIDOS_URL = null; // TODO: completar con URL capturada
-
-/**
- * Obtiene un token JWT de Keycloak usando ROPC (Resource Owner Password Credentials).
- * Requiere que el cliente `app-sri-claves-angular` tenga Direct Grant habilitado en
- * el realm `Internet`. Si el SRI no lo permite, lanza error con instrucciones claras.
- *
- * @param {string} ruc       RUC o cédula del contribuyente
- * @param {string} password  Contraseña del portal srienlinea.sri.gob.ec
- * @returns {{ token: string, expiresAt: number, scope: string }}
- */
-async function sriLoginKeycloak(ruc, password) {
-  const body = new URLSearchParams({
-    grant_type: 'password',
-    client_id:  'app-sri-claves-angular',
-    username:   ruc,
-    password:   password,
-    scope:      'openid',
-  });
-
-  let res;
-  try {
-    res = await fetch(SRI_KEYCLOAK_TOKEN_URL, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body:    body.toString(),
-      signal:  AbortSignal.timeout(20_000),
-    });
-  } catch (err) {
-    throw new Error(
-      `No se pudo conectar con el servidor de autenticación del SRI: ${err.message}`
-    );
+// ─── Cookie jar helpers ───────────────────────────────────────
+function _parsearSetCookie(headers) {
+  // getSetCookie() disponible en Node 20+; fallback para Node 18
+  let values = [];
+  if (typeof headers.getSetCookie === 'function') {
+    values = headers.getSetCookie();
+  } else {
+    const raw = headers.get('set-cookie');
+    if (raw) values = [raw];
   }
-
-  if (!res.ok) {
-    let detalle = '';
-    try {
-      const json = await res.json();
-      detalle = json.error_description || json.error || '';
-    } catch { /* respuesta no-JSON */ }
-
-    if (res.status === 400 && detalle.includes('grant type not enabled')) {
-      throw new Error(
-        'El portal SRI no permite autenticación directa (Direct Grant deshabilitado). ' +
-        'Descarga el ZIP de comprobantes desde srienlinea.sri.gob.ec e impórtalo con "Importar ZIP".'
-      );
-    }
-    if (res.status === 401 || (detalle && detalle.toLowerCase().includes('invalid'))) {
-      throw new Error('Credenciales del portal SRI incorrectas. Verifica RUC y contraseña.');
-    }
-    throw new Error(`Error autenticando con SRI (${res.status}): ${detalle || res.statusText}`);
+  const jar = {};
+  for (const h of values) {
+    if (!h) continue;
+    const eq = h.indexOf('=');
+    const sc = h.indexOf(';');
+    if (eq < 0) continue;
+    const name  = h.substring(0, eq).trim();
+    const value = h.substring(eq + 1, sc > eq ? sc : undefined).trim();
+    if (name) jar[name] = value;
   }
-
-  const json = await res.json();
-  return {
-    token:     json.access_token,
-    expiresAt: Date.now() + (json.expires_in || 300) * 1000,
-    scope:     json.scope || '',
-  };
+  return jar;
 }
 
-/**
- * Obtiene comprobantes recibidos usando el token Keycloak.
- * Requiere que SRI_COMPROBANTES_RECIBIDOS_URL esté configurada.
- *
- * @param {string} token   access_token de sriLoginKeycloak
- * @returns {Array}
- */
-async function sriGetComprobantesRecibidos(token) {
-  if (!SRI_COMPROBANTES_RECIBIDOS_URL) {
+function _cookieStr(jar) {
+  return Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+function _resolverUrl(url, base) {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  return new URL(url, base).toString();
+}
+
+// ─── Paso 1: login via Keycloak redirect chain ───────────────
+async function _loginJSFFetch(ruc, password) {
+  const jar = {};
+  const T   = 25_000;
+
+  // 1a. GET la página JSF → debe redirigir a Keycloak
+  const r1 = await fetch(SRI_JSF_URL, {
+    redirect: 'manual',
+    headers:  { ..._HEADERS, 'Accept': 'text/html,application/xhtml+xml,*/*' },
+    signal:   AbortSignal.timeout(T),
+  });
+  Object.assign(jar, _parsearSetCookie(r1.headers));
+
+  if (r1.status === 200) {
+    // Podría devolver 200 si el servidor tiene un bypass o ya está autenticado
+    const html = await r1.text();
+    if (html.includes('javax.faces.ViewState')) return { jar, paginaJSF: html };
+  }
+  if (r1.status !== 302 && r1.status !== 301) {
+    throw new Error(`El portal SRI respondió ${r1.status} al acceder al formulario de comprobantes`);
+  }
+
+  const keycloakAuthUrl = _resolverUrl(r1.headers.get('location'), SRI_BASE);
+  if (!keycloakAuthUrl) {
+    throw new Error('El portal SRI no proporcionó URL de autenticación');
+  }
+
+  // 1b. GET la página de login de Keycloak
+  const r2 = await fetch(keycloakAuthUrl, {
+    redirect: 'manual',
+    headers:  { ..._HEADERS, 'Accept': 'text/html', 'Cookie': _cookieStr(jar) },
+    signal:   AbortSignal.timeout(T),
+  });
+  Object.assign(jar, _parsearSetCookie(r2.headers));
+
+  if (r2.status === 302 || r2.status === 301) {
+    // Keycloak redirige directamente (sesión SSO activa?) — seguir
+    const nextUrl = _resolverUrl(r2.headers.get('location'), SRI_BASE);
+    if (nextUrl) return _seguirRedirects(nextUrl, jar, T, null);
+  }
+  if (r2.status !== 200) {
+    throw new Error(`Keycloak devolvió ${r2.status} al cargar el formulario de login del SRI`);
+  }
+
+  const loginHtml = await r2.text();
+
+  // Extraer action URL del formulario (<form ... action="...">)
+  const actionMatch = loginHtml.match(/<form[^>]+action="([^"]+)"/i);
+  if (!actionMatch) {
+    throw new Error('No se encontró el formulario de login en el portal SRI (Keycloak)');
+  }
+  const loginActionUrl = _resolverUrl(
+    actionMatch[1].replace(/&amp;/g, '&'),
+    keycloakAuthUrl
+  );
+
+  // 1c. POST credenciales
+  const r3 = await fetch(loginActionUrl, {
+    method:   'POST',
+    redirect: 'manual',
+    headers:  {
+      ..._HEADERS,
+      'Accept':        'text/html',
+      'Content-Type':  'application/x-www-form-urlencoded',
+      'Cookie':        _cookieStr(jar),
+      'Referer':       keycloakAuthUrl,
+      'Origin':        SRI_BASE,
+    },
+    body:   new URLSearchParams({ username: ruc, password, credentialId: '' }).toString(),
+    signal: AbortSignal.timeout(T),
+  });
+  Object.assign(jar, _parsearSetCookie(r3.headers));
+
+  if (r3.status === 200) {
+    // Login fallido → Keycloak vuelve a mostrar el form con mensaje de error
+    const errHtml = await r3.text();
+    const errMatch = errHtml.match(/class="[^"]*kc-feedback-text[^"]*"[^>]*>([\s\S]*?)<\/\w+>/i)
+                  || errHtml.match(/id="input-error[^"]*"[^>]*>([\s\S]*?)<\/\w+>/i)
+                  || errHtml.match(/alert-error[^>]*>([\s\S]*?)<\/\w+>/i);
+    const msgErr = errMatch
+      ? errMatch[1].replace(/<[^>]+>/g, '').trim()
+      : 'RUC o contraseña incorrectos';
+    throw new Error(`Credenciales del portal SRI incorrectas: ${msgErr}`);
+  }
+  if (r3.status !== 302 && r3.status !== 301) {
+    throw new Error(`Error al enviar credenciales al portal SRI (${r3.status})`);
+  }
+
+  const appCallbackUrl = _resolverUrl(r3.headers.get('location'), SRI_BASE);
+  return _seguirRedirects(appCallbackUrl, jar, T, null);
+}
+
+// ─── Seguir redirects hasta obtener JSESSIONID + HTML JSF ────
+async function _seguirRedirects(url, jar, timeout, paginaJSF) {
+  for (let i = 0; i < 8; i++) {
+    const r = await fetch(url, {
+      redirect: 'manual',
+      headers:  { ..._HEADERS, 'Accept': 'text/html', 'Cookie': _cookieStr(jar) },
+      signal:   AbortSignal.timeout(timeout),
+    });
+    Object.assign(jar, _parsearSetCookie(r.headers));
+
+    if (r.status === 302 || r.status === 301) {
+      url = _resolverUrl(r.headers.get('location'), SRI_BASE);
+      if (!url) break;
+      continue;
+    }
+    if (r.status === 200) {
+      const html = await r.text();
+      if (html.includes('javax.faces.ViewState')) {
+        return { jar, paginaJSF: html };
+      }
+      paginaJSF = html; // guardar aunque no tenga ViewState aún
+      // Puede que haya redirigido a otra página intermedia — seguir si hay redirect en HTML
+      const metaMatch = html.match(/<meta[^>]+http-equiv="refresh"[^>]+content="[^"]*url=([^"]+)"/i);
+      if (metaMatch) {
+        url = _resolverUrl(metaMatch[1], SRI_BASE);
+        continue;
+      }
+      break;
+    }
+    break;
+  }
+
+  if (!jar.JSESSIONID) {
+    // Buscar JSESSIONID en la URL si no vino como cookie (algunos servidores JSF lo meten en la URL)
+    const jsInUrl = url && url.match(/jsessionid=([A-Z0-9._-]+)/i);
+    if (jsInUrl) jar.JSESSIONID = jsInUrl[1];
+  }
+
+  if (!jar.JSESSIONID) {
     throw new Error(
-      'URL de comprobantes recibidos no configurada. ' +
-      'Navega a Comprobantes Electrónicos → Recibidos en srienlinea.sri.gob.ec, ' +
-      'abre DevTools → Network → Fetch/XHR y copia la URL de la request "recibido" o "comprobante".'
+      'No se pudo establecer sesión con el portal de comprobantes SRI. ' +
+      'Verifica que las credenciales sean correctas y que el portal esté disponible.'
     );
   }
 
-  const res = await fetch(SRI_COMPROBANTES_RECIBIDOS_URL, {
+  return { jar, paginaJSF };
+}
+
+// ─── Paso 2: GET página JSF (si no la tenemos del login) ──────
+async function _obtenerPaginaJSF(jar) {
+  const r = await fetch(SRI_JSF_URL, {
+    headers: { ..._HEADERS, 'Accept': 'text/html', 'Cookie': _cookieStr(jar) },
+    signal:  AbortSignal.timeout(20_000),
+  });
+  Object.assign(jar, _parsearSetCookie(r.headers));
+  if (!r.ok) throw new Error(`Error cargando el formulario del SRI (${r.status})`);
+  return r.text();
+}
+
+// ─── Paso 3: Extraer campos del formulario JSF desde HTML ────
+function _extraerCamposJSF(html) {
+  const vsMatch = html.match(/name="javax\.faces\.ViewState"[^>]*value="([^"]+)"/)
+                || html.match(/id="javax\.faces\.ViewState"[^>]*value="([^"]+)"/);
+  if (!vsMatch) throw new Error('No se pudo leer el estado del formulario JSF (ViewState ausente)');
+  const viewState = vsMatch[1];
+
+  // Extraer el ID del form principal
+  const formMatch = html.match(/<form[^>]+id="([^"]+)"/i);
+  const formId    = formMatch ? formMatch[1] : '';
+
+  // Helper para extraer el primer `name` que coincida con algún patrón
+  const campo = (...pats) => {
+    for (const p of pats) {
+      const m = html.match(p);
+      if (m) return m[1];
+    }
+    return null;
+  };
+
+  const fieldTipoIdent = campo(
+    /name="([^"]*tipoIdentificacion[^"]*)"/i,
+    /name="([^"]*tipo[_-]?ident[^"]*)"/i,
+  );
+  const fieldIdent = campo(
+    /name="([^"]*:identificacion)"/i,
+    /name="([^"]*identificacion[^"]*)"\s+(?:type="text"|class=)/i,
+  );
+  const fieldAnio = campo(
+    /name="([^"]*[Aa]n[ií]o[^"]*)"[^>]*>[^<]{0,50}<option/,
+    /name="([^"]*[Aa]ni[oo][^"]*)"/i,
+    /id="([^"]*[Aa]ni[oo][^"]*)"/i,
+  );
+  const fieldMes = campo(
+    /name="([^"]*[Mm]es[^"]*)"[^>]*>[^<]{0,50}<option/,
+    /name="([^"]*[Mm]es[^"]*)"/i,
+  );
+  const fieldTipoComp = campo(
+    /name="([^"]*tipo[^"]*)"[^>]*>[^<]{0,200}<option[^>]*value="01"/,
+    /name="([^"]*[Tt]ipo[Cc]omprobante[^"]*)"/i,
+  );
+  const fieldBtn = campo(
+    /name="([^"]*[Cc]onsultar[^"]*)"[^>]*(?:type="submit"|value="[Cc]onsultar")/i,
+    /id="([^"]*[Cc]onsultar[^"]*)"/i,
+    /id="([^"]*[Bb]tn[^"]*)"/i,
+    /name="([^"]*[Bb]tn[^"]*)"/i,
+  );
+
+  return { viewState, formId, fieldTipoIdent, fieldIdent, fieldAnio, fieldMes, fieldTipoComp, fieldBtn };
+}
+
+// ─── Paso 4: POST JSF AJAX ───────────────────────────────────
+async function _postJSF(jar, campos, { ruc, anio, mes, tipoComprobante }) {
+  const { viewState, formId, fieldTipoIdent, fieldIdent, fieldAnio, fieldMes, fieldTipoComp, fieldBtn } = campos;
+
+  if (!fieldBtn || !viewState) {
+    throw new Error('No se pudieron identificar los campos del formulario JSF del SRI');
+  }
+
+  const p = new URLSearchParams();
+  p.append('javax.faces.partial.ajax',   'true');
+  p.append('javax.faces.source',         fieldBtn);
+  p.append('javax.faces.partial.execute', '@all');
+  p.append('javax.faces.partial.render',  '@all');
+  p.append(fieldBtn, fieldBtn);
+  if (formId)         p.append(formId, formId);
+  if (fieldTipoIdent) p.append(fieldTipoIdent, 'R');         // R = RUC/Cédula
+  if (fieldIdent)     p.append(fieldIdent, ruc);
+  if (fieldAnio)      p.append(fieldAnio, String(anio));
+  if (fieldMes)       p.append(fieldMes,  String(mes));
+  if (fieldTipoComp && tipoComprobante && tipoComprobante !== 'TODOS') {
+    p.append(fieldTipoComp, tipoComprobante);
+  }
+  p.append('javax.faces.ViewState', viewState);
+
+  const r = await fetch(SRI_JSF_URL, {
+    method:  'POST',
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept':        'application/json',
-      'Cache-Control': 'no-cache',
+      ..._HEADERS,
+      'Cookie':        _cookieStr(jar),
+      'Content-Type':  'application/x-www-form-urlencoded; charset=UTF-8',
+      'Faces-Request': 'partial/ajax',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Accept':        'application/xml, text/xml, */*; q=0.01',
+      'Origin':        SRI_BASE,
+      'Referer':       SRI_JSF_URL,
     },
+    body:   p.toString(),
     signal: AbortSignal.timeout(30_000),
   });
+  Object.assign(jar, _parsearSetCookie(r.headers));
 
-  if (!res.ok) {
-    throw new Error(`Error consultando comprobantes SRI (${res.status}): ${res.statusText}`);
-  }
-
-  const data = await res.json();
-  // Normalizar la respuesta (la estructura exacta depende del endpoint — TBD)
-  return Array.isArray(data) ? data : (data.data || data.items || data.comprobantes || []);
+  if (!r.ok) throw new Error(`Error consultando el portal SRI (${r.status}): ${r.statusText}`);
+  return r.text();
 }
 
-/**
- * Flujo completo fetch-based: login + comprobantes recibidos.
- * Si la URL de recibidos no está configurada, usa Puppeteer como fallback.
- */
-async function obtenerRecibidosFetch({ identificacion, password, fechaDesde, fechaHasta } = {}) {
+// ─── Paso 5: Parsear XML de respuesta JSF ───────────────────
+function _parsearXmlJSF(xml) {
+  const items = [];
+  const cdataRe = /<!\[CDATA\[([\s\S]*?)\]\]>/g;
+  let cdataMatch;
+
+  while ((cdataMatch = cdataRe.exec(xml)) !== null) {
+    const html = cdataMatch[1];
+    const rowRe  = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+
+    while ((rowMatch = rowRe.exec(html)) !== null) {
+      const rowHtml = rowMatch[1];
+      const celdas  = [];
+      const cellRe  = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      let cellMatch;
+
+      while ((cellMatch = cellRe.exec(rowHtml)) !== null) {
+        celdas.push(
+          cellMatch[1]
+            .replace(/<[^>]+>/g, '')
+            .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&nbsp;/g, ' ').replace(/&#160;/g, ' ')
+            .trim().replace(/\s+/g, ' ')
+        );
+      }
+      if (celdas.length < 2) continue;
+
+      // Buscar clave de acceso de 49 dígitos en las celdas
+      let claveAcceso = null;
+      for (const c of celdas) {
+        if (/^\d{49}$/.test(c.replace(/\s/g, ''))) { claveAcceso = c.replace(/\s/g, ''); break; }
+      }
+      // También buscar en hrefs de la fila
+      if (!claveAcceso) {
+        const hrefM = rowHtml.match(/claveAcceso[=:](\d{49})/i);
+        if (hrefM) claveAcceso = hrefM[1];
+      }
+      if (!claveAcceso) continue;
+
+      const fechaCell = celdas.find((c) => /\d{2}\/\d{2}\/\d{4}/.test(c));
+      const totalCell = celdas.find((c) => /^\$?\s*\d[\d.,]*$/.test(c.trim()));
+      const razonCell = celdas.find((c) =>
+        c.length > 3 && !/^\d+$/.test(c) && c !== claveAcceso &&
+        !/^\d{2}\/\d{2}\/\d{4}$/.test(c) && !/^\$?\s*\d[\d.,]*$/.test(c.trim())
+      );
+
+      items.push({
+        claveAcceso,
+        razonSocialEmisor: razonCell  || '',
+        fechaEmision:      fechaCell  || '',
+        importeTotal:      totalCell  ? parseFloat(totalCell.replace(/[$, ]/g, '')) || 0 : 0,
+      });
+    }
+  }
+
+  // Loguear si el SRI devolvió un mensaje (sin resultados o error)
+  if (items.length === 0) {
+    const msgMatch = xml.match(/<update[^>]*>\s*<!\[CDATA\[([\s\S]{0,400})\]\]>/i);
+    if (msgMatch) {
+      const msg = msgMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+      if (msg) console.log('[SRI JSF] Mensaje del portal:', msg.substring(0, 200));
+    }
+  }
+
+  return items;
+}
+
+// ─── Función principal fetch-based ──────────────────────────
+async function obtenerRecibidosFetch({
+  identificacion,
+  password,
+  fechaDesde,
+  fechaHasta,
+  tipoComprobante = 'TODOS',
+} = {}) {
   if (!identificacion || !password) {
     throw new Error('Se requiere identificación y contraseña del portal SRI');
   }
 
-  // Si no tenemos la URL de recibidos, avisar claramente (no ejecutar Puppeteer)
-  if (!SRI_COMPROBANTES_RECIBIDOS_URL) {
-    throw new Error(
-      'Buzón SRI automático en desarrollo. ' +
-      'Falta configurar la URL de comprobantes recibidos (ver comentario en sriScraper.js). ' +
-      'Por ahora descarga el ZIP desde srienlinea.sri.gob.ec e impórtalo con "Importar ZIP".'
-    );
+  const fDesde = _normalizarFecha(fechaDesde);
+  const fHasta = _normalizarFecha(fechaHasta);
+  const meses  = _mesesEnRango(fDesde, fHasta);
+
+  // 1. Login
+  let jar, paginaJSF;
+  try {
+    ({ jar, paginaJSF } = await _loginJSFFetch(identificacion, password));
+  } catch (err) {
+    throw err;
   }
 
-  const { token } = await sriLoginKeycloak(identificacion, password);
-  const items = await sriGetComprobantesRecibidos(token);
-  return items;
+  // 2. Obtener ViewState (del HTML del login si ya lo tenemos, o haciendo GET)
+  const html   = paginaJSF || await _obtenerPaginaJSF(jar);
+  let campos   = _extraerCamposJSF(html);
+
+  const todosPorDuplicar = [];
+
+  // 3. Consultar cada mes del rango
+  for (const { anio, mes } of meses) {
+    const xml   = await _postJSF(jar, campos, { ruc: identificacion, anio, mes, tipoComprobante });
+    const items = _parsearXmlJSF(xml);
+    todosPorDuplicar.push(...items);
+
+    // Refrescar ViewState para la siguiente consulta
+    if (meses.length > 1) {
+      try {
+        const freshHtml = await _obtenerPaginaJSF(jar);
+        campos = _extraerCamposJSF(freshHtml);
+      } catch { /* continuar con campos anteriores */ }
+    }
+  }
+
+  return _deduplicar(todosPorDuplicar);
 }
+
+// Alias de compatibilidad (por si se importa directamente)
+const sriLoginKeycloak = async () => {
+  throw new Error('sriLoginKeycloak ya no se usa; usa obtenerRecibidosFetch()');
+};
+const sriGetComprobantesRecibidos = async () => {
+  throw new Error('sriGetComprobantesRecibidos ya no se usa; usa obtenerRecibidosFetch()');
+};
 
 // ═══════════════════════════════════════════════════════════════
 //  BLOQUE 2 — LEGACY PUPPETEER (mantenido como referencia)
@@ -724,7 +1020,9 @@ async function scraperSriRecibidos(cookies, {
 
 // ─── Función principal exportada ──────────────────────────────
 /**
- * Login + consulta de TODOS los comprobantes recibidos en el rango dado.
+ * Login + consulta de comprobantes recibidos.
+ * Intenta primero con fetch-based JSF (sin Puppeteer).
+ * Si falla por razones técnicas (no por credenciales), reintenta con Puppeteer.
  *
  * @param {{ identificacion, password, fechaDesde, fechaHasta, tipoComprobante }} params
  * @returns {Array<{ claveAcceso, razonSocialEmisor, fechaEmision, importeTotal }>}
@@ -743,7 +1041,25 @@ async function obtenerRecibidosScraper({
     throw new Error('Se requiere rango de fechas (fechaDesde, fechaHasta)');
   }
 
-  // Timeout global de 3 minutos para evitar que el job quede colgado indefinidamente
+  const params = { identificacion, password, fechaDesde, fechaHasta, tipoComprobante };
+
+  // ── Intento 1: fetch-based (sin Puppeteer, funciona en Railway) ──
+  try {
+    console.log('[SRI] Intentando scraper fetch-based (JSF)...');
+    const items = await obtenerRecibidosFetch(params);
+    console.log(`[SRI] Fetch-based OK: ${items.length} comprobantes`);
+    return items;
+  } catch (fetchErr) {
+    console.warn('[SRI] Fetch-based falló:', fetchErr.message);
+    // Si el error es de credenciales, no tiene sentido reintentar con Puppeteer
+    if (/credenciales|contraseña|password|incorrectos|incorrectas|usuario/i.test(fetchErr.message)) {
+      throw fetchErr;
+    }
+    // Otros errores → intentar con Puppeteer como fallback
+  }
+
+  // ── Intento 2: Puppeteer (fallback, no disponible en Railway) ──
+  console.log('[SRI] Intentando scraper Puppeteer (fallback)...');
   const TIMEOUT_TOTAL_MS = 3 * 60 * 1000;
 
   const scraperPromise = (async () => {
@@ -757,17 +1073,18 @@ async function obtenerRecibidosScraper({
     return items;
   })();
 
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(
-      () => reject(new Error(
-        'Tiempo de espera agotado (3 min). El portal SRI no respondió a tiempo. ' +
-        'Prueba más tarde o descarga el ZIP manualmente desde srienlinea.sri.gob.ec → Comprobantes electrónicos → Recibidos → Descargar XML e impórtalo con "Importar ZIP".'
-      )),
-      TIMEOUT_TOTAL_MS
-    )
-  );
-
-  return Promise.race([scraperPromise, timeoutPromise]);
+  return Promise.race([
+    scraperPromise,
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error(
+          'Tiempo de espera agotado (3 min). El portal SRI no respondió a tiempo. ' +
+          'Prueba más tarde o descarga el ZIP desde srienlinea.sri.gob.ec → Comprobantes electrónicos → Recibidos → Descargar XML e impórtalo con "Importar ZIP".'
+        )),
+        TIMEOUT_TOTAL_MS
+      )
+    ),
+  ]);
 }
 
 module.exports = {
