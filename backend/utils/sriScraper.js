@@ -84,155 +84,175 @@ function _resolverUrl(url, base) {
   return new URL(url, base).toString();
 }
 
-// ─── Paso 1: login via Keycloak redirect chain ───────────────
-async function _loginJSFFetch(ruc, password) {
+// ─── Login + obtener formulario JSF (flujo unificado) ────────
+//
+//  Problema detectado 2026-06-20: el redirect_uri de Keycloak puede apuntar
+//  a tuportal-internet (Angular) en lugar de a la subapp JSF de comprobantes.
+//  Resultado: obtenemos JSESSIONID del portal Angular, no del JSF. La subapp
+//  JSF no reconoce esa sesión y necesita su propio round-trip de Keycloak.
+//
+//  Solución: un único loop que:
+//    - Sigue todos los redirects manualmente (capturando cookies en cada paso)
+//    - Detecta el form de Keycloak y envía credenciales exactamente UNA vez
+//    - Si llegamos a una página sin ViewState (tuportal) pero con sesión KC,
+//      reintenta el JSF URL — el SSO de Keycloak da sesión JSF sin re-login
+async function _loginYObtenerJSF(ruc, password) {
   const jar = {};
-  const T   = 25_000;
+  const T   = 30_000;
+  let url   = SRI_JSF_URL;
+  let credencialesEnviadas = false;
+  let reintentosJSF = 0;
+  const MAX = 18;
 
-  // 1a. GET la página JSF → debe redirigir a Keycloak
-  const r1 = await fetch(SRI_JSF_URL, {
-    redirect: 'manual',
-    headers:  { ..._HEADERS, 'Accept': 'text/html,application/xhtml+xml,*/*' },
-    signal:   AbortSignal.timeout(T),
-  });
-  Object.assign(jar, _parsearSetCookie(r1.headers));
-
-  if (r1.status === 200) {
-    // Podría devolver 200 si el servidor tiene un bypass o ya está autenticado
-    const html = await r1.text();
-    if (html.includes('javax.faces.ViewState')) return { jar, paginaJSF: html };
-  }
-  if (r1.status !== 302 && r1.status !== 301) {
-    throw new Error(`El portal SRI respondió ${r1.status} al acceder al formulario de comprobantes`);
-  }
-
-  const keycloakAuthUrl = _resolverUrl(r1.headers.get('location'), SRI_BASE);
-  if (!keycloakAuthUrl) {
-    throw new Error('El portal SRI no proporcionó URL de autenticación');
-  }
-
-  // 1b. GET la página de login de Keycloak
-  const r2 = await fetch(keycloakAuthUrl, {
-    redirect: 'manual',
-    headers:  { ..._HEADERS, 'Accept': 'text/html', 'Cookie': _cookieStr(jar) },
-    signal:   AbortSignal.timeout(T),
-  });
-  Object.assign(jar, _parsearSetCookie(r2.headers));
-
-  if (r2.status === 302 || r2.status === 301) {
-    // Keycloak redirige directamente (sesión SSO activa?) — seguir
-    const nextUrl = _resolverUrl(r2.headers.get('location'), SRI_BASE);
-    if (nextUrl) return _seguirRedirects(nextUrl, jar, T, null);
-  }
-  if (r2.status !== 200) {
-    throw new Error(`Keycloak devolvió ${r2.status} al cargar el formulario de login del SRI`);
-  }
-
-  const loginHtml = await r2.text();
-
-  // Extraer action URL del formulario (<form ... action="...">)
-  const actionMatch = loginHtml.match(/<form[^>]+action="([^"]+)"/i);
-  if (!actionMatch) {
-    throw new Error('No se encontró el formulario de login en el portal SRI (Keycloak)');
-  }
-  const loginActionUrl = _resolverUrl(
-    actionMatch[1].replace(/&amp;/g, '&'),
-    keycloakAuthUrl
-  );
-
-  // 1c. POST credenciales
-  const r3 = await fetch(loginActionUrl, {
-    method:   'POST',
-    redirect: 'manual',
-    headers:  {
-      ..._HEADERS,
-      'Accept':        'text/html',
-      'Content-Type':  'application/x-www-form-urlencoded',
-      'Cookie':        _cookieStr(jar),
-      'Referer':       keycloakAuthUrl,
-      'Origin':        SRI_BASE,
-    },
-    body:   new URLSearchParams({ username: ruc, password, credentialId: '' }).toString(),
-    signal: AbortSignal.timeout(T),
-  });
-  Object.assign(jar, _parsearSetCookie(r3.headers));
-
-  if (r3.status === 200) {
-    // Login fallido → Keycloak vuelve a mostrar el form con mensaje de error
-    const errHtml = await r3.text();
-    const errMatch = errHtml.match(/class="[^"]*kc-feedback-text[^"]*"[^>]*>([\s\S]*?)<\/\w+>/i)
-                  || errHtml.match(/id="input-error[^"]*"[^>]*>([\s\S]*?)<\/\w+>/i)
-                  || errHtml.match(/alert-error[^>]*>([\s\S]*?)<\/\w+>/i);
-    const msgErr = errMatch
-      ? errMatch[1].replace(/<[^>]+>/g, '').trim()
-      : 'RUC o contraseña incorrectos';
-    throw new Error(`Credenciales del portal SRI incorrectas: ${msgErr}`);
-  }
-  if (r3.status !== 302 && r3.status !== 301) {
-    throw new Error(`Error al enviar credenciales al portal SRI (${r3.status})`);
-  }
-
-  const appCallbackUrl = _resolverUrl(r3.headers.get('location'), SRI_BASE);
-  return _seguirRedirects(appCallbackUrl, jar, T, null);
-}
-
-// ─── Seguir redirects hasta obtener JSESSIONID + HTML JSF ────
-async function _seguirRedirects(url, jar, timeout, paginaJSF) {
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < MAX; i++) {
     const r = await fetch(url, {
+      method:   'GET',
       redirect: 'manual',
-      headers:  { ..._HEADERS, 'Accept': 'text/html', 'Cookie': _cookieStr(jar) },
-      signal:   AbortSignal.timeout(timeout),
+      headers:  {
+        ..._HEADERS,
+        'Accept': 'text/html,application/xhtml+xml,*/*',
+        'Cookie': _cookieStr(jar),
+        'Referer': SRI_BASE + '/',
+      },
+      signal: AbortSignal.timeout(T),
     });
     Object.assign(jar, _parsearSetCookie(r.headers));
 
     if (r.status === 302 || r.status === 301) {
-      url = _resolverUrl(r.headers.get('location'), SRI_BASE);
-      if (!url) break;
+      const loc = _resolverUrl(r.headers.get('location'), url);
+      console.log(`[SRI-fetch] ${r.status} → ${(loc || '').substring(0, 100)}`);
+      if (!loc) throw new Error('Portal SRI envió redirect sin URL destino');
+      url = loc;
       continue;
     }
-    if (r.status === 200) {
-      const html = await r.text();
-      if (html.includes('javax.faces.ViewState')) {
-        return { jar, paginaJSF: html };
-      }
-      paginaJSF = html; // guardar aunque no tenga ViewState aún
-      // Puede que haya redirigido a otra página intermedia — seguir si hay redirect en HTML
-      const metaMatch = html.match(/<meta[^>]+http-equiv="refresh"[^>]+content="[^"]*url=([^"]+)"/i);
-      if (metaMatch) {
-        url = _resolverUrl(metaMatch[1], SRI_BASE);
-        continue;
-      }
-      break;
+
+    if (r.status !== 200) {
+      throw new Error(`Portal SRI respondió ${r.status} (URL: ${url.substring(0, 80)})`);
     }
-    break;
-  }
 
-  if (!jar.JSESSIONID) {
-    // Buscar JSESSIONID en la URL si no vino como cookie (algunos servidores JSF lo meten en la URL)
-    const jsInUrl = url && url.match(/jsessionid=([A-Z0-9._-]+)/i);
-    if (jsInUrl) jar.JSESSIONID = jsInUrl[1];
-  }
+    const html = await r.text();
+    const tieneViewState = html.includes('javax.faces.ViewState');
+    console.log(`[SRI-fetch] 200 | ViewState:${tieneViewState} | len:${html.length} | url:${url.substring(0, 80)}`);
 
-  if (!jar.JSESSIONID) {
+    // ¿Ya tenemos el formulario JSF? → éxito
+    if (tieneViewState) {
+      console.log('[SRI-fetch] Formulario JSF obtenido correctamente');
+      return { jar, paginaJSF: html };
+    }
+
+    // ¿Es el formulario de login de Keycloak?
+    // Detectar por action con "login-actions" o "authenticate", o por id del form
+    const esFormKeycloak =
+      html.includes('/auth/realms/') ||
+      html.includes('kc-form-login') ||
+      html.includes('login-actions/authenticate');
+
+    if (esFormKeycloak) {
+      const actionMatch = html.match(/<form[^>]+action="([^"]+)"/i);
+      if (!actionMatch) throw new Error('No se pudo extraer el action del form de Keycloak');
+
+      if (credencialesEnviadas) {
+        // Segunda aparición del form → credenciales incorrectas
+        const errMatch = html.match(/class="[^"]*kc-feedback-text[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i)
+                       || html.match(/id="input-error[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i);
+        const msg = errMatch
+          ? errMatch[1].replace(/<[^>]+>/g, '').trim()
+          : 'RUC o contraseña incorrectos';
+        throw new Error(`Credenciales del portal SRI incorrectas: ${msg}`);
+      }
+
+      const loginActionUrl = _resolverUrl(
+        actionMatch[1].replace(/&amp;/g, '&'),
+        url
+      );
+      console.log('[SRI-fetch] POST credenciales →', (loginActionUrl || '').substring(0, 80));
+
+      const rPost = await fetch(loginActionUrl, {
+        method:   'POST',
+        redirect: 'manual',
+        headers:  {
+          ..._HEADERS,
+          'Accept':       'text/html',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Cookie':       _cookieStr(jar),
+          'Referer':      url,
+          'Origin':       new URL(loginActionUrl).origin,
+        },
+        body:   new URLSearchParams({ username: ruc, password, credentialId: '' }).toString(),
+        signal: AbortSignal.timeout(T),
+      });
+      Object.assign(jar, _parsearSetCookie(rPost.headers));
+      credencialesEnviadas = true;
+
+      if (rPost.status === 200) {
+        // Keycloak vuelve a mostrar el form en 200 solo cuando falla el login
+        const errHtml  = await rPost.text();
+        const errMatch = errHtml.match(/class="[^"]*kc-feedback-text[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i)
+                       || errHtml.match(/id="input-error[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i);
+        const msg = errMatch ? errMatch[1].replace(/<[^>]+>/g, '').trim() : 'RUC o contraseña incorrectos';
+        throw new Error(`Credenciales del portal SRI incorrectas: ${msg}`);
+      }
+      if (rPost.status !== 302 && rPost.status !== 301) {
+        throw new Error(`Keycloak respondió ${rPost.status} al enviar credenciales`);
+      }
+
+      const loc = _resolverUrl(rPost.headers.get('location'), url);
+      if (!loc) throw new Error('Keycloak no devolvió URL de redirección tras el login');
+      url = loc;
+      continue;
+    }
+
+    // 200 sin ViewState ni form Keycloak:
+    // El redirect_uri apuntó a tuportal-internet (Angular).
+    // Si ya enviamos credenciales, el realm Keycloak tiene una sesión SSO activa.
+    // Al volver a GET el JSF URL, Keycloak reconoce la sesión y da sesión JSF sin re-login.
+    if (credencialesEnviadas && reintentosJSF < 3) {
+      reintentosJSF++;
+      console.log(`[SRI-fetch] Sin ViewState (posiblemente tuportal), reintentando JSF URL (${reintentosJSF}/3)...`);
+      url = SRI_JSF_URL;
+      continue;
+    }
+
+    // Sin credenciales enviadas aún y sin form → situación inesperada
+    if (!credencialesEnviadas) {
+      throw new Error(
+        `El portal SRI no redirigió al login (200 inesperado). ` +
+        `URL: ${url.substring(0, 80)} | HTML len: ${html.length}`
+      );
+    }
+
     throw new Error(
-      'No se pudo establecer sesión con el portal de comprobantes SRI. ' +
-      'Verifica que las credenciales sean correctas y que el portal esté disponible.'
+      'El portal SRI no mostró el formulario de comprobantes recibidos tras el login. ' +
+      'Verifica que la cuenta tenga acceso a Comprobantes Electrónicos en srienlinea.sri.gob.ec.'
     );
   }
 
-  return { jar, paginaJSF };
+  throw new Error('No se pudo iniciar sesión en el portal SRI (demasiadas redirecciones)');
 }
 
-// ─── Paso 2: GET página JSF (si no la tenemos del login) ──────
+// ─── Refrescar página JSF (para obtener nuevo ViewState entre meses) ─
 async function _obtenerPaginaJSF(jar) {
-  const r = await fetch(SRI_JSF_URL, {
-    headers: { ..._HEADERS, 'Accept': 'text/html', 'Cookie': _cookieStr(jar) },
-    signal:  AbortSignal.timeout(20_000),
-  });
-  Object.assign(jar, _parsearSetCookie(r.headers));
-  if (!r.ok) throw new Error(`Error cargando el formulario del SRI (${r.status})`);
-  return r.text();
+  let url = SRI_JSF_URL;
+  const T = 20_000;
+
+  for (let i = 0; i < 8; i++) {
+    const r = await fetch(url, {
+      redirect: 'manual',
+      headers:  { ..._HEADERS, 'Accept': 'text/html', 'Cookie': _cookieStr(jar) },
+      signal:   AbortSignal.timeout(T),
+    });
+    Object.assign(jar, _parsearSetCookie(r.headers));
+
+    if (r.status === 302 || r.status === 301) {
+      const loc = _resolverUrl(r.headers.get('location'), url);
+      if (!loc) break;
+      url = loc;
+      continue;
+    }
+    if (r.status === 200) return r.text();
+    throw new Error(`Error ${r.status} al refrescar el formulario JSF del SRI`);
+  }
+  throw new Error('No se pudo acceder al formulario JSF del SRI para la siguiente consulta');
 }
 
 // ─── Paso 3: Extraer campos del formulario JSF desde HTML ────
@@ -415,16 +435,11 @@ async function obtenerRecibidosFetch({
   const fHasta = _normalizarFecha(fechaHasta);
   const meses  = _mesesEnRango(fDesde, fHasta);
 
-  // 1. Login
-  let jar, paginaJSF;
-  try {
-    ({ jar, paginaJSF } = await _loginJSFFetch(identificacion, password));
-  } catch (err) {
-    throw err;
-  }
+  // 1. Login + obtener formulario JSF (flujo unificado con seguimiento de redirects)
+  const { jar, paginaJSF } = await _loginYObtenerJSF(identificacion, password);
 
-  // 2. Obtener ViewState (del HTML del login si ya lo tenemos, o haciendo GET)
-  const html   = paginaJSF || await _obtenerPaginaJSF(jar);
+  // 2. Extraer ViewState y campos del formulario
+  const html   = paginaJSF;
   let campos   = _extraerCamposJSF(html);
 
   const todosPorDuplicar = [];
