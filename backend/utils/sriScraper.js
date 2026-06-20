@@ -148,8 +148,11 @@ async function _loginYObtenerJSF(ruc, password) {
       html.includes('login-actions/authenticate');
 
     if (esFormKeycloak) {
-      const actionMatch = html.match(/<form[^>]+action="([^"]+)"/i);
-      if (!actionMatch) throw new Error('No se pudo extraer el action del form de Keycloak');
+      // Buscar específicamente el form de login de Keycloak (evitar forms secundarios)
+      const kcFormMatch = html.match(/<form[^>]+id="kc-form-login"[^>]*action="([^"]+)"/i)
+                       || html.match(/<form[^>]+action="([^"]*login-actions\/authenticate[^"]*)"/i)
+                       || html.match(/<form[^>]+action="([^"]+)"/i);
+      if (!kcFormMatch) throw new Error('No se pudo extraer el action del form de Keycloak');
 
       if (credencialesEnviadas) {
         // Segunda aparición del form → credenciales incorrectas
@@ -161,34 +164,58 @@ async function _loginYObtenerJSF(ruc, password) {
         throw new Error(`Credenciales del portal SRI incorrectas: ${msg}`);
       }
 
+      // Extraer TODOS los <input type="hidden"> del form: Keycloak incluye tokens
+      // de estado de sesión que deben enviarse junto con las credenciales.
+      const hiddenCampos = {};
+      const hiddenRe2 = /<input[^>]+type="hidden"[^>]*>/gi;
+      let hm;
+      while ((hm = hiddenRe2.exec(html)) !== null) {
+        const nm = hm[0].match(/\bname="([^"]+)"/i);
+        const vm = hm[0].match(/\bvalue="([^"]*)"/i);
+        if (nm) hiddenCampos[nm[1]] = vm ? vm[1] : '';
+      }
+      console.log('[SRI-fetch] Hidden campos Keycloak:', Object.keys(hiddenCampos).join(', ') || '(ninguno)');
+
       const loginActionUrl = _resolverUrl(
-        actionMatch[1].replace(/&amp;/g, '&'),
+        kcFormMatch[1].replace(/&amp;/g, '&'),
         url
       );
       console.log('[SRI-fetch] POST credenciales →', (loginActionUrl || '').substring(0, 80));
+
+      const postBody = new URLSearchParams({
+        ...hiddenCampos,          // Campos hidden del form (tokens de sesión Keycloak)
+        username: ruc,            // Identificación del contribuyente
+        password,                 // Contraseña del portal SRI
+        credentialId: hiddenCampos.credentialId ?? '',
+      });
 
       const rPost = await fetch(loginActionUrl, {
         method:   'POST',
         redirect: 'manual',
         headers:  {
           ..._HEADERS,
-          'Accept':       'text/html',
+          'Accept':       'text/html,application/xhtml+xml,*/*',
           'Content-Type': 'application/x-www-form-urlencoded',
           'Cookie':       _cookieStr(jar),
           'Referer':      url,
           'Origin':       new URL(loginActionUrl).origin,
         },
-        body:   new URLSearchParams({ username: ruc, password, credentialId: '' }).toString(),
+        body:   postBody.toString(),
         signal: AbortSignal.timeout(T),
       });
       Object.assign(jar, _parsearSetCookie(rPost.headers));
       credencialesEnviadas = true;
 
+      console.log(`[SRI-fetch] POST resultado: ${rPost.status} | location: ${(rPost.headers.get('location') || '').substring(0, 80)}`);
+
       if (rPost.status === 200) {
-        // Keycloak vuelve a mostrar el form en 200 solo cuando falla el login
         const errHtml  = await rPost.text();
+        // Log texto plano para diagnóstico (sin exponer password)
+        const textPlano = errHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 400);
+        console.log('[SRI-fetch] POST 200 respuesta:', textPlano);
         const errMatch = errHtml.match(/class="[^"]*kc-feedback-text[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i)
-                       || errHtml.match(/id="input-error[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i);
+                       || errHtml.match(/id="input-error[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i)
+                       || errHtml.match(/<span[^>]+class="[^"]*alert-error[^"]*"[^>]*>([\s\S]{0,300})<\/span>/i);
         const msg = errMatch ? errMatch[1].replace(/<[^>]+>/g, '').trim() : 'RUC o contraseña incorrectos';
         throw new Error(`Credenciales del portal SRI incorrectas: ${msg}`);
       }
