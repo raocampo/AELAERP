@@ -40,11 +40,11 @@ function _generarPdfProforma(p, configSri, outputPath) {
       return new Date(d).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' });
     };
 
-    const doc    = new PDFDocument({ size: 'A4', margins: { top: 20, bottom: 20, left: 28, right: 28 }, autoFirstPage: true });
+    const doc    = new PDFDocument({ size: 'A4', margins: { top: 24, bottom: 24, left: 32, right: 32 }, autoFirstPage: true });
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 
-    const ML    = 28;
+    const ML    = 32;
     const PW    = doc.page.width;
     const PH    = doc.page.height;
     const W     = PW - ML * 2;
@@ -55,40 +55,49 @@ function _generarPdfProforma(p, configSri, outputPath) {
     const BLANCO = '#FFFFFF';
     const BG_ALT = '#f5f3ff';
 
-    const { logoData, tienelogo } = _resolverLogo(cfg.logoUrl);
+    const { logoData, tienelogo }   = _resolverLogo(cfg.logoUrl);
+    const { logoData: firmaData,  tienelogo: tieneFirma  } = _resolverLogo(cfg.firmaUrl);
+    const { logoData: selloData,  tienelogo: tieneSello  } = _resolverLogo(cfg.selloUrl);
 
     // ── HEADER ────────────────────────────────────────────────────────────────
-    let y = 20;
-    const LP   = Math.floor(W * 0.44);
-    const GAP  = 8;
+    let y = 24;
+    const LP   = Math.floor(W * 0.46);
+    const GAP  = 10;
     const RP_X = ML + LP + GAP;
     const RP_W = W - LP - GAP;
 
-    // Panel izquierdo: logo + emisor
+    // Panel izquierdo: logo (ancho completo) + RUC grande + emisor
     let yL = y;
     if (tienelogo) {
-      try { doc.image(logoData, ML, yL, { fit: [LP - 4, 65] }); yL += 70; }
+      try { doc.image(logoData, ML, yL, { fit: [LP, 70], align: 'left' }); yL += 76; }
       catch { /* logo inválido */ }
     }
-    doc.fontSize(8.5).font('Helvetica-Bold').fillColor(NEGRO)
-       .text((cfg.razonSocial || '').toUpperCase(), ML, yL, { width: LP - 4, lineBreak: false });
+    // RUC destacado arriba de la razón social
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(GRIS)
+       .text('R.U.C.: ', ML, yL, { continued: true, lineBreak: false });
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(MORADO)
+       .text(cfg.ruc || '', { lineBreak: false });
+    yL += 14;
+
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(NEGRO)
+       .text((cfg.razonSocial || '').toUpperCase(), ML, yL, { width: LP, lineBreak: false });
     yL += 13;
     if (cfg.nombreComercial) {
       doc.fontSize(7.5).font('Helvetica').fillColor(GRIS)
-         .text(cfg.nombreComercial, ML, yL, { width: LP - 4, lineBreak: false });
+         .text(cfg.nombreComercial, ML, yL, { width: LP, lineBreak: false });
       yL += 11;
     }
     doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
-       .text(`Dir.: ${cfg.dirMatriz || cfg.dirEstablecimiento || ''}`, ML, yL, { width: LP - 4 });
+       .text(`Dir.: ${cfg.dirMatriz || cfg.dirEstablecimiento || ''}`, ML, yL, { width: LP });
     yL = doc.y + 2;
     if (cfg.telefono) {
       doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
-         .text(`Telf.: ${cfg.telefono}`, ML, yL, { width: LP - 4, lineBreak: false });
+         .text(`Telf.: ${cfg.telefono}`, ML, yL, { width: LP, lineBreak: false });
       yL += 10;
     }
-    if (cfg.email) {
+    if (cfg.emailNotificaciones || cfg.email) {
       doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
-         .text(cfg.email, ML, yL, { width: LP - 4, lineBreak: false });
+         .text(cfg.emailNotificaciones || cfg.email, ML, yL, { width: LP, lineBreak: false });
       yL += 10;
     }
     if (cfg.contribuyenteRimpe) {
@@ -96,21 +105,15 @@ function _generarPdfProforma(p, configSri, outputPath) {
         ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
         : 'CONTRIBUYENTE RÉGIMEN RIMPE';
       doc.fontSize(6).font('Helvetica-Bold').fillColor(MORADO)
-         .text(rimpeLabel, ML, yL, { width: LP - 4, lineBreak: false });
+         .text(rimpeLabel, ML, yL, { width: LP, lineBreak: false });
       yL += 10;
     }
 
-    // Panel derecho: RUC + PROFORMA + número + fechas
+    // Panel derecho: PROFORMA + número + recuadro de fechas
     let yR = y;
-    doc.fontSize(7).font('Helvetica-Bold').fillColor(GRIS)
-       .text('R.U.C.:', RP_X, yR, { lineBreak: false });
-    doc.fontSize(7).font('Helvetica').fillColor(NEGRO)
-       .text(`  ${cfg.ruc || ''}`, RP_X + 32, yR, { lineBreak: false });
-    yR += 13;
-
-    doc.fontSize(14).font('Helvetica-Bold').fillColor(MORADO)
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(MORADO)
        .text('PROFORMA', RP_X, yR, { width: RP_W, align: 'center', lineBreak: false });
-    yR += 20;
+    yR += 22;
 
     doc.fontSize(9).font('Helvetica-Bold').fillColor(NEGRO)
        .text(`No. ${p.numero || ''}`, RP_X, yR, { width: RP_W, align: 'center', lineBreak: false });
@@ -119,15 +122,15 @@ function _generarPdfProforma(p, configSri, outputPath) {
     doc.moveTo(RP_X, yR).lineTo(RP_X + RP_W, yR).lineWidth(0.4).stroke('#CCCCCC');
     yR += 6;
 
-    // Recuadro con fechas
+    // Recuadro con fechas (4 campos en 2×2)
     const BOX_H = 54;
     doc.rect(RP_X, yR, RP_W, BOX_H).lineWidth(0.7).stroke('#AAAAAA');
     const colW  = RP_W / 2 - 4;
     const datosRight = [
-      { l: 'FECHA DE EMISIÓN',     v: fmtFecha(p.createdat || p.createdAt) },
-      { l: 'VÁLIDA DESDE',         v: fmtFecha(p.vigenciadesde || p.vigenciaDesde) },
-      { l: 'VÁLIDA HASTA',         v: fmtFecha(p.vigenciahasta || p.vigenciaHasta), bold: true },
-      { l: 'ESTADO',               v: (p.estado || 'BORRADOR') },
+      { l: 'FECHA DE EMISIÓN', v: fmtFecha(p.createdat || p.createdAt) },
+      { l: 'VÁLIDA DESDE',     v: fmtFecha(p.vigenciadesde || p.vigenciaDesde) },
+      { l: 'VÁLIDA HASTA',     v: fmtFecha(p.vigenciahasta || p.vigenciaHasta), bold: true },
+      { l: 'ESTADO',           v: (p.estado || 'BORRADOR') },
     ];
     let yDat = yR + 5;
     datosRight.forEach((d, i) => {
@@ -142,27 +145,29 @@ function _generarPdfProforma(p, configSri, outputPath) {
     });
     yR += BOX_H + 4;
 
-    y = Math.max(yL, yR) + 6;
+    y = Math.max(yL, yR) + 8;
 
     // ── DATOS DEL CLIENTE ────────────────────────────────────────────────────
-    const COMP_H = p.direccion ? 52 : 38;
+    const esConsumidorFinal = p.tipoIdentificacion === '07' || p.tipoidentificacion === '07';
+    const idCliente         = esConsumidorFinal ? '9999999999999' : (p.identificacion || p.identificacion || '—');
+
+    const COMP_H = p.direccion ? 54 : 40;
     doc.rect(ML, y, W, COMP_H).lineWidth(0.5).stroke('#AAAAAA');
     doc.moveTo(ML, y + 20).lineTo(ML + W, y + 20).lineWidth(0.3).stroke('#CCCCCC');
 
     const COL_ID_W = W * 0.55;
-    doc.moveTo(ML + COL_ID_W, y + 20).lineTo(ML + COL_ID_W, y + (p.direccion ? COMP_H : COMP_H))
+    doc.moveTo(ML + COL_ID_W, y + 20).lineTo(ML + COL_ID_W, y + COMP_H)
        .lineWidth(0.3).stroke('#CCCCCC');
 
     doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS)
        .text('RAZÓN SOCIAL / NOMBRES Y APELLIDOS:', ML + 3, y + 3, { lineBreak: false });
     doc.fontSize(8).font('Helvetica').fillColor(NEGRO)
-       .text(p.razonSocial || 'CONSUMIDOR FINAL', ML + 3, y + 12, { width: W - 6, lineBreak: false });
+       .text(p.razonSocial || p.razonsocial || 'CONSUMIDOR FINAL', ML + 3, y + 12, { width: W - 6, lineBreak: false });
 
     doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS)
        .text('RUC / IDENTIFICACIÓN:', ML + 3, y + 23, { lineBreak: false });
     doc.fontSize(7.5).font('Helvetica').fillColor(NEGRO)
-       .text(p.tipoIdentificacion === '07' ? '—' : (p.identificacion || '—'),
-             ML + 3, y + 32, { width: COL_ID_W - 6, lineBreak: false });
+       .text(idCliente, ML + 3, y + 32, { width: COL_ID_W - 6, lineBreak: false });
 
     doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS)
        .text('TELÉFONO:', ML + COL_ID_W + 3, y + 23, { lineBreak: false });
@@ -170,23 +175,23 @@ function _generarPdfProforma(p, configSri, outputPath) {
        .text(p.telefono || '—', ML + COL_ID_W + 3, y + 32, { lineBreak: false });
 
     if (p.direccion) {
-      doc.moveTo(ML, y + 38).lineTo(ML + W, y + 38).lineWidth(0.3).stroke('#CCCCCC');
+      doc.moveTo(ML, y + 40).lineTo(ML + W, y + 40).lineWidth(0.3).stroke('#CCCCCC');
       doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS)
-         .text('DIRECCIÓN:', ML + 3, y + 41, { lineBreak: false });
+         .text('DIRECCIÓN:', ML + 3, y + 43, { lineBreak: false });
       doc.fontSize(7.5).font('Helvetica').fillColor(NEGRO)
-         .text(p.direccion, ML + 70, y + 41, { width: W - 74, lineBreak: false });
+         .text(p.direccion, ML + 72, y + 43, { width: W - 76, lineBreak: false });
     }
-    y += COMP_H + 4;
+    y += COMP_H + 6;
 
     // ── TABLA DE DETALLES ────────────────────────────────────────────────────
     const COLS = [
-      { h: 'Cód.',         w: 46,  al: 'left'  },
-      { h: 'Cantidad',     w: 36,  al: 'right' },
+      { h: 'Cód.',         w: 48,  al: 'left'  },
+      { h: 'Cantidad',     w: 38,  al: 'right' },
       { h: 'Descripción',  w: 0,   al: 'left'  },
-      { h: 'P. Unitario',  w: 52,  al: 'right' },
-      { h: 'Descuento',    w: 44,  al: 'right' },
-      { h: '% IVA',        w: 28,  al: 'right' },
-      { h: 'Total',        w: 52,  al: 'right' },
+      { h: 'P. Unitario',  w: 54,  al: 'right' },
+      { h: 'Descuento',    w: 46,  al: 'right' },
+      { h: '% IVA',        w: 30,  al: 'right' },
+      { h: 'Total',        w: 54,  al: 'right' },
     ];
     const fixedW = COLS.filter(c => c.w > 0).reduce((s, c) => s + c.w, 0);
     COLS.find(c => c.w === 0).w = W - fixedW;
@@ -202,14 +207,14 @@ function _generarPdfProforma(p, configSri, outputPath) {
     y += TH_H;
 
     detalles.forEach((det, idx) => {
-      const cant   = parseFloat(det.cantidad)      || 0;
+      const cant   = parseFloat(det.cantidad)       || 0;
       const prec   = parseFloat(det.precioUnitario) || 0;
-      const desc   = parseFloat(det.descuento)     || 0;
-      const ivaPct = parseInt(det.ivaPorcentaje)   || 0;
+      const desc   = parseFloat(det.descuento)      || 0;
+      const ivaPct = parseInt(det.ivaPorcentaje)    || 0;
       const tot    = cant * prec - desc;
-      const ROW_H  = 13;
+      const ROW_H  = 14;
 
-      if (y > PH - 150) { doc.addPage(); y = 30; }
+      if (y > PH - 160) { doc.addPage(); y = 32; }
 
       doc.rect(ML, y, W, ROW_H).fill(idx % 2 === 0 ? BLANCO : BG_ALT);
       doc.rect(ML, y, W, ROW_H).lineWidth(0.2).stroke('#DDDDDD');
@@ -226,30 +231,27 @@ function _generarPdfProforma(p, configSri, outputPath) {
       cx = ML;
       vals.forEach((v, vi) => {
         doc.fontSize(6.5).font('Helvetica').fillColor(NEGRO)
-           .text(v.v, cx + 2, y + 3, { width: COLS[vi].w - 4, align: v.al, lineBreak: false });
+           .text(v.v, cx + 2, y + 4, { width: COLS[vi].w - 4, align: v.al, lineBreak: false });
         cx += COLS[vi].w;
       });
       y += ROW_H;
     });
 
-    // ── FOOTER: info izq + totales der ──────────────────────────────────────
-    y += 8;
+    // ── FOOTER: info izq + totales der ───────────────────────────────────────
+    y += 10;
     const FP_W  = Math.floor(W * 0.50);
     const TOT_X = ML + FP_W + 4;
     const TOT_W = W - FP_W - 4;
     let yLeft = y;
 
-    // Información adicional (vigencia, forma de pago, correo, teléfono, obs)
+    // Información adicional
     const camposIA = [];
-    if (p.vigenciadesde || p.vigenciaDesde) {
+    if (p.vigenciadesde || p.vigenciaDesde)
       camposIA.push({ n: 'Válida desde', v: fmtFecha(p.vigenciadesde || p.vigenciaDesde) });
-    }
-    if (p.vigenciahasta || p.vigenciaHasta) {
+    if (p.vigenciahasta || p.vigenciaHasta)
       camposIA.push({ n: 'Válida hasta', v: fmtFecha(p.vigenciahasta || p.vigenciaHasta) });
-    }
-    if (p.formapago || p.formaPago) {
+    if (p.formapago || p.formaPago)
       camposIA.push({ n: 'Forma de pago', v: p.formapago || p.formaPago });
-    }
     if (p.email) camposIA.push({ n: 'Correo', v: p.email });
     if (p.observaciones) camposIA.push({ n: 'Observaciones', v: p.observaciones });
 
@@ -259,7 +261,7 @@ function _generarPdfProforma(p, configSri, outputPath) {
       yLeft += 11;
 
       const IA_H    = 12;
-      const LABEL_W = FP_W * 0.35;
+      const LABEL_W = FP_W * 0.36;
       const VAL_W   = FP_W - LABEL_W;
 
       doc.rect(ML, yLeft, FP_W, IA_H).fill(MORADO);
@@ -284,21 +286,21 @@ function _generarPdfProforma(p, configSri, outputPath) {
     const st0   = parseFloat(p.subtotal0  || 0);
     const st5   = parseFloat(p.subtotal5  || 0);
     const st15  = parseFloat(p.subtotal15 || 0);
-    const desc  = parseFloat(p.totalDescuento || 0);
+    const descT = parseFloat(p.totalDescuento || 0);
     const iva   = parseFloat(p.totalIva   || 0);
     const total = parseFloat(p.importetotal || p.importeTotal || 0);
 
     const TOT_ROWS = [
-      ...(st0  > 0 ? [{ l: 'SUBTOTAL 0%',    v: st0  }] : []),
-      ...(st5  > 0 ? [{ l: 'SUBTOTAL 5%',    v: st5  }] : []),
-      ...(st15 > 0 ? [{ l: 'SUBTOTAL 15%',   v: st15 }] : []),
-      ...(desc > 0 ? [{ l: 'TOTAL DESCUENTO', v: desc }] : []),
+      ...(st0  > 0 ? [{ l: 'SUBTOTAL 0%',     v: st0  }] : []),
+      ...(st5  > 0 ? [{ l: 'SUBTOTAL 5%',     v: st5  }] : []),
+      ...(st15 > 0 ? [{ l: 'SUBTOTAL 15%',    v: st15 }] : []),
+      ...(descT > 0 ? [{ l: 'TOTAL DESCUENTO', v: descT }] : []),
       { l: 'IVA',         v: iva   },
       { l: 'VALOR TOTAL', v: total, bold: true },
     ];
 
-    const TR_H       = 13;
-    const TOT_BOX_H  = TOT_ROWS.length * TR_H + 4;
+    const TR_H      = 13;
+    const TOT_BOX_H = TOT_ROWS.length * TR_H + 4;
     doc.rect(TOT_X, y, TOT_W, TOT_BOX_H).lineWidth(0.5).stroke('#AAAAAA');
 
     let yT = y + 2;
@@ -309,14 +311,46 @@ function _generarPdfProforma(p, configSri, outputPath) {
       const bg = row.bold ? '#ede9fe' : (ri % 2 === 0 ? BLANCO : BG_ALT);
       doc.rect(TOT_X, yT, TOT_W, TR_H).fill(bg);
       doc.fontSize(6.5).font(fn).fillColor(fc)
-         .text(row.l, TOT_X + 3, yT + 3, { width: TOT_W * 0.65 - 3, align: 'left', lineBreak: false });
+         .text(row.l, TOT_X + 3, yT + 3, { width: TOT_W * 0.62 - 3, align: 'left', lineBreak: false });
       doc.fontSize(6.5).font(fn).fillColor(fc)
-         .text(`$${row.v.toFixed(2)}`, TOT_X + TOT_W * 0.65, yT + 3, { width: TOT_W * 0.35 - 3, align: 'right', lineBreak: false });
+         .text(`$${row.v.toFixed(2)}`, TOT_X + TOT_W * 0.62, yT + 3, { width: TOT_W * 0.38 - 3, align: 'right', lineBreak: false });
       yT += TR_H;
     });
 
-    // ── PIE DE PÁGINA ────────────────────────────────────────────────────────
-    const bottomY = Math.max(yLeft, yT) + 12;
+    // ── FIRMA Y SELLO ─────────────────────────────────────────────────────────
+    const afterFooter = Math.max(yLeft, yT) + 16;
+    const IMG_W = Math.floor(W * 0.28);
+    const IMG_H = 55;
+    const SEP_W = (W - IMG_W * 2) / 3;
+
+    const xFirma = ML + SEP_W;
+    const xSello = ML + SEP_W * 2 + IMG_W;
+
+    if (tieneFirma || tieneSello) {
+      let yImg = afterFooter;
+
+      if (tieneFirma) {
+        try { doc.image(firmaData, xFirma, yImg, { fit: [IMG_W, IMG_H], align: 'center' }); }
+        catch { /* imagen inválida */ }
+      }
+      if (tieneSello) {
+        try { doc.image(selloData, xSello, yImg, { fit: [IMG_W, IMG_H], align: 'center' }); }
+        catch { /* imagen inválida */ }
+      }
+
+      const yLine = yImg + IMG_H + 4;
+      doc.moveTo(xFirma, yLine).lineTo(xFirma + IMG_W, yLine).lineWidth(0.5).stroke('#AAAAAA');
+      doc.fontSize(6).font('Helvetica').fillColor(GRIS)
+         .text('Firma Autorizada', xFirma, yLine + 3, { width: IMG_W, align: 'center', lineBreak: false });
+
+      doc.moveTo(xSello, yLine).lineTo(xSello + IMG_W, yLine).lineWidth(0.5).stroke('#AAAAAA');
+      doc.fontSize(6).font('Helvetica').fillColor(GRIS)
+         .text('Sello Empresarial', xSello, yLine + 3, { width: IMG_W, align: 'center', lineBreak: false });
+    }
+
+    // ── PIE DE PÁGINA ─────────────────────────────────────────────────────────
+    const bottomBase = (tieneFirma || tieneSello) ? afterFooter + IMG_H + 18 : afterFooter;
+    const bottomY    = bottomBase + 6;
     doc.moveTo(ML, bottomY).lineTo(ML + W, bottomY).lineWidth(0.4).stroke('#CCCCCC');
     doc.fontSize(6).font('Helvetica').fillColor('#888888')
        .text(

@@ -15,6 +15,22 @@ export default class ErrorBoundary extends Component {
   componentDidCatch(error, info) {
     this.setState({ info });
     console.error('[AELA ErrorBoundary]', error, info?.componentStack);
+
+    // Chunk load failures (después de un nuevo deploy Vercel, los hashes cambian).
+    // Recargamos automáticamente una sola vez por ventana para resolver el estado stale.
+    const esChunkError =
+      error?.message?.includes('Failed to fetch dynamically imported module') ||
+      error?.message?.includes('Importing a module script failed') ||
+      error?.name === 'ChunkLoadError';
+
+    if (esChunkError) {
+      const KEY = '_aela_chunk_reload_at';
+      const ultimo = parseInt(sessionStorage.getItem(KEY) || '0', 10);
+      if (Date.now() - ultimo > 15_000) {
+        sessionStorage.setItem(KEY, String(Date.now()));
+        window.location.reload();
+      }
+    }
   }
 
   handleReload() {

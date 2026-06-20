@@ -386,6 +386,8 @@ model configuracion_sri {
   claveCertificado        String?   @db.VarChar(500)
   tipoCertificado         String?   @default("archivo") @db.VarChar(20)
   logoUrl                 String?   @db.Text
+  firmaUrl                String?   @db.Text
+  selloUrl                String?   @db.Text
   emailNotificaciones     String?   @db.VarChar(150)
   telefono                String?   @db.VarChar(20)
   activo                  Boolean   @default(true)

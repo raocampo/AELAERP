@@ -72,6 +72,9 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "proformas_estado_idx"    ON "proformas"("estado")`,
   // Forma de pago en proformas (campo agregado 2026-06-18)
   `ALTER TABLE "proformas" ADD COLUMN IF NOT EXISTS "formaPago" VARCHAR(100)`,
+  // Firma digital y sello de empresa para proformas (2026-06-20)
+  `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "firmaUrl" TEXT`,
+  `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "selloUrl" TEXT`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

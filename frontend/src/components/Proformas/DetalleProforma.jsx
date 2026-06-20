@@ -200,21 +200,29 @@ export default function DetalleProforma() {
       `  IVA:           $${iva.toFixed(2)}`,
     ].filter(Boolean).join('\n');
 
-    const cab = [
+    const emisor   = proforma.razonsocial_emisor || proforma.razonSocial_emisor || '';
+    const saludo   = `Estimado/a *${proforma.razonSocial || 'cliente'}*,`;
+    const intro    = emisor
+      ? `Le saluda *${emisor}*. Le compartimos la siguiente proforma para su revisión:`
+      : 'Le compartimos la siguiente proforma para su revisión:';
+
+    const cabecera = [
       `📋 *PROFORMA N° ${proforma.numero}*`,
       `📅 Fecha: ${fmtFecha(proforma.createdAt || proforma.createdat)}`,
       proforma.vigenciaHasta ? `⏳ Válida hasta: *${fmtFecha(proforma.vigenciaHasta)}*` : '',
     ].filter(Boolean).join('\n');
 
-    const cliente = [
-      `👤 *Cliente:* ${proforma.razonSocial || 'CONSUMIDOR FINAL'}`,
-      proforma.tipoIdentificacion !== '07' && proforma.identificacion ? `🪪 RUC/CI: ${proforma.identificacion}` : '',
-    ].filter(Boolean).join('\n');
+    const clienteLinea = proforma.tipoIdentificacion !== '07' && proforma.identificacion
+      ? `🪪 RUC/CI: ${proforma.identificacion}`
+      : '';
 
     const texto = [
-      cab,
+      saludo,
       '',
-      cliente,
+      intro,
+      '',
+      cabecera,
+      clienteLinea,
       '',
       `📦 *DETALLE:*`,
       lineas,
@@ -227,6 +235,10 @@ export default function DetalleProforma() {
       proforma.formaPago ? `💳 Forma de pago: ${proforma.formaPago}` : '',
       proforma.observaciones ? `📝 ${proforma.observaciones}` : '',
       '',
+      `📎 *Adjunto a este mensaje encontrará el archivo PDF* de la proforma. Por favor descárguelo para revisarlo.`,
+      '',
+      `Quedamos atentos a su confirmación. ¡Gracias por su preferencia!`,
+      emisor ? `\n_${emisor}_` : '',
       `_Este documento es una cotización y no tiene validez tributaria._`,
     ].filter(s => s !== undefined).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
@@ -439,8 +451,7 @@ export default function DetalleProforma() {
           <div className="modal-content" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', color: '#1e293b' }}>💬 Compartir por WhatsApp</h3>
             <p style={{ margin: '0 0 14px', fontSize: '.83rem', color: '#64748b' }}>
-              WhatsApp no admite adjuntar archivos desde el navegador. Puedes enviar el mensaje
-              de texto o descargar el PDF primero y adjuntarlo manualmente.
+              Descarga el PDF primero, luego abre WhatsApp y adjunta el archivo manualmente junto con este mensaje.
             </p>
 
             {/* Vista previa del mensaje */}

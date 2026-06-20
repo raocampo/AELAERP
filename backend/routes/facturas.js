@@ -582,6 +582,34 @@ router.post('/configuracion/logo', permitirConfigurarSri, uploadLogo.single('log
   }
 });
 
+// POST /api/facturas/configuracion/firma
+router.post('/configuracion/firma', permitirConfigurarSri, uploadLogo.single('firma'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió imagen' });
+  try {
+    const config = await getConfigSRI(req.empresa.id);
+    if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
+    const firmaUrl = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
+    await prisma.configuracion_sri.update({ where: { id: config.id }, data: { firmaUrl } });
+    res.json({ ok: true, data: { firmaUrl } });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /api/facturas/configuracion/sello
+router.post('/configuracion/sello', permitirConfigurarSri, uploadLogo.single('sello'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió imagen' });
+  try {
+    const config = await getConfigSRI(req.empresa.id);
+    if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
+    const selloUrl = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
+    await prisma.configuracion_sri.update({ where: { id: config.id }, data: { selloUrl } });
+    res.json({ ok: true, data: { selloUrl } });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // POST /api/facturas/configuracion/certificado
 router.post('/configuracion/certificado', permitirConfigurarSri, uploadCert.single('certificado'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió archivo .p12' });

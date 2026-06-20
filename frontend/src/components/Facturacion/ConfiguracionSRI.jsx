@@ -167,6 +167,14 @@ const ConfiguracionSRI = () => {
   const [logoUp,    setLogoUp]    = useState(false);
   const logoRef = useRef();
 
+  // Firma y sello
+  const [firmaUrl,  setFirmaUrl]  = useState(null);
+  const [firmaFile, setFirmaFile] = useState(null);
+  const [firmaUp,   setFirmaUp]   = useState(false);
+  const [selloUrl,  setSelloUrl]  = useState(null);
+  const [selloFile, setSelloFile] = useState(null);
+  const [selloUp,   setSelloUp]   = useState(false);
+
   // Certificado
   const [certInfo,  setCertInfo]  = useState(null);
   const [certFile,  setCertFile]  = useState(null);
@@ -201,7 +209,9 @@ const ConfiguracionSRI = () => {
         });
         const ci = res.data.certInfo || {};
         setCertInfo({ cargado: !!(d.certificadoP12 || d.certificadoP12Data), ...ci });
-        setLogoUrl(d.logoUrl || null);
+        setLogoUrl(d.logoUrl   || null);
+        setFirmaUrl(d.firmaUrl || null);
+        setSelloUrl(d.selloUrl || null);
         setTipoCertificado(d.tipoCertificado || 'archivo');
       }
     } catch {
@@ -265,6 +275,46 @@ const ConfiguracionSRI = () => {
       toast.error(err.response?.data?.error || 'Error al subir logo');
     } finally {
       setLogoUp(false);
+    }
+  };
+
+  // ─── Firma ───────────────────────────────────────────────────────────────
+  const handleSubirFirma = async () => {
+    if (!firmaFile) return toast.error('Selecciona una imagen de firma');
+    setFirmaUp(true);
+    try {
+      const fd = new FormData();
+      fd.append('firma', firmaFile);
+      const res = await api.post('/facturas/configuracion/firma', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setFirmaUrl(res.data.data.firmaUrl);
+      setFirmaFile(null);
+      toast.success('Firma subida correctamente');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al subir firma');
+    } finally {
+      setFirmaUp(false);
+    }
+  };
+
+  // ─── Sello ───────────────────────────────────────────────────────────────
+  const handleSubirSello = async () => {
+    if (!selloFile) return toast.error('Selecciona una imagen de sello');
+    setSelloUp(true);
+    try {
+      const fd = new FormData();
+      fd.append('sello', selloFile);
+      const res = await api.post('/facturas/configuracion/sello', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setSelloUrl(res.data.data.selloUrl);
+      setSelloFile(null);
+      toast.success('Sello subido correctamente');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al subir sello');
+    } finally {
+      setSelloUp(false);
     }
   };
 
@@ -434,6 +484,62 @@ const ConfiguracionSRI = () => {
                   {logoUp ? 'Subiendo...' : '⬆️ Subir logo'}
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* Firma y Sello */}
+          <div className="sri-logo-section" style={{ marginTop: 20 }}>
+            <label className="sri-logo-label">Firma y Sello (aparecen en PDF de Proformas)</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+              {/* Firma */}
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>✍️ Firma Autorizada</p>
+                {firmaUrl && (
+                  <div className="sri-logo-preview">
+                    <img src={firmaUrl} alt="Firma actual" style={{ maxHeight: 60, maxWidth: '100%', objectFit: 'contain', border: '1px solid #e5e7eb', borderRadius: 4, padding: 4 }} />
+                    <span className="field-hint">Firma actual</span>
+                  </div>
+                )}
+                <DropZone
+                  accept="image/*"
+                  icon="✍️"
+                  label="Arrastra o selecciona la firma"
+                  sublabel="PNG transparente recomendado"
+                  files={firmaFile ? [firmaFile] : []}
+                  onChange={([f]) => setFirmaFile(f || null)}
+                />
+                <button type="button" className="btn-secondary"
+                  onClick={handleSubirFirma} disabled={!firmaFile || firmaUp}
+                  style={{ marginTop: '0.5rem' }}>
+                  {firmaUp ? 'Subiendo...' : '⬆️ Subir firma'}
+                </button>
+              </div>
+
+              {/* Sello */}
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>🔵 Sello Empresarial</p>
+                {selloUrl && (
+                  <div className="sri-logo-preview">
+                    <img src={selloUrl} alt="Sello actual" style={{ maxHeight: 60, maxWidth: '100%', objectFit: 'contain', border: '1px solid #e5e7eb', borderRadius: 4, padding: 4 }} />
+                    <span className="field-hint">Sello actual</span>
+                  </div>
+                )}
+                <DropZone
+                  accept="image/*"
+                  icon="🔵"
+                  label="Arrastra o selecciona el sello"
+                  sublabel="PNG transparente recomendado"
+                  files={selloFile ? [selloFile] : []}
+                  onChange={([f]) => setSelloFile(f || null)}
+                />
+                <button type="button" className="btn-secondary"
+                  onClick={handleSubirSello} disabled={!selloFile || selloUp}
+                  style={{ marginTop: '0.5rem' }}>
+                  {selloUp ? 'Subiendo...' : '⬆️ Subir sello'}
+                </button>
+              </div>
+
             </div>
           </div>
         </div>
