@@ -46,6 +46,8 @@ export default function DetalleProforma() {
   const [emailDestino, setEmailDestino] = useState('');
   const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const [modalWA, setModalWA] = useState(false);
+  const [waMensaje, setWaMensaje] = useState('');
 
   const puedeConvertir = tienePermiso(usuario?.rol, 'proformas.convertir');
   const puedeAnular    = tienePermiso(usuario?.rol, 'proformas.anular');
@@ -171,25 +173,79 @@ export default function DetalleProforma() {
     }
   };
 
-  const compartirWhatsApp = () => {
+  const abrirModalWhatsApp = () => {
     const detalles = proforma.detalles || [];
-    const lineas   = detalles.map(d => {
-      const total = (parseFloat(d.cantidad || 1) * parseFloat(d.precioUnitario || 0) - parseFloat(d.descuento || 0)).toFixed(2);
-      return `  • ${d.descripcion} x${d.cantidad} = $${total}`;
+
+    const lineas = detalles.map(d => {
+      const cant  = parseFloat(d.cantidad || 1);
+      const prec  = parseFloat(d.precioUnitario || 0);
+      const desc  = parseFloat(d.descuento || 0);
+      const tot   = (cant * prec - desc).toFixed(2);
+      const iva   = d.ivaPorcentaje ? ` | IVA ${d.ivaPorcentaje}%` : '';
+      return `  • ${d.descripcion}${d.codigo ? ` (${d.codigo})` : ''}\n    Cant: ${cant} × $${prec.toFixed(2)}${iva} = *$${tot}*`;
     }).join('\n');
 
-    const vigencia = proforma.vigenciaHasta
-      ? `\nVigencia hasta: ${fmtFecha(proforma.vigenciaHasta)}`
-      : '';
+    const st0   = parseFloat(proforma.subtotal0  || 0);
+    const st5   = parseFloat(proforma.subtotal5  || 0);
+    const st15  = parseFloat(proforma.subtotal15 || 0);
+    const iva   = parseFloat(proforma.totalIva   || 0);
+    const desc  = parseFloat(proforma.totalDescuento || 0);
+    const total = parseFloat(proforma.importeTotal || 0);
 
-    const texto = `*PROFORMA ${proforma.numero}*\nCliente: ${proforma.razonSocial}\n\n*Detalle:*\n${lineas}\n\n*TOTAL: $${parseFloat(proforma.importeTotal || 0).toFixed(2)}*${vigencia}${proforma.formaPago ? `\nForma de pago: ${proforma.formaPago}` : ''}${proforma.observaciones ? `\n\n${proforma.observaciones}` : ''}`;
+    const resumenLineas = [
+      st0  > 0 ? `  Subtotal 0%:   $${st0.toFixed(2)}`  : '',
+      st5  > 0 ? `  Subtotal 5%:   $${st5.toFixed(2)}`  : '',
+      st15 > 0 ? `  Subtotal 15%:  $${st15.toFixed(2)}` : '',
+      desc > 0 ? `  Descuento:    -$${desc.toFixed(2)}`  : '',
+      `  IVA:           $${iva.toFixed(2)}`,
+    ].filter(Boolean).join('\n');
 
+    const cab = [
+      `📋 *PROFORMA N° ${proforma.numero}*`,
+      `📅 Fecha: ${fmtFecha(proforma.createdAt || proforma.createdat)}`,
+      proforma.vigenciaHasta ? `⏳ Válida hasta: *${fmtFecha(proforma.vigenciaHasta)}*` : '',
+    ].filter(Boolean).join('\n');
+
+    const cliente = [
+      `👤 *Cliente:* ${proforma.razonSocial || 'CONSUMIDOR FINAL'}`,
+      proforma.tipoIdentificacion !== '07' && proforma.identificacion ? `🪪 RUC/CI: ${proforma.identificacion}` : '',
+    ].filter(Boolean).join('\n');
+
+    const texto = [
+      cab,
+      '',
+      cliente,
+      '',
+      `📦 *DETALLE:*`,
+      lineas,
+      '',
+      `💰 *RESUMEN:*`,
+      resumenLineas,
+      `  ──────────────────`,
+      `  *TOTAL:   $${total.toFixed(2)}*`,
+      '',
+      proforma.formaPago ? `💳 Forma de pago: ${proforma.formaPago}` : '',
+      proforma.observaciones ? `📝 ${proforma.observaciones}` : '',
+      '',
+      `_Este documento es una cotización y no tiene validez tributaria._`,
+    ].filter(s => s !== undefined).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+    setWaMensaje(texto);
+    setModalWA(true);
+  };
+
+  const abrirWhatsApp = () => {
     const telefono = (proforma.telefono || '').replace(/\D/g, '');
-    const url      = telefono
-      ? `https://wa.me/593${telefono.replace(/^0/, '')}?text=${encodeURIComponent(texto)}`
-      : `https://wa.me/?text=${encodeURIComponent(texto)}`;
-
+    const url = telefono
+      ? `https://wa.me/593${telefono.replace(/^0/, '')}?text=${encodeURIComponent(waMensaje)}`
+      : `https://wa.me/?text=${encodeURIComponent(waMensaje)}`;
     window.open(url, '_blank');
+  };
+
+  const copiarMensajeWA = () => {
+    navigator.clipboard.writeText(waMensaje)
+      .then(() => toast.success('Mensaje copiado al portapapeles'))
+      .catch(() => toast.error('No se pudo copiar'));
   };
 
   if (cargando) return <div className="prf-det-loading">Cargando proforma...</div>;
@@ -245,7 +301,7 @@ export default function DetalleProforma() {
             </button>
           )}
           {/* Compartir */}
-          <button className="btn-secondary" onClick={compartirWhatsApp} title="Enviar por WhatsApp">
+          <button className="btn-secondary" onClick={abrirModalWhatsApp} title="Compartir por WhatsApp">
             💬 WhatsApp
           </button>
           <button className="btn-secondary" onClick={abrirModalEmail} title="Enviar por Email (con PDF adjunto)">
@@ -376,6 +432,60 @@ export default function DetalleProforma() {
           <p>Este documento es una cotización / presupuesto y no tiene validez tributaria. Para emitir un comprobante válido, convierta esta proforma a Factura.</p>
         </div>
       </div>
+
+      {/* ── Modal WhatsApp ── */}
+      {modalWA && (
+        <div className="modal-overlay" onClick={() => setModalWA(false)}>
+          <div className="modal-content" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', color: '#1e293b' }}>💬 Compartir por WhatsApp</h3>
+            <p style={{ margin: '0 0 14px', fontSize: '.83rem', color: '#64748b' }}>
+              WhatsApp no admite adjuntar archivos desde el navegador. Puedes enviar el mensaje
+              de texto o descargar el PDF primero y adjuntarlo manualmente.
+            </p>
+
+            {/* Vista previa del mensaje */}
+            <label style={{ fontSize: '.8rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>
+              Vista previa del mensaje:
+            </label>
+            <textarea
+              value={waMensaje}
+              onChange={e => setWaMensaje(e.target.value)}
+              rows={14}
+              style={{
+                width: '100%', fontFamily: 'monospace', fontSize: '.78rem',
+                border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px',
+                resize: 'vertical', background: '#f9fafb', color: '#1e293b',
+                boxSizing: 'border-box', marginBottom: 14,
+              }}
+            />
+
+            {/* Acciones */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn-secondary" onClick={() => setModalWA(false)} style={{ flex: 'none' }}>
+                Cancelar
+              </button>
+              <button className="btn-secondary" onClick={copiarMensajeWA} style={{ flex: 'none' }}>
+                📋 Copiar mensaje
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={descargarPdf}
+                disabled={descargandoPdf}
+                style={{ flex: 'none' }}
+              >
+                {descargandoPdf ? '⏳ Generando...' : '⬇️ Descargar PDF'}
+              </button>
+              <button
+                className="btn-primary"
+                onClick={abrirWhatsApp}
+                style={{ flex: 1, minWidth: 140, background: '#25d366', borderColor: '#25d366' }}
+              >
+                💬 Abrir WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal envío por Email ── */}
       {modalEmail && (
