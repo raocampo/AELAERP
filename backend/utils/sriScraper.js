@@ -53,24 +53,37 @@ const _HEADERS = {
 
 // ─── Cookie jar helpers ───────────────────────────────────────
 function _parsearSetCookie(headers) {
-  // getSetCookie() disponible en Node 20+; fallback para Node 18
-  let values = [];
-  if (typeof headers.getSetCookie === 'function') {
-    values = headers.getSetCookie();
-  } else {
-    const raw = headers.get('set-cookie');
-    if (raw) values = [raw];
-  }
   const jar = {};
-  for (const h of values) {
-    if (!h) continue;
+  const _parsearUna = (h) => {
+    h = (h || '').trim();
     const eq = h.indexOf('=');
-    const sc = h.indexOf(';');
-    if (eq < 0) continue;
-    const name  = h.substring(0, eq).trim();
-    const value = h.substring(eq + 1, sc > eq ? sc : undefined).trim();
-    if (name) jar[name] = value;
+    if (eq < 0) return;
+    const sc   = h.indexOf(';');
+    const name = h.substring(0, eq).trim();
+    const val  = h.substring(eq + 1, sc > eq ? sc : undefined).trim();
+    if (name) jar[name] = val;
+  };
+
+  // Nivel 1: Node 20+ — getSetCookie() devuelve array con cada cookie separada
+  if (typeof headers.getSetCookie === 'function') {
+    headers.getSetCookie().forEach(_parsearUna);
+    return jar;
   }
+
+  // Nivel 2: Node 18 con undici — forEach invoca callback por cada entrada de header,
+  // incluidas múltiples Set-Cookie, sin mezclarlas.
+  let capturóCookies = false;
+  try {
+    headers.forEach((value, name) => {
+      if (name.toLowerCase() === 'set-cookie') { _parsearUna(value); capturóCookies = true; }
+    });
+  } catch (_) { /* continuar al nivel 3 */ }
+  if (capturóCookies) return jar;
+
+  // Nivel 3: último recurso — headers.get() devuelve todas unidas por ", ".
+  // Dividir solo en comas seguidas de "NombreCookie=" para no romper valores con comas (ej. Expires).
+  const raw = headers.get('set-cookie') || '';
+  raw.split(/,\s*(?=[A-Za-z][A-Za-z0-9_\-]*=)/).forEach(_parsearUna);
   return jar;
 }
 
@@ -132,7 +145,7 @@ async function _loginYObtenerJSF(ruc, password) {
 
     const html = await r.text();
     const tieneViewState = html.includes('javax.faces.ViewState');
-    console.log(`[SRI-fetch] 200 | ViewState:${tieneViewState} | len:${html.length} | url:${url.substring(0, 80)}`);
+    console.log(`[SRI-fetch] 200 | ViewState:${tieneViewState} | len:${html.length} | cookies:${Object.keys(jar).join(',') || 'ninguna'} | url:${url.substring(0, 80)}`);
 
     // ¿Ya tenemos el formulario JSF? → éxito
     if (tieneViewState) {
