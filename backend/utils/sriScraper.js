@@ -129,7 +129,8 @@ async function _loginROPC(ruc, password) {
     });
 
     const data = await r.json().catch(() => ({ error: `parse_${r.status}` }));
-    console.log(`[SRI-ROPC] client:${client_id} → ${r.status} | error:${data.error || 'OK'}`);
+    // Log completo del error para diagnóstico — NO mapear aquí
+    console.log(`[SRI-ROPC] client:${client_id} → ${r.status} | error:${data.error || 'OK'} | desc:"${data.error_description || ''}"`);
 
     if (r.ok && data.access_token) {
       console.log(`[SRI-ROPC] Token obtenido — session_state:${(data.session_state || '').substring(0, 12)}...`);
@@ -137,9 +138,18 @@ async function _loginROPC(ruc, password) {
     }
 
     if (data.error === 'invalid_grant') {
-      // Credenciales DEFINITIVAMENTE incorrectas — Keycloak lo confirmó
-      const desc = (data.error_description || 'invalid_grant')
-        .replace(/Invalid user credentials/i, 'RUC o contraseña incorrectos');
+      const rawDesc = data.error_description || 'invalid_grant';
+      // Mapear mensajes conocidos de Keycloak a mensajes en español
+      let desc;
+      if (/temporarily disabled|too many/i.test(rawDesc)) {
+        desc = 'Cuenta bloqueada temporalmente por demasiados intentos fallidos. Espere 30 minutos o recupere su clave en srienlinea.sri.gob.ec → "Generar o recuperar clave".';
+      } else if (/account is disabled/i.test(rawDesc)) {
+        desc = 'Cuenta deshabilitada. Contacte al SRI o use "Generar o recuperar clave" en srienlinea.sri.gob.ec.';
+      } else if (/Invalid user credentials/i.test(rawDesc)) {
+        desc = 'RUC o contraseña del portal SRI incorrectos. Verifique que puede ingresar con esas credenciales en srienlinea.sri.gob.ec usando usuario+clave (no Microsoft).';
+      } else {
+        desc = `Error Keycloak: ${rawDesc}`;
+      }
       const err = new Error(desc);
       err.esCredenciales = true;
       throw err;
