@@ -161,19 +161,21 @@ async function _loginYObtenerJSF(ruc, password) {
       html.includes('login-actions/authenticate');
 
     if (esFormKeycloak) {
-      // Buscar específicamente el form de login de Keycloak (evitar forms secundarios)
+      // Buscar específicamente el form de login de Keycloak (evitar forms secundarios).
+      // Los atributos id/action pueden aparecer en cualquier orden en el HTML.
       const kcFormMatch = html.match(/<form[^>]+id="kc-form-login"[^>]*action="([^"]+)"/i)
+                       || html.match(/<form[^>]+action="([^"]+)"[^>]*id="kc-form-login"/i)
                        || html.match(/<form[^>]+action="([^"]*login-actions\/authenticate[^"]*)"/i)
                        || html.match(/<form[^>]+action="([^"]+)"/i);
       if (!kcFormMatch) throw new Error('No se pudo extraer el action del form de Keycloak');
 
       if (credencialesEnviadas) {
-        // Segunda aparición del form → credenciales incorrectas
+        // Segunda aparición del form → credenciales incorrectas o IP bloqueada por SRI
         const errMatch = html.match(/class="[^"]*kc-feedback-text[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i)
                        || html.match(/id="input-error[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i);
         const msg = errMatch
           ? errMatch[1].replace(/<[^>]+>/g, '').trim()
-          : 'RUC o contraseña incorrectos';
+          : 'RUC o contraseña incorrectos (o el portal SRI bloqueó la IP de AELA — usa "Conectar desde portal SRI")';
         throw new Error(`Credenciales del portal SRI incorrectas: ${msg}`);
       }
 
@@ -187,13 +189,29 @@ async function _loginYObtenerJSF(ruc, password) {
         const vm = hm[0].match(/\bvalue="([^"]*)"/i);
         if (nm) hiddenCampos[nm[1]] = vm ? vm[1] : '';
       }
-      console.log('[SRI-fetch] Hidden campos Keycloak:', Object.keys(hiddenCampos).join(', ') || '(ninguno)');
+      // Log con valores (truncados) para diagnóstico
+      const camposLog = Object.entries(hiddenCampos)
+        .map(([k, v]) => `${k}="${v ? String(v).substring(0, 30) : ''}"`)
+        .join(', ') || '(ninguno)';
+      console.log('[SRI-fetch] Hidden campos Keycloak:', camposLog);
+
+      // Log snippet del form HTML para ver exactamente qué campos hay
+      const formSnip = html.match(/<form[^>]*(?:kc-form|authenticate|login)[^>]*>[\s\S]{0,700}/i)
+                    || html.match(/<form[\s\S]{0,700}/i);
+      if (formSnip) {
+        const formClean = formSnip[0]
+          .replace(/\s+/g, ' ')
+          .replace(/value="[^"]{15,}"/g, 'value="…"')
+          .substring(0, 500);
+        console.log('[SRI-fetch] Form HTML:', formClean);
+      }
 
       const loginActionUrl = _resolverUrl(
         kcFormMatch[1].replace(/&amp;/g, '&'),
         url
       );
-      console.log('[SRI-fetch] POST credenciales →', (loginActionUrl || '').substring(0, 80));
+      // Log URL completa (sin truncar) para ver parámetros exactos
+      console.log('[SRI-fetch] POST credenciales →', loginActionUrl || '(no encontrado)');
 
       const postBody = new URLSearchParams({
         ...hiddenCampos,          // Campos hidden del form (tokens de sesión Keycloak)
@@ -202,16 +220,28 @@ async function _loginYObtenerJSF(ruc, password) {
         credentialId: hiddenCampos.credentialId ?? '',
       });
 
+      // Log cuerpo del POST (sin exponer la contraseña)
+      const postBodyLog = postBody.toString()
+        .replace(/(?:^|&)(password=)[^&]*/g, '&$1***')
+        .replace(/^&/, '');
+      console.log('[SRI-fetch] POST body:', postBodyLog.substring(0, 400));
+
       const rPost = await fetch(loginActionUrl, {
         method:   'POST',
         redirect: 'manual',
         headers:  {
           ..._HEADERS,
-          'Accept':       'text/html,application/xhtml+xml,*/*',
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Cookie':       _cookieStr(jar),
-          'Referer':      url,
-          'Origin':       new URL(loginActionUrl).origin,
+          'Accept':                    'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Content-Type':              'application/x-www-form-urlencoded',
+          'Cookie':                    _cookieStr(jar),
+          'Referer':                   url,
+          'Origin':                    new URL(loginActionUrl).origin,
+          'Upgrade-Insecure-Requests': '1',
+          'Cache-Control':             'max-age=0',
+          'Sec-Fetch-Site':            'same-origin',
+          'Sec-Fetch-Mode':            'navigate',
+          'Sec-Fetch-User':            '?1',
+          'Sec-Fetch-Dest':            'document',
         },
         body:   postBody.toString(),
         signal: AbortSignal.timeout(T),
