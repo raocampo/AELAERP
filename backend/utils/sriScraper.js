@@ -97,19 +97,129 @@ function _resolverUrl(url, base) {
   return new URL(url, base).toString();
 }
 
+// ─── ROPC: validar credenciales y obtener token JWT ─────────
+//
+//  Resource Owner Password Credentials — endpoint distinto al browser flow.
+//  Permite saber definitivamente si las credenciales son correctas sin
+//  depender de redirects/cookies. Útil incluso si las IPs de Railway están
+//  bloqueadas para el form HTML de Keycloak.
+async function _loginROPC(ruc, password) {
+  const tokenUrl = `${SRI_BASE}/auth/realms/Internet/protocol/openid-connect/token`;
+  const T = 15_000;
+
+  // Intentar con distintos client_ids públicos del portal SRI
+  const clientes = ['app-tuportal-internet', 'app-sri-claves-angular'];
+
+  for (const client_id of clientes) {
+    const r = await fetch(tokenUrl, {
+      method:  'POST',
+      headers: {
+        ..._HEADERS,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept':        'application/json',
+      },
+      body: new URLSearchParams({
+        grant_type: 'password',
+        client_id,
+        username: ruc,
+        password,
+        scope: 'openid profile',
+      }).toString(),
+      signal: AbortSignal.timeout(T),
+    });
+
+    const data = await r.json().catch(() => ({ error: `parse_${r.status}` }));
+    console.log(`[SRI-ROPC] client:${client_id} → ${r.status} | error:${data.error || 'OK'}`);
+
+    if (r.ok && data.access_token) {
+      console.log(`[SRI-ROPC] Token obtenido — session_state:${(data.session_state || '').substring(0, 12)}...`);
+      return { ...data, usedClient: client_id };
+    }
+
+    if (data.error === 'invalid_grant') {
+      // Credenciales DEFINITIVAMENTE incorrectas — Keycloak lo confirmó
+      const desc = (data.error_description || 'invalid_grant')
+        .replace(/Invalid user credentials/i, 'RUC o contraseña incorrectos');
+      const err = new Error(desc);
+      err.esCredenciales = true;
+      throw err;
+    }
+    // 'unauthorized_client' / 'unsupported_grant_type' → probar siguiente cliente
+  }
+
+  const err = new Error('ROPC no habilitado en este realm');
+  err.esCredenciales = false;
+  throw err;
+}
+
+// ─── Intentar acceso al JSF con Bearer token ─────────────────
+//
+//  Algunos Keycloak adapters JSF aceptan Authorization: Bearer.
+//  Si funciona, evitamos el browser flow completamente.
+async function _jsfConBearer(accessToken) {
+  const jar = {};
+  let url = SRI_JSF_URL;
+
+  for (let i = 0; i < 6; i++) {
+    const r = await fetch(url, {
+      redirect: 'manual',
+      headers: {
+        ..._HEADERS,
+        'Accept':        'text/html,application/xhtml+xml,*/*',
+        'Authorization': `Bearer ${accessToken}`,
+        'Cookie':        _cookieStr(jar),
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+    Object.assign(jar, _parsearSetCookie(r.headers));
+
+    if (r.status === 302 || r.status === 301) {
+      const loc = _resolverUrl(r.headers.get('location'), url);
+      console.log(`[SRI-Bearer] ${r.status} → ${(loc || '').substring(0, 80)}`);
+      if (!loc) break;
+      url = loc;
+      continue;
+    }
+
+    if (r.status === 200) {
+      const html = await r.text();
+      console.log(`[SRI-Bearer] 200 | ViewState:${html.includes('javax.faces.ViewState')} | len:${html.length}`);
+      if (html.includes('javax.faces.ViewState')) {
+        console.log('[SRI-Bearer] Formulario JSF con Bearer token — éxito!');
+        return { jar, paginaJSF: html };
+      }
+    }
+    break;
+  }
+  return null;
+}
+
 // ─── Login + obtener formulario JSF (flujo unificado) ────────
 //
-//  Problema detectado 2026-06-20: el redirect_uri de Keycloak puede apuntar
-//  a tuportal-internet (Angular) en lugar de a la subapp JSF de comprobantes.
-//  Resultado: obtenemos JSESSIONID del portal Angular, no del JSF. La subapp
-//  JSF no reconoce esa sesión y necesita su propio round-trip de Keycloak.
-//
-//  Solución: un único loop que:
-//    - Sigue todos los redirects manualmente (capturando cookies en cada paso)
-//    - Detecta el form de Keycloak y envía credenciales exactamente UNA vez
-//    - Si llegamos a una página sin ViewState (tuportal) pero con sesión KC,
-//      reintenta el JSF URL — el SSO de Keycloak da sesión JSF sin re-login
+//  Estrategia:
+//    0. ROPC: validar credenciales en el endpoint de tokens (sin browser flow)
+//       - Si da invalid_grant → error definitivo de credenciales
+//       - Si da token → intentar JSF con Bearer
+//    1. Browser flow: seguir redirects, enviar form Keycloak una vez
+//       (puede estar bloqueado si Railway usa IPs de AWS en lista negra del SRI)
 async function _loginYObtenerJSF(ruc, password) {
+  // ── 0. ROPC — validar credenciales y opcionalmente usar Bearer en JSF ──
+  try {
+    const tokens = await _loginROPC(ruc, password);
+    // Credenciales correctas — intentar acceso directo con Bearer token
+    const bearerResult = await _jsfConBearer(tokens.access_token);
+    if (bearerResult) return bearerResult;
+    // Bearer no funcionó, pero credenciales son válidas → continuar con browser flow
+    console.log('[SRI-ROPC] Credenciales OK pero JSF no acepta Bearer. IP de Railway posiblemente bloqueada para browser flow.');
+  } catch (ropcErr) {
+    if (ropcErr.esCredenciales) {
+      throw new Error(`Credenciales del portal SRI incorrectas: ${ropcErr.message}`);
+    }
+    // ROPC no disponible (unauthorized_client, etc.) → continuar sin token
+    console.log('[SRI-ROPC] No disponible:', ropcErr.message.substring(0, 80));
+  }
+
+  // ── 1. Browser flow con seguimiento manual de redirects ─────
   const jar = {};
   const T   = 30_000;
   let url   = SRI_JSF_URL;
