@@ -6,7 +6,7 @@
 // ====================================
 
 import { useCallback, useState, useEffect, Component } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 
 // ─── ErrorBoundary — evita pantalla en blanco por crash de render ─────────────
 class ErrorBoundary extends Component {
@@ -33,16 +33,10 @@ class ErrorBoundary extends Component {
 }
 import './Declaraciones.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
-
 const MESES = [
   'Enero','Febrero','Marzo','Abril','Mayo','Junio',
   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre',
 ];
-
-function token() {
-  return localStorage.getItem('aela_token') || localStorage.getItem('token');
-}
 
 function fmt(v) { return `$${parseFloat(v || 0).toFixed(2)}`; }
 function fmtNum(v) { return parseFloat(v || 0).toFixed(2); }
@@ -70,11 +64,9 @@ export default function Declaraciones() {
     setData(null);
     try {
       const endpoint = tab === 'f101'
-        ? `${API}/declaraciones/f101?anio=${anio}`
-        : `${API}/declaraciones/${tab}?anio=${anio}&mes=${mes}`;
-      const { data: resp } = await axios.get(endpoint, {
-        headers: { Authorization: `Bearer ${token()}` },
-      });
+        ? `/declaraciones/f101?anio=${anio}`
+        : `/declaraciones/${tab}?anio=${anio}&mes=${mes}`;
+      const { data: resp } = await api.get(endpoint);
       setData(resp.data);
     } catch (err) {
       setError(err.response?.data?.mensaje || 'Error al cargar declaración');

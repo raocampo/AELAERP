@@ -371,7 +371,8 @@ router.post('/', proteger, soloAdmin, async (req, res) => {
 // PUT /api/empresas/:id — actualizar empresa
 router.put('/:id', proteger, soloAdmin, async (req, res) => {
   try {
-    const { razonSocial, nombreComercial, direccion, email, telefono, plan, activo } = req.body;
+    const { razonSocial, nombreComercial, direccion, email, telefono, plan, activo,
+            esMatriz, parentEmpresaId } = req.body;
     const data = {};
     if (razonSocial !== undefined)     data.razonSocial     = razonSocial;
     if (nombreComercial !== undefined) data.nombreComercial = nombreComercial;
@@ -379,6 +380,8 @@ router.put('/:id', proteger, soloAdmin, async (req, res) => {
     if (email !== undefined)           data.email           = email?.toLowerCase();
     if (telefono !== undefined)        data.telefono        = telefono;
     if (activo !== undefined)          data.activo          = activo;
+    if (esMatriz !== undefined)        data.esMatriz        = esMatriz === true || esMatriz === 'true';
+    if (parentEmpresaId !== undefined) data.parentEmpresaId = parentEmpresaId ? parseInt(parentEmpresaId, 10) : null;
     if (plan !== undefined) {
       data.plan = plan === 'lite' ? 'lite' : 'full';
       data.factAnualesMax = data.plan === 'lite' ? 100 : null;
