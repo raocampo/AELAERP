@@ -4,7 +4,6 @@
 const jwt    = require('jsonwebtoken');
 const prisma = require('../config/prisma');
 const { normalizarRol, tienePermiso, obtenerRolLabel } = require('../utils/roles');
-const { obtenerModoOperacionGlobal } = require('../utils/configuracionSistema');
 
 // ─── Proteger rutas (JWT requerido) ──────────────────────────────────────────
 // Inyecta req.usuario y req.empresa
@@ -52,32 +51,24 @@ const proteger = async (req, res, next) => {
     };
 
     // ── Inyectar empresa ─────────────────────────────────────────────────────
-    const modoOperacion = await obtenerModoOperacionGlobal(db);
-    const modoMulti = modoOperacion === 'multiempresa';
-    // decoded.empresaId viene del JWT cuando el usuario cambió de empresa activa (macro empresa)
+    // Prioridad: decoded.empresaId (JWT — puede venir de cambiar-empresa)
+    // > usuario.empresaId (empresa base del usuario en BD)
+    // > primera empresa activa (fallback monoempresa sin empresa asignada)
     const empresaIdActiva = decoded.empresaId || usuario.empresaId;
 
-    // En modoMulti: usar la empresaId del JWT (puede ser > 1).
-    // En monoempresa: buscar la primera empresa activa (no asumir id=1 que
-    // podría no existir o ser otra empresa en BDs migradas).
     let empresa;
-    if (modoMulti && empresaIdActiva) {
+    if (empresaIdActiva) {
       empresa = await db.empresas.findUnique({ where: { id: empresaIdActiva } });
-      // Si la empresa del JWT no existe, buscar la primera del usuario como fallback
-      if (!empresa && usuario.empresaId) {
+      // El JWT puede referir una empresa eliminada — caer al empresa base del usuario
+      if (!empresa && decoded.empresaId && usuario.empresaId) {
         empresa = await db.empresas.findUnique({ where: { id: usuario.empresaId } });
       }
-    } else {
-      // Monoempresa: la empresa del usuario o la primera activa disponible
-      if (usuario.empresaId) {
-        empresa = await db.empresas.findUnique({ where: { id: usuario.empresaId } });
-      }
-      if (!empresa) {
-        empresa = await db.empresas.findFirst({
-          where: { activo: true },
-          orderBy: { id: 'asc' },
-        });
-      }
+    }
+    if (!empresa) {
+      empresa = await db.empresas.findFirst({
+        where: { activo: true },
+        orderBy: { id: 'asc' },
+      });
     }
 
     req.empresa = empresa || { id: empresaIdActiva || 1, plan: process.env.AELA_EDITION || 'full', factAnualesMax: null };
