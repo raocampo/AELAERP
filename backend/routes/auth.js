@@ -432,8 +432,8 @@ router.post('/cambiar-empresa', proteger, async (req, res) => {
       return res.status(400).json({ success: false, mensaje: 'empresaId requerido' });
     }
 
-    // Verificar acceso: empresa propia del usuario O entrada en usuario_empresas
-    const [propiaEmpresa, accesoExtra] = await Promise.all([
+    // Verificar acceso: empresa propia, entrada en usuario_empresas, o Admin Macro
+    const [propiaEmpresa, accesoExtra, usuarioBase] = await Promise.all([
       req.usuario.empresaId === empresaId
         ? req.prisma.empresas.findUnique({ where: { id: empresaId } })
         : Promise.resolve(null),
@@ -441,19 +441,24 @@ router.post('/cambiar-empresa', proteger, async (req, res) => {
         where: { usuarioId_empresaId: { usuarioId: req.usuario.id, empresaId } },
         include: { empresa: true },
       }),
+      req.prisma.usuarios.findUnique({
+        where: { id: req.usuario.id },
+        select: { rol: true },
+      }),
     ]);
 
-    const empresa = propiaEmpresa || accesoExtra?.empresa || null;
+    // Admin Macro (rol base = 'admin') tiene acceso implícito a todas las empresas activas
+    const esAdminMacro = normalizarRol(usuarioBase?.rol) === 'admin';
+    const empresaMacro = esAdminMacro && !propiaEmpresa && !accesoExtra?.empresa
+      ? await req.prisma.empresas.findUnique({ where: { id: empresaId } })
+      : null;
+
+    const empresa = propiaEmpresa || accesoExtra?.empresa || empresaMacro || null;
     if (!empresa || !empresa.activo) {
       return res.status(403).json({ success: false, mensaje: 'No tienes acceso a esa empresa o está inactiva' });
     }
 
-    // Rol efectivo: el asignado en usuario_empresas para esta empresa,
-    // o el rol base del usuario si está accediendo a su propia empresa.
-    const usuarioBase = await req.prisma.usuarios.findUnique({
-      where: { id: req.usuario.id },
-      select: { rol: true },
-    });
+    // Rol efectivo: el asignado en usuario_empresas, o el rol base (admin macro mantiene 'admin')
     const rolEfectivo = normalizarRol(accesoExtra?.rol ?? usuarioBase?.rol ?? req.usuario.rol);
 
     const tenantSlug = req.tenant?.slug || null;
