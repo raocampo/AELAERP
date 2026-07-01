@@ -20,9 +20,24 @@
 
 const puppeteer  = require('puppeteer');
 const nodePath   = require('path');
+const crypto     = require('crypto');
 const { execSync } = require('child_process');
 
 const SRI_BASE = 'https://srienlinea.sri.gob.ec';
+
+// ─── Hash de contraseña para el portal SRI ───────────────────
+//
+//  El form de Keycloak del SRI ejecuta onsubmit="return validarUsuario();"
+//  que hashea la clave antes del POST (script.js del SRI):
+//    document.getElementById('password').value =
+//      CryptoJS.MD5(password) + shaObj.getHash('SHA-512', 'HEX');
+//  → contraseña final = md5hex(32) + sha512hex(128) = 160 chars
+//
+function _hashPasswordSRI(password) {
+  const md5    = crypto.createHash('md5').update(password, 'utf8').digest('hex');
+  const sha512 = crypto.createHash('sha512').update(password, 'ascii').digest('hex');
+  return md5 + sha512;
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  BLOQUE 1 — SCRAPER FETCH+JSF (sin Puppeteer)
@@ -371,18 +386,22 @@ async function _loginYObtenerJSF(ruc, password) {
       // Log URL completa (sin truncar) para ver parámetros exactos
       console.log('[SRI-fetch] POST credenciales →', loginActionUrl || '(no encontrado)');
 
+      // Replicar exactamente lo que hace validarUsuario() del portal SRI:
+      //   username = usuarioPrincipal.toUpperCase()   (campo hidden ← campo visible)
+      //   password = CryptoJS.MD5(pw) + SHA-512(pw)  (hash combinado, 160 chars)
+      const hashedPw = _hashPasswordSRI(password);
       const postBody = new URLSearchParams({
-        ...hiddenCampos,          // Campos hidden del form (tokens de sesión Keycloak)
-        username: ruc,            // Identificación del contribuyente
-        password,                 // Contraseña del portal SRI
+        ...hiddenCampos,                            // campos hidden del form
+        usuario:     ruc,                           // campo VISIBLE (input name="usuario")
+        ciAdicional: '',                            // CI adicional (vacío)
+        username:    ruc.toUpperCase(),             // campo HIDDEN (seteado por JS desde usuario)
+        password:    hashedPw,                      // MD5(pw) + SHA-512(pw) = 160 chars
+        login:       '',                            // botón submit (name="login")
         credentialId: hiddenCampos.credentialId ?? '',
       });
 
-      // Log cuerpo del POST (sin exponer la contraseña)
-      const postBodyLog = postBody.toString()
-        .replace(/(?:^|&)(password=)[^&]*/g, '&$1***')
-        .replace(/^&/, '');
-      console.log('[SRI-fetch] POST body:', postBodyLog.substring(0, 400));
+      // Log cuerpo del POST — muestra hash parcial (primeros 20 chars) para confirmar que aplica
+      console.log(`[SRI-fetch] POST body: usuario=${ruc} | password_hash=${hashedPw.substring(0, 20)}... (${hashedPw.length} chars)`);
 
       const rPost = await fetch(loginActionUrl, {
         method:   'POST',
@@ -1140,23 +1159,20 @@ async function scraperSriLogin(identificacion, password) {
     }
 
     // ── Detectar campos del formulario ───────────────────────
-    // NOTA: el portal SRI tiene el #username como type="hidden" (JS lo maneja).
-    // Intentar la VISIBLE input que el usuario ve, en orden de probabilidad.
+    // NOTA: el portal SRI Keycloak customizado usa:
+    //   - input#usuario (VISIBLE, el que escribe el usuario)
+    //   - input#username type="hidden" (JS lo rellena desde #usuario en onsubmit)
+    //   - onsubmit="return validarUsuario();" hashea la clave automáticamente
+    // Puppeteer llena el campo VISIBLE y el submit dispara validarUsuario() nativamente.
     const SELECTORS_USER = [
-      // Keycloak customizado del SRI — el visible input puede tener nombre distinto
-      'input[name="identificacion"]:not([type="hidden"])',
-      'input[id="identificacion"]:not([type="hidden"])',
-      // Estándar portal SRI
-      '#usuario',
-      'input[name="usuario"]',
-      'input[id*="usuario"]',
+      '#usuario',                            // SRI Keycloak — campo visible confirmado
+      'input[name="usuario"]',               // fallback por nombre
       '#ruc',
       'input[name="ruc"]',
-      // SPA / Angular fallbacks
+      '#usuario2',
+      'input[id*="usuario"]',
       'input[formcontrolname="usuario"]',
-      'input[formcontrolname="ruc"]',
       'input[autocomplete="username"]',
-      // Último recurso: primer visible text input del form
       '#kc-form-login input[type="text"]',
       'input[type="text"]:first-of-type',
     ];
