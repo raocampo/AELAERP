@@ -328,6 +328,42 @@ async function _loginYObtenerJSF(ruc, password) {
         console.log('[SRI-fetch] Form HTML:', formClean);
       }
 
+      // Extraer TODOS los inputs visibles (type != hidden) para detectar campos extra
+      const inputsVisibles = [];
+      const inputRe = /<input[^>]+>/gi;
+      let im;
+      while ((im = inputRe.exec(html)) !== null) {
+        const tipo = (im[0].match(/\btype="([^"]+)"/i) || [])[1] || 'text';
+        if (tipo === 'hidden') continue;
+        const nombre = (im[0].match(/\bname="([^"]+)"/i) || [])[1] || '';
+        const id     = (im[0].match(/\bid="([^"]+)"/i)   || [])[1] || '';
+        inputsVisibles.push(`${tipo}[name="${nombre}" id="${id}"]`);
+      }
+      console.log('[SRI-fetch] Inputs visibles del form:', inputsVisibles.join(', ') || '(ninguno)');
+
+      // Buscar y loguear la función validarUsuario() — puede transformar/hashear la clave
+      const scriptInline = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
+      for (const sc of scriptInline) {
+        if (/validarUsuario/i.test(sc)) {
+          const fnMatch = sc.match(/function\s+validarUsuario[\s\S]{0,800}/i);
+          if (fnMatch) {
+            console.log('[SRI-fetch] validarUsuario() encontrada:', fnMatch[0].replace(/\s+/g, ' ').substring(0, 600));
+          }
+        }
+      }
+      // También buscar en scripts externos referenciados
+      const scriptSrcs = [];
+      const scriptSrcRe = /<script[^>]+src="([^"]+)"/gi;
+      let ssm;
+      while ((ssm = scriptSrcRe.exec(html)) !== null) {
+        if (!/jquery|bootstrap|font-awesome|moment/i.test(ssm[1])) {
+          scriptSrcs.push(ssm[1]);
+        }
+      }
+      if (scriptSrcs.length > 0) {
+        console.log('[SRI-fetch] Scripts externos (posible validarUsuario):', scriptSrcs.slice(0, 5).join(' | '));
+      }
+
       const loginActionUrl = _resolverUrl(
         kcFormMatch[1].replace(/&amp;/g, '&'),
         url
@@ -1075,6 +1111,17 @@ async function scraperSriLogin(identificacion, password) {
     page.on('requestfailed', () => {});
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'es-EC,es;q=0.9' });
 
+    // Interceptar el POST de autenticación para loguear qué envía validarUsuario()
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      if (req.url().includes('login-actions/authenticate') && req.method() === 'POST') {
+        const rawBody = req.postData() || '';
+        const safeBody = rawBody.replace(/(?:^|&)(password=)[^&]*/g, '&$1***').replace(/^&/, '');
+        console.log('[SRI-Puppeteer] POST authenticate body:', safeBody.substring(0, 500));
+      }
+      req.continue();
+    });
+
     // ── Navegar al portal (el orden asegura llegar al formulario de login) ──
     let loginExitoso = false;
     for (const loginUrl of [SRI_LOGIN_URL, SRI_LOGIN_URL_ALT, SRI_LOGIN_JSF]) {
@@ -1093,8 +1140,13 @@ async function scraperSriLogin(identificacion, password) {
     }
 
     // ── Detectar campos del formulario ───────────────────────
+    // NOTA: el portal SRI tiene el #username como type="hidden" (JS lo maneja).
+    // Intentar la VISIBLE input que el usuario ve, en orden de probabilidad.
     const SELECTORS_USER = [
-      // Portal JSF (IDs confirmados del portal SRI)
+      // Keycloak customizado del SRI — el visible input puede tener nombre distinto
+      'input[name="identificacion"]:not([type="hidden"])',
+      'input[id="identificacion"]:not([type="hidden"])',
+      // Estándar portal SRI
       '#usuario',
       'input[name="usuario"]',
       'input[id*="usuario"]',
@@ -1104,6 +1156,8 @@ async function scraperSriLogin(identificacion, password) {
       'input[formcontrolname="usuario"]',
       'input[formcontrolname="ruc"]',
       'input[autocomplete="username"]',
+      // Último recurso: primer visible text input del form
+      '#kc-form-login input[type="text"]',
       'input[type="text"]:first-of-type',
     ];
     const SELECTORS_PASS = [
@@ -1295,11 +1349,12 @@ async function obtenerRecibidosScraper({
     return items;
   } catch (fetchErr) {
     console.warn('[SRI] Fetch-based falló:', fetchErr.message);
-    // Si el error es de credenciales, no tiene sentido reintentar con Puppeteer
-    if (/credenciales|contraseña|password|incorrectos|incorrectas|usuario/i.test(fetchErr.message)) {
-      throw fetchErr;
-    }
-    // Otros errores → intentar con Puppeteer como fallback
+    // NO bloqueamos Puppeteer aunque el mensaje parezca de credenciales.
+    // El portal SRI ejecuta validarUsuario() en onsubmit (JavaScript puro) que
+    // puede transformar/hashear la clave antes del POST. El fetch-based no ejecuta
+    // JS y la clave llega cruda al servidor → "Clave inválida / inactiva" incluso
+    // con la clave correcta. Puppeteer ejecuta ese JS correctamente.
+    console.log('[SRI] Continuando con Puppeteer (ejecuta validarUsuario JS)...');
   }
 
   // ── Intento 2: Puppeteer con @sparticuz/chromium (disponible en Railway) ──
