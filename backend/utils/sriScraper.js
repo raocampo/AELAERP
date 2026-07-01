@@ -1,24 +1,21 @@
 // ============================================================
 //  AELA — sriScraper.js
 //
-//  ESTRATEGIA ACTUAL (2026-06-20):
-//    1. Keycloak ROPC fetch (preferido, sin Puppeteer)
-//       - sriLoginKeycloak(ruc, password)      → { token, expiresAt }
-//       - sriGetComprobantesRecibidos(token)   → items[] (TBD: URL pendiente)
-//    2. Puppeteer legacy (fallback)
-//       - scraperSriLogin / scraperSriRecibidos
+//  ESTRATEGIA ACTUAL (2026-06-30):
+//    1. Fetch + JSF (sin navegador — preferido)
+//       a. ROPC → validar credenciales / obtener Bearer token
+//       b. Bearer en JSF (si ROPC OK)
+//       c. Browser flow fetch (seguimiento manual de redirects Keycloak)
+//       NOTA: ROPC invalid_grant ya NO detiene el flujo — Railway puede
+//       tener IPs de AWS bloqueadas en /token pero no en el form web.
+//    2. Puppeteer (fallback con Chromium de 3 niveles)
+//       Nivel 1: PUPPETEER_EXECUTABLE_PATH / nixpacks (chromium del sistema)
+//       Nivel 2: @sparticuz/chromium (binario serverless, descarga automática)
+//       Nivel 3: puppeteer bundled Chromium (solo dev local)
 //
-//  Datos confirmados del JWT (2026-06-20):
-//    Auth:      https://srienlinea.sri.gob.ec/auth/realms/Internet
-//    client_id: app-sri-claves-angular
-//    TTL token: 300 s
-//    Endpoint obligaciones/vigentes:
-//      https://srienlinea.sri.gob.ec/sri-obligacion-beneficio-servicio-internet/
-//      rest/privado/obligaciones/tributarias/vigentes
-//
-//  Pendiente: URL de comprobantes recibidos. El usuario debe navegar a la
-//  sección "Comprobantes Electrónicos → Recibidos" del portal SRI y capturar
-//  la request en DevTools → Network → Fetch/XHR.
+//  Railway env vars recomendadas:
+//    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true   (evita descarga innecesaria)
+//    PUPPETEER_EXECUTABLE_PATH=chromium      (si nixpacks instaló Chromium)
 // ============================================================
 
 const puppeteer  = require('puppeteer');
@@ -223,10 +220,15 @@ async function _loginYObtenerJSF(ruc, password) {
     console.log('[SRI-ROPC] Credenciales OK pero JSF no acepta Bearer. IP de Railway posiblemente bloqueada para browser flow.');
   } catch (ropcErr) {
     if (ropcErr.esCredenciales) {
-      throw new Error(`Credenciales del portal SRI incorrectas: ${ropcErr.message}`);
+      // ROPC reporta invalid_grant pero NO es definitivo: el endpoint /token de Keycloak
+      // puede tener restricciones de IP distintas al login form (Railway usa IPs de AWS
+      // que pueden estar en lista negra del /token pero no del form web).
+      // Continuamos al browser flow; si ese también falla, ESE error es el definitivo.
+      console.warn('[SRI-ROPC] invalid_grant en /token — continuando con browser flow para confirmar (posible bloqueo de IP en el endpoint ROPC)');
+    } else {
+      // ROPC no disponible (unauthorized_client, etc.) → continuar sin token
+      console.log('[SRI-ROPC] No disponible:', ropcErr.message.substring(0, 80));
     }
-    // ROPC no disponible (unauthorized_client, etc.) → continuar sin token
-    console.log('[SRI-ROPC] No disponible:', ropcErr.message.substring(0, 80));
   }
 
   // ── 1. Browser flow con seguimiento manual de redirects ─────
@@ -714,35 +716,72 @@ function _resolverRutaChromium() {
 }
 
 // ─── Lanzar navegador ─────────────────────────────────────────
+//
+//  Estrategia de 3 niveles para Railway/serverless:
+//    1. PUPPETEER_EXECUTABLE_PATH / CHROMIUM_PATH (configurado en Railway env vars)
+//    2. @sparticuz/chromium (binario comprimido, descarga automática, diseñado para serverless)
+//    3. Chromium bundleado por puppeteer (solo funciona en desarrollo local)
 async function _lanzarNavegador() {
-  const execPath = _resolverRutaChromium();
+  const configuredPath = _resolverRutaChromium();
 
-  const opts = {
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-zygote',              // requerido en Docker/Railway: sin él Chrome no puede iniciarse
-      '--no-proxy-server',        // evitar detección automática de proxy (puede colgar)
-      '--ignore-certificate-errors',
-      '--disable-extensions',
-      '--disable-sync',
-      '--disable-translate',
-      '--mute-audio',
-      '--window-size=1280,800',
-    ],
-    timeout: 30_000,
-    defaultViewport: { width: 1280, height: 800 },
-  };
+  const BASE_ARGS = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--no-zygote',
+    '--no-proxy-server',
+    '--ignore-certificate-errors',
+    '--disable-extensions',
+    '--disable-sync',
+    '--disable-translate',
+    '--mute-audio',
+    '--window-size=1280,800',
+  ];
 
-  if (execPath) opts.executablePath = execPath;
+  // Nivel 1: ruta explícita (nixpacks en Railway con PUPPETEER_EXECUTABLE_PATH=chromium)
+  if (configuredPath) {
+    try {
+      console.log('[SRI-Browser] Nivel 1 — executablePath:', configuredPath);
+      return await puppeteer.launch({
+        headless: true,
+        args: BASE_ARGS,
+        executablePath: configuredPath,
+        timeout: 30_000,
+        defaultViewport: { width: 1280, height: 800 },
+      });
+    } catch (err) {
+      console.warn('[SRI-Browser] Nivel 1 falló:', err.message.substring(0, 100));
+    }
+  }
 
+  // Nivel 2: @sparticuz/chromium (optimizado para Railway/Lambda/serverless)
   try {
-    return await puppeteer.launch(opts);
+    const chromium = require('@sparticuz/chromium');
+    const sparticuzExec = await chromium.executablePath();
+    console.log('[SRI-Browser] Nivel 2 — @sparticuz/chromium:', sparticuzExec);
+    return await puppeteer.launch({
+      headless: chromium.headless,
+      args: [...chromium.args, ...BASE_ARGS],
+      executablePath: sparticuzExec,
+      timeout: 30_000,
+      defaultViewport: { width: 1280, height: 800 },
+    });
   } catch (err) {
-    throw new Error(`BROWSER_UNAVAILABLE: No se pudo iniciar el navegador: ${err.message}`);
+    console.warn('[SRI-Browser] Nivel 2 (@sparticuz/chromium) falló:', err.message.substring(0, 100));
+  }
+
+  // Nivel 3: puppeteer con su propio Chromium (solo disponible en desarrollo local)
+  try {
+    console.log('[SRI-Browser] Nivel 3 — puppeteer bundled Chromium');
+    return await puppeteer.launch({
+      headless: true,
+      args: BASE_ARGS,
+      timeout: 30_000,
+      defaultViewport: { width: 1280, height: 800 },
+    });
+  } catch (err) {
+    throw new Error(`BROWSER_UNAVAILABLE: No se pudo iniciar el navegador en ninguno de los 3 niveles. Último error: ${err.message}`);
   }
 }
 
@@ -1263,7 +1302,7 @@ async function obtenerRecibidosScraper({
     // Otros errores → intentar con Puppeteer como fallback
   }
 
-  // ── Intento 2: Puppeteer (fallback, no disponible en Railway) ──
+  // ── Intento 2: Puppeteer con @sparticuz/chromium (disponible en Railway) ──
   console.log('[SRI] Intentando scraper Puppeteer (fallback)...');
   const TIMEOUT_TOTAL_MS = 3 * 60 * 1000;
 

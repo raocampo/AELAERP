@@ -34,6 +34,7 @@
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@sparticuz/chromium": "^133.0.0",
     "adm-zip": "^0.5.17",
     "bcryptjs": "^2.4.3",
     "bwip-js": "^4.8.0",
@@ -50,6 +51,7 @@
     "pdfkit": "^0.17.2",
     "pg": "^8.21.0",
     "puppeteer": "^24.42.0",
+    "puppeteer-core": "^24.43.1",
     "qrcode": "^1.5.4",
     "xlsx": "^0.18.5",
     "xml-crypto": "^6.1.2",

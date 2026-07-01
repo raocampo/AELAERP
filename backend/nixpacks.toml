@@ -1,0 +1,35 @@
+# nixpacks.toml — Railway build configuration for AELA backend
+#
+# Instala Chromium del sistema para que Puppeteer pueda usarlo en Railway.
+# Después de deployar, agregar en Railway → Variables:
+#   PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+#   PUPPETEER_EXECUTABLE_PATH=chromium
+#   (el scraper resuelve 'chromium' con `which chromium` automáticamente)
+#
+# Si nixpacks no funciona, el fallback es @sparticuz/chromium (descarga automática).
+
+[phases.setup]
+nixPkgs = [
+  "chromium",
+  "glib",
+  "nss",
+  "freetype",
+  "fontconfig",
+  "dbus",
+  "atk",
+  "at-spi2-atk",
+  "cups",
+  "libdrm",
+  "mesa",
+  "libxkbcommon",
+  "pango",
+  "cairo",
+  "gdk-pixbuf",
+  "xorg.libX11",
+  "xorg.libxcb",
+  "xorg.libXcomposite",
+  "xorg.libXdamage",
+  "xorg.libXext",
+  "xorg.libXfixes",
+  "xorg.libXrandr",
+]
