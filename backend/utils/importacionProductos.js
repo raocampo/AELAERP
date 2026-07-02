@@ -412,8 +412,14 @@ async function obtenerXmlDesdeAutorizacion(claveAcceso) {
 
   // sriMensajes es un array de objetos { identificador, mensaje, tipo, informacionAdicional }
   // (ver sri.js autorizarComprobanteSRI) — no strings. Extraer el texto legible antes de unir.
+  // informacionAdicional suele traer la razón real (ej. "fecha de emisión fuera del rango
+  // permitido" para documentos antiguos) cuando "mensaje" es un código genérico.
   const textosMensajes = sriMensajes
-    .map((m) => (typeof m === 'string' ? m : m?.mensaje || m?.identificador || ''))
+    .map((m) => {
+      if (typeof m === 'string') return m;
+      const base = m?.mensaje || m?.identificador || '';
+      return m?.informacionAdicional ? `${base} (${m.informacionAdicional})` : base;
+    })
     .filter(Boolean);
 
   // Construir mensaje de error con el máximo contexto posible

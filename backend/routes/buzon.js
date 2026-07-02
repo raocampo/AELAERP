@@ -295,10 +295,15 @@ router.post('/consultar', async (req, res) => {
     // Detectar fallo masivo del servicio SRI (todas las claves nuevas dieron error de red/servicio)
     const nuevas  = resultados.filter((r) => r.estado !== 'existe');
     const errores = nuevas.filter((r) => r.estado === 'error');
-    const avisoSri = nuevas.length > 0 && errores.length === nuevas.length &&
-      errores.every((r) => /sri|servicio|timeout|red|http|disponible/i.test(r.error || ''))
-      ? 'El servicio de autorización del SRI no está disponible en este momento. Intenta más tarde o usa "Importar ZIP" con los XMLs descargados de srienlinea.sri.gob.ec.'
-      : null;
+    const todosFueraDeRango = errores.length > 0 &&
+      errores.every((r) => /fuera del rango permitido/i.test(r.error || ''));
+    const avisoSri = nuevas.length === 0 || errores.length !== nuevas.length
+      ? null
+      : todosFueraDeRango
+        ? 'El servicio de autorización en línea del SRI solo permite consultar documentos recientes. Para comprobantes antiguos, descarga los XML desde srienlinea.sri.gob.ec y usa "Importar XML" o "Importar ZIP".'
+        : errores.every((r) => /sri|servicio|timeout|red|http|disponible/i.test(r.error || ''))
+          ? 'El servicio de autorización del SRI no está disponible en este momento. Intenta más tarde o usa "Importar ZIP" con los XMLs descargados de srienlinea.sri.gob.ec.'
+          : null;
 
     res.json({ success: true, total: clavesLimpias.length, resultados, avisoSri });
   } catch (error) {
