@@ -3,13 +3,11 @@
 // frontend/src/components/Facturacion/FormRetencion.jsx
 // ====================================
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../services/api';
 import { normalizarPeriodoMMYYYY, periodoActualMMYYYY } from '../../utils/periodo';
 import './FormRetencion.css';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 
 const hoy = () => {
   const d = new Date();
@@ -60,8 +58,6 @@ function compraLabel(compra) {
 export default function FormRetencion() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
   const [catalogos, setCatalogos] = useState({ renta: [], iva: [], tiposDocSustento: [], tiposIdentificacion: [] });
   const [loading, setLoading] = useState(false);
@@ -97,10 +93,10 @@ export default function FormRetencion() {
   ]);
 
   useEffect(() => {
-    axios.get(`${API}/retenciones/catalogos/impuestos`, { headers })
+    api.get('/retenciones/catalogos/impuestos')
       .then((r) => setCatalogos(r.data.data))
       .catch(() => setError('No se pudieron cargar los catálogos de retención'));
-  }, [headers]);
+  }, []);
 
   const aplicarCompraSeleccionada = useCallback((compra, actualizarUrl = true) => {
     setCompraSeleccionada(compra);
@@ -132,7 +128,7 @@ export default function FormRetencion() {
     const cargarCompra = async () => {
       setCargandoCompra(true);
       try {
-        const { data } = await axios.get(`${API}/retenciones/compras/${compraIdParam}/preload`, { headers });
+        const { data } = await api.get(`/retenciones/compras/${compraIdParam}/preload`);
         if (!ignore) aplicarCompraSeleccionada(data.data, false);
       } catch (err) {
         if (!ignore) {
@@ -146,7 +142,7 @@ export default function FormRetencion() {
 
     cargarCompra();
     return () => { ignore = true; };
-  }, [aplicarCompraSeleccionada, compraIdParam, compraSeleccionada?.id, headers, setSearchParams]);
+  }, [aplicarCompraSeleccionada, compraIdParam, compraSeleccionada?.id, setSearchParams]);
 
   useEffect(() => {
     let ignore = false;
@@ -163,10 +159,7 @@ export default function FormRetencion() {
     const timer = setTimeout(async () => {
       setBuscandoCompra(true);
       try {
-        const { data } = await axios.get(`${API}/retenciones/compras/buscar`, {
-          headers,
-          params: { q: termino },
-        });
+        const { data } = await api.get('/retenciones/compras/buscar', { params: { q: termino } });
         if (!ignore) setComprasSugeridas(data.data || []);
       } catch {
         if (!ignore) setComprasSugeridas([]);
@@ -179,7 +172,7 @@ export default function FormRetencion() {
       ignore = true;
       clearTimeout(timer);
     };
-  }, [compraBusqueda, compraSeleccionada, headers]);
+  }, [compraBusqueda, compraSeleccionada]);
 
   const handleForm = (e) => setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
@@ -200,7 +193,7 @@ export default function FormRetencion() {
     setCargandoCompra(true);
     setError('');
     try {
-      const { data } = await axios.get(`${API}/retenciones/compras/${compraId}/preload`, { headers });
+      const { data } = await api.get(`/retenciones/compras/${compraId}/preload`);
       aplicarCompraSeleccionada(data.data);
     } catch (err) {
       setError(err.response?.data?.error || 'No se pudo precargar la compra');
@@ -315,7 +308,7 @@ export default function FormRetencion() {
         })),
       };
 
-      const { data } = await axios.post(`${API}/retenciones`, payload, { headers });
+      const { data } = await api.post('/retenciones', payload);
       setGuardado(data.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Error al emitir la retención');
@@ -327,10 +320,7 @@ export default function FormRetencion() {
   if (guardado) {
     const descargarPDF = async () => {
       try {
-        const resp = await axios.get(`${API}/retenciones/${guardado.id}/pdf`, {
-          headers,
-          responseType: 'blob',
-        });
+        const resp = await api.get(`/retenciones/${guardado.id}/pdf`, { responseType: 'blob' });
         const url = window.URL.createObjectURL(new Blob([resp.data], { type: 'application/pdf' }));
         const link = document.createElement('a');
         link.href = url;

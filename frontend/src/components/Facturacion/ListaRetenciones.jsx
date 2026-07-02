@@ -5,12 +5,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import { IcPDF, IcXML, IcReenviar, IcAnular } from '../../utils/icons';
 import './ListaRetenciones.css';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 
 const BADGE = {
   PENDIENTE_FIRMA: { label: 'Pendiente Firma', cls: 'badge-warning' },
@@ -40,12 +38,8 @@ export default function ListaRetenciones() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token');
       const params = { page: pg, limit: 15, ...filtros };
-      const { data } = await axios.get(`${API}/retenciones`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params,
-      });
+      const { data } = await api.get('/retenciones', { params });
       setRetenciones(data.data || []);
       setTotal(data.total || 0);
       setPages(data.pages || 1);
@@ -65,11 +59,7 @@ export default function ListaRetenciones() {
 
   const descargarPDF = async (id, numero) => {
     try {
-      const token = localStorage.getItem('token');
-      const resp  = await axios.get(`${API}/retenciones/${id}/pdf`, {
-        headers:      { Authorization: `Bearer ${token}` },
-        responseType: 'blob',
-      });
+      const resp = await api.get(`/retenciones/${id}/pdf`, { responseType: 'blob' });
       const url  = window.URL.createObjectURL(new Blob([resp.data], { type: 'application/pdf' }));
       const link = document.createElement('a');
       link.href  = url;
@@ -84,11 +74,7 @@ export default function ListaRetenciones() {
 
   const descargarXML = async (id, numero) => {
     try {
-      const token = localStorage.getItem('token');
-      const resp  = await axios.get(`${API}/retenciones/${id}/xml`, {
-        headers:      { Authorization: `Bearer ${token}` },
-        responseType: 'blob',
-      });
+      const resp = await api.get(`/retenciones/${id}/xml`, { responseType: 'blob' });
       const url  = window.URL.createObjectURL(new Blob([resp.data], { type: 'application/xml' }));
       const link = document.createElement('a');
       link.href  = url;
@@ -104,10 +90,7 @@ export default function ListaRetenciones() {
   const reenviar = async (id) => {
     if (!window.confirm('¿Reenviar esta retención al SRI?')) return;
     try {
-      const token = localStorage.getItem('token');
-      await axios.post(`${API}/retenciones/${id}/reenviar`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.post(`/retenciones/${id}/reenviar`, {});
       alert('Reenvío iniciado. El estado se actualizará en breve.');
       cargar(page);
     } catch (err) {
@@ -118,10 +101,7 @@ export default function ListaRetenciones() {
   const anular = async () => {
     if (!motivoAnular.trim()) { alert('Ingrese el motivo de anulación'); return; }
     try {
-      const token = localStorage.getItem('token');
-      await axios.post(`${API}/retenciones/${modalAnular}/anular`, { motivo: motivoAnular }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.post(`/retenciones/${modalAnular}/anular`, { motivo: motivoAnular });
       setModalAnular(null);
       setMotivoAnular('');
       cargar(page);

@@ -101,7 +101,7 @@ export default function Declaraciones() {
       <div className="decl-periodo">
         <label>Año</label>
         <select value={anio} onChange={(e) => setAnio(parseInt(e.target.value))}>
-          {[anioActual, anioActual - 1, anioActual - 2].map((a) => (
+          {Array.from({ length: anioActual - 2019 }, (_, i) => anioActual - i).map((a) => (
             <option key={a} value={a}>{a}</option>
           ))}
         </select>
