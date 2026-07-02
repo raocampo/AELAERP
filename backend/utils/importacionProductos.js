@@ -410,10 +410,16 @@ async function obtenerXmlDesdeAutorizacion(claveAcceso) {
     }
   }
 
+  // sriMensajes es un array de objetos { identificador, mensaje, tipo, informacionAdicional }
+  // (ver sri.js autorizarComprobanteSRI) — no strings. Extraer el texto legible antes de unir.
+  const textosMensajes = sriMensajes
+    .map((m) => (typeof m === 'string' ? m : m?.mensaje || m?.identificador || ''))
+    .filter(Boolean);
+
   // Construir mensaje de error con el máximo contexto posible
   let detalle = '';
-  if (sriMensajes.length > 0) {
-    detalle = ` — ${sriMensajes.join('; ')}`;
+  if (textosMensajes.length > 0) {
+    detalle = ` — ${textosMensajes.join('; ')}`;
   } else if (sriEstado && sriEstado !== 'NO_AUTORIZADO') {
     detalle = ` — estado SRI: ${sriEstado}`;
   } else if (ultimoError) {
@@ -421,8 +427,8 @@ async function obtenerXmlDesdeAutorizacion(claveAcceso) {
   }
 
   throw new Error(
-    sriMensajes.length > 0
-      ? `SRI: ${sriMensajes.join('; ')}`
+    textosMensajes.length > 0
+      ? `SRI: ${textosMensajes.join('; ')}`
       : `Comprobante no encontrado en el SRI${detalle}. Verifica que la clave sea correcta y que el portal esté disponible.`
   );
 }
