@@ -71,6 +71,7 @@ const TablaUtilidades      = lazy(() => import('./components/Configuracion/Tabla
 const ListaFacturas = lazy(() => import('./components/Facturacion/ListaFacturas'));
 const FormFactura = lazy(() => import('./components/Facturacion/FormFactura'));
 const DetalleFactura = lazy(() => import('./components/Facturacion/DetalleFactura'));
+const ImportarFacturasHistoricas = lazy(() => import('./components/Facturacion/ImportarFacturasHistoricas'));
 const ListaRetenciones = lazy(() => import('./components/Facturacion/ListaRetenciones'));
 const FormRetencion = lazy(() => import('./components/Facturacion/FormRetencion'));
 const ListaLiquidaciones = lazy(() => import('./components/Facturacion/ListaLiquidaciones'));
@@ -194,9 +195,10 @@ function App() {
                 <Route path="proformas/:id/editar" element={<PermissionRoute permission="proformas.gestionar"><FormProforma /></PermissionRoute>} />
 
                 {/* Facturas — requieren Medium o superior */}
-                <Route path="facturas"          element={<MediumRoute><PermissionRoute permission="facturacion.ver"><ListaFacturas /></PermissionRoute></MediumRoute>} />
-                <Route path="facturas/nueva"    element={<MediumRoute><PermissionRoute permission="facturacion.emitir"><FormFactura /></PermissionRoute></MediumRoute>} />
-                <Route path="facturas/:id"      element={<MediumRoute><PermissionRoute permission="facturacion.ver"><DetalleFactura /></PermissionRoute></MediumRoute>} />
+                <Route path="facturas"                   element={<MediumRoute><PermissionRoute permission="facturacion.ver"><ListaFacturas /></PermissionRoute></MediumRoute>} />
+                <Route path="facturas/nueva"             element={<MediumRoute><PermissionRoute permission="facturacion.emitir"><FormFactura /></PermissionRoute></MediumRoute>} />
+                <Route path="facturas/importar-historicas" element={<MediumRoute><PermissionRoute permission="facturacion.emitir"><ImportarFacturasHistoricas /></PermissionRoute></MediumRoute>} />
+                <Route path="facturas/:id"               element={<MediumRoute><PermissionRoute permission="facturacion.ver"><DetalleFactura /></PermissionRoute></MediumRoute>} />
 
                 {/* Clientes */}
                 <Route path="clientes" element={<PermissionRoute permission="clientes.gestionar"><GestionClientes /></PermissionRoute>} />

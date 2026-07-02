@@ -23,6 +23,7 @@ const BadgeEstado = ({ estado }) => {
     AUTORIZADO:      { label: 'Autorizado',       cls: 'autorizado'      },
     RECHAZADO:       { label: 'Rechazado',        cls: 'rechazado'       },
     ANULADO:         { label: 'Anulado',          cls: 'anulado'         },
+    HISTORICO:       { label: 'Histórica',        cls: 'listo-enviar'    },
   };
   const c = conf[estado] || { label: estado, cls: 'pendiente-firma' };
   return <span className={`sri-badge ${c.cls}`}>{c.label}</span>;
@@ -155,6 +156,7 @@ const TabFacturas = ({ navigate, onIrNC }) => {
           <option value="AUTORIZADO">Autorizado</option>
           <option value="RECHAZADO">Rechazado</option>
           <option value="ANULADO">Anulado</option>
+          <option value="HISTORICO">Histórica</option>
         </select>
       </div>
 

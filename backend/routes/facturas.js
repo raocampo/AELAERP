@@ -1492,4 +1492,212 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
   }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// IMPORTACIÓN MASIVA DE FACTURAS HISTÓRICAS
+// ────────────────────────────────────────────────────────────────────────────
+
+const {
+  leerExcel,
+  validarFila,
+  construirDetalles,
+  generarPlantilla,
+} = require('../utils/importarFacturasHistoricas');
+
+const uploadImportacion = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(xlsx|xls|csv)$/i.test(file.originalname);
+    cb(ok ? null : new Error('Solo se aceptan archivos .xlsx, .xls o .csv'), ok);
+  },
+});
+
+// GET /api/facturas/importar/plantilla — descarga la plantilla Excel
+router.get('/importar/plantilla', async (_req, res) => {
+  try {
+    const buffer = generarPlantilla();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="plantilla-facturas-historicas.xlsx"');
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /api/facturas/importar/preview — valida el archivo sin importar
+router.post('/importar/preview', uploadImportacion.single('archivo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió archivo' });
+
+    const filas = leerExcel(req.file.buffer);
+    if (filas.length === 0) return res.status(400).json({ ok: false, error: 'El archivo está vacío o no tiene datos en la primera hoja' });
+    if (filas.length > 1000) return res.status(400).json({ ok: false, error: 'Máximo 1000 filas por importación' });
+
+    const resultado = filas.map((raw, idx) => {
+      const { valida, errores, datos } = validarFila(raw);
+      return { fila: idx + 2, valida, errores, datos };
+    });
+
+    const validas   = resultado.filter(r => r.valida).length;
+    const invalidas = resultado.length - validas;
+
+    res.json({ ok: true, filas: resultado, validas, invalidas, total: filas.length });
+  } catch (err) {
+    console.error('[Importar] preview error:', err.message);
+    res.status(500).json({ ok: false, error: `Error al procesar archivo: ${err.message}` });
+  }
+});
+
+// POST /api/facturas/importar/ejecutar — importa las filas válidas
+router.post('/importar/ejecutar', uploadImportacion.single('archivo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió archivo' });
+
+    const db = req.prisma || prisma;
+    const config = await construirConfiguracionSriBase(db, req.empresa.id);
+    if (!config?.ruc) return res.status(400).json({ ok: false, error: 'La empresa no tiene RUC configurado en Configuración SRI' });
+
+    const filasRaw = leerExcel(req.file.buffer);
+    if (filasRaw.length === 0) return res.status(400).json({ ok: false, error: 'El archivo está vacío' });
+    if (filasRaw.length > 1000) return res.status(400).json({ ok: false, error: 'Máximo 1000 filas por importación' });
+
+    // Obtener el secuencial más alto actual para asignar automáticamente
+    const lastFact = await db.facturas.findFirst({
+      where:   { empresaId: req.empresa.id, rucEmisor: config.ruc },
+      orderBy: { secuencial: 'desc' },
+      select:  { secuencial: true },
+    });
+    let secuencialAuto = lastFact ? (parseInt(lastFact.secuencial, 10) || 0) : 0;
+
+    const importadas = [];
+    const errores    = [];
+
+    for (const [idx, raw] of filasRaw.entries()) {
+      const filaNum = idx + 2;
+      const { valida, errores: errs, datos } = validarFila(raw);
+
+      if (!valida) {
+        errores.push({ fila: filaNum, errores: errs });
+        continue;
+      }
+
+      try {
+        let secuencial, estab, ptoEmi;
+
+        if (datos.parsedNum) {
+          // Respetar numeración original del sistema anterior
+          secuencial = datos.parsedNum.secuencial;
+          estab      = datos.parsedNum.estab;
+          ptoEmi     = datos.parsedNum.ptoEmi;
+          const seqNum = parseInt(secuencial, 10);
+          if (seqNum > secuencialAuto) secuencialAuto = seqNum;
+        } else {
+          // Asignar siguiente secuencial automático
+          secuencialAuto++;
+          secuencial = String(secuencialAuto).padStart(9, '0');
+          estab      = config.establecimiento;
+          ptoEmi     = config.puntoEmision;
+        }
+
+        // Clave de acceso: usar autorización del SRI si existe, sino generar
+        const claveAcceso = datos.numeroAutorizacion
+          ? datos.numeroAutorizacion
+          : sri.generarClaveAcceso({
+              fecha:    datos.fecha,
+              tipoCod:  '01',
+              ruc:      config.ruc,
+              ambiente: config.ambiente,
+              estab,
+              ptoEmi,
+              secuencial,
+            });
+
+        const numeroFactura = sri.formatearNumeroFactura(estab, ptoEmi, secuencial);
+
+        // Verificar unicidad de clave de acceso
+        const yaExiste = await db.facturas.findUnique({
+          where:  { claveAcceso },
+          select: { id: true, numeroFactura: true },
+        });
+        if (yaExiste) {
+          errores.push({
+            fila: filaNum,
+            errores: [`Ya existe la factura ${yaExiste.numeroFactura} con esta clave de acceso`],
+          });
+          continue;
+        }
+
+        const detalles     = construirDetalles(datos);
+        const estadoSri    = datos.numeroAutorizacion ? 'AUTORIZADO' : 'HISTORICO';
+
+        // Determinar subtotal5 vs subtotal15 según tasa de IVA histórica
+        const subtotal5  = datos.ivaPct === 5  ? datos.subtotalGravado : 0;
+        const subtotal15 = datos.ivaPct !== 5  ? datos.subtotalGravado : 0;
+
+        const creada = await db.facturas.create({
+          data: {
+            empresaId:                   req.empresa.id,
+            claveAcceso,
+            numeroFactura,
+            secuencial,
+            rucEmisor:                   config.ruc,
+            razonSocialEmisor:           config.razonSocial,
+            tipoIdentificacionComprador: datos.tipoId,
+            identificacionComprador:     datos.identificacion,
+            razonSocialComprador:        datos.razonSocial,
+            emailComprador:              datos.email,
+            fechaEmision:                datos.fecha,
+            subtotal0:                   datos.subtotalExento,
+            subtotal5,
+            subtotal15,
+            subtotalNoObjetoIva:         0,
+            totalDescuento:              0,
+            totalIva:                    datos.ivaTotal,
+            propina:                     0,
+            importeTotal:                datos.importeTotal,
+            detalles,
+            pagos: [{ formaPago: datos.formaPago, total: datos.importeTotal }],
+            estadoSri,
+            numeroAutorizacion:          datos.numeroAutorizacion || null,
+            origenRegistro:              'IMPORTACION',
+            observaciones:               datos.observaciones,
+            emisorId:                    req.usuario.id,
+          },
+          select: { id: true, numeroFactura: true, importeTotal: true, estadoSri: true, fechaEmision: true },
+        });
+
+        importadas.push({
+          fila:          filaNum,
+          id:            creada.id,
+          numeroFactura: creada.numeroFactura,
+          total:         parseFloat(creada.importeTotal),
+          estadoSri:     creada.estadoSri,
+        });
+      } catch (err) {
+        console.error(`[Importar] fila ${filaNum}:`, err.message);
+        errores.push({ fila: filaNum, errores: [err.message] });
+      }
+    }
+
+    await registrarAuditoria({
+      db,
+      usuarioId:   req.usuario.id,
+      empresaId:   req.empresa.id,
+      accion:      'IMPORTAR_FACTURAS_HISTORICAS',
+      tabla:       'facturas',
+      descripcion: `Importadas ${importadas.length} facturas históricas. Errores: ${errores.length}`,
+    });
+
+    res.json({
+      ok:        true,
+      importadas: importadas.length,
+      errores:    errores.length,
+      detalle:   { importadas, errores },
+    });
+  } catch (err) {
+    console.error('[Importar] error general:', err);
+    res.status(500).json({ ok: false, error: `Error en importación: ${err.message}` });
+  }
+});
+
 module.exports = router;

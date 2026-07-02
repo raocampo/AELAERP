@@ -18,6 +18,8 @@ const FIXES = [
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "sbuEcuador"           DECIMAL(8,2) NOT NULL DEFAULT 480.00`,
   // Actualizar SBU al valor 2025 en empresas que tengan aún el valor anterior
   `UPDATE "configuracion_sistema" SET "sbuEcuador" = 480.00 WHERE "sbuEcuador" = 460.00`,
+  // facturas — importación histórica
+  `ALTER TABLE "facturas" ADD COLUMN IF NOT EXISTS "origenRegistro" VARCHAR(30) NOT NULL DEFAULT 'MANUAL'`,
   // facturas_compra — columnas añadidas progresivamente
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "motivoAnulacion"       VARCHAR(500)`,
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "tipoGasto"             VARCHAR(30)`,
