@@ -71,7 +71,22 @@ const proteger = async (req, res, next) => {
       });
     }
 
-    req.empresa = empresa || { id: empresaIdActiva || 1, plan: process.env.AELA_EDITION || 'full', factAnualesMax: null };
+    if (!empresa) {
+      // Si el JWT/usuario apuntaba a una empresaId específica y no se pudo resolver
+      // NI esa empresa NI ninguna otra empresa activa, no inventamos un id falso
+      // (eso rompe cualquier create() con FK sobre empresaId — ver facturas_compra_empresaId_fkey).
+      // Se conserva el fallback a id=1 solo para instalaciones mono-empresa legítimas
+      // sin empresaId en el JWT ni en el usuario.
+      if (empresaIdActiva) {
+        return res.status(409).json({
+          success: false,
+          mensaje: 'Tu sesión hace referencia a una empresa que ya no existe o no está disponible. Cierra sesión y vuelve a iniciar.',
+          codigo: 'EMPRESA_NO_ENCONTRADA',
+        });
+      }
+      empresa = { id: 1, plan: process.env.AELA_EDITION || 'full', factAnualesMax: null };
+    }
+    req.empresa = empresa;
 
     // ── Trial expirado ───────────────────────────────────────────────────────
     if (req.empresa.esTrial && req.empresa.trialExpiresAt) {

@@ -25,6 +25,11 @@ const { execSync } = require('child_process');
 
 const SRI_BASE = 'https://srienlinea.sri.gob.ec';
 
+// Marcador de versión — permite confirmar en los logs de Railway qué build
+// del scraper está realmente corriendo (evita diagnósticos a ciegas si un
+// deploy no tomó el último commit).
+console.log('[SRI] sriScraper.js build 2026-07-01 — incluye hash MD5+SHA-512 (a581579)');
+
 // ─── Hash de contraseña para el portal SRI ───────────────────
 //
 //  El form de Keycloak del SRI ejecuta onsubmit="return validarUsuario();"
