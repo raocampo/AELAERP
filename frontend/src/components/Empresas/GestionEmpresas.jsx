@@ -573,9 +573,9 @@ export default function GestionEmpresas() {
                           onChange={handleChange} placeholder="Nombre completo" />
                       </div>
                       <div className="ge-field">
-                        <label>Cédula de la contadora</label>
+                        <label>RUC de la contadora</label>
                         <input className="ge-input" name="contadoraCedula" value={form.contadoraCedula}
-                          onChange={handleChange} placeholder="0000000000" maxLength={10} />
+                          onChange={handleChange} placeholder="0000000000001" maxLength={13} />
                       </div>
                       <div className="ge-field">
                         <label>Email de la contadora</label>
