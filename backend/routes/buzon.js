@@ -375,7 +375,7 @@ router.post('/importar', async (req, res) => {
         // Re-consultar SRI para obtener XML fresco
         const respSRI = await obtenerXmlDesdeAutorizacion(clave);
 
-        const resultado = await prisma.$transaction(async (tx) => {
+        const resultado = await req.prisma.$transaction(async (tx) => {
           return importarDocumentoRecibido({
             tx,
             empresaId,
@@ -458,7 +458,7 @@ router.post('/importar-zip', upload.single('archivo'), async (req, res) => {
       }
 
       try {
-        const resultado = await prisma.$transaction(async (tx) => {
+        const resultado = await req.prisma.$transaction(async (tx) => {
           return importarDocumentoRecibido({
             tx,
             empresaId,
@@ -530,7 +530,7 @@ router.post('/importar-xml', upload.array('archivos', MAX_CLAVES_LOTE), async (r
       }
 
       try {
-        const resultado = await prisma.$transaction(async (tx) => {
+        const resultado = await req.prisma.$transaction(async (tx) => {
           return importarDocumentoRecibido({
             tx, empresaId, usuarioId,
             tipoDoc: tipo.cod,
@@ -968,7 +968,7 @@ router.post('/sri-scraper/importar', async (req, res) => {
     for (const { clave, tipo } of porImportar) {
       try {
         const respSRI = await obtenerXmlDesdeAutorizacion(clave);
-        const resultado = await prisma.$transaction(async (tx) =>
+        const resultado = await req.prisma.$transaction(async (tx) =>
           importarDocumentoRecibido({
             tx, empresaId, usuarioId,
             tipoDoc: tipo.cod,
