@@ -312,12 +312,42 @@ router.post('/consultar', async (req, res) => {
   }
 });
 
+// ─── Validar que req.empresa.id existe realmente en BD ───────
+// Captura el caso en que el middleware cae al fallback { id: 1 }
+// cuando no puede resolver la empresa del JWT (Railway con código viejo).
+// Sin esta guardia el error llega como FK violation críptico de Prisma.
+async function _validarEmpresaActiva(req, res) {
+  const empresaId = req.empresa?.id;
+  const db = req.prisma || prisma;
+  if (!empresaId) {
+    res.status(409).json({
+      success: false,
+      mensaje: 'Tu sesión no tiene una empresa activa. Cierra sesión e inicia nuevamente.',
+      codigo: 'EMPRESA_NO_ENCONTRADA',
+    });
+    return false;
+  }
+  const existe = await db.empresas.findUnique({ where: { id: empresaId }, select: { id: true } });
+  if (!existe) {
+    console.warn(`[Buzón] empresaId=${empresaId} no existe en BD — JWT desactualizado (usuario=${req.usuario?.id})`);
+    res.status(409).json({
+      success: false,
+      mensaje: 'Tu sesión hace referencia a una empresa que no existe. Cierra sesión e inicia nuevamente para continuar.',
+      codigo: 'EMPRESA_NO_ENCONTRADA',
+    });
+    return false;
+  }
+  return true;
+}
+
 // ─── POST /importar ──────────────────────────────────────────
 router.post('/importar', async (req, res) => {
   try {
     const { items = [], opciones = {} } = req.body || {};
     const empresaId  = req.empresa.id;
     const usuarioId  = req.usuario?.id || null;
+
+    if (!await _validarEmpresaActiva(req, res)) return;
 
     if (items.length === 0) {
       return res.status(400).json({ success: false, mensaje: 'No se enviaron documentos a importar' });
@@ -388,6 +418,8 @@ router.post('/importar-zip', upload.single('archivo'), async (req, res) => {
     const empresaId = req.empresa.id;
     const usuarioId = req.usuario?.id || null;
     const opciones  = req.body?.opciones ? JSON.parse(req.body.opciones || '{}') : {};
+
+    if (!await _validarEmpresaActiva(req, res)) return;
 
     let zip;
     try {
@@ -474,6 +506,8 @@ router.post('/importar-xml', upload.array('archivos', MAX_CLAVES_LOTE), async (r
     const empresaId = req.empresa.id;
     const usuarioId = req.usuario?.id || null;
     const opciones  = req.body?.opciones ? JSON.parse(req.body.opciones || '{}') : {};
+
+    if (!await _validarEmpresaActiva(req, res)) return;
 
     const resultados = [];
 
