@@ -37,18 +37,51 @@ function detectarFormatoExterno(rows) {
 }
 
 const TIPO_EXTERNO_MAP = {
-  'ACTIVOS':          'ACTIVO',
-  'PASIVOS':          'PASIVO',
-  'PATRIMONIO NETO':  'PATRIMONIO',
-  'SECCION INGRESOS': 'INGRESO',
-  'SECCION COSTOS':   null, // se determina por código
+  'ACTIVOS':           'ACTIVO',
+  'ACTIVO':            'ACTIVO',
+  'PASIVOS':           'PASIVO',
+  'PASIVO':            'PASIVO',
+  'PATRIMONIO NETO':   'PATRIMONIO',
+  'PATRIMONIO':        'PATRIMONIO',
+  'CAPITAL Y RESERVAS':'PATRIMONIO',
+  'SECCION INGRESOS':  'INGRESO',
+  'INGRESOS':          'INGRESO',
+  'INGRESO':           'INGRESO',
+  'SECCION COSTOS':    null, // se determina por código
+  'COSTOS Y GASTOS':   null,
+  'GASTOS':            'GASTO',
+  'GASTO':             'GASTO',
+  'COSTOS':            'COSTO',
+  'COSTO':             'COSTO',
 };
+
+// Si el tipo no está en el mapa, intenta derivarlo del código de cuenta
+function derivarTipoDesdeCodigoExterno(codigo) {
+  const c = String(codigo).trim();
+  if (c.startsWith('1')) return 'ACTIVO';
+  if (c.startsWith('2')) return 'PASIVO';
+  if (c.startsWith('3')) return 'PATRIMONIO';
+  if (c.startsWith('4')) return 'INGRESO';
+  if (c.startsWith('51')) return 'COSTO';
+  if (c.startsWith('5')) return 'GASTO';
+  if (c.startsWith('6')) return 'COSTO';
+  return '';
+}
 
 function tipoDesdeExterno(tipo, codigo) {
   const t = String(tipo || '').toUpperCase().trim();
-  if (t !== 'SECCION COSTOS') return TIPO_EXTERNO_MAP[t] || '';
-  // 51xxx → COSTO (Costo de Ventas), resto → GASTO
-  return String(codigo).startsWith('51') ? 'COSTO' : 'GASTO';
+  // Sección de costos/gastos → derivar del código
+  if (t === 'SECCION COSTOS' || t === 'COSTOS Y GASTOS') {
+    return String(codigo).startsWith('51') ? 'COSTO' : 'GASTO';
+  }
+  // Buscar en el mapa exacto
+  if (TIPO_EXTERNO_MAP[t] !== undefined) return TIPO_EXTERNO_MAP[t] || derivarTipoDesdeCodigoExterno(codigo);
+  // Búsqueda parcial: "ACTIVOS CORRIENTES" → contiene "ACTIVO"
+  for (const [key, val] of Object.entries(TIPO_EXTERNO_MAP)) {
+    if (key && t.includes(key)) return val || derivarTipoDesdeCodigoExterno(codigo);
+  }
+  // Último recurso: derivar del código numérico
+  return derivarTipoDesdeCodigoExterno(codigo);
 }
 
 // Extrae el código numérico del campo Parent: "NOMBRE CUENTA 1010101" → "1010101"
@@ -61,10 +94,11 @@ function extraerCodigoPadre(parentStr) {
   return (ultimo && !isNaN(ultimo)) ? ultimo : null;
 }
 
+// rows ya vienen normalizados con mapearFila (claves: codigo, nombre, tipo, codigoPadre, aceptaMovimiento)
 function transformarDesdeExterno(rows) {
   // Índice por código para calcular nivel por recorrido ascendente
   const porCodigo = {};
-  rows.forEach((r) => { porCodigo[String(r.codigo).trim()] = r; });
+  rows.forEach((r) => { porCodigo[String(r.codigo || '').trim()] = r; });
 
   const nivelCache = {};
   const computing  = new Set(); // detección de ciclos
@@ -75,7 +109,8 @@ function transformarDesdeExterno(rows) {
     computing.add(cod);
     const row = porCodigo[cod];
     if (!row) { computing.delete(cod); nivelCache[cod] = 1; return 1; }
-    const padreCode = extraerCodigoPadre(row.Parent);
+    // codigoPadre viene del campo Parent del externo (ya normalizado por mapearFila)
+    const padreCode = extraerCodigoPadre(row.codigoPadre);
     // auto-referencia, padre inexistente o padre vacío → raíz
     if (!padreCode || padreCode === cod || !porCodigo[padreCode]) {
       computing.delete(cod); nivelCache[cod] = 1; return 1;
@@ -87,20 +122,23 @@ function transformarDesdeExterno(rows) {
   }
 
   return rows.map((r) => {
-    const codigo      = String(r.codigo).trim();
-    const codigoPadre = extraerCodigoPadre(r.Parent);
+    const codigo      = String(r.codigo || '').trim();
+    // codigoPadre: viene normalizado desde el campo Parent (formato "NOMBRE CUENTA 1010101")
+    const codigoPadre = extraerCodigoPadre(r.codigoPadre);
     const tipo        = tipoDesdeExterno(r.tipo, codigo);
     const nivel       = calcularNivel(codigo);
-    const acepta      = String(r.Esdetalle || '').toLowerCase() === 'activo' ? 'SI' : 'NO';
+    // aceptaMovimiento: viene del campo Esdetalle normalizado ('activo', 'si', 'yes', '1', etc.)
+    const aceptaStr   = String(r.aceptaMovimiento || '').toLowerCase();
+    const acepta      = ['activo', 'si', 'sí', 'yes', 'true', '1', 'x', 's'].includes(aceptaStr) ? 'SI' : 'NO';
 
     return {
       codigo,
-      nombre:           r.nombre,
+      nombre:            r.nombre,
       tipo,
-      codigoPadre,      // recogido por NORM_MAP → omite derivación por puntos
-      nivel,            // recogido por NORM_MAP → omite derivación por puntos
+      codigoPadre,       // recogido por NORM_MAP → omite derivación por puntos
+      nivel,             // recogido por NORM_MAP → omite derivación por puntos
       acepta_movimiento: acepta,
-      activo:           'SI',
+      activo:            'SI',
     };
   });
 }
@@ -142,8 +180,11 @@ function parsearBuffer(buffer) {
   const columnas = headers.filter((h) => h !== '');
 
   // Auto-detectar formato externo y transformar antes del parseo estándar
+  // Normalizar claves con mapearFila antes de pasar a transformarDesdeExterno,
+  // para que funcione independientemente del idioma/capitalización/puntuación de los headers
+  // (ej: "Cod" → codigo, "Tipo." → tipo, "Parent" → codigoPadre, "Esdetalle" → aceptaMovimiento)
   if (detectarFormatoExterno(rows)) {
-    return { rows: transformarDesdeExterno(rows), columnas };
+    return { rows: transformarDesdeExterno(rows.map(mapearFila)), columnas };
   }
   return { rows, columnas };
 }
