@@ -1,4 +1,5 @@
 const express = require('express');
+const multer  = require('multer');
 const PDFDocument = require('pdfkit');
 const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
@@ -6,6 +7,16 @@ const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { crearAsientoContable, crearAsientoNominaPeriodo, round2 } = require('../utils/contabilidad');
 const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
+const { parsearBuffer, parsearPlanCuentas, generarPlantillaPlanCuentas } = require('../utils/importarPlanCuentas');
+
+// Multer para importación de plan de cuentas (memoria, max 10 MB)
+const _uploadPC = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+function multerPlanCuentas(req, res, next) {
+  _uploadPC.single('archivo')(req, res, (err) => {
+    if (err) return res.status(400).json({ success: false, mensaje: err.message });
+    next();
+  });
+}
 
 const router = express.Router();
 
@@ -1041,6 +1052,113 @@ router.post('/plan-cuentas/semilla', async (req, res) => {
   } catch (error) {
     console.error('POST /contabilidad/plan-cuentas/semilla:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo instalar el plan de cuentas base' });
+  }
+});
+
+// GET /api/contabilidad/plan-cuentas/plantilla — descarga Excel de ejemplo
+router.get('/plan-cuentas/plantilla', async (req, res) => {
+  try {
+    const buffer = generarPlantillaPlanCuentas();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="plantilla-plan-cuentas.xlsx"');
+    res.send(buffer);
+  } catch (error) {
+    console.error('GET /contabilidad/plan-cuentas/plantilla:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo generar la plantilla' });
+  }
+});
+
+// POST /api/contabilidad/plan-cuentas/importar/preview — valida sin guardar
+router.post('/plan-cuentas/importar/preview', multerPlanCuentas, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, mensaje: 'No se recibió ningún archivo' });
+
+    let rows;
+    try {
+      rows = parsearBuffer(req.file.buffer);
+    } catch {
+      return res.status(400).json({ success: false, mensaje: 'El archivo no es un Excel válido (.xlsx o .xls)' });
+    }
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'El archivo está vacío o no contiene filas de datos' });
+    }
+
+    const resultados = parsearPlanCuentas(rows);
+    const validos    = resultados.filter((r) => r.estado === 'ok');
+    const errores    = resultados.filter((r) => r.estado === 'error');
+
+    res.json({
+      success: true,
+      data: { total: resultados.length, validos: validos.length, errores: errores.length, filas: resultados },
+    });
+  } catch (error) {
+    console.error('POST /contabilidad/plan-cuentas/importar/preview:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al procesar el archivo' });
+  }
+});
+
+// POST /api/contabilidad/plan-cuentas/importar/ejecutar — upsert en BD
+router.post('/plan-cuentas/importar/ejecutar', multerPlanCuentas, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, mensaje: 'No se recibió ningún archivo' });
+
+    const db        = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+
+    let rows;
+    try {
+      rows = parsearBuffer(req.file.buffer);
+    } catch {
+      return res.status(400).json({ success: false, mensaje: 'El archivo no es un Excel válido (.xlsx o .xls)' });
+    }
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'El archivo está vacío' });
+    }
+
+    const resultados = parsearPlanCuentas(rows);
+    const validos    = resultados.filter((r) => r.estado === 'ok');
+
+    if (validos.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'No hay filas válidas para importar' });
+    }
+
+    // Ordenar por código para que los padres se creen antes que los hijos
+    validos.sort((a, b) => a.data.codigo.localeCompare(b.data.codigo));
+
+    let creadas = 0;
+    let actualizadas = 0;
+    const erroresImport = [];
+
+    for (const item of validos) {
+      try {
+        const existente = await db.plan_cuentas.findFirst({
+          where: { empresaId, codigo: item.data.codigo },
+        });
+
+        const data = { empresaId, ...item.data };
+
+        if (existente) {
+          await db.plan_cuentas.update({ where: { id: existente.id }, data });
+          actualizadas++;
+        } else {
+          await db.plan_cuentas.create({ data });
+          creadas++;
+        }
+      } catch (err) {
+        erroresImport.push({ fila: item.fila, codigo: item.data.codigo, error: err.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      mensaje: `Importación completada: ${creadas} cuentas creadas, ${actualizadas} actualizadas${erroresImport.length ? `, ${erroresImport.length} con error` : ''}`,
+      data: { creadas, actualizadas, errores: erroresImport.length, erroresDetalle: erroresImport },
+    });
+  } catch (error) {
+    console.error('POST /contabilidad/plan-cuentas/importar/ejecutar:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al importar plan de cuentas' });
   }
 });
 

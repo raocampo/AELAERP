@@ -306,3 +306,136 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Importar Plan de Cuentas ──────────────────────────────────── */
+.conta-import-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.conta-import-header h3 {
+  margin: 0 0 2px;
+}
+
+.conta-import-header-btns {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.conta-import-sub {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.conta-import-body {
+  margin-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
+.conta-import-instruccion {
+  margin: 0 0 12px;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.conta-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 32px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.conta-dropzone:hover {
+  border-color: #22C55E;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.conta-dropzone-icon { font-size: 2rem; }
+
+.conta-dropzone-fname {
+  font-size: 0.8rem;
+  color: #22C55E;
+  font-weight: 600;
+}
+
+.conta-import-resumen {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
+.badge-ok    { background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 99px; font-size: 0.82rem; font-weight: 600; }
+.badge-error { background: #fee2e2; color: #991b1b; padding: 4px 10px; border-radius: 99px; font-size: 0.82rem; font-weight: 600; cursor: default; }
+.badge-total { background: #f1f5f9; color: #475569; padding: 4px 10px; border-radius: 99px; font-size: 0.82rem; }
+
+.conta-import-tabla-wrap {
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.conta-import-tabla { font-size: 0.82rem; }
+
+.conta-import-row-error td { background: #fff5f5; color: #991b1b; }
+.conta-import-row-error code { color: #991b1b; }
+
+.conta-import-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.conta-import-resultado {
+  padding: 16px;
+  background: #f0fdf4;
+  border-radius: 10px;
+  border: 1px solid #bbf7d0;
+}
+
+.conta-import-resultado-ok {
+  font-weight: 600;
+  color: #166534;
+  margin-bottom: 10px;
+  font-size: 1rem;
+}
+
+.conta-import-errores-lista {
+  font-size: 0.82rem;
+  color: #991b1b;
+  margin: 0 0 12px 0;
+  padding-left: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .conta-dropzone { border-color: #334155; color: #94a3b8; }
+  .conta-dropzone:hover { border-color: #22C55E; background: #052e16; color: #86efac; }
+  .badge-ok    { background: #052e16; color: #86efac; }
+  .badge-error { background: #450a0a; color: #fca5a5; }
+  .badge-total { background: #1e293b; color: #94a3b8; }
+  .conta-import-resultado { background: #052e16; border-color: #166534; }
+  .conta-import-resultado-ok { color: #86efac; }
+  .conta-import-errores-lista { color: #fca5a5; }
+  .conta-import-row-error td { background: #450a0a; color: #fca5a5; }
+}

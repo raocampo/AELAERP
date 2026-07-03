@@ -34,6 +34,8 @@ const ContabilidadHub = () => {
   const [planLoading, setPlanLoading] = useState(false);
   const [instalandoPlanBase, setInstalandoPlanBase] = useState(false);
   const [planFiltros, setPlanFiltros] = useState({ q: '', tipo: '', activo: 'todos', soloMovimiento: false });
+
+  const [importPC, setImportPC] = useState({ abierto: false, archivo: null, preview: null, loading: false, resultado: null });
   const [cuentaForm, setCuentaForm] = useState({
     id: null,
     codigo: '',
@@ -411,6 +413,49 @@ const ContabilidadHub = () => {
       toast.error(error.response?.data?.mensaje || 'No se pudo instalar el plan de cuentas base');
     } finally {
       setInstalandoPlanBase(false);
+    }
+  };
+
+  const descargarPlantillaPlan = async () => {
+    try {
+      const resp = await api.get('/contabilidad/plan-cuentas/plantilla', { responseType: 'blob' });
+      const url  = window.URL.createObjectURL(new Blob([resp.data]));
+      const link = document.createElement('a');
+      link.href  = url;
+      link.setAttribute('download', 'plantilla-plan-cuentas.xlsx');
+      document.body.appendChild(link); link.click(); link.remove();
+    } catch {
+      toast.error('No se pudo descargar la plantilla');
+    }
+  };
+
+  const previewImportPlan = async (archivo) => {
+    if (!archivo) return;
+    setImportPC((p) => ({ ...p, loading: true, preview: null, resultado: null }));
+    try {
+      const form = new FormData();
+      form.append('archivo', archivo);
+      const { data } = await api.post('/contabilidad/plan-cuentas/importar/preview', form);
+      setImportPC((p) => ({ ...p, loading: false, preview: data.data }));
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al procesar el archivo');
+      setImportPC((p) => ({ ...p, loading: false }));
+    }
+  };
+
+  const ejecutarImportPlan = async () => {
+    if (!importPC.archivo) return;
+    setImportPC((p) => ({ ...p, loading: true }));
+    try {
+      const form = new FormData();
+      form.append('archivo', importPC.archivo);
+      const { data } = await api.post('/contabilidad/plan-cuentas/importar/ejecutar', form);
+      setImportPC((p) => ({ ...p, loading: false, preview: null, archivo: null, resultado: data }));
+      toast.success(data.mensaje);
+      await cargarPlan();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al importar');
+      setImportPC((p) => ({ ...p, loading: false }));
     }
   };
 
@@ -1173,6 +1218,152 @@ const ContabilidadHub = () => {
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* ── Card: Importar plan de cuentas desde Excel ─────────────── */}
+          <div className="conta-card">
+            <div className="conta-import-header">
+              <div>
+                <h3>Importar plan de cuentas desde Excel</h3>
+                <p className="conta-import-sub">Carga masiva desde otro sistema o usando la plantilla descargable</p>
+              </div>
+              <div className="conta-import-header-btns">
+                <button className="btn-secondary" onClick={descargarPlantillaPlan}>
+                  ⬇ Descargar plantilla
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => setImportPC((p) => ({ ...p, abierto: !p.abierto, preview: null, resultado: null, archivo: null }))}
+                >
+                  {importPC.abierto ? 'Cerrar' : 'Abrir importador'}
+                </button>
+              </div>
+            </div>
+
+            {importPC.abierto && (
+              <div className="conta-import-body">
+                {/* Paso 1: seleccionar archivo */}
+                {!importPC.preview && !importPC.resultado && (
+                  <div className="conta-import-upload">
+                    <p className="conta-import-instruccion">
+                      1. Descarga la plantilla, llena el plan y vuelve a subir el archivo .xlsx
+                    </p>
+                    <label className="conta-dropzone">
+                      <input
+                        type="file"
+                        accept=".xlsx,.xls"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const f = e.target.files[0];
+                          if (f) {
+                            setImportPC((p) => ({ ...p, archivo: f }));
+                            previewImportPlan(f);
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                      <span className="conta-dropzone-icon">📂</span>
+                      <span>{importPC.loading ? 'Procesando…' : 'Haz clic para seleccionar archivo .xlsx'}</span>
+                      {importPC.archivo && !importPC.loading && (
+                        <span className="conta-dropzone-fname">{importPC.archivo.name}</span>
+                      )}
+                    </label>
+                  </div>
+                )}
+
+                {/* Loading */}
+                {importPC.loading && (
+                  <div className="conta-loading">Validando el archivo…</div>
+                )}
+
+                {/* Paso 2: vista previa */}
+                {importPC.preview && !importPC.loading && (
+                  <div className="conta-import-preview">
+                    <div className="conta-import-resumen">
+                      <span className="badge-ok">✓ {importPC.preview.validos} válidas</span>
+                      {importPC.preview.errores > 0 && (
+                        <span className="badge-error">✗ {importPC.preview.errores} con error</span>
+                      )}
+                      <span className="badge-total">Total: {importPC.preview.total} filas</span>
+                    </div>
+
+                    <div className="conta-import-tabla-wrap">
+                      <table className="conta-table conta-import-tabla">
+                        <thead>
+                          <tr>
+                            <th>Fila</th>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Tipo</th>
+                            <th>Nivel</th>
+                            <th>Mov.</th>
+                            <th>Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importPC.preview.filas.map((f) => (
+                            <tr key={f.fila} className={f.estado === 'error' ? 'conta-import-row-error' : ''}>
+                              <td>{f.fila}</td>
+                              <td><code>{f.codigo}</code></td>
+                              <td>{f.estado === 'ok' ? f.data.nombre : f.nombre}</td>
+                              <td>{f.estado === 'ok' ? f.data.tipo : '—'}</td>
+                              <td>{f.estado === 'ok' ? f.data.nivel : '—'}</td>
+                              <td>{f.estado === 'ok' ? (f.data.aceptaMovimiento ? 'Sí' : 'No') : '—'}</td>
+                              <td>
+                                {f.estado === 'ok'
+                                  ? <span className="badge-ok">✓ OK</span>
+                                  : <span className="badge-error" title={f.errores?.join(', ')}>✗ {f.errores?.[0]}</span>
+                                }
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="conta-import-actions">
+                      <button
+                        className="btn-secondary"
+                        onClick={() => setImportPC((p) => ({ ...p, preview: null, archivo: null }))}
+                      >
+                        ← Cambiar archivo
+                      </button>
+                      {importPC.preview.validos > 0 && (
+                        <button
+                          className="btn-primary"
+                          onClick={ejecutarImportPlan}
+                          disabled={importPC.loading}
+                        >
+                          Importar {importPC.preview.validos} cuenta{importPC.preview.validos !== 1 ? 's' : ''}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Paso 3: resultado */}
+                {importPC.resultado && !importPC.loading && (
+                  <div className="conta-import-resultado">
+                    <div className="conta-import-resultado-ok">
+                      ✅ {importPC.resultado.mensaje}
+                    </div>
+                    {importPC.resultado.data?.erroresDetalle?.length > 0 && (
+                      <ul className="conta-import-errores-lista">
+                        {importPC.resultado.data.erroresDetalle.map((e, i) => (
+                          <li key={i}>Fila {e.fila} ({e.codigo}): {e.error}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <button
+                      className="btn-secondary"
+                      onClick={() => setImportPC({ abierto: true, archivo: null, preview: null, loading: false, resultado: null })}
+                    >
+                      Importar otro archivo
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="conta-card">
