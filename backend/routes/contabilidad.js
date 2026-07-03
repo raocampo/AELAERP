@@ -1055,6 +1055,32 @@ router.post('/plan-cuentas/semilla', async (req, res) => {
   }
 });
 
+// GET /api/contabilidad/plan-cuentas/estado — detecta si el sistema arranca desde cero
+router.get('/plan-cuentas/estado', async (req, res) => {
+  try {
+    const db        = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+
+    const [totalCuentas, totalAsientos] = await Promise.all([
+      db.plan_cuentas.count({ where: { empresaId } }),
+      db.asientos_contables.count({ where: { empresaId } }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        planVacio:        totalCuentas === 0,
+        tieneMovimientos: totalAsientos > 0,
+        totalCuentas,
+        totalAsientos,
+      },
+    });
+  } catch (error) {
+    console.error('GET /contabilidad/plan-cuentas/estado:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al consultar estado del plan' });
+  }
+});
+
 // GET /api/contabilidad/plan-cuentas/plantilla — descarga Excel de ejemplo
 router.get('/plan-cuentas/plantilla', async (req, res) => {
   try {
@@ -1099,12 +1125,14 @@ router.post('/plan-cuentas/importar/preview', multerPlanCuentas, async (req, res
 });
 
 // POST /api/contabilidad/plan-cuentas/importar/ejecutar — upsert en BD
+// Form-data: archivo (xlsx), reemplazar ('true'|'false')
 router.post('/plan-cuentas/importar/ejecutar', multerPlanCuentas, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, mensaje: 'No se recibió ningún archivo' });
 
-    const db        = req.prisma;
-    const empresaId = obtenerEmpresaId(req);
+    const db         = req.prisma;
+    const empresaId  = obtenerEmpresaId(req);
+    const reemplazar = String(req.body?.reemplazar || '').toLowerCase() === 'true';
 
     let rows;
     try {
@@ -1124,10 +1152,46 @@ router.post('/plan-cuentas/importar/ejecutar', multerPlanCuentas, async (req, re
       return res.status(400).json({ success: false, mensaje: 'No hay filas válidas para importar' });
     }
 
-    // Ordenar por código para que los padres se creen antes que los hijos
+    // Ordenar por código (ascendente) → padres antes que hijos
     validos.sort((a, b) => a.data.codigo.localeCompare(b.data.codigo));
 
-    let creadas = 0;
+    let eliminadas   = 0;
+    const noEliminadas = []; // cuentas que no se pudieron borrar (tienen movimientos)
+
+    // ── Modo reemplazar: borrar cuentas que no están en el Excel ─────────────
+    if (reemplazar) {
+      const codigosExcel    = new Set(validos.map((v) => v.data.codigo));
+      const cuentasActuales = await db.plan_cuentas.findMany({
+        where: { empresaId },
+        select: { id: true, codigo: true, nombre: true },
+      });
+
+      // Eliminar en orden inverso (hijos antes que padres) para no violar jerarquía
+      const aEliminar = cuentasActuales
+        .filter((c) => !codigosExcel.has(c.codigo))
+        .sort((a, b) => b.codigo.localeCompare(a.codigo));
+
+      for (const cuenta of aEliminar) {
+        const tieneMovimientos = await db.asientos_contables_detalle.count({
+          where: { cuentaId: cuenta.id },
+        });
+
+        if (tieneMovimientos > 0) {
+          noEliminadas.push({ codigo: cuenta.codigo, nombre: cuenta.nombre, razon: 'tiene movimientos contables' });
+          continue;
+        }
+
+        try {
+          await db.plan_cuentas.delete({ where: { id: cuenta.id } });
+          eliminadas++;
+        } catch {
+          noEliminadas.push({ codigo: cuenta.codigo, nombre: cuenta.nombre, razon: 'referenciada por otros registros' });
+        }
+      }
+    }
+
+    // ── Upsert de cuentas del Excel ───────────────────────────────────────────
+    let creadas    = 0;
     let actualizadas = 0;
     const erroresImport = [];
 
@@ -1151,10 +1215,26 @@ router.post('/plan-cuentas/importar/ejecutar', multerPlanCuentas, async (req, re
       }
     }
 
+    // ── Mensaje final ─────────────────────────────────────────────────────────
+    const partes = [
+      `${creadas} cuentas creadas`,
+      actualizadas ? `${actualizadas} actualizadas` : null,
+      reemplazar && eliminadas ? `${eliminadas} eliminadas` : null,
+      reemplazar && noEliminadas.length ? `${noEliminadas.length} no eliminadas (tienen movimientos)` : null,
+      erroresImport.length ? `${erroresImport.length} con error` : null,
+    ].filter(Boolean);
+
     res.json({
       success: true,
-      mensaje: `Importación completada: ${creadas} cuentas creadas, ${actualizadas} actualizadas${erroresImport.length ? `, ${erroresImport.length} con error` : ''}`,
-      data: { creadas, actualizadas, errores: erroresImport.length, erroresDetalle: erroresImport },
+      mensaje: `Importación completada: ${partes.join(', ')}`,
+      data: {
+        creadas,
+        actualizadas,
+        eliminadas,
+        noEliminadas,
+        errores: erroresImport.length,
+        erroresDetalle: erroresImport,
+      },
     });
   } catch (error) {
     console.error('POST /contabilidad/plan-cuentas/importar/ejecutar:', error);

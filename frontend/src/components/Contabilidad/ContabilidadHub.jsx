@@ -35,7 +35,8 @@ const ContabilidadHub = () => {
   const [instalandoPlanBase, setInstalandoPlanBase] = useState(false);
   const [planFiltros, setPlanFiltros] = useState({ q: '', tipo: '', activo: 'todos', soloMovimiento: false });
 
-  const [importPC, setImportPC] = useState({ abierto: false, archivo: null, preview: null, loading: false, resultado: null });
+  const [importPC, setImportPC] = useState({ abierto: false, archivo: null, preview: null, loading: false, resultado: null, reemplazar: false });
+  const [estadoPlan, setEstadoPlan] = useState(null);
   const [cuentaForm, setCuentaForm] = useState({
     id: null,
     codigo: '',
@@ -110,6 +111,15 @@ const ContabilidadHub = () => {
       toast.error(error.response?.data?.mensaje || 'Error al cargar períodos contables');
     } finally {
       setLoadingPeriodos(false);
+    }
+  }, []);
+
+  const cargarEstadoPlan = useCallback(async () => {
+    try {
+      const res = await api.get('/contabilidad/plan-cuentas/estado');
+      setEstadoPlan(res.data?.data || null);
+    } catch {
+      // no bloquea el flujo
     }
   }, []);
 
@@ -267,6 +277,7 @@ const ContabilidadHub = () => {
     }
     if (tab === 'plan') {
       cargarPlan();
+      cargarEstadoPlan();
     }
     if (tab === 'diario') {
       cargarDiario();
@@ -286,7 +297,7 @@ const ContabilidadHub = () => {
     if (tab === 'cierre') {
       cargarEstadosFinancieros();
     }
-  }, [tab, periodos.length, plan.length, mayorFiltros.cuentaId, cargarPeriodos, cargarPlan, cargarDiario, cargarLibroMayor, cargarMayorizacionLote, cargarEstadosFinancieros]);
+  }, [tab, periodos.length, plan.length, mayorFiltros.cuentaId, cargarPeriodos, cargarPlan, cargarEstadoPlan, cargarDiario, cargarLibroMayor, cargarMayorizacionLote, cargarEstadosFinancieros]);
 
   const guardarPeriodo = async (e) => {
     e.preventDefault();
@@ -449,10 +460,12 @@ const ContabilidadHub = () => {
     try {
       const form = new FormData();
       form.append('archivo', importPC.archivo);
+      form.append('reemplazar', String(importPC.reemplazar));
       const { data } = await api.post('/contabilidad/plan-cuentas/importar/ejecutar', form);
       setImportPC((p) => ({ ...p, loading: false, preview: null, archivo: null, resultado: data }));
       toast.success(data.mensaje);
       await cargarPlan();
+      await cargarEstadoPlan();
     } catch (err) {
       toast.error(err.response?.data?.mensaje || 'Error al importar');
       setImportPC((p) => ({ ...p, loading: false }));
@@ -1242,6 +1255,29 @@ const ContabilidadHub = () => {
 
             {importPC.abierto && (
               <div className="conta-import-body">
+                {/* Banner contextual: estado del sistema */}
+                {estadoPlan && (
+                  <div className={`conta-import-banner ${estadoPlan.planVacio ? 'banner-inicio' : estadoPlan.tieneMovimientos ? 'banner-uso' : 'banner-vacio'}`}>
+                    {estadoPlan.planVacio ? (
+                      <>
+                        <strong>Inicio desde cero</strong> — Esta empresa aún no tiene plan de cuentas.
+                        Puede importar el plan completo desde Excel o usar el plan base AELA.
+                        Se recomienda usar el modo <em>Reemplazar plan completo</em>.
+                      </>
+                    ) : estadoPlan.tieneMovimientos ? (
+                      <>
+                        <strong>Sistema en operación</strong> — El plan tiene {estadoPlan.totalCuentas} cuentas y {estadoPlan.totalAsientos} asientos contables.
+                        Solo podrá agregar cuentas nuevas o eliminar las que no tengan movimientos.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Plan sin movimientos</strong> — El plan tiene {estadoPlan.totalCuentas} cuentas pero aún no hay asientos contables.
+                        Puede reemplazar el plan completo sin restricciones.
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {/* Paso 1: seleccionar archivo */}
                 {!importPC.preview && !importPC.resultado && (
                   <div className="conta-import-upload">
@@ -1287,6 +1323,32 @@ const ContabilidadHub = () => {
                       <span className="badge-total">Total: {importPC.preview.total} filas</span>
                     </div>
 
+                    {/* Opción reemplazar */}
+                    {estadoPlan && !estadoPlan.planVacio && (
+                      <div className={`conta-import-reemplazar ${importPC.reemplazar ? 'activo' : ''}`}>
+                        <label className="conta-check-row">
+                          <input
+                            type="checkbox"
+                            checked={importPC.reemplazar}
+                            onChange={(e) => setImportPC((p) => ({ ...p, reemplazar: e.target.checked }))}
+                          />
+                          <strong>Reemplazar plan completo</strong>
+                          {' '}— las cuentas del plan actual que NO estén en este Excel serán eliminadas
+                          {estadoPlan.tieneMovimientos && (
+                            <span className="conta-import-reemplazar-warn">
+                              {' '}(las cuentas con movimientos contables se conservarán)
+                            </span>
+                          )}
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Auto-activar reemplazar si plan vacío (inicio desde cero) */}
+                    {estadoPlan?.planVacio && importPC.reemplazar === false && (
+                      // inicio desde cero: el reemplazar no aplica (no hay nada que borrar)
+                      null
+                    )}
+
                     <div className="conta-import-tabla-wrap">
                       <table className="conta-table conta-import-tabla">
                         <thead>
@@ -1324,7 +1386,7 @@ const ContabilidadHub = () => {
                     <div className="conta-import-actions">
                       <button
                         className="btn-secondary"
-                        onClick={() => setImportPC((p) => ({ ...p, preview: null, archivo: null }))}
+                        onClick={() => setImportPC((p) => ({ ...p, preview: null, archivo: null, reemplazar: false }))}
                       >
                         ← Cambiar archivo
                       </button>
@@ -1334,7 +1396,10 @@ const ContabilidadHub = () => {
                           onClick={ejecutarImportPlan}
                           disabled={importPC.loading}
                         >
-                          Importar {importPC.preview.validos} cuenta{importPC.preview.validos !== 1 ? 's' : ''}
+                          {importPC.reemplazar
+                            ? `Reemplazar plan (${importPC.preview.validos} cuentas)`
+                            : `Importar ${importPC.preview.validos} cuenta${importPC.preview.validos !== 1 ? 's' : ''}`
+                          }
                         </button>
                       )}
                     </div>
@@ -1347,6 +1412,21 @@ const ContabilidadHub = () => {
                     <div className="conta-import-resultado-ok">
                       ✅ {importPC.resultado.mensaje}
                     </div>
+                    {importPC.resultado.data?.eliminadas > 0 && (
+                      <div className="conta-import-resultado-info">
+                        🗑 {importPC.resultado.data.eliminadas} cuentas del plan anterior eliminadas
+                      </div>
+                    )}
+                    {importPC.resultado.data?.noEliminadas?.length > 0 && (
+                      <div className="conta-import-resultado-warn">
+                        <strong>⚠ {importPC.resultado.data.noEliminadas.length} cuentas conservadas</strong> (tienen movimientos contables):
+                        <ul className="conta-import-errores-lista">
+                          {importPC.resultado.data.noEliminadas.map((c, i) => (
+                            <li key={i}>{c.codigo} — {c.nombre} ({c.razon})</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     {importPC.resultado.data?.erroresDetalle?.length > 0 && (
                       <ul className="conta-import-errores-lista">
                         {importPC.resultado.data.erroresDetalle.map((e, i) => (
@@ -1356,7 +1436,7 @@ const ContabilidadHub = () => {
                     )}
                     <button
                       className="btn-secondary"
-                      onClick={() => setImportPC({ abierto: true, archivo: null, preview: null, loading: false, resultado: null })}
+                      onClick={() => setImportPC({ abierto: true, archivo: null, preview: null, loading: false, resultado: null, reemplazar: false })}
                     >
                       Importar otro archivo
                     </button>
