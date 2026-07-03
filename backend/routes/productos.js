@@ -144,7 +144,7 @@ router.post('/importacion/excel', permitirGestionarProductos, checkLimiteProduct
 
     const registrarEntradaInventario = String(req.body?.registrarEntradaInventario || 'false') === 'true';
 
-    const resultado = await prisma.$transaction(async (tx) => importarProductos({
+    const resultado = await req.prisma.$transaction(async (tx) => importarProductos({
       tx,
       empresaId: req.empresa.id,
       usuarioId: req.usuario.id,
@@ -182,7 +182,7 @@ router.post('/importacion/xml', permitirGestionarProductos, upload.single('archi
     }
 
     const registrarEntradaInventario = String(req.body?.registrarEntradaInventario || 'false') === 'true';
-    const resultado = await prisma.$transaction(async (tx) => importarProductos({
+    const resultado = await req.prisma.$transaction(async (tx) => importarProductos({
       tx,
       empresaId: req.empresa.id,
       usuarioId: req.usuario.id,

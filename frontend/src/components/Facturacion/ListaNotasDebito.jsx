@@ -5,12 +5,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import { IcPDF, IcReenviar, IcAnular } from '../../utils/icons';
 import './ListaNotasDebito.css';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 
 const BADGE = {
   PENDIENTE_FIRMA:        { label: 'Pendiente Firma',  cls: 'badge-warning' },
@@ -40,12 +38,8 @@ export default function ListaNotasDebito() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
       const params = { page: pg, limit: 15, ...filtros };
-      const { data } = await axios.get(`${API}/notas-debito`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params,
-      });
+      const { data } = await api.get('/notas-debito', { params });
       setItems(data.data || []);
       setTotal(data.total || 0);
       setPages(data.pages || 1);
@@ -63,10 +57,7 @@ export default function ListaNotasDebito() {
 
   const reenviar = async (id) => {
     try {
-      const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-      await axios.post(`${API}/notas-debito/${id}/reenviar`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.post(`/notas-debito/${id}/reenviar`, {});
       cargar(page);
     } catch (err) {
       alert(err.response?.data?.mensaje || 'Error al reenviar');
@@ -77,11 +68,7 @@ export default function ListaNotasDebito() {
     const motivo = prompt('Motivo de anulación:');
     if (!motivo) return;
     try {
-      const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-      await axios.delete(`${API}/notas-debito/${id}/anular`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { motivo },
-      });
+      await api.delete(`/notas-debito/${id}/anular`, { data: { motivo } });
       cargar(page);
     } catch (err) {
       alert(err.response?.data?.mensaje || 'Error al anular');

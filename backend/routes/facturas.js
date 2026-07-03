@@ -75,17 +75,18 @@ const uploadLogo = multer({
 });
 
 // ─── Helper: obtener configuración SRI activa ────────────────────────────────
-async function getConfigSRI(empresaId) {
-  return prisma.configuracion_sri.findFirst({
+// db opcional: pasa req.prisma en rutas con multer para evitar pérdida de AsyncLocalStorage
+async function getConfigSRI(empresaId, db = prisma) {
+  return db.configuracion_sri.findFirst({
     where: { empresaId, activo: true },
   });
 }
 
-async function getConfigSRIEditable(empresaId) {
-  const existente = await getConfigSRI(empresaId);
+async function getConfigSRIEditable(empresaId, db = prisma) {
+  const existente = await getConfigSRI(empresaId, db);
   if (existente) return existente;
 
-  const empresa = await prisma.empresas.findUnique({
+  const empresa = await db.empresas.findUnique({
     where: { id: empresaId },
   });
   if (!empresa) return null;
@@ -567,7 +568,8 @@ router.put('/configuracion', permitirConfigurarSri, async (req, res) => {
 router.post('/configuracion/logo', permitirConfigurarSri, uploadLogo.single('logo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió imagen' });
   try {
-    const config = await getConfigSRI(req.empresa.id);
+    const db = req.prisma;
+    const config = await getConfigSRI(req.empresa.id, db);
     if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
 
     // Construir data URI directamente desde el buffer en memoria
@@ -575,7 +577,7 @@ router.post('/configuracion/logo', permitirConfigurarSri, uploadLogo.single('log
     const b64     = req.file.buffer.toString('base64');
     const logoUrl = `data:${mime};base64,${b64}`;
 
-    await prisma.configuracion_sri.update({ where: { id: config.id }, data: { logoUrl } });
+    await db.configuracion_sri.update({ where: { id: config.id }, data: { logoUrl } });
     res.json({ ok: true, data: { logoUrl } });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -586,10 +588,11 @@ router.post('/configuracion/logo', permitirConfigurarSri, uploadLogo.single('log
 router.post('/configuracion/firma', permitirConfigurarSri, uploadLogo.single('firma'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió imagen' });
   try {
-    const config = await getConfigSRI(req.empresa.id);
+    const db = req.prisma;
+    const config = await getConfigSRI(req.empresa.id, db);
     if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
     const firmaUrl = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
-    await prisma.configuracion_sri.update({ where: { id: config.id }, data: { firmaUrl } });
+    await db.configuracion_sri.update({ where: { id: config.id }, data: { firmaUrl } });
     res.json({ ok: true, data: { firmaUrl } });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -600,10 +603,11 @@ router.post('/configuracion/firma', permitirConfigurarSri, uploadLogo.single('fi
 router.post('/configuracion/sello', permitirConfigurarSri, uploadLogo.single('sello'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió imagen' });
   try {
-    const config = await getConfigSRI(req.empresa.id);
+    const db = req.prisma;
+    const config = await getConfigSRI(req.empresa.id, db);
     if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
     const selloUrl = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
-    await prisma.configuracion_sri.update({ where: { id: config.id }, data: { selloUrl } });
+    await db.configuracion_sri.update({ where: { id: config.id }, data: { selloUrl } });
     res.json({ ok: true, data: { selloUrl } });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -615,7 +619,8 @@ router.post('/configuracion/certificado', permitirConfigurarSri, uploadCert.sing
   if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió archivo .p12' });
 
   try {
-    const config = await getConfigSRI(req.empresa.id);
+    const db = req.prisma;
+    const config = await getConfigSRI(req.empresa.id, db);
     if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
 
     // Eliminar certificado anterior
@@ -636,7 +641,7 @@ router.post('/configuracion/certificado', permitirConfigurarSri, uploadCert.sing
       return res.status(400).json({ ok: false, error: `El archivo .p12 no se pudo leer: ${certInfoPreview.error || 'formato inválido'}` });
     }
 
-    await prisma.configuracion_sri.update({
+    await db.configuracion_sri.update({
       where: { id: config.id },
       data: {
         certificadoP12:     req.file.path,

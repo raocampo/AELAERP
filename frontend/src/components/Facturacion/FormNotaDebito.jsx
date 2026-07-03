@@ -5,10 +5,8 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../services/api';
 import './FormNotaDebito.css';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 
 const TIPOS_ID = [
   { value: '04', label: 'RUC' },
@@ -70,12 +68,9 @@ export default function FormNotaDebito() {
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-      await axios.post(`${API}/notas-debito`, {
+      await api.post('/notas-debito', {
         ...form,
         motivos: motivos.map((m) => ({ razon: m.razon, valor: parseFloat(m.valor) })),
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
       });
       navigate('/notas-debito');
     } catch (err) {

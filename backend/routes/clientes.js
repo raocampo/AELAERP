@@ -441,6 +441,7 @@ router.post('/importar-excel', proteger, upload.single('archivo'), async (req, r
       return res.status(400).json({ success: false, mensaje: 'No se recibió ningún archivo' });
     }
 
+    const db = req.prisma;
     const empresaId = req.empresa.id;
     let rows;
     try {
@@ -465,7 +466,7 @@ router.post('/importar-excel', proteger, upload.single('archivo'), async (req, r
       upsertDirectorio({ ...item.data, fuente: 'importacion' });
 
       try {
-        const existe = await prisma.clientes.findFirst({
+        const existe = await db.clientes.findFirst({
           where: { empresaId, identificacion: item.data.identificacion },
           select: { id: true },
         });
@@ -475,7 +476,7 @@ router.post('/importar-excel', proteger, upload.single('archivo'), async (req, r
           continue;
         }
 
-        await prisma.clientes.create({ data: { ...item.data, empresaId } });
+        await db.clientes.create({ data: { ...item.data, empresaId } });
         resultados.push({ fila: item.fila, identificacion: item.data.identificacion, razonSocial: item.data.razonSocial, estado: 'creado' });
       } catch (err) {
         resultados.push({ fila: item.fila, identificacion: item.data.identificacion, razonSocial: item.data.razonSocial, estado: 'error', motivo: err.message });

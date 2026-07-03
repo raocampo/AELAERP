@@ -5,20 +5,15 @@
 // ====================================
 
 import { useState, useCallback } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import './ReportesTributarios.css';
 import { buildDataTable, buildKvTable, printHtmlReport } from '../../utils/reportPrint';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
-
 async function obtenerEmpresaParaReporte() {
   const stored = JSON.parse(localStorage.getItem('aela_empresa') || '{}');
   try {
-    const token = localStorage.getItem('token');
-    const { data: cfg } = await axios.get(`${API}/facturas/configuracion`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const { data: cfg } = await api.get('/facturas/configuracion');
     return {
       razonSocial: cfg.data?.razonSocial || stored.razonSocial || '',
       ruc:         cfg.data?.ruc         || stored.ruc         || '',
@@ -51,10 +46,8 @@ export default function ReportesTributarios() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('token');
-      const { data: resp } = await axios.get(`${API}/facturas/reportes/tributario`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params:  { mes: parseInt(mes), anio: parseInt(anio) },
+      const { data: resp } = await api.get('/facturas/reportes/tributario', {
+        params: { mes: parseInt(mes), anio: parseInt(anio) },
       });
       setData(resp.data);
     } catch (err) {

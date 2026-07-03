@@ -4,20 +4,15 @@
 // ====================================
 
 import { useState, useCallback } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import './ATS.css';
 import { buildDataTable, buildKvTable, printHtmlReport } from '../../utils/reportPrint';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
-
 async function obtenerEmpresaParaReporte() {
   const stored = JSON.parse(localStorage.getItem('aela_empresa') || '{}');
   try {
-    const token = localStorage.getItem('token');
-    const { data: cfg } = await axios.get(`${API}/facturas/configuracion`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const { data: cfg } = await api.get('/facturas/configuracion');
     return {
       razonSocial: cfg.data?.razonSocial || stored.razonSocial || '',
       ruc:         cfg.data?.ruc         || stored.ruc         || '',
@@ -61,10 +56,8 @@ export default function ATS() {
     setError('');
     setData(null);
     try {
-      const token = localStorage.getItem('token');
-      const { data: resp } = await axios.get(`${API}/ats/preview`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params:  { mes: parseInt(mes), anio: parseInt(anio) },
+      const { data: resp } = await api.get('/ats/preview', {
+        params: { mes: parseInt(mes), anio: parseInt(anio) },
       });
       setData(resp.data);
     } catch (err) {
@@ -77,9 +70,7 @@ export default function ATS() {
   const descargarXML = async () => {
     setDescargando(true);
     try {
-      const token = localStorage.getItem('token');
-      const resp  = await axios.get(`${API}/ats/exportar`, {
-        headers:      { Authorization: `Bearer ${token}` },
+      const resp = await api.get('/ats/exportar', {
         params:       { mes: parseInt(mes), anio: parseInt(anio) },
         responseType: 'blob',
       });

@@ -5,10 +5,8 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../services/api';
 import './FormLiquidacion.css';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 
 const hoy = () => {
   const d = new Date();
@@ -45,8 +43,6 @@ const calcLinea = (det) => {
 
 export default function FormLiquidacion() {
   const navigate = useNavigate();
-  const token   = localStorage.getItem('token');
-  const headers = { Authorization: `Bearer ${token}` };
 
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
@@ -126,7 +122,7 @@ export default function FormLiquidacion() {
         pagos: [{ formaPago: form.formaPago, total: importeTotal.toFixed(2) }],
       };
 
-      const { data } = await axios.post(`${API}/liquidaciones`, payload, { headers });
+      const { data } = await api.post('/liquidaciones', payload);
       setGuardado(data.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Error al emitir la liquidación');
@@ -139,9 +135,7 @@ export default function FormLiquidacion() {
   if (guardado) {
     const descargarPDF = async () => {
       try {
-        const resp = await axios.get(`${API}/liquidaciones/${guardado.id}/pdf`, {
-          headers, responseType: 'blob',
-        });
+        const resp = await api.get(`/liquidaciones/${guardado.id}/pdf`, { responseType: 'blob' });
         const url  = window.URL.createObjectURL(new Blob([resp.data], { type: 'application/pdf' }));
         const link = document.createElement('a');
         link.href  = url;
