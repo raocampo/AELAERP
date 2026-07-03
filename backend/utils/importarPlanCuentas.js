@@ -28,11 +28,93 @@ function derivarNaturaleza(tipo) {
   return 'DEBITO'; // ACTIVO, GASTO, COSTO
 }
 
+// ─── Detección y transformación de formato externo ─────────────────────────
+// Detecta si el Excel viene de otro sistema (columnas Parent + Esdetalle)
+function detectarFormatoExterno(rows) {
+  if (!rows || rows.length === 0) return false;
+  const keys = Object.keys(rows[0]).map((k) => k.toLowerCase());
+  return keys.includes('parent') && keys.includes('esdetalle');
+}
+
+const TIPO_EXTERNO_MAP = {
+  'ACTIVOS':          'ACTIVO',
+  'PASIVOS':          'PASIVO',
+  'PATRIMONIO NETO':  'PATRIMONIO',
+  'SECCION INGRESOS': 'INGRESO',
+  'SECCION COSTOS':   null, // se determina por código
+};
+
+function tipoDesdeExterno(tipo, codigo) {
+  const t = String(tipo || '').toUpperCase().trim();
+  if (t !== 'SECCION COSTOS') return TIPO_EXTERNO_MAP[t] || '';
+  // 51xxx → COSTO (Costo de Ventas), resto → GASTO
+  return String(codigo).startsWith('51') ? 'COSTO' : 'GASTO';
+}
+
+// Extrae el código numérico del campo Parent: "NOMBRE CUENTA 1010101" → "1010101"
+function extraerCodigoPadre(parentStr) {
+  const s = String(parentStr || '').trim();
+  if (!s) return null;
+  const partes = s.split(' ').filter((p) => p.trim() !== '');
+  if (partes.length === 0) return null;
+  const ultimo = partes[partes.length - 1].trim();
+  return (ultimo && !isNaN(ultimo)) ? ultimo : null;
+}
+
+function transformarDesdeExterno(rows) {
+  // Índice por código para calcular nivel por recorrido ascendente
+  const porCodigo = {};
+  rows.forEach((r) => { porCodigo[String(r.codigo).trim()] = r; });
+
+  const nivelCache = {};
+  const computing  = new Set(); // detección de ciclos
+  function calcularNivel(codigo) {
+    const cod = String(codigo).trim();
+    if (nivelCache[cod] !== undefined) return nivelCache[cod];
+    if (computing.has(cod)) { nivelCache[cod] = 1; return 1; } // ciclo → raíz
+    computing.add(cod);
+    const row = porCodigo[cod];
+    if (!row) { computing.delete(cod); nivelCache[cod] = 1; return 1; }
+    const padreCode = extraerCodigoPadre(row.Parent);
+    // auto-referencia, padre inexistente o padre vacío → raíz
+    if (!padreCode || padreCode === cod || !porCodigo[padreCode]) {
+      computing.delete(cod); nivelCache[cod] = 1; return 1;
+    }
+    const n = 1 + calcularNivel(padreCode);
+    computing.delete(cod);
+    nivelCache[cod] = n;
+    return n;
+  }
+
+  return rows.map((r) => {
+    const codigo      = String(r.codigo).trim();
+    const codigoPadre = extraerCodigoPadre(r.Parent);
+    const tipo        = tipoDesdeExterno(r.tipo, codigo);
+    const nivel       = calcularNivel(codigo);
+    const acepta      = String(r.Esdetalle || '').toLowerCase() === 'activo' ? 'SI' : 'NO';
+
+    return {
+      codigo,
+      nombre:           r.nombre,
+      tipo,
+      codigoPadre,      // recogido por NORM_MAP → omite derivación por puntos
+      nivel,            // recogido por NORM_MAP → omite derivación por puntos
+      acepta_movimiento: acepta,
+      activo:           'SI',
+    };
+  });
+}
+
 // ─── Parsear buffer Excel → filas planas ────────────────────────────────────
 function parsearBuffer(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: '' });
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  // Auto-detectar formato externo y transformar antes del parseo estándar
+  if (detectarFormatoExterno(rows)) {
+    return transformarDesdeExterno(rows);
+  }
+  return rows;
 }
 
 // ─── Normalizar clave de encabezado ─────────────────────────────────────────
@@ -43,6 +125,8 @@ const NORM_MAP = {
   naturaleza:       ['naturaleza', 'saldo', 'debcred', 'deb_cred', 'tipo_saldo'],
   aceptaMovimiento: ['aceptamovimiento', 'acepta_movimiento', 'acepta movimiento', 'movimiento', 'mov', 'auxiliar', 'detalle'],
   activo:           ['activo', 'active', 'estado', 'habilitado', 'vigente'],
+  nivel:            ['nivel', 'level'],
+  codigoPadre:      ['codigopadre', 'codigo_padre', 'cuenta_padre', 'parent_code'],
 };
 
 function normalizarClave(clave) {
@@ -102,9 +186,10 @@ function parsearPlanCuentas(rows) {
       return;
     }
 
-    // Derivar campos opcionales
-    const nivel = derivarNivel(codigo);
-    const codigoPadre = derivarPadre(codigo);
+    // Derivar campos opcionales (usar valor pre-computado si viene de transformación externa)
+    const nivelRaw = m.nivel !== undefined ? parseInt(String(m.nivel), 10) : null;
+    const nivel = (nivelRaw && nivelRaw >= 1) ? nivelRaw : derivarNivel(codigo);
+    const codigoPadre = (m.codigoPadre !== undefined) ? (m.codigoPadre || null) : derivarPadre(codigo);
 
     let naturaleza = String(m.naturaleza || '').trim().toUpperCase();
     if (!['DEBITO', 'CREDITO'].includes(naturaleza)) {
