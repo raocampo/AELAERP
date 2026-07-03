@@ -364,6 +364,13 @@ Ver `docs/pendientes-2026-07-03.md` para detalle completo.
 - Diagnóstico visible: muestra columnas detectadas cuando todas las filas fallan
 - Fix CSS: `}` sobrante eliminado en `.conta-dropzone-hint`
 
+#### Fix importación — formato externo con headers no estándar (`de905b2`)
+- `parsearBuffer` aplica `mapearFila()` antes de `transformarDesdeExterno` para normalizar
+  cualquier capitalización/puntuación: `Cod→codigo`, `Tipo.→tipo`, `Parent→codigoPadre`
+- `TIPO_EXTERNO_MAP` ampliado + búsqueda parcial + fallback por código numérico
+- `acepta_movimiento` acepta `'activo'`, `'si'`, `'yes'`, `'1'`, `'x'`
+- Resuelve: 427 filas `undefined` al importar formato externo `Cod/Nombre/Tipo./Parent/Esdetalle`
+
 #### Principios de diseño ERP contable (documentados)
 5 principios compartidos por el usuario para guiar la arquitectura contable futura:
 cuentas de control, mapeo SRI, POS+inventario permanente, centros de costo, provisiones RRHH.

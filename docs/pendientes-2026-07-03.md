@@ -6,7 +6,7 @@ Sesión con dos frentes: (1) auditoría sistemática de aislamiento multi-tenant
 backend y frontend pendiente, y (2) módulo completo de Plan de Cuentas — importación
 inteligente, reemplazo, Supercias NIIF, arrastre de archivos y diagnóstico de formato.
 
-Commits pusheados: `4d1e3a4`, `4b5b59e`, `bb2ea49`, `2a03852`, `3340ac8`, `9ef752e`
+Commits pusheados: `4d1e3a4`, `4b5b59e`, `bb2ea49`, `2a03852`, `3340ac8`, `9ef752e`, `de905b2`
 
 ---
 
@@ -115,6 +115,37 @@ que generaba error de sintaxis CSS silencioso.
 
 ---
 
+### Fix — Importar formato externo con headers no estándar (`de905b2`)
+
+**Problema detectado en producción** (Consorcio Vial — columnas `Cod · Nombre · Tipo. · Parent · Esdetalle`):
+
+El sistema detectaba correctamente el formato externo (tenía `Parent` y `Esdetalle`), pero
+`transformarDesdeExterno` accedía directamente a `r.codigo`, `r.nombre`, `r.tipo` con los
+nombres exactos del sistema interno — que NO coincidían con `Cod`, `Nombre`, `Tipo.`:
+- `r.codigo` → `undefined` (columna real: `Cod`)
+- `r.nombre` → `undefined` (columna real: `Nombre` con mayúscula)
+- `r.tipo`   → `undefined` (columna real: `Tipo.` con punto al final)
+- `r.Parent` y `r.Esdetalle` → SÍ funcionaban (coincidencia exacta)
+
+**Fix:**
+- `parsearBuffer` ahora aplica `mapearFila()` a cada fila ANTES de `transformarDesdeExterno`
+- Tras normalización: `Cod→codigo`, `Nombre→nombre`, `Tipo.→tipo`, `Parent→codigoPadre`, `Esdetalle→aceptaMovimiento`
+- `transformarDesdeExterno` actualizado para usar los nombres normalizados (`r.codigoPadre`, `r.aceptaMovimiento`)
+
+**`TIPO_EXTERNO_MAP` ampliado** con variantes adicionales:
+- Formas singulares: `ACTIVO`, `PASIVO`, `PATRIMONIO`, `INGRESO`, `GASTO`, `COSTO`
+- Variantes: `CAPITAL Y RESERVAS`, `COSTOS Y GASTOS`, `INGRESOS`, `GASTOS`
+- Búsqueda parcial: "ACTIVOS CORRIENTES" → contiene "ACTIVO" → mapea a `ACTIVO`
+- Fallback: `derivarTipoDesdeCodigoExterno(codigo)` — deriva del prefijo numérico
+
+**`acepta_movimiento` más robusto:**
+Ahora acepta `'activo'`, `'si'`, `'yes'`, `'1'`, `'x'`, `'s'` — no solo la cadena `'activo'`
+
+**Resultado:** el Excel de formato externo con columnas `Cod/Nombre/Tipo./Parent/Esdetalle`
+ahora importa correctamente las 427 cuentas.
+
+---
+
 ### Documentación — Principios de diseño ERP contable
 
 El usuario compartió 5 principios fundamentales para el diseño del módulo contable.
@@ -135,16 +166,19 @@ Guardados en `memory/feedback_erp_contabilidad_design.md` y resumidos aquí:
 
 ## 🔴 PENDIENTES CRÍTICOS — Verificar desde casa
 
-### 1. Confirmar importación plan de cuentas con el Excel del Consorcio Vial
+### 1. Confirmar importación plan de cuentas con el Excel del Consorcio Vial ← PENDIENTE VERIFICAR
 
-Volver a subir el mismo archivo Excel en:
-`Contabilidad → Plan de Cuentas → Importar plan de cuentas desde Excel`
+El fix `de905b2` resuelve el problema de las 427 filas con `undefined`. Volver a subir el mismo
+archivo en `Contabilidad → Plan de Cuentas → Importar plan de cuentas desde Excel`.
 
-**Resultado esperado:**
-- Si el archivo tenía fila de título arriba: ahora debe detectar las columnas reales
-- Si las columnas tienen nombres distintos (ej. "Cuenta", "Denominación"): el cuadro
-  amarillo mostrará exactamente los nombres detectados
-- Compartir captura o los nombres de columnas detectados para ajuste final si sigue fallando
+**Resultado esperado tras el fix:**
+- Las 427 filas deberían parsear con código, nombre y tipo correctos
+- El preview mostrará X válidas (sin errores de "Nombre requerido")
+- Si hay filas con tipo no reconocido, se derivan automáticamente del código numérico
+- Si aún hay errores: capturar el error exacto de la columna Estado para diagnóstico final
+
+**Si funciona:** proceder a importar. El sistema tiene 86 cuentas actuales con modo
+"Plan sin movimientos" → puede reemplazarse sin restricciones marcando el checkbox.
 
 ### 2. Confirmar pendientes sesión 2026-07-02 (aún sin verificar)
 
@@ -233,3 +267,5 @@ DB:       PostgreSQL Railway (railway + aela_lsac + aela_mprq)
 | `2a03852` | feat: drag & drop en importador plan de cuentas |
 | `3340ac8` | feat: plan de cuentas NIIF Supercias 308 cuentas + semilla endpoint |
 | `9ef752e` | fix: detección automática fila de encabezado + NORM_MAP ampliado + diagnóstico columnas |
+| `ca3ae5b` | docs: sesión 2026-07-03 — documentación completa (pendientes + estado-proyecto) |
+| `de905b2` | fix: formato externo Excel normaliza claves antes de transformar (Cod/Tipo./Esdetalle) |
