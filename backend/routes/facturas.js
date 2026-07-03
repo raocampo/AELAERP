@@ -1507,10 +1507,21 @@ const uploadImportacion = multer({
   storage: multer.memoryStorage(),
   limits:  { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const ok = /\.(xlsx|xls|csv)$/i.test(file.originalname);
-    cb(ok ? null : new Error('Solo se aceptan archivos .xlsx, .xls o .csv'), ok);
+    if (/\.(xlsx|xls|csv)$/i.test(file.originalname)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se aceptan archivos .xlsx, .xls o .csv'));
+    }
   },
 });
+
+// Wrapper que convierte errores de multer en respuestas JSON
+function multerImportacion(req, res, next) {
+  uploadImportacion.single('archivo')(req, res, (err) => {
+    if (err) return res.status(400).json({ ok: false, error: err.message });
+    next();
+  });
+}
 
 // GET /api/facturas/importar/plantilla — descarga la plantilla Excel
 router.get('/importar/plantilla', async (_req, res) => {
@@ -1525,7 +1536,7 @@ router.get('/importar/plantilla', async (_req, res) => {
 });
 
 // POST /api/facturas/importar/preview — valida el archivo sin importar
-router.post('/importar/preview', uploadImportacion.single('archivo'), async (req, res) => {
+router.post('/importar/preview', multerImportacion, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió archivo' });
 
@@ -1549,13 +1560,17 @@ router.post('/importar/preview', uploadImportacion.single('archivo'), async (req
 });
 
 // POST /api/facturas/importar/ejecutar — importa las filas válidas
-router.post('/importar/ejecutar', uploadImportacion.single('archivo'), async (req, res) => {
+router.post('/importar/ejecutar', multerImportacion, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió archivo' });
 
     const db = req.prisma || prisma;
-    const config = await construirConfiguracionSriBase(db, req.empresa.id);
-    if (!config?.ruc) return res.status(400).json({ ok: false, error: 'La empresa no tiene RUC configurado en Configuración SRI' });
+
+    // Usar req.prisma directamente para esquivar el AsyncLocalStorage roto por multer
+    const config = await db.configuracion_sri.findFirst({
+      where: { empresaId: req.empresa.id, activo: true },
+    });
+    if (!config?.ruc) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI (RUC, razón social) en Configuración SRI' });
 
     const filasRaw = leerExcel(req.file.buffer);
     if (filasRaw.length === 0) return res.status(400).json({ ok: false, error: 'El archivo está vacío' });
