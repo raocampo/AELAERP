@@ -1121,9 +1121,9 @@ router.post('/plan-cuentas/importar/preview', multerPlanCuentas, async (req, res
   try {
     if (!req.file) return res.status(400).json({ success: false, mensaje: 'No se recibió ningún archivo' });
 
-    let rows;
+    let rows, columnas;
     try {
-      rows = parsearBuffer(req.file.buffer);
+      ({ rows, columnas } = parsearBuffer(req.file.buffer));
     } catch {
       return res.status(400).json({ success: false, mensaje: 'El archivo no es un Excel válido (.xlsx o .xls)' });
     }
@@ -1138,7 +1138,7 @@ router.post('/plan-cuentas/importar/preview', multerPlanCuentas, async (req, res
 
     res.json({
       success: true,
-      data: { total: resultados.length, validos: validos.length, errores: errores.length, filas: resultados },
+      data: { total: resultados.length, validos: validos.length, errores: errores.length, filas: resultados, columnas },
     });
   } catch (error) {
     console.error('POST /contabilidad/plan-cuentas/importar/preview:', error);
@@ -1158,7 +1158,7 @@ router.post('/plan-cuentas/importar/ejecutar', multerPlanCuentas, async (req, re
 
     let rows;
     try {
-      rows = parsearBuffer(req.file.buffer);
+      ({ rows } = parsearBuffer(req.file.buffer));
     } catch {
       return res.status(400).json({ success: false, mensaje: 'El archivo no es un Excel válido (.xlsx o .xls)' });
     }

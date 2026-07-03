@@ -1376,6 +1376,19 @@ const ContabilidadHub = () => {
                       <span className="badge-total">Total: {importPC.preview.total} filas</span>
                     </div>
 
+                    {/* Diagnóstico cuando todas las filas fallan — columnas no reconocidas */}
+                    {importPC.preview.validos === 0 && importPC.preview.errores > 0 && (
+                      <div className="conta-import-diag">
+                        <strong>No se reconocieron las columnas del archivo.</strong>
+                        {importPC.preview.columnas?.length > 0 && (
+                          <span> Columnas detectadas en tu Excel: <em>{importPC.preview.columnas.join(' · ')}</em></span>
+                        )}
+                        <br />
+                        Columnas esperadas: <code>codigo</code>, <code>nombre</code>, <code>tipo</code> (ACTIVO | PASIVO | PATRIMONIO | INGRESO | GASTO | COSTO).
+                        {' '}Descarga la plantilla para ver el formato exacto.
+                      </div>
+                    )}
+
                     {/* Opción reemplazar */}
                     {estadoPlan && !estadoPlan.planVacio && (
                       <div className={`conta-import-reemplazar ${importPC.reemplazar ? 'activo' : ''}`}>

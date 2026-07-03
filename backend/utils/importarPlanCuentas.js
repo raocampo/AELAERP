@@ -105,28 +105,69 @@ function transformarDesdeExterno(rows) {
   });
 }
 
-// ─── Parsear buffer Excel → filas planas ────────────────────────────────────
+// ─── Parsear buffer Excel → { rows, columnas } ──────────────────────────────
+// Escanea las primeras 10 filas para encontrar la fila de encabezados real,
+// manejando archivos con filas de título antes de los headers.
 function parsearBuffer(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+  // Leer como arrays crudos para detectar dónde están los encabezados
+  const rawArrays = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  if (!rawArrays.length) return { rows: [], columnas: [] };
+
+  // Conjunto de todos los alias conocidos para reconocer la fila de headers
+  const ALIASES_CONOCIDOS = new Set(Object.values(NORM_MAP).flat());
+
+  // Buscar la primera fila (máx. 10) donde alguna celda coincida con un alias
+  let headerRowIdx = 0;
+  for (let i = 0; i < Math.min(rawArrays.length, 10); i++) {
+    const norm = rawArrays[i].map((c) => normalizarClave(String(c)));
+    if (norm.some((n) => ALIASES_CONOCIDOS.has(n))) {
+      headerRowIdx = i;
+      break;
+    }
+  }
+
+  const headers   = rawArrays[headerRowIdx].map((h) => String(h));
+  const dataRows  = rawArrays.slice(headerRowIdx + 1);
+  const rows = dataRows
+    .filter((r) => r.some((c) => c !== '' && c !== null && c !== undefined))
+    .map((r) => {
+      const obj = {};
+      headers.forEach((h, idx) => { if (h !== '') obj[h] = r[idx] ?? ''; });
+      return obj;
+    });
+
+  const columnas = headers.filter((h) => h !== '');
+
   // Auto-detectar formato externo y transformar antes del parseo estándar
   if (detectarFormatoExterno(rows)) {
-    return transformarDesdeExterno(rows);
+    return { rows: transformarDesdeExterno(rows), columnas };
   }
-  return rows;
+  return { rows, columnas };
 }
 
 // ─── Normalizar clave de encabezado ─────────────────────────────────────────
 const NORM_MAP = {
-  codigo:           ['codigo', 'código', 'cod', 'code', 'cuenta', 'cta'],
-  nombre:           ['nombre', 'name', 'descripcion', 'descripción', 'denominacion', 'denominación'],
-  tipo:             ['tipo', 'type', 'clasificacion', 'clase', 'grupo', 'naturaleza_grupo'],
-  naturaleza:       ['naturaleza', 'saldo', 'debcred', 'deb_cred', 'tipo_saldo'],
-  aceptaMovimiento: ['aceptamovimiento', 'acepta_movimiento', 'acepta movimiento', 'movimiento', 'mov', 'auxiliar', 'detalle'],
-  activo:           ['activo', 'active', 'estado', 'habilitado', 'vigente'],
-  nivel:            ['nivel', 'level'],
-  codigoPadre:      ['codigopadre', 'codigo_padre', 'cuenta_padre', 'parent_code'],
+  codigo:           ['codigo', 'cod', 'code', 'cuenta', 'cta', 'no_cuenta', 'num_cuenta', 'numero_cuenta',
+                     'nro_cuenta', 'cta_contable', 'cuentacontable', 'numerodecuenta', 'no', 'nro',
+                     'num', 'id_cuenta', 'idcuenta', 'cuentamayor', 'cta_mayor'],
+  nombre:           ['nombre', 'name', 'descripcion', 'denominacion', 'denominacion_cuenta',
+                     'concepto', 'detalle', 'descripcion_cuenta', 'titulo', 'cuenta_nombre',
+                     'description', 'label'],
+  tipo:             ['tipo', 'type', 'clasificacion', 'clase', 'grupo', 'naturaleza_grupo',
+                     'tipo_cuenta', 'clasificacion_cuenta', 'tipodecuenta', 'categoria',
+                     'rubro', 'tipocuenta'],
+  naturaleza:       ['naturaleza', 'saldo', 'debcred', 'deb_cred', 'tipo_saldo', 'debe_haber',
+                     'debehaber', 'dc', 'signo', 'sign'],
+  aceptaMovimiento: ['aceptamovimiento', 'acepta_movimiento', 'movimiento', 'mov', 'auxiliar',
+                     'esdetalle', 'es_detalle', 'detalle', 'hoja', 'esfinal', 'es_final',
+                     'cuentadetalle', 'cuenta_detalle', 'nivel_detalle'],
+  activo:           ['activo', 'active', 'estado', 'habilitado', 'vigente', 'enabled'],
+  nivel:            ['nivel', 'level', 'jerarquia', 'hierarchy', 'nivel_cuenta'],
+  codigoPadre:      ['codigopadre', 'codigo_padre', 'cuenta_padre', 'parent_code', 'cta_padre',
+                     'ctapadre', 'padre', 'parent', 'cuentapadre'],
 };
 
 function normalizarClave(clave) {
