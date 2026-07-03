@@ -117,6 +117,13 @@ AELA ya cuenta con una base funcional operativa para:
 - ATS
 - plan de cuentas base por empresa
 - edicion del plan de cuentas
+- importacion masiva de plan de cuentas desde Excel (formato AELA y formato externo)
+- auto-deteccion de formato externo (columnas Parent/Esdetalle) con transformacion automatica
+- deteccion inteligente de fila de encabezado (maneja archivos con titulo antes de los headers)
+- modo reemplazar plan completo (respeta FK y cuentas con movimientos)
+- plan de cuentas NIIF Supercias 308 cuentas (CUC oficial Ecuador)
+- drag & drop para subir archivo de importacion
+- estado del sistema contable (planVacio / sinMovimientos / enOperacion) con UI contextual
 - periodos contables
 - asientos
 - mayor
@@ -332,6 +339,36 @@ Durante la implementacion se verifico:
 - sincronizacion del esquema Prisma con PostgreSQL
 - migracion `20260427231353_talento_humano` aplicada exitosamente
 
+### 23. Sesión 2026-07-03 — Plan de cuentas avanzado + auditoría multi-tenant
+
+Ver `docs/pendientes-2026-07-03.md` para detalle completo.
+
+#### Auditoría multi-tenant sistemática (`4d1e3a4`)
+- Backend: `facturas.js`, `clientes.js`, `proveedores.js`, `productos.js` — rutas con multer
+  migradas a `req.prisma` y `req.prisma.$transaction()`
+- Frontend: `ListaLiquidaciones`, `FormLiquidacion`, `ListaNotasDebito`, `FormNotaDebito`,
+  `ATS`, `ReportesTributarios` migrados de axios directo al `api` service
+
+#### Plan de cuentas — importación avanzada (`4b5b59e`, `bb2ea49`, `2a03852`, `3340ac8`)
+- Modo **reemplazar plan completo**: elimina hijos antes que padres, respeta FK y movimientos
+- Endpoint `GET /api/contabilidad/plan-cuentas/estado`: detecta estado del sistema contable
+- **UI contextual** con banner 3 estados (inicio/sin-movimientos/en-operación)
+- **Drag & drop** con feedback visual en zona de importación
+- **Auto-detección** de formato externo (columnas Parent/Esdetalle) con transformación automática
+- Protección contra ciclos en parent lookup (Set computing)
+- **Plan NIIF Supercias**: 308 cuentas del CUC oficial, endpoint de semilla, elección al inicio
+
+#### Fix importación — columnas no reconocidas (`9ef752e`)
+- `parsearBuffer` detecta automáticamente la fila de encabezado real (primeras 10 filas)
+- NORM_MAP ampliado con +20 aliases para sistemas contables ecuatorianos
+- Diagnóstico visible: muestra columnas detectadas cuando todas las filas fallan
+- Fix CSS: `}` sobrante eliminado en `.conta-dropzone-hint`
+
+#### Principios de diseño ERP contable (documentados)
+5 principios compartidos por el usuario para guiar la arquitectura contable futura:
+cuentas de control, mapeo SRI, POS+inventario permanente, centros de costo, provisiones RRHH.
+Ver `memory/feedback_erp_contabilidad_design.md`.
+
 ### 21. Sesión 2026-05-01 — Seguridad, catastro SRI y cierre de rebrand
 
 #### Rebrand SCFI → AELA completado al 100%
@@ -463,23 +500,29 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
 
 ### 🟢 Prioridad funcional (mejoras del sistema)
 
-8. **Talento Humano**
+8. **Contabilidad — ERP design (pendientes de implementar)**
+   - **Tabla `sri_mapeo_cuentas`** (Alta): código retención/IVA → cuenta contable; asiento automático en facturación
+   - **POS → asientos contables** (Alta): 2 asientos automáticos por venta (venta + costo de inventario permanente)
+   - **Centros de costo dimensionales** (Media): campo `centroCostoId` en `asientos_contables_detalle`, tabla `centros_costo`
+   - **Provisiones RRHH automáticas** (Baja): asiento de provisión al cerrar nómina (décimos, fondos reserva, IESS patronal)
+
+9. **Talento Humano**
    - Impuesto a la Renta auto-calculado (tabla progresiva LORTI)
    - Historial salarial por empleado (contratos)
    - Notificaciones de ausencias pendientes de aprobación
    - SBU actualizable desde Configuración (ya existe campo, confirmar UI)
 
-9. **Reportes**
-   - Exportación PDF/Excel de nómina (más allá del CSV actual)
-   - Reportes de ventas por período
-   - Reportes de compras por proveedor
+10. **Reportes**
+    - Exportación PDF/Excel de nómina (más allá del CSV actual)
+    - Reportes de ventas por período
+    - Reportes de compras por proveedor
 
-10. **Seguridad adicional**
+11. **Seguridad adicional**
     - 2FA para roles administrador
     - Log de auditoría de acciones críticas (eliminar, anular, cambiar rol)
     - Política de contraseñas configurable
 
-11. **Pruebas automatizadas**
+12. **Pruebas automatizadas**
     - Ampliar cobertura de rutas críticas (registro, provisioning, nomina)
     - Tests de integración frontend con Playwright o Cypress
 
