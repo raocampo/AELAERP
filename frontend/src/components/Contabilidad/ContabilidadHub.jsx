@@ -33,6 +33,7 @@ const ContabilidadHub = () => {
 
   const [planLoading, setPlanLoading] = useState(false);
   const [instalandoPlanBase, setInstalandoPlanBase] = useState(false);
+  const [instalandoSupercias, setInstalandoSupercias] = useState(false);
   const [planFiltros, setPlanFiltros] = useState({ q: '', tipo: '', activo: 'todos', soloMovimiento: false });
 
   const [importPC, setImportPC] = useState({ abierto: false, archivo: null, preview: null, loading: false, resultado: null, reemplazar: false, dragging: false });
@@ -405,6 +406,30 @@ const ContabilidadHub = () => {
       await cargar();
     } catch (error) {
       toast.error(error.response?.data?.mensaje || 'No se pudo eliminar la cuenta');
+    }
+  };
+
+  const instalarPlanSupercias = async (overwriteExisting = false) => {
+    const msg = overwriteExisting
+      ? '¿Sincronizar el Plan NIIF Supercias? Se actualizarán las cuentas existentes con el mismo código.'
+      : '¿Instalar el Plan NIIF Supercias (308 cuentas)? Se agregarán a las cuentas existentes.';
+    if (!window.confirm(msg)) return;
+    setInstalandoSupercias(true);
+    try {
+      const res = await api.post('/contabilidad/plan-cuentas/semilla-supercias', { overwriteExisting });
+      const info = res.data?.data || {};
+      toast.success(
+        overwriteExisting
+          ? `Plan NIIF sincronizado: ${info.creadas || 0} creadas, ${info.actualizadas || 0} actualizadas`
+          : `Plan NIIF instalado: ${info.creadas || 0} cuentas creadas`,
+      );
+      await cargarPlan();
+      await cargarEstadoPlan();
+      await cargar();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo instalar el plan NIIF Supercias');
+    } finally {
+      setInstalandoSupercias(false);
     }
   };
 
@@ -1476,21 +1501,33 @@ const ContabilidadHub = () => {
 
           <div className="conta-card">
             <h3>Plan de cuentas</h3>
+            {/* Banner orientativo según estado del plan */}
             <div className="conta-note">
               {hayPlanBase ? (
                 <p>
-                  El plan base AELA ya está cargado para esta empresa. El contador puede editar, ampliar o desactivar cuentas
-                  según la necesidad operativa. Si deseas completar cuentas faltantes sin borrar tu estructura actual, usa
-                  <strong> Cargar plan base AELA</strong>. Si quieres volver a alinear nombres y jerarquías con la base, usa
-                  <strong> Sincronizar base</strong>.
+                  El plan de cuentas de esta empresa tiene <strong>{plan.length} cuentas</strong>. El contador puede editar,
+                  ampliar o desactivar cuentas. Para añadir cuentas faltantes del catálogo AELA usa <strong>Cargar plan base AELA</strong>;
+                  para actualizarlo usa <strong>Sincronizar</strong>. Para el catálogo oficial de la Supercias (308 cuentas NIIF) usa
+                  los botones del Plan NIIF.
                 </p>
               ) : (
-                <p>
-                  Esta empresa todavía no tiene un plan de cuentas visible en el módulo. Usa
-                  <strong> Instalar plan base AELA</strong> para cargar una estructura inicial editable y luego ajustarla con el contador.
-                </p>
+                <div className="conta-plan-opciones-inicio">
+                  <div className="conta-plan-opcion">
+                    <strong>Plan base AELA</strong> — estructura simplificada (~88 cuentas). Ideal para PYMES, RIMPE y negocios pequeños.
+                    <button className="btn-primary" onClick={() => instalarPlanBase(false)} disabled={instalandoPlanBase} style={{ marginLeft: 12 }}>
+                      {instalandoPlanBase ? 'Instalando...' : 'Instalar plan AELA'}
+                    </button>
+                  </div>
+                  <div className="conta-plan-opcion">
+                    <strong>Plan NIIF Supercias</strong> — Catálogo Único de Cuentas oficial (308 cuentas). Para S.A. y Cía. Ltda. que reportan a la Superintendencia de Compañías.
+                    <button className="btn-secondary" onClick={() => instalarPlanSupercias(false)} disabled={instalandoSupercias} style={{ marginLeft: 12 }}>
+                      {instalandoSupercias ? 'Instalando...' : 'Instalar plan NIIF'}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
+
             <div className="conta-filters">
               <input
                 placeholder="Buscar por código o nombre"
@@ -1520,12 +1557,22 @@ const ContabilidadHub = () => {
                 Solo movimiento
               </label>
               <button className="btn-secondary" onClick={cargarPlan}>Filtrar</button>
-              <button className="btn-secondary" onClick={() => instalarPlanBase(false)} disabled={instalandoPlanBase}>
-                {instalandoPlanBase ? 'Procesando...' : (hayPlanBase ? 'Cargar plan base AELA' : 'Instalar plan base AELA')}
-              </button>
-              <button className="btn-secondary" onClick={() => instalarPlanBase(true)} disabled={instalandoPlanBase}>
-                Sincronizar base
-              </button>
+              {hayPlanBase && (
+                <>
+                  <button className="btn-secondary" onClick={() => instalarPlanBase(false)} disabled={instalandoPlanBase} title="Agrega cuentas AELA faltantes sin borrar las existentes">
+                    {instalandoPlanBase ? 'Procesando...' : 'Cargar plan base AELA'}
+                  </button>
+                  <button className="btn-secondary" onClick={() => instalarPlanBase(true)} disabled={instalandoPlanBase} title="Actualiza nombres y estructura AELA base">
+                    Sincronizar AELA
+                  </button>
+                  <button className="btn-secondary" onClick={() => instalarPlanSupercias(false)} disabled={instalandoSupercias} title="Agrega cuentas NIIF Supercias faltantes">
+                    {instalandoSupercias ? 'Procesando...' : 'Cargar plan NIIF'}
+                  </button>
+                  <button className="btn-secondary" onClick={() => instalarPlanSupercias(true)} disabled={instalandoSupercias} title="Sincroniza con el catálogo oficial Supercias">
+                    Sincronizar NIIF
+                  </button>
+                </>
+              )}
             </div>
 
             {planLoading ? (

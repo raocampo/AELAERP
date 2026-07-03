@@ -7,6 +7,7 @@ const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { crearAsientoContable, crearAsientoNominaPeriodo, round2 } = require('../utils/contabilidad');
 const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
+const { sembrarPlanSupercias }  = require('../utils/planCuentasSupercias');
 const { parsearBuffer, parsearPlanCuentas, generarPlantillaPlanCuentas } = require('../utils/importarPlanCuentas');
 
 // Multer para importación de plan de cuentas (memoria, max 10 MB)
@@ -1052,6 +1053,27 @@ router.post('/plan-cuentas/semilla', async (req, res) => {
   } catch (error) {
     console.error('POST /contabilidad/plan-cuentas/semilla:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo instalar el plan de cuentas base' });
+  }
+});
+
+// POST /api/contabilidad/plan-cuentas/semilla-supercias — instala plan NIIF Supercias
+router.post('/plan-cuentas/semilla-supercias', async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const overwriteExisting = Boolean(req.body?.overwriteExisting);
+    const resultado = await sembrarPlanSupercias(db, empresaId, overwriteExisting);
+
+    res.json({
+      success: true,
+      data: resultado,
+      mensaje: overwriteExisting
+        ? `Plan NIIF Supercias sincronizado: ${resultado.creadas} creadas, ${resultado.actualizadas} actualizadas`
+        : `Plan NIIF Supercias instalado: ${resultado.creadas} cuentas creadas`,
+    });
+  } catch (error) {
+    console.error('POST /contabilidad/plan-cuentas/semilla-supercias:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo instalar el plan NIIF Supercias' });
   }
 });
 
