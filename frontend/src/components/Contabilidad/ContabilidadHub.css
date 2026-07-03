@@ -366,6 +366,21 @@
   color: #166534;
 }
 
+.conta-dropzone.dragging {
+  border-color: #16a34a;
+  background: #dcfce7;
+  color: #14532d;
+  transform: scale(1.01);
+  box-shadow: 0 0 0 3px #bbf7d0;
+}
+
+.conta-dropzone-hint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+}
+
 .conta-dropzone-icon { font-size: 2rem; }
 
 .conta-dropzone-fname {
@@ -498,6 +513,7 @@
 @media (prefers-color-scheme: dark) {
   .conta-dropzone { border-color: #334155; color: #94a3b8; }
   .conta-dropzone:hover { border-color: #22C55E; background: #052e16; color: #86efac; }
+  .conta-dropzone.dragging { border-color: #16a34a; background: #052e16; color: #86efac; box-shadow: 0 0 0 3px #14532d; }
   .badge-ok    { background: #052e16; color: #86efac; }
   .badge-error { background: #450a0a; color: #fca5a5; }
   .badge-total { background: #1e293b; color: #94a3b8; }

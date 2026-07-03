@@ -35,7 +35,7 @@ const ContabilidadHub = () => {
   const [instalandoPlanBase, setInstalandoPlanBase] = useState(false);
   const [planFiltros, setPlanFiltros] = useState({ q: '', tipo: '', activo: 'todos', soloMovimiento: false });
 
-  const [importPC, setImportPC] = useState({ abierto: false, archivo: null, preview: null, loading: false, resultado: null, reemplazar: false });
+  const [importPC, setImportPC] = useState({ abierto: false, archivo: null, preview: null, loading: false, resultado: null, reemplazar: false, dragging: false });
   const [estadoPlan, setEstadoPlan] = useState(null);
   const [cuentaForm, setCuentaForm] = useState({
     id: null,
@@ -1284,7 +1284,28 @@ const ContabilidadHub = () => {
                     <p className="conta-import-instruccion">
                       1. Descarga la plantilla, llena el plan y vuelve a subir el archivo .xlsx
                     </p>
-                    <label className="conta-dropzone">
+                    <label
+                      className={`conta-dropzone${importPC.dragging ? ' dragging' : ''}`}
+                      onDragOver={(e) => { e.preventDefault(); setImportPC((p) => ({ ...p, dragging: true })); }}
+                      onDragEnter={(e) => { e.preventDefault(); setImportPC((p) => ({ ...p, dragging: true })); }}
+                      onDragLeave={(e) => {
+                        // Solo quitar el estado si el cursor salió del label completo
+                        if (!e.currentTarget.contains(e.relatedTarget)) {
+                          setImportPC((p) => ({ ...p, dragging: false }));
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setImportPC((p) => ({ ...p, dragging: false }));
+                        const f = e.dataTransfer.files[0];
+                        if (f && (f.name.endsWith('.xlsx') || f.name.endsWith('.xls'))) {
+                          setImportPC((p) => ({ ...p, archivo: f }));
+                          previewImportPlan(f);
+                        } else if (f) {
+                          toast.error('Solo se aceptan archivos .xlsx o .xls');
+                        }
+                      }}
+                    >
                       <input
                         type="file"
                         accept=".xlsx,.xls"
@@ -1298,9 +1319,16 @@ const ContabilidadHub = () => {
                           e.target.value = '';
                         }}
                       />
-                      <span className="conta-dropzone-icon">📂</span>
-                      <span>{importPC.loading ? 'Procesando…' : 'Haz clic para seleccionar archivo .xlsx'}</span>
-                      {importPC.archivo && !importPC.loading && (
+                      <span className="conta-dropzone-icon">{importPC.dragging ? '📥' : '📂'}</span>
+                      <span>
+                        {importPC.loading
+                          ? 'Procesando…'
+                          : importPC.dragging
+                            ? 'Suelta el archivo aquí'
+                            : 'Arrastra tu archivo aquí o haz clic para buscar'}
+                      </span>
+                      <span className="conta-dropzone-hint">.xlsx · .xls</span>
+                      {importPC.archivo && !importPC.loading && !importPC.dragging && (
                         <span className="conta-dropzone-fname">{importPC.archivo.name}</span>
                       )}
                     </label>
