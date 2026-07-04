@@ -11,12 +11,17 @@ para notas de venta también), fix de aislamiento multiempresa en el módulo Ban
 vínculo con Plan de Cuentas, y actualización completa de la Ayuda del sistema y el
 manual de usuario.
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`
 
 ---
 
 ## 🔴 PENDIENTES PARA MAÑANA — verificar en producción, en orden
 
+0. **[PRIORIDAD] Facturas históricas ahora enlazan al diario** (fix `3a032cf`) —
+   importar un lote real de facturas históricas por Excel, confirmar la columna
+   "✓ Enlazada" en el resultado, y confirmar en Contabilidad → Libro Diario que los
+   asientos aparecen con la FECHA HISTÓRICA correcta (no la fecha de hoy). Esto es
+   lo que reportó el cliente como bloqueante — priorizar sobre el resto de la lista.
 1. **Confirmar deploy de Railway** — abrir pestaña "Details" del deployment activo y
    confirmar que corresponde al commit `62ed9f6` (o posterior). Si Railway no lo tomó,
    forzar redeploy manual ("Clear build cache & redeploy").
@@ -389,6 +394,55 @@ compra) se importaban y eran visibles en el Historial, pero nunca generaban asie
 **Verificado con script de integración contra `scfi_dev` real:** 10/10 asserts
 (retención con IVA+Renta, NC reduce CxP, ND aumenta CxP, partida cuadrada,
 idempotencia).
+
+---
+
+## 🔴 Bug importante — Facturas históricas (Excel) nunca generaban asiento contable (`3a032cf`)
+
+**Reportado por el cliente** (a través del usuario): "no puede registrar porque no
+sabe cómo enlazar con el diario", en el contexto de llevar contabilidad de un
+período anterior importando facturas por Excel. Se investigó con `AskUserQuestion`
+para descartar que fuera confusión de UX en Bancos (el feature de hoy) — la
+respuesta apuntó a "se carga las facturas a través de archivos", confirmando que
+el problema real estaba en **Importar facturas históricas**.
+
+**Causa raíz (no era confusión del usuario, era un bug real):** el único punto que
+generaba el asiento de venta (`crearAsientoFacturaAutorizada`) estaba enganchado
+EXCLUSIVAMENTE al job de autorización SRI (`procesarFacturaEnSRI`, que corre en
+background tras emitir una factura normal). Las facturas históricas importadas por
+Excel (`estadoSri = 'HISTORICO'` o `'AUTORIZADO'` vía importación, `origenRegistro
+= 'IMPORTACION'`) **nunca pasan por ese job** — no se envían al SRI, es justamente
+el punto del feature. Resultado: absolutamente ninguna factura histórica importada
+generaba nunca ningún asiento contable. No había ningún paso de "enlace" que el
+usuario pudiera encontrar porque el mecanismo simplemente no existía para este flujo.
+
+**Fix:**
+- `crearAsientoFacturaAutorizada()` acepta `db` opcional (mismo patrón ya usado
+  en el resto de funciones de ayer) — necesario porque `/facturas/importar/ejecutar`
+  usa `multer` y ya tenía su propio `db = req.prisma` para esquivar el
+  `AsyncLocalStorage` roto (comentario ya existente en el archivo, `routes/facturas.js:79`).
+- Tras crear cada factura histórica en el loop de importación, se genera su
+  asiento usando la **fecha histórica de la factura**, no la fecha de hoy —
+  verificado que cae en el período contable correcto.
+- **Deliberadamente NO se toca inventario ni costo de venta** para facturas
+  históricas: descontar el stock ACTUAL por una venta ya consumida hace tiempo
+  podría dejarlo negativo o incorrecto. Solo el asiento de ingreso (venta), que es
+  seguro sin importar cuándo ocurrió.
+- Frontend (`ImportarFacturasHistoricas.jsx`): nueva columna "Libro Diario" en la
+  tabla de resultado (✓ Enlazada / ⚠ Sin asiento) + nota explicando qué se
+  contabiliza automático y qué no — visibilidad directa en vez de que el usuario
+  tenga que adivinar o ir a buscar en Contabilidad si funcionó.
+
+**Verificado con script de integración contra `scfi_dev` real:** factura histórica
+sin autorización SRI genera asiento `FACTURA` con montos correctos y fecha
+histórica (2023-05-15, no la fecha de hoy). Se re-corrió también la batería
+completa de tests de ayer (22 asserts) para confirmar que agregar el parámetro
+`db` no rompió el flujo normal de facturas con autorización SRI real.
+
+**Pendiente de verificar en producción:** importar un lote de facturas históricas
+reales, confirmar la columna "✓ Enlazada" en el resultado, y confirmar en
+Contabilidad → Libro Diario que los asientos aparecen con la fecha histórica
+correcta (no la fecha de importación).
 
 ---
 
