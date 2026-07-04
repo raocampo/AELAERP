@@ -1,0 +1,141 @@
+# AELA ERP — Sesión 2026-07-04
+
+## Resumen ejecutivo
+
+Sincronización de git (HEAD local desactualizado, sin pérdida de trabajo), seguimiento
+de pendientes de sesiones anteriores, y diseño + implementación de la primera pieza del
+"motor de reglas contables" pedido por un cliente: configuración de cuentas contables
+para asientos automáticos de compras.
+
+Commits pusheados: `de6b37e`, `6b081f3`
+
+---
+
+## Seguimiento de pendientes (sesión 2026-07-03)
+
+Confirmado por el usuario:
+- ✅ Punto 1 (Plan de Cuentas Consorcio Vial) — completado
+- ✅ Punto 2 (Facturas históricas) — completado; el XML sí carga las facturas
+- 🟡 Punto 3 (Buzón SRI: facturas/NC/ND/retenciones a cada módulo) — **parcialmente confirmado como bug real**, ver abajo
+- ⏳ Punto 4 (Scraper SRI login) — aún sin probar, cliente priorizando que la parte contable funcione al 100%
+- ✅ Punto 5 (Gestión Empresas — contadora/repLegal) — funciona
+
+## Hallazgo — Buzón SRI: documentos importados no generaban asiento contable (`de6b37e`)
+
+Al revisar el punto 3, se confirmó que el ruteo por tipo de documento SÍ funciona
+correctamente (facturas/liquidaciones → `facturas_compra`, NC/ND → `docs_recibidos_otros`,
+retenciones → `retenciones_recibidas`, todos visibles en el tab "Historial" del Buzón).
+
+**El problema real:** `crearAsientoFacturaCompraRegistrada()` (que genera el asiento
+contable automático) solo se llamaba desde el registro MANUAL de compras
+(`routes/compras.js`). Las facturas de compra importadas por el Buzón SRI (los 4
+endpoints: `/importar`, `/importar-zip`, `/importar-xml`, `/sri-scraper/importar`)
+nunca generaban asiento — quedaban fuera de la contabilidad sin importar cuántas se
+importaran.
+
+**Fix:**
+- `crearAsientoFacturaCompraRegistrada()` acepta ahora `db` opcional (mismo patrón que
+  `getConfigSRI` en `facturas.js`) para respetar el tenant correcto cuando se llama desde
+  rutas con `multer` (donde el proxy global de Prisma rompe `AsyncLocalStorage`).
+- Nuevo helper `_generarAsientoSiAplica()` en `buzon.js`, llamado tras cada
+  `facturas_compra` creada en los 4 endpoints. No bloqueante: si falla, se loguea pero
+  no revierte la importación del documento (mismo criterio que `compras.js`).
+
+**Pendiente (fuera de alcance de este fix):** `retenciones_recibidas` y
+`docs_recibidos_otros` (NC/ND recibidas) aún no tienen tratamiento contable propio —
+no existe una función `crearAsientoXxx` para ellos todavía. Backlog.
+
+---
+
+## Feature — Configuración contable: cuentas enlazadas por el contador (`6b081f3`)
+
+### Pregunta del cliente
+"¿Cómo configuro la parte contable para que al ingresar las compras se contabilicen
+directamente en la cuenta de gastos [que yo elija]?"
+
+### Estado ANTES de este fix
+Toda compra no inventariable se contabilizaba SIEMPRE en una única cuenta genérica
+hardcodeada: `5.2.01.001 "Compras Locales"` (tipo GASTO). No existía forma de elegir
+otra cuenta. Lo mismo aplicaba a inventario (`1.1.04.001`), IVA compras (`1.1.05.001`),
+cuentas por pagar (`2.1.04.001`) y caja (`1.1.01.001`) — todas fijas en el código.
+
+### Diseño elegido
+El usuario aclaró que prefiere que **el contador configure manualmente los enlaces**
+desde el propio Plan de Cuentas de la empresa, en vez de un motor de reglas por
+producto/categoría/proveedor (eso queda como posible v2 si se necesita más adelante).
+
+### Implementación
+- **Nueva tabla `configuracion_contable`** (1 fila por empresa, guarda el **código**
+  de la cuenta, no el id — porque el plan de cuentas se puede reemplazar/reconstruir
+  por empresa y el código es lo estable desde la perspectiva del usuario):
+  `codigoCuentaComprasGasto`, `codigoCuentaInventario`, `codigoCuentaIvaCompras`,
+  `codigoCuentaCxP`, `codigoCuentaCajaCompras`
+- **`utils/contabilidad.js`**: `obtenerConfiguracionContable()` + `_resolverCuenta()`
+  — usa la cuenta configurada si existe y acepta movimiento; si no, cae al valor por
+  defecto de siempre (nunca rompe el asiento por una configuración inválida o
+  desactualizada, solo loguea una advertencia)
+- **`routes/contabilidad.js`**: `GET/PUT /api/contabilidad/configuracion-asientos` —
+  valida que cada código configurado exista en el Plan de Cuentas de la empresa y
+  acepte movimiento antes de guardar
+- **`ContabilidadHub.jsx`**: nueva tarjeta "⚙️ Configuración de asientos automáticos —
+  Compras" en el tab Plan de Cuentas, con 5 selectores (poblados desde el plan de
+  cuentas ya cargado en memoria, filtrados por el tipo de cuenta esperado) y botón
+  Guardar
+
+### Cómo lo usa el contador
+1. Ir a Contabilidad → Plan de Cuentas
+2. Crear (o ya tener) la cuenta de gasto específica que quiere usar (ej. "Gastos de
+   Oficina 5.2.03.010")
+3. En la tarjeta "Configuración de asientos automáticos — Compras", elegir esa cuenta
+   en el selector "Gasto por compra"
+4. Guardar — desde ese momento, TODAS las compras (manuales y del Buzón SRI) se
+   contabilizan en esa cuenta en vez de la genérica
+
+### Pendiente de verificar
+Probar el flujo completo: configurar una cuenta de gasto propia, registrar/importar
+una compra no inventariable, y confirmar en el Libro Diario que el asiento usa la
+cuenta configurada (no la genérica).
+
+---
+
+## Revisión de los 5 principios de diseño ERP contable (vs. estado real del código)
+
+| # | Principio | Estado |
+|---|-----------|--------|
+| 1 | Cuentas de control (no "cuentitis") | ✅ Seguido — CxC/CxP usan FK a `clientes`/`proveedores`, una sola cuenta contable genérica por concepto, no una por cliente/proveedor |
+| 2 | Motor de reglas / mapeo SRI → cuenta contable | 🟡 Parcial — implementado como **configuración manual del contador** (este fix), no como motor automático por producto/categoría/proveedor. La tabla `sri_mapeo_cuentas` del backlog original (código retención/IVA → cuenta) sigue sin implementar |
+| 3 | POS + inventario permanente (2 asientos por venta) | ❌ Falta — `crearAsientoFacturaAutorizada()` solo genera el asiento de venta (CxC/Ventas/IVA). Falta el segundo asiento de **Costo de Ventas vs Inventario** en cada venta con ítems inventariables |
+| 4 | Centros de costo dimensionales | ❌ No implementado — no existe `centroCostoId` en ningún lado del esquema |
+| 5 | Provisiones RRHH automáticas | ❌ No implementado — `crearAsientoNominaPeriodo()` literalmente lanza `Error('El módulo de nómina no está implementado en esta versión de AELA')` |
+
+**Recomendación de prioridad para seguir (si se retoma el diseño contable):**
+1. Punto 3 (POS + costo de venta) — es el que más distorsiona los estados financieros
+   hoy: toda venta de mercadería inventariable no descarga el inventario contablemente,
+   solo a nivel de stock físico
+2. Punto 2 completo (mapeo SRI → cuenta) — para retenciones/IVA de compras y ventas
+3. Puntos 4 y 5 — menor urgencia, dependen de que RRHH/reportes por sucursal sean
+   prioridad de negocio
+
+---
+
+## Contexto técnico rápido
+
+```
+Repo:     github.com/raocampo/AELAERP  rama: main
+Backend:  Railway → aelaerp-production.up.railway.app
+Frontend: Vercel  → aela.corpsimtelec.com
+DB:       PostgreSQL Railway
+```
+
+**Archivos clave de esta sesión:**
+- `backend/utils/contabilidad.js` — `crearAsientoFacturaCompraRegistrada`,
+  `obtenerConfiguracionContable`, `_resolverCuenta`
+- `backend/routes/contabilidad.js` — `GET/PUT /configuracion-asientos`
+- `backend/routes/buzon.js` — `_generarAsientoSiAplica`
+- `frontend/src/components/Contabilidad/ContabilidadHub.jsx` — tarjeta de configuración
+
+**Nota de git:** al iniciar esta sesión, `git pull` fue rechazado porque el HEAD local
+estaba en `bc49978` mientras `origin/main` ya iba en `c09e044` (15 commits de sesiones
+2026-07-02/03 hechas en otro entorno). Se verificó **byte a byte** que el working tree
+ya coincidía con `origin/main` antes de sincronizar — no se perdió nada. Si esto vuelve
+a pasar: `git fetch && git diff origin/main --stat` antes de asumir que hay conflictos reales.
