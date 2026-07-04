@@ -11,7 +11,7 @@ para notas de venta también), fix de aislamiento multiempresa en el módulo Ban
 vínculo con Plan de Cuentas, y actualización completa de la Ayuda del sistema y el
 manual de usuario.
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`
 
 ---
 
@@ -40,12 +40,16 @@ Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3
 7. **Scraper SRI login** — pendiente desde antes, el cliente priorizó lo contable.
    Confirmar en logs de Railway: `[SRI] sriScraper.js build 2026-07-01 — incluye
    hash MD5+SHA-512`.
+8. **Movimientos bancarios con asiento contable** (feature `cbe029f`) — en Bancos,
+   registrar un movimiento o emitir un cheque eligiendo una "Cuenta contrapartida",
+   confirmar que aparece el asiento `MOVIMIENTO_BANCO` en el Libro Diario. Registrar
+   otro SIN elegir contrapartida y confirmar que se sigue guardando normal (sin asiento).
 
 Detalle completo de cada punto (causa raíz, qué se cambió) en las secciones abajo.
 
 ---
 
-## ✅ Verificación local (2026-07-04, mañana) — puntos 3, 4, 5 confirmados con datos reales
+## ✅ Verificación local (2026-07-04, mañana) — puntos 3, 4, 5, 8 confirmados con datos reales
 
 Se corrió un script de integración contra `scfi_dev` (Postgres local, sin mocks —
 llama a las mismas funciones de `utils/contabilidad.js`/`utils/inventario.js` que
@@ -65,6 +69,11 @@ usan las rutas reales). 22 asserts, todos ✅:
   mismo `compraId` NO duplica el asiento.
 - **Bancos:** confirmado que `include: { cuentaContable }` devuelve correctamente
   código+nombre de la cuenta vinculada.
+- **Punto 8 (movimientos bancarios, feature `cbe029f`):** depósito con contrapartida
+  → banco Debe=500 cuadrado; retiro con contrapartida → banco Haber=200 / gasto
+  Debe=200; movimiento SIN contrapartida se registra igual sin crear asiento;
+  idempotencia; y error claro si la cuenta bancaria no está vinculada al Plan de
+  Cuentas — 9/9 asserts.
 
 **Nota sobre el entorno local:** estaba desactualizado (4 migraciones pendientes,
 incluida `20260704000000_configuracion_contable` de ayer) — se corrió
@@ -320,6 +329,37 @@ selector que filtrara por tipo, incluido el nuevo de Bancos.
 **Pendiente de verificar:** recargar Bancos en Consorcio Vial, confirmar que el modal
 se ve sólido (no transparente) y que el selector ahora muestra las cuentas del Plan
 de Cuentas ya creadas.
+
+## Feature — Asiento contable opcional para movimientos bancarios y cheques (`cbe029f`)
+
+Siguiente punto del backlog de contabilidad: `movimientos_bancarios.asientoId` existía
+en el schema pero nunca se usaba — ningún depósito/retiro/cheque manual generaba
+asiento contable, a diferencia de compras y ventas.
+
+**Diseño:** a diferencia de compras/ventas, un movimiento bancario manual NO tiene una
+contrapartida contable predecible (puede ser un aporte de capital, el pago de un gasto
+puntual, un cobro a un cliente, etc.) — por eso no se adivina la cuenta como se hizo con
+`configuracion_contable`. El usuario elige la cuenta contrapartida al registrar el
+movimiento o emitir el cheque; si no la elige, el movimiento se registra exactamente
+igual que antes (sin asiento) — no se fuerza nada.
+
+- `crearAsientoMovimientoBancario()` en `utils/contabilidad.js`: Debe/Haber banco vs.
+  la cuenta contrapartida elegida (según el movimiento sea entrada o salida). Requiere
+  que la cuenta bancaria ya esté vinculada a una cuenta del Plan de Cuentas (el fix de
+  ayer); si no, lanza un error claro pidiendo vincularla primero. Idempotente vía
+  `asientoId` (si el movimiento ya tiene asiento, no crea otro).
+- `routes/bancos.js`: `POST /:id/movimientos` y `POST /:id/cheques` aceptan
+  `cuentaContrapartidaId` opcional en el body.
+- `BancosHub.jsx`: selector "Cuenta contrapartida (opcional)" en el modal de
+  Movimiento y en el de Cheque. Se extrajo `useCuentasContables()` como hook
+  compartido (antes el fetch estaba duplicado solo en ModalCuenta).
+
+**Verificado con script de integración contra `scfi_dev` real** (Postgres, sin mocks,
+mismo patrón que ayer): 9/9 asserts — depósito (entrada), retiro (salida), movimiento
+sin contrapartida (se registra igual, sin asiento), idempotencia, y error claro cuando
+la cuenta bancaria no está vinculada al Plan de Cuentas.
+
+---
 
 ## Nota — Deploy de Railway
 
