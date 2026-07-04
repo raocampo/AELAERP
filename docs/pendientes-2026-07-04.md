@@ -5,10 +5,12 @@
 Sincronización de git (HEAD local desactualizado, sin pérdida de trabajo), seguimiento
 de pendientes de sesiones anteriores, diseño + implementación de la primera pieza del
 "motor de reglas contables" pedido por un cliente (configuración de cuentas contables
-para asientos automáticos de compras), y cierre del gap de "POS + inventario permanente"
-de los 5 principios ERP (asiento automático de costo de ventas).
+para asientos automáticos de compras), cierre del gap de "POS + inventario permanente"
+de los 5 principios ERP (asiento automático de costo de ventas), fix de aislamiento
+multiempresa en el módulo Bancos + vínculo con Plan de Cuentas, y actualización completa
+de la Ayuda del sistema y el manual de usuario.
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`
 
 ---
 
@@ -123,6 +125,55 @@ separado (habría que agregar ambos asientos ahí, no solo el de costo). Queda e
 Emitir una factura con al menos un producto inventariable, esperar la autorización SRI,
 y confirmar en el Libro Diario que aparece el asiento tipo `COSTO_VENTA` además del de
 `FACTURA`, con el monto correcto (cantidad × costoUnitario de esa venta).
+
+---
+
+## Bug — Bancos operaba sobre la empresa base, no la empresa activa (`2886f8b`)
+
+Reportado con captura del módulo Bancos en **CONSORCIO VIAL UCH...** (sub-empresa de
+LSAC en modo Macro Empresa) mostrando "No hay cuentas bancarias registradas" pese a
+que el Plan de Cuentas de esa empresa ya tenía cuentas de banco cargadas.
+
+**Causa raíz:** `backend/routes/bancos.js` tenía su propio `obtenerEmpresaId(req)` que
+devolvía `req.usuario.empresaId` (empresa **base** del usuario, nunca cambia) en vez de
+`req.empresa.id` (empresa **activa**, la que refleja el EmpresaSwitcher/cambiar-empresa).
+Es el único archivo de rutas con este bug — se confirmó grepeando `req.empresa.id` en
+el resto de `routes/*.js`, todos lo usan directamente sin un helper intermedio.
+Efecto real: un Admin Macro (como Robert Ocampo) viendo/creando cuentas bancarias
+mientras tenía activa Consorcio Vial en realidad operaba sobre las cuentas de su
+empresa base — ni siquiera un simple "no se ve nada", sino potencial mezcla de datos
+entre empresas.
+
+**Fix:** `obtenerEmpresaId` ahora prioriza `req.empresa?.id`, igual que el resto de rutas.
+
+## Feature — Vincular cuentas bancarias con el Plan de Cuentas (`2886f8b`)
+
+El modelo `bancos.cuentaContableId` (FK opcional a `plan_cuentas`) ya existía en el
+schema y el backend (`routes/bancos.js`) ya lo aceptaba en POST/PUT — el gap era
+puramente de frontend: el formulario nunca mostraba el selector.
+
+**Fix en `BancosHub.jsx`:**
+- Modal Nueva/Editar Cuenta Bancaria: selector de cuenta contable (carga cuentas tipo
+  `ACTIVO` con `aceptaMovimiento` desde `GET /contabilidad/plan-cuentas`).
+- Tarjeta de cada cuenta y detalle: muestra la cuenta contable vinculada, o un aviso
+  "⚠ Sin cuenta contable vinculada" si no se ha configurado.
+
+**Pendiente:** los movimientos bancarios (`movimientos_bancarios`) tienen un campo
+`asientoId` en el schema pero no se generan asientos contables automáticamente al
+registrar depósitos/retiros manuales todavía — solo los cheques generan su propio
+movimiento bancario (sin asiento). Backlog si se necesita conciliar Bancos con el
+Libro Diario automáticamente.
+
+## Docs — Ayuda del sistema y manual de usuario actualizados (`2886f8b`)
+
+- `AyudaSistema.jsx`: sección "Multiempresa y Admin Macro" reescrita (estaba
+  desactualizada desde hace semanas, backlog recurrente); nuevas secciones Plan de
+  Cuentas avanzado, Configuración contable, Bancos, Facturas Históricas; Buzón SRI
+  actualizado con el límite de fecha del SRI para documentos antiguos.
+- `docs/manual-usuario.md`: mismas actualizaciones en Contabilidad (12.3.1, importación
+  de plan de cuentas, NIIF Supercias), Bancos (13.1), Facturación (7.7 reemplaza una
+  sección de "Buzón SRI" vieja e **incorrecta** — describía algo que el Buzón SRI real
+  nunca hizo) y Compras (9.7, Buzón SRI con el detalle correcto).
 
 ---
 
