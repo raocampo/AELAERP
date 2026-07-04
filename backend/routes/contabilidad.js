@@ -780,7 +780,10 @@ router.get('/plan-cuentas', async (req, res) => {
     const { activo = 'true', tipo, q, soloMovimiento = 'false' } = req.query;
     const where = { empresaId };
     if (activo !== 'todos') where.activo = String(activo) === 'true';
-    if (tipo) where.tipo = String(tipo).toUpperCase();
+    // mode: 'insensitive' — cuentas importadas de fuentes externas a veces guardan
+    // el tipo con otra capitalización (ej. "Activo"); una comparación exacta las
+    // excluía silenciosamente de selectores como el de Bancos.
+    if (tipo) where.tipo = { equals: String(tipo).toUpperCase(), mode: 'insensitive' };
     if (soloMovimiento === 'true') where.aceptaMovimiento = true;
     if (q) {
       where.OR = [

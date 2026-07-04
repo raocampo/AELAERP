@@ -14,7 +14,7 @@
 .bancos-header h1 {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--color-text-primary);
+  color: var(--color-text, #1e293b);
   margin: 0;
 }
 
@@ -27,8 +27,8 @@
 }
 
 .banco-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 1.25rem;
   cursor: pointer;
@@ -43,7 +43,7 @@
 
 .banco-card.selected {
   border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-primary) 5%, #ffffff);
 }
 
 .banco-card-header {
@@ -56,7 +56,7 @@
 .banco-card-nombre {
   font-weight: 600;
   font-size: 0.95rem;
-  color: var(--color-text-primary);
+  color: var(--color-text, #1e293b);
 }
 
 .banco-card-tipo {
@@ -65,14 +65,14 @@
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
   background: var(--color-bg);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted, #64748b);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .banco-card-info {
   font-size: 0.82rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted, #64748b);
   margin-bottom: 0.5rem;
 }
 
@@ -104,7 +104,7 @@
 .bancos-tabs {
   display: flex;
   gap: 0.25rem;
-  border-bottom: 2px solid var(--color-border);
+  border-bottom: 2px solid #e2e8f0;
   margin-bottom: 1.25rem;
 }
 
@@ -112,7 +112,7 @@
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted, #64748b);
   cursor: pointer;
   border: none;
   background: transparent;
@@ -122,7 +122,7 @@
 }
 
 .bancos-tab:hover {
-  color: var(--color-text-primary);
+  color: var(--color-text, #1e293b);
 }
 
 .bancos-tab.active {
@@ -144,15 +144,15 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted, #64748b);
   background: var(--color-bg);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .movimientos-tabla td {
   padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text-primary);
+  border-bottom: 1px solid #e2e8f0;
+  color: var(--color-text, #1e293b);
   vertical-align: middle;
 }
 
@@ -239,7 +239,7 @@
   padding: 1rem;
   background: var(--color-bg);
   border-radius: 8px;
-  border: 1px solid var(--color-border);
+  border: 1px solid #e2e8f0;
 }
 
 .saldo-item {
@@ -248,7 +248,7 @@
 
 .saldo-item-label {
   font-size: 0.75rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted, #64748b);
   font-weight: 500;
   margin-bottom: 0.25rem;
 }
@@ -256,7 +256,7 @@
 .saldo-item-valor {
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--color-text-primary);
+  color: var(--color-text, #1e293b);
 }
 
 /* ── Filtros ── */
@@ -271,11 +271,11 @@
 .bancos-filtros select,
 .bancos-filtros input[type="date"] {
   padding: 0.4rem 0.6rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   font-size: 0.85rem;
-  background: var(--color-surface);
-  color: var(--color-text-primary);
+  background: #ffffff;
+  color: var(--color-text, #1e293b);
   cursor: pointer;
 }
 
@@ -292,7 +292,7 @@
 }
 
 .bancos-modal {
-  background: var(--color-surface);
+  background: #ffffff;
   border-radius: 12px;
   padding: 1.5rem;
   width: 100%;
@@ -306,7 +306,7 @@
   font-size: 1.1rem;
   font-weight: 700;
   margin: 0 0 1.25rem;
-  color: var(--color-text-primary);
+  color: var(--color-text, #1e293b);
 }
 
 .bancos-form-grid {
@@ -323,7 +323,7 @@
   display: block;
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted, #64748b);
   margin-bottom: 0.3rem;
 }
 
@@ -331,11 +331,11 @@
 .form-group select {
   width: 100%;
   padding: 0.5rem 0.65rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   font-size: 0.875rem;
-  background: var(--color-surface);
-  color: var(--color-text-primary);
+  background: #ffffff;
+  color: var(--color-text, #1e293b);
   transition: border-color 0.15s;
   box-sizing: border-box;
 }
@@ -357,7 +357,7 @@
 .bancos-empty {
   text-align: center;
   padding: 3rem 1rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted, #64748b);
 }
 
 .bancos-empty-icon {

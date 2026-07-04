@@ -41,9 +41,13 @@ function ModalCuenta({ cuenta, onClose, onSaved }) {
   }, [cuenta]);
 
   useEffect(() => {
-    api.get('/contabilidad/plan-cuentas', { params: { tipo: 'ACTIVO', activo: true, soloMovimiento: true } })
+    // Sin filtro por tipo: algunas cuentas de banco quedan importadas con el tipo
+    // en otra capitalización o agrupadas distinto según el origen del plan de
+    // cuentas — mejor mostrar todas las cuentas de movimiento y dejar que el
+    // usuario elija por código/nombre, que ya es autoexplicativo.
+    api.get('/contabilidad/plan-cuentas', { params: { activo: true, soloMovimiento: true } })
       .then((r) => setCuentasContables(r.data?.data?.flat || []))
-      .catch(() => {});
+      .catch((err) => console.error('No se pudo cargar el plan de cuentas para Bancos:', err.response?.data?.mensaje || err.message));
   }, []);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -108,10 +112,10 @@ function ModalCuenta({ cuenta, onClose, onSaved }) {
                   <option key={c.id} value={c.id}>{c.codigo} — {c.nombre}</option>
                 ))}
               </select>
-              <small style={{ color: 'var(--color-text-secondary)', fontSize: '0.78rem' }}>
+              <small style={{ color: 'var(--color-text-muted, #64748b)', fontSize: '0.78rem' }}>
                 {cuentasContables.length === 0
-                  ? 'No hay cuentas de tipo Activo disponibles. Crea primero la cuenta del banco en Contabilidad → Plan de Cuentas.'
-                  : 'Enlaza esta cuenta bancaria con su cuenta de Activo en el Plan de Cuentas para que los movimientos y conciliaciones se reflejen correctamente en la contabilidad.'}
+                  ? 'No hay cuentas disponibles que acepten movimiento. Crea primero la cuenta del banco en Contabilidad → Plan de Cuentas.'
+                  : 'Enlaza esta cuenta bancaria con su cuenta contable en el Plan de Cuentas para que los movimientos y conciliaciones se reflejen correctamente en la contabilidad.'}
               </small>
             </div>
           </div>
@@ -355,7 +359,7 @@ function TabMovimientos({ cuenta }) {
       </div>
 
       {cargando ? (
-        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-secondary)' }}>Cargando movimientos...</p>
+        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted, #64748b)' }}>Cargando movimientos...</p>
       ) : movimientos.length === 0 ? (
         <div className="bancos-empty">
           <div className="bancos-empty-icon">📋</div>
@@ -383,7 +387,7 @@ function TabMovimientos({ cuenta }) {
                     <span className={`tipo-badge tipo-${m.tipo}`}>{m.tipo.replace(/_/g, ' ')}</span>
                   </td>
                   <td>{m.concepto}</td>
-                  <td style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{m.referencia || '—'}</td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #64748b)' }}>{m.referencia || '—'}</td>
                   <td style={{ textAlign: 'right' }}>
                     {parseFloat(m.debe) > 0 ? <span className="monto-debe">${formatMoney(m.debe)}</span> : '—'}
                   </td>
@@ -454,7 +458,7 @@ function TabCheques({ cuenta }) {
       </div>
 
       {cargando ? (
-        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-secondary)' }}>Cargando cheques...</p>
+        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted, #64748b)' }}>Cargando cheques...</p>
       ) : cheques.length === 0 ? (
         <div className="bancos-empty">
           <div className="bancos-empty-icon">🧾</div>
@@ -480,7 +484,7 @@ function TabCheques({ cuenta }) {
                   <td style={{ fontWeight: 600 }}>#{c.numero}</td>
                   <td>{formatDate(c.fecha)}</td>
                   <td>{c.beneficiario}</td>
-                  <td style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>{c.concepto || '—'}</td>
+                  <td style={{ fontSize: '0.82rem', color: 'var(--color-text-muted, #64748b)' }}>{c.concepto || '—'}</td>
                   <td style={{ textAlign: 'right', fontWeight: 600 }}>${formatMoney(c.monto)}</td>
                   <td>
                     <span className={`cheque-estado-badge estado-${c.estado}`}>{c.estado}</span>
@@ -568,7 +572,7 @@ export default function BancosHub() {
       </div>
 
       {cargando ? (
-        <p style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-text-secondary)' }}>Cargando cuentas bancarias...</p>
+        <p style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-text-muted, #64748b)' }}>Cargando cuentas bancarias...</p>
       ) : cuentas.length === 0 ? (
         <div className="bancos-empty">
           <div className="bancos-empty-icon">🏦</div>
@@ -617,15 +621,15 @@ export default function BancosHub() {
 
           {/* Detalle de cuenta seleccionada */}
           {cuentaSeleccionada && (
-            <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', padding: '1.25rem' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1.25rem' }}>
               <div style={{ marginBottom: '0.5rem' }}>
                 <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>{cuentaSeleccionada.nombre}</h2>
-                <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', color: 'var(--color-text-muted, #64748b)' }}>
                   {cuentaSeleccionada.banco} · {cuentaSeleccionada.tipoCuenta} · {cuentaSeleccionada.numeroCuenta}
                 </p>
                 <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem' }}>
                   {cuentaSeleccionada.cuentaContable
-                    ? <span style={{ color: 'var(--color-text-secondary)' }}>📎 Cuenta contable: {cuentaSeleccionada.cuentaContable.codigo} — {cuentaSeleccionada.cuentaContable.nombre}</span>
+                    ? <span style={{ color: 'var(--color-text-muted, #64748b)' }}>📎 Cuenta contable: {cuentaSeleccionada.cuentaContable.codigo} — {cuentaSeleccionada.cuentaContable.nombre}</span>
                     : <span style={{ color: 'var(--color-warning, #b45309)' }}>⚠ Sin cuenta contable vinculada — edítala para enlazarla al Plan de Cuentas</span>}
                 </p>
               </div>
