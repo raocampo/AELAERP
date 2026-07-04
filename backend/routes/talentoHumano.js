@@ -8,6 +8,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { crearAsientoNominaPeriodo, crearAsientoPagoNominaPeriodo } = require('../utils/contabilidad');
 
 const verRRHH      = [proteger, autorizarPermiso('rrhh.ver')];
 const gestionarRRHH = [proteger, autorizarPermiso('rrhh.gestionar')];
@@ -675,7 +676,25 @@ router.patch('/nomina/:id/estado', ...nominaRRHH, async (req, res) => {
     const nomina = await prisma.nominas.findFirst({ where: { id, empresaId: req.empresa.id } });
     if (!nomina) return res.status(404).json({ success: false, mensaje: 'Nómina no encontrada' });
     const updated = await prisma.nominas.update({ where: { id }, data: { estado } });
-    res.json({ success: true, data: updated });
+
+    const periodo = `${String(nomina.mes).padStart(2, '0')}/${nomina.anio}`;
+    const finDeMesPeriodo = new Date(nomina.anio, nomina.mes, 0);
+    let asientoOk = null;
+    let asientoError = null;
+    try {
+      if (estado === 'PROCESADA') {
+        const r = await crearAsientoNominaPeriodo({ empresaId: req.empresa.id, periodo, usuarioId: req.usuario?.id, fecha: finDeMesPeriodo });
+        asientoOk = !!r.asiento;
+      } else if (estado === 'PAGADA') {
+        const r = await crearAsientoPagoNominaPeriodo({ empresaId: req.empresa.id, periodo, usuarioId: req.usuario?.id });
+        asientoOk = !!r.asiento;
+      }
+    } catch (contErr) {
+      console.error(`[Nómina] Asiento contable nómina ${id} (${estado}):`, contErr.message);
+      asientoError = contErr.message;
+    }
+
+    res.json({ success: true, data: updated, asientoOk, asientoError });
   } catch (err) {
     res.status(500).json({ success: false, mensaje: 'Error al cambiar estado de nómina' });
   }

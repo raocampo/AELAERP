@@ -311,8 +311,15 @@ const Nomina = () => {
   const cambiarEstado = async (nominaId, estado) => {
     if (!confirm(`¿Cambiar el estado a ${estado}?`)) return;
     try {
-      await api.patch(`/talento-humano/nomina/${nominaId}/estado`, { estado });
+      const res = await api.patch(`/talento-humano/nomina/${nominaId}/estado`, { estado });
       toast.success('Estado actualizado');
+      if (estado === 'PROCESADA' || estado === 'PAGADA') {
+        if (res.data?.asientoOk) {
+          toast.success(estado === 'PROCESADA' ? 'Asiento de provisión generado en el Libro Diario' : 'Asiento de pago generado en el Libro Diario');
+        } else if (res.data?.asientoError) {
+          toast.error(`No se generó el asiento contable: ${res.data.asientoError}`);
+        }
+      }
       cargarNominas();
       if (nominaSel?.id === nominaId) cargarDetalle(nominaId);
     } catch (err) {

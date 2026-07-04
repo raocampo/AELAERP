@@ -205,12 +205,217 @@ async function crearAsientoContable({
   });
 }
 
-async function crearAsientoNominaPeriodo() {
-  throw new Error('El módulo de nómina no está implementado en esta versión de AELA');
+function _parsePeriodoNomina(periodo) {
+  const match = /^(\d{2})\/(\d{4})$/.exec(String(periodo || ''));
+  if (!match) throw new Error('periodo debe tener formato MM/YYYY');
+  return { mes: Number(match[1]), anio: Number(match[2]) };
 }
 
-async function crearAsientoPagoNominaPeriodo() {
-  throw new Error('El módulo de nómina no está implementado en esta versión de AELA');
+function _calcularTotalesNomina(detallesNomina) {
+  const sumar = (campo) => round2(detallesNomina.reduce((acc, d) => acc + Number(d[campo] || 0), 0));
+
+  const totalIngresos = sumar('totalIngresos');
+  const totalAportePersonal = sumar('aportePersonalIESS');
+  const totalImpuestoRenta = sumar('impuestoRenta');
+  const totalPrestamosIESS = sumar('prestamosIESS');
+  const totalAnticipos = sumar('anticipos');
+  const totalOtrosDescuentos = sumar('otrosDescuentos');
+  const totalDescuentos = round2(totalAportePersonal + totalImpuestoRenta + totalPrestamosIESS + totalAnticipos + totalOtrosDescuentos);
+
+  return {
+    totalIngresos,
+    totalDecimoTercero: sumar('decimoTerceroProp'),
+    totalDecimoCuarto: sumar('decimoCuartoProp'),
+    totalFondosReserva: sumar('fondosReservaProp'),
+    totalAportePatronal: sumar('aportePatronal'),
+    totalAportePersonal,
+    totalImpuestoRenta,
+    totalPrestamosIESS,
+    totalAnticipos,
+    totalOtrosDescuentos,
+    // Derivado de la ecuación contable (ingresos - descuentos), no de sumar la columna
+    // netoApagar directamente — así el asiento cuadra exacto sin importar redondeos
+    // fila a fila ya calculados por el módulo de nómina.
+    totalNeto: round2(totalIngresos - totalDescuentos),
+  };
+}
+
+async function crearAsientoNominaPeriodo({ empresaId, periodo, usuarioId, fecha = new Date(), db = prisma }) {
+  const empresaIdNum = toInt(empresaId);
+  const { mes, anio } = _parsePeriodoNomina(periodo);
+
+  const nomina = await db.nominas.findFirst({ where: { empresaId: empresaIdNum, mes, anio } });
+  if (!nomina) throw new Error(`No existe una nómina para el período ${periodo}`);
+
+  const referencia = `NOMINA-${nomina.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: empresaIdNum, tipo: 'NOMINA', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const detallesNomina = await db.nomina_detalles.findMany({ where: { nominaId: nomina.id } });
+  if (detallesNomina.length === 0) throw new Error('La nómina no tiene detalles de empleados calculados');
+
+  const t = _calcularTotalesNomina(detallesNomina);
+  if (t.totalIngresos <= 0) return { asiento: null, creado: false };
+
+  const detalles = [];
+
+  const cuentaGastoSueldos = await ensureCuentaMovimiento({
+    empresaId: empresaIdNum, tx: db,
+    codigo: '5.1.02.001', nombre: 'Gasto Sueldos y Salarios', tipo: 'GASTO', naturaleza: 'DEBITO',
+  });
+  detalles.push({ cuentaId: cuentaGastoSueldos.id, descripcion: `Sueldos ${periodo}`, debe: t.totalIngresos, haber: 0 });
+
+  if (t.totalAportePatronal > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '5.1.02.002', nombre: 'Gasto Aporte Patronal IESS', tipo: 'GASTO', naturaleza: 'DEBITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Aporte patronal IESS ${periodo}`, debe: t.totalAportePatronal, haber: 0 });
+  }
+  if (t.totalDecimoTercero > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '5.1.02.003', nombre: 'Gasto Provisión Décimo Tercer Sueldo', tipo: 'GASTO', naturaleza: 'DEBITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión décimo tercero ${periodo}`, debe: t.totalDecimoTercero, haber: 0 });
+  }
+  if (t.totalDecimoCuarto > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '5.1.02.004', nombre: 'Gasto Provisión Décimo Cuarto Sueldo', tipo: 'GASTO', naturaleza: 'DEBITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión décimo cuarto ${periodo}`, debe: t.totalDecimoCuarto, haber: 0 });
+  }
+  if (t.totalFondosReserva > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '5.1.02.005', nombre: 'Gasto Provisión Fondos de Reserva', tipo: 'GASTO', naturaleza: 'DEBITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión fondos de reserva ${periodo}`, debe: t.totalFondosReserva, haber: 0 });
+  }
+
+  const cuentaSueldosPagar = await ensureCuentaMovimiento({
+    empresaId: empresaIdNum, tx: db,
+    codigo: '2.1.05.001', nombre: 'Sueldos por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
+  });
+  detalles.push({ cuentaId: cuentaSueldosPagar.id, descripcion: `Neto a pagar ${periodo}`, debe: 0, haber: t.totalNeto });
+
+  const totalIess = round2(t.totalAportePersonal + t.totalAportePatronal + t.totalPrestamosIESS);
+  if (totalIess > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '2.1.05.002', nombre: 'IESS por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Aportes IESS ${periodo}`, debe: 0, haber: totalIess });
+  }
+  if (t.totalImpuestoRenta > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '2.1.05.003', nombre: 'Retención IR Relación de Dependencia por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Retención IR ${periodo}`, debe: 0, haber: t.totalImpuestoRenta });
+  }
+  if (t.totalDecimoTercero > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '2.1.05.004', nombre: 'Provisión Décimo Tercero por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión décimo tercero ${periodo}`, debe: 0, haber: t.totalDecimoTercero });
+  }
+  if (t.totalDecimoCuarto > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '2.1.05.005', nombre: 'Provisión Décimo Cuarto por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión décimo cuarto ${periodo}`, debe: 0, haber: t.totalDecimoCuarto });
+  }
+  if (t.totalFondosReserva > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '2.1.05.006', nombre: 'Provisión Fondos de Reserva por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión fondos de reserva ${periodo}`, debe: 0, haber: t.totalFondosReserva });
+  }
+  if (t.totalAnticipos > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '1.1.08.001', nombre: 'Anticipos a Empleados', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Descuento anticipos ${periodo}`, debe: 0, haber: t.totalAnticipos });
+  }
+  if (t.totalOtrosDescuentos > 0) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId: empresaIdNum, tx: db,
+      codigo: '2.1.05.007', nombre: 'Otros Descuentos de Nómina por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
+    });
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Otros descuentos ${periodo}`, debe: 0, haber: t.totalOtrosDescuentos });
+  }
+
+  const asiento = await crearAsientoContable({
+    empresaId: empresaIdNum,
+    fecha,
+    descripcion: `Provisión de nómina — ${periodo}`,
+    tipo: 'NOMINA',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles,
+  });
+
+  return { asiento, creado: true };
+}
+
+async function crearAsientoPagoNominaPeriodo({ empresaId, periodo, usuarioId, fecha = new Date(), db = prisma }) {
+  const empresaIdNum = toInt(empresaId);
+  const { mes, anio } = _parsePeriodoNomina(periodo);
+
+  const nomina = await db.nominas.findFirst({ where: { empresaId: empresaIdNum, mes, anio } });
+  if (!nomina) throw new Error(`No existe una nómina para el período ${periodo}`);
+
+  const referenciaProvision = `NOMINA-${nomina.id}`;
+  const asientoProvision = await db.asientos_contables.findFirst({
+    where: { empresaId: empresaIdNum, tipo: 'NOMINA', referencia: referenciaProvision },
+  });
+  if (!asientoProvision) {
+    throw new Error('No se puede registrar el pago: primero debe generarse la provisión de la nómina (estado PROCESADA)');
+  }
+
+  const referencia = `NOMINA-PAGO-${nomina.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: empresaIdNum, tipo: 'NOMINA', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const detallesNomina = await db.nomina_detalles.findMany({ where: { nominaId: nomina.id } });
+  const { totalNeto } = _calcularTotalesNomina(detallesNomina);
+  if (totalNeto <= 0) return { asiento: null, creado: false };
+
+  const cuentaSueldosPagar = await ensureCuentaMovimiento({
+    empresaId: empresaIdNum, tx: db,
+    codigo: '2.1.05.001', nombre: 'Sueldos por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
+  });
+  const cuentaCaja = await ensureCuentaMovimiento({
+    empresaId: empresaIdNum, tx: db,
+    codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+  });
+
+  const asiento = await crearAsientoContable({
+    empresaId: empresaIdNum,
+    fecha,
+    descripcion: `Pago de nómina — ${periodo}`,
+    tipo: 'NOMINA',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles: [
+      { cuentaId: cuentaSueldosPagar.id, descripcion: `Pago neto ${periodo}`, debe: totalNeto, haber: 0 },
+      { cuentaId: cuentaCaja.id, descripcion: `Pago neto ${periodo}`, debe: 0, haber: totalNeto },
+    ],
+  });
+
+  return { asiento, creado: true };
 }
 
 async function crearAsientoFacturaAutorizada({ facturaId, usuarioId, fecha = new Date(), db = prisma }) {
