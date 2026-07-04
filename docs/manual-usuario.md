@@ -547,13 +547,18 @@ Las retenciones se emiten cuando su empresa actúa como **agente de retención**
 4. Vincule opcionalmente a una factura existente.
 5. Haga clic en **Emitir**.
 
-### 7.7 Buzón SRI
+### 7.7 Importar facturas históricas (contabilidad atrasada)
 
-El Buzón SRI muestra los comprobantes que han quedado pendientes de respuesta o que requieren atención.
+Para cargar facturas de **ventas de años anteriores** (por ejemplo, al poner al día la contabilidad de un cliente nuevo) sin emitirlas una por una:
 
-1. Desde el menú lateral, vaya a **Compras → Buzón SRI**.
-2. Revise los documentos en estado pendiente.
-3. Para cada documento puede intentar el reenvío al SRI.
+1. Vaya a **Ventas → Importar históricas**.
+2. Descargue la plantilla Excel desde el asistente.
+3. Llene una fila por factura: fecha, identificación y razón social del cliente, subtotales, IVA, y opcionalmente el número de autorización o de factura originales.
+4. Suba el archivo y revise la vista previa (filas válidas vs. con error) antes de confirmar.
+
+Las facturas con **número de autorización** quedan como `Autorizado`; las que no lo traen quedan como `Histórico` (solo registro contable, nunca se envían al SRI, pero sí se incluyen en Declaraciones).
+
+> 💡 Para importar facturas de **compra** de proveedores (recibidas por el SRI), use el Buzón SRI — ver sección 9.7.
 
 ### 7.8 Anular una factura
 
@@ -664,6 +669,12 @@ El sistema revierte automáticamente los movimientos de inventario y caja asocia
 ### 9.6 Exportar compras
 
 En el listado de compras puede hacer clic en **Exportar CSV** para descargar las compras visibles (con los filtros activos) en formato de hoja de cálculo.
+
+### 9.7 Buzón SRI — importación masiva
+
+Además de importar compras una por una (9.2 y 9.3), el **Buzón SRI** (**Compras → Buzón SRI**) permite descargar y registrar en lote todos los documentos que sus proveedores y clientes han emitido a su RUC: facturas, liquidaciones de compra, notas de crédito/débito recibidas y retenciones que le hicieron sus clientes. Ver la sección de Ayuda dentro del sistema para el detalle de cada pestaña (Descarga automática, Importar TXT, Por claves de acceso, Importar ZIP, Importar XML, Historial).
+
+> ⚠ **Documentos de más de un año:** las pestañas "Importar TXT" y "Por claves de acceso" consultan el servicio en línea del SRI, que solo tiene disponibles los comprobantes recientes. Para cargar facturas antiguas (por ejemplo, al poner al día la contabilidad de un cliente), descargue los XML directamente desde `srienlinea.sri.gob.ec` y use **"Importar XML"** o **"Importar ZIP"** — esa vía no depende de la fecha porque no vuelve a consultar al SRI.
 
 ---
 
@@ -798,6 +809,22 @@ Si necesita volver al plan de cuentas original sin perder los asientos ya regist
 2. Confirme la operación.
 3. El sistema agrega las cuentas del plan base que falten, sin eliminar las que ya creó el contador.
 
+#### Instalar el plan NIIF Superintendencia de Compañías
+
+Si su empresa reporta bajo NIIF (Superintendencia de Compañías), puede instalar el **Catálogo Único de Cuentas (CUC) oficial** con 308 cuentas ya estructuradas, en vez del plan base simplificado. La opción aparece junto al plan base cuando el plan de cuentas está vacío.
+
+#### Importar el plan de cuentas desde Excel
+
+Si ya tiene un plan de cuentas definido en otro sistema o en una hoja de cálculo:
+
+1. En **Plan de Cuentas**, haga clic en **Importar plan de cuentas desde Excel**.
+2. Descargue la plantilla si necesita el formato de referencia, o arrastre directamente su propio archivo.
+3. El sistema detecta automáticamente la fila de encabezados (aunque el archivo tenga un título arriba) y reconoce formatos de otros sistemas contables (columnas como `Cod`, `Parent`, `Esdetalle`), convirtiéndolos al formato de AELA.
+4. Revise la **vista previa**: filas válidas y filas con error se muestran por separado antes de importar nada. Si todas las filas fallan, el sistema le indica qué columnas detectó en su archivo para que las compare con las esperadas.
+5. Confirme la importación.
+
+> 💡 **Reemplazar el plan completo:** si su plan de cuentas actual no tiene movimientos contables registrados, puede marcar la opción "Reemplazar" al importar — el sistema elimina las cuentas que no estén en su Excel (respetando siempre las que sí tengan movimientos, esas nunca se eliminan).
+
 > ⚠ Modifique el plan de cuentas en coordinación con su contador. Una estructura de cuentas incorrecta puede afectar los reportes contables.
 
 ### 12.2 Periodos contables
@@ -811,11 +838,24 @@ Antes de registrar asientos manuales, asegúrese de tener el **período contable
 ### 12.3 Asientos automáticos
 
 El sistema genera asientos contables automáticamente al:
-- Autorizar una factura de venta.
-- Registrar una compra.
+- Autorizar una factura de venta (asiento de venta: Cuentas por Cobrar / Ventas / IVA).
+- Vender un producto inventariable en una factura autorizada (segundo asiento de **Costo de Ventas** contra **Inventario**, usando el costo real de ese momento).
+- Registrar una compra, manual o importada por el Buzón SRI.
 - Registrar otros documentos contables.
 
 Estos asientos se pueden consultar desde **Contabilidad → Asientos**.
+
+> 💡 Las **Notas de Venta / POS** todavía no generan asientos automáticos — solo las facturas formales lo hacen por ahora.
+
+### 12.3.1 Configuración de asientos automáticos (a qué cuenta se contabiliza)
+
+Por defecto, las compras y el costo de ventas se contabilizan en cuentas genéricas predefinidas del sistema. Si el contador prefiere usar cuentas propias del plan de cuentas de la empresa:
+
+1. Cree primero la cuenta que desea usar en el **Plan de Cuentas** (por ejemplo, una cuenta de gasto específica).
+2. En la tarjeta **"Configuración de asientos automáticos — Compras y Ventas"** (dentro de Plan de Cuentas), seleccione esa cuenta en el campo correspondiente: gasto por compra, inventario, IVA compras, cuentas por pagar, caja/bancos, o costo de ventas.
+3. Guarde. Desde ese momento, todas las compras y el costo de las ventas usan las cuentas configuradas.
+
+> 💡 Puede dejar cualquier campo sin elegir — el sistema sigue usando la cuenta genérica por defecto para ese caso.
 
 ### 12.4 Asientos manuales
 
@@ -857,12 +897,16 @@ Para generar cualquier reporte:
 
 1. Desde el módulo de Bancos, haga clic en **Nueva Cuenta Bancaria**.
 2. Ingrese:
-   - Nombre del banco.
+   - Nombre descriptivo (ej. "Banco del Pacífico - Cta Cte Principal").
+   - Institución bancaria.
    - Tipo de cuenta (corriente, ahorros).
    - Número de cuenta.
    - Nombre del titular.
    - Saldo inicial.
+   - **Cuenta contable**: seleccione la cuenta del Plan de Cuentas (tipo Activo) que representa este banco. Debe crearla primero en **Contabilidad → Plan de Cuentas** si aún no existe.
 3. Haga clic en **Guardar**.
+
+> ⚠ Si no vincula la cuenta contable, la tarjeta de la cuenta bancaria muestra la advertencia "Sin cuenta contable vinculada". Puede editarla en cualquier momento para agregarla — no es obligatorio para empezar a registrar movimientos, pero es necesario para que la cuenta se integre correctamente con el resto de la contabilidad.
 
 ### 13.2 Registrar movimientos bancarios
 

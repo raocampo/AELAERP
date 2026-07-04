@@ -11,18 +11,20 @@ const SECCIONES = [
   {
     id: 'saas',
     icono: '🏢',
-    titulo: 'Crear nueva empresa (SaaS / Marca blanca)',
+    titulo: 'Multiempresa y Admin Macro',
     contenido: (
       <div className="ayuda-contenido">
-        <p>AELA ERP soporta <strong>múltiples empresas</strong> dentro de la misma plataforma. Cada empresa tiene sus propios datos, usuarios, facturas y configuraciones completamente aislados.</p>
+        <p>AELA ERP soporta <strong>Macro Empresa</strong>: una sola cuenta (ej. una empresa consultora o de servicios contables) puede gestionar varias empresas/sub-empresas independientes, cada una con sus propios datos, facturas, plan de cuentas y usuarios completamente aislados.</p>
 
-        <h4>¿Cómo crear una nueva empresa?</h4>
+        <h4>Crear una nueva empresa</h4>
         <ol>
           <li>Ve a <strong>Administración → Empresas</strong> (solo visible para administradores).</li>
           <li>Haz clic en <strong>+ Nueva Empresa</strong>.</li>
-          <li>Completa los datos: <em>RUC, Razón Social, Nombre Comercial, Dirección, Plan.</em></li>
+          <li>Completa: <em>RUC, Razón Social, Nombre Comercial, Dirección, Plan, Tipo de contribuyente</em> (Persona Natural o Jurídica).</li>
+          <li>Si es Persona Jurídica, completa opcionalmente <strong>Representante Legal</strong> y <strong>Contadora/Contador</strong> (esta última se identifica con <strong>RUC</strong>, no cédula).</li>
+          <li>Marca <strong>Empresa matriz</strong> si es la empresa raíz, o selecciona su <strong>Empresa matriz</strong> si es una filial.</li>
           <li>Activa <strong>Crear configuración SRI</strong> si la empresa necesita facturación electrónica.</li>
-          <li>Guarda. El sistema creará automáticamente la estructura de datos para esa empresa.</li>
+          <li>Guarda. El sistema crea automáticamente la estructura de datos para esa empresa (plan de cuentas base, configuración del sistema).</li>
         </ol>
 
         <h4>Planes disponibles</h4>
@@ -35,15 +37,26 @@ const SECCIONES = [
           </tbody>
         </table>
 
-        <h4>Asignar usuarios a la empresa</h4>
+        <h4>¿Quién es Admin Macro?</h4>
+        <p>Un usuario cuyo <strong>rol base</strong> (el de su empresa de origen) es <strong>Administrador</strong> se convierte automáticamente en <strong>Admin Macro</strong>: ve TODAS las empresas activas de la cuenta, puede gestionar usuarios de cualquiera de ellas, y aparece marcado con el chip <strong>"Admin Macro"</strong> en la lista de usuarios de cada empresa (sin necesidad de estar asignado explícitamente a ella).</p>
+        <p>Un usuario con rol base distinto (ej. Supervisor o Contador) que también tiene acceso a una empresa específica (asignado por un Admin Macro) solo verá botones de gestión en esa empresa puntual, no en las demás.</p>
+
+        <h4>Cambiar de empresa activa</h4>
         <ol>
-          <li>En <strong>Administración → Empresas</strong>, expande la empresa creada.</li>
-          <li>Usa el panel <strong>"Usuarios de esta empresa"</strong> para vincular usuarios existentes o crear nuevos.</li>
-          <li>Asigna el rol que tendrá el usuario en esa empresa específica.</li>
+          <li>En el sidebar, bajo <strong>"Modo multiempresa"</strong>, haz clic en el nombre de la empresa activa.</li>
+          <li>Selecciona la empresa a la que quieres cambiar. El sistema recarga con los datos, permisos y plan de cuentas de esa empresa.</li>
+          <li>Todo lo que hagas después (facturas, compras, asientos contables) queda registrado en la empresa activa, no en tu empresa base.</li>
+        </ol>
+
+        <h4>Asignar usuarios a una empresa</h4>
+        <ol>
+          <li>En <strong>Administración → Empresas</strong>, expande la empresa.</li>
+          <li>Usa el panel <strong>"Usuarios de esta empresa"</strong> para vincular usuarios existentes (del pool de tu empresa base) o crear nuevos.</li>
+          <li>Asigna el rol que tendrá ese usuario específicamente en esa empresa (puede ser distinto a su rol base).</li>
         </ol>
 
         <div className="ayuda-nota">
-          💡 <strong>Modo Mono-empresa:</strong> Si el sistema está configurado en modo <code>monoempresa</code>, solo habrá una empresa activa. Para activar multi-empresa, configura <code>VITE_MODO_EMPRESA=multiempresa</code> en el entorno de producción (Vercel).
+          💡 <strong>Modo Mono-empresa:</strong> instalaciones simples (sin Macro Empresa) solo tienen una empresa activa y no muestran el selector del sidebar.
         </div>
       </div>
     ),
@@ -321,12 +334,51 @@ const SECCIONES = [
         <h4>Comprobantes duplicados</h4>
         <p>El sistema verifica la <strong>clave de acceso</strong> de cada comprobante antes de importar. Si ya fue registrado anteriormente, lo omitirá automáticamente para evitar duplicados.</p>
 
+        <h4>Qué se importa además de facturas</h4>
+        <p>El Buzón detecta el tipo de documento por su clave de acceso y lo registra en el módulo correcto: <strong>facturas y liquidaciones de compra</strong> → Compras, <strong>notas de crédito/débito recibidas</strong> y <strong>retenciones recibidas de tus clientes</strong> → visibles en la pestaña <strong>"Historial"</strong> del Buzón. Las facturas de compra generan además su <strong>asiento contable automático</strong>.</p>
+
         <div className="ayuda-nota ayuda-nota-warning">
           ⚠️ Para usar el Buzón SRI necesitas tener configuradas tus <strong>credenciales SRI</strong> en <em>Configuración → SRI</em> (RUC y clave del portal contribuyente).
         </div>
 
-        <h4>Importar desde archivo XML</h4>
-        <p>También puedes cargar comprobantes manualmente subiendo el archivo <strong>XML</strong> directamente (arrastra el archivo o usa el botón de carga). Útil si el proveedor te envió el XML por correo.</p>
+        <h4>Importar desde archivo XML o ZIP</h4>
+        <p>También puedes cargar comprobantes manualmente con las pestañas <strong>"Importar XML"</strong> (varios archivos sueltos) o <strong>"Importar ZIP"</strong> (un comprimido con varios XML). Útil si el proveedor te envió los archivos por correo, o si el documento es demasiado antiguo para la vía automática (ver nota abajo).</p>
+
+        <div className="ayuda-nota ayuda-nota-warning">
+          ⚠️ <strong>Documentos de más de un año:</strong> las pestañas <strong>"Importar TXT"</strong> y <strong>"Por claves de acceso"</strong> consultan el servicio en línea del SRI, que solo tiene disponibles los comprobantes <strong>recientes</strong>. Si necesitas cargar facturas antiguas (por ejemplo, para corregir contabilidad de años anteriores), descarga los XML directamente desde <strong>srienlinea.sri.gob.ec</strong> y usa <strong>"Importar XML"</strong> o <strong>"Importar ZIP"</strong> — esa vía no depende de la fecha porque no vuelve a consultar al SRI.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'facturas-historicas',
+    icono: '🗂️',
+    titulo: 'Importar facturas históricas (contabilidad atrasada)',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Si necesitas cargar facturas de <strong>ventas de años anteriores</strong> (por ejemplo, para poner al día la contabilidad de un cliente nuevo), usa este módulo en vez de emitir facturas una por una.</p>
+
+        <h4>Cómo importar</h4>
+        <ol>
+          <li>Ve a <strong>Ventas → Importar históricas</strong>.</li>
+          <li>Descarga la <strong>plantilla Excel</strong> desde el asistente.</li>
+          <li>Llena una fila por factura: fecha, tipo y número de identificación del cliente, razón social, subtotales, IVA, y opcionalmente <em>número de autorización</em> o <em>número de factura</em> originales.</li>
+          <li>Sube el archivo. El sistema muestra una <strong>vista previa</strong> con las filas válidas y los errores resaltados antes de importar nada.</li>
+          <li>Confirma la importación.</li>
+        </ol>
+
+        <h4>Estados asignados automáticamente</h4>
+        <table className="ayuda-tabla">
+          <thead><tr><th>Estado</th><th>Cuándo se asigna</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Autorizado</strong></td><td>Si la fila trae un número de autorización del SRI (49 dígitos)</td></tr>
+            <tr><td><strong>Histórico</strong></td><td>Si no trae autorización — factura solo para registro contable, nunca se envía al SRI</td></tr>
+          </tbody>
+        </table>
+
+        <div className="ayuda-nota">
+          💡 Las facturas con estado <strong>Histórico</strong> aparecen con un badge azul en el listado de facturas, y sí se incluyen en las Declaraciones (F104).
+        </div>
       </div>
     ),
   },
@@ -408,6 +460,100 @@ const SECCIONES = [
         <div className="ayuda-nota">
           💡 Puedes crear márgenes por categoría: <em>General (30%), Electrónica (20%), Alimentos (15%)</em>, etc. Selecciona el más adecuado al importar cada compra.
         </div>
+      </div>
+    ),
+  },
+  {
+    id: 'plan-cuentas',
+    icono: '📑',
+    titulo: 'Plan de Cuentas — instalación e importación',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>El Plan de Cuentas es la base de toda la contabilidad: cada asiento automático (facturas, compras, costo de ventas) necesita cuentas ya creadas para poder registrarse.</p>
+
+        <h4>Si tu plan de cuentas está vacío</h4>
+        <p>Ve a <strong>Contabilidad → Plan de Cuentas</strong>. El sistema detecta que no tienes cuentas y te ofrece dos opciones:</p>
+        <ul>
+          <li><strong>Plan AELA base</strong> — catálogo estándar simplificado, listo para empezar rápido.</li>
+          <li><strong>Plan NIIF Supercias</strong> — las 308 cuentas del Catálogo Único de Cuentas oficial de la Superintendencia de Compañías del Ecuador, para empresas que deben reportar bajo NIIF.</li>
+        </ul>
+
+        <h4>Importar tu propio plan desde Excel</h4>
+        <ol>
+          <li>En la tarjeta <strong>"Importar plan de cuentas desde Excel"</strong>, descarga la plantilla o arrastra tu propio archivo.</li>
+          <li>El sistema detecta automáticamente la fila de encabezados aunque tu archivo tenga un título arriba, y reconoce formatos de otros sistemas contables (columnas como <code>Cod</code>, <code>Parent</code>, <code>Esdetalle</code>) convirtiéndolos al formato de AELA.</li>
+          <li>Revisa la vista previa: filas válidas vs. con error. Si todas fallan, el sistema te muestra qué columnas detectó en tu archivo para que compares con las esperadas.</li>
+          <li>Confirma la importación.</li>
+        </ol>
+
+        <h4>Reemplazar el plan completo</h4>
+        <p>Si tu plan de cuentas ya tiene cuentas pero sin movimientos contables aún, puedes <strong>reemplazarlo por completo</strong> al importar (marca la opción correspondiente): el sistema elimina las cuentas que no estén en tu Excel, respetando las que ya tienen movimientos (esas nunca se eliminan, quedan reportadas aparte).</p>
+
+        <div className="ayuda-nota ayuda-nota-warning">
+          ⚠️ Si tu empresa ya tiene asientos contables registrados, el sistema restringe el reemplazo completo — solo permite agregar cuentas nuevas o eliminar cuentas sin movimientos, para no romper la contabilidad ya generada.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'config-contable',
+    icono: '⚙️',
+    titulo: 'Configuración contable — a qué cuenta se contabilizan compras y ventas',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Por defecto, el sistema contabiliza automáticamente cada compra y el costo de cada venta en cuentas genéricas predefinidas. Si tu contador prefiere usar cuentas propias del Plan de Cuentas de la empresa, puede configurarlas.</p>
+
+        <h4>Cómo configurarlo</h4>
+        <ol>
+          <li>Ve a <strong>Contabilidad → Plan de Cuentas</strong>.</li>
+          <li>Primero crea (si no existe) la cuenta que quieres usar — por ejemplo, una cuenta de gasto específica como <em>"Gastos de Oficina"</em>.</li>
+          <li>En la tarjeta <strong>"Configuración de asientos automáticos — Compras y Ventas"</strong>, selecciona esa cuenta en el campo correspondiente.</li>
+          <li>Guarda. Desde ese momento, todas las compras (manuales y las importadas por el Buzón SRI) y el costo de las ventas se contabilizan en las cuentas que elegiste.</li>
+        </ol>
+
+        <h4>Qué se puede configurar</h4>
+        <table className="ayuda-tabla">
+          <thead><tr><th>Campo</th><th>Se usa para</th></tr></thead>
+          <tbody>
+            <tr><td>Gasto por compra</td><td>Ítems de compra no inventariables (servicios, suministros, etc.)</td></tr>
+            <tr><td>Inventario</td><td>Ítems de compra inventariables, y la salida por costo de venta</td></tr>
+            <tr><td>IVA crédito tributario compras</td><td>El IVA pagado en las compras</td></tr>
+            <tr><td>Cuentas por pagar proveedores</td><td>Contrapartida cuando la compra queda pendiente de pago</td></tr>
+            <tr><td>Caja/Bancos</td><td>Contrapartida cuando la compra se paga de contado</td></tr>
+            <tr><td>Costo de ventas</td><td>El costo de la mercadería vendida en cada factura</td></tr>
+          </tbody>
+        </table>
+
+        <div className="ayuda-nota">
+          💡 Si dejas un campo sin elegir, el sistema sigue usando la cuenta genérica de siempre — no necesitas configurar todo de una vez.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'bancos',
+    icono: '🏦',
+    titulo: 'Bancos — cuentas bancarias, movimientos y cheques',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>El módulo de Bancos (disponible en planes Medium y Pro) lleva el registro de tus cuentas bancarias, sus movimientos y los cheques emitidos.</p>
+
+        <h4>Crear una cuenta bancaria</h4>
+        <ol>
+          <li>Ve a <strong>Contabilidad → Bancos → + Nueva Cuenta</strong>.</li>
+          <li>Completa nombre descriptivo, institución bancaria, tipo (Corriente/Ahorros), número de cuenta y saldo inicial.</li>
+          <li><strong>Vincula la cuenta contable:</strong> selecciona en el campo "Cuenta contable" la cuenta de tu Plan de Cuentas que representa este banco (debe estar creada primero en Contabilidad → Plan de Cuentas, tipo Activo).</li>
+        </ol>
+
+        <div className="ayuda-nota ayuda-nota-warning">
+          ⚠️ Si no vinculas la cuenta contable, la tarjeta de la cuenta bancaria muestra una advertencia "Sin cuenta contable vinculada". Puedes editarla en cualquier momento para agregarla.
+        </div>
+
+        <h4>Movimientos y cheques</h4>
+        <ul>
+          <li><strong>Movimientos / Libro Mayor:</strong> registra depósitos, retiros, transferencias, notas de débito/crédito bancarias. Muestra el saldo acumulado.</li>
+          <li><strong>Cheques:</strong> emite cheques asociados a un proveedor, con seguimiento de estado (Pendiente, Cobrado, Anulado, Protestado).</li>
+        </ul>
       </div>
     ),
   },

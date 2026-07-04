@@ -20,8 +20,9 @@ function formatDate(d) {
 function ModalCuenta({ cuenta, onClose, onSaved }) {
   const [form, setForm] = useState({
     nombre: '', banco: '', tipoCuenta: 'CORRIENTE',
-    numeroCuenta: '', titular: '', saldoInicial: '0',
+    numeroCuenta: '', titular: '', saldoInicial: '0', cuentaContableId: '',
   });
+  const [cuentasContables, setCuentasContables] = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
@@ -34,9 +35,16 @@ function ModalCuenta({ cuenta, onClose, onSaved }) {
         numeroCuenta: cuenta.numeroCuenta || '',
         titular: cuenta.titular || '',
         saldoInicial: String(cuenta.saldoInicial ?? 0),
+        cuentaContableId: cuenta.cuentaContableId ? String(cuenta.cuentaContableId) : '',
       });
     }
   }, [cuenta]);
+
+  useEffect(() => {
+    api.get('/contabilidad/plan-cuentas', { params: { tipo: 'ACTIVO', activo: true, soloMovimiento: true } })
+      .then((r) => setCuentasContables(r.data?.data?.flat || []))
+      .catch(() => {});
+  }, []);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -92,6 +100,20 @@ function ModalCuenta({ cuenta, onClose, onSaved }) {
                 <input name="saldoInicial" type="number" step="0.01" value={form.saldoInicial} onChange={handleChange} />
               </div>
             )}
+            <div className="form-group full-col">
+              <label>Cuenta contable (Plan de Cuentas)</label>
+              <select name="cuentaContableId" value={form.cuentaContableId} onChange={handleChange}>
+                <option value="">— Sin vincular —</option>
+                {cuentasContables.map((c) => (
+                  <option key={c.id} value={c.id}>{c.codigo} — {c.nombre}</option>
+                ))}
+              </select>
+              <small style={{ color: 'var(--color-text-secondary)', fontSize: '0.78rem' }}>
+                {cuentasContables.length === 0
+                  ? 'No hay cuentas de tipo Activo disponibles. Crea primero la cuenta del banco en Contabilidad → Plan de Cuentas.'
+                  : 'Enlaza esta cuenta bancaria con su cuenta de Activo en el Plan de Cuentas para que los movimientos y conciliaciones se reflejen correctamente en la contabilidad.'}
+              </small>
+            </div>
           </div>
           {error && <p className="form-error" style={{ color: 'var(--color-danger)', fontSize: '0.85rem', marginTop: '0.75rem' }}>{error}</p>}
           <div className="modal-actions">
@@ -576,6 +598,15 @@ export default function BancosHub() {
                   </div>
                   <div className="banco-card-info">{c.banco} · {c.numeroCuenta}</div>
                   {c.titular && <div className="banco-card-info" style={{ fontSize: '0.78rem' }}>{c.titular}</div>}
+                  {c.cuentaContable ? (
+                    <div className="banco-card-info" style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                      📎 {c.cuentaContable.codigo} — {c.cuentaContable.nombre}
+                    </div>
+                  ) : (
+                    <div className="banco-card-info" style={{ fontSize: '0.75rem', color: 'var(--color-warning, #b45309)' }}>
+                      ⚠ Sin cuenta contable vinculada
+                    </div>
+                  )}
                   <div className={`banco-card-saldo ${saldoActual < 0 ? 'negativo' : ''}`}>
                     ${formatMoney(saldoActual)}
                   </div>
@@ -591,6 +622,11 @@ export default function BancosHub() {
                 <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>{cuentaSeleccionada.nombre}</h2>
                 <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>
                   {cuentaSeleccionada.banco} · {cuentaSeleccionada.tipoCuenta} · {cuentaSeleccionada.numeroCuenta}
+                </p>
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.8rem' }}>
+                  {cuentaSeleccionada.cuentaContable
+                    ? <span style={{ color: 'var(--color-text-secondary)' }}>📎 Cuenta contable: {cuentaSeleccionada.cuentaContable.codigo} — {cuentaSeleccionada.cuentaContable.nombre}</span>
+                    : <span style={{ color: 'var(--color-warning, #b45309)' }}>⚠ Sin cuenta contable vinculada — edítala para enlazarla al Plan de Cuentas</span>}
                 </p>
               </div>
 

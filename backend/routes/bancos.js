@@ -21,8 +21,12 @@ function parseIntSafe(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// req.empresa.id refleja la empresa ACTIVA (EmpresaSwitcher / cambiar-empresa en
+// Macro Empresa). req.usuario.empresaId es la empresa BASE del usuario y nunca
+// cambia al cambiar de empresa — usarlo aquí hacía que Bancos operara siempre
+// sobre la empresa base del usuario, ignorando a qué empresa había cambiado.
 function obtenerEmpresaId(req) {
-  return req.usuario?.empresaId ?? 1;
+  return req.empresa?.id ?? req.usuario?.empresaId ?? 1;
 }
 
 // ============================================================
