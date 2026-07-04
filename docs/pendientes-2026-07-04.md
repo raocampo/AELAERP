@@ -15,7 +15,37 @@ reimportar, y cierre de los dos últimos principios de diseño ERP contable eleg
 por el usuario como backlog: Centros de Costo y Provisiones automáticas de nómina
 (décimos, fondos de reserva, aportes IESS).
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`, `358d78e`, `8ad0bb7`, `cf16980`, `23fc46d`, `c6a61da`, `a57a994`, `e7415cb`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`, `358d78e`, `8ad0bb7`, `cf16980`, `23fc46d`, `c6a61da`, `a57a994`, `e7415cb`, `ee37c7a`
+
+---
+
+## 🟢 ESTADO AL CIERRE DE SESIÓN (2026-07-05) — para retomar más luego
+
+**Todo el código está commiteado y pusheado a `origin/main` (HEAD = `ee37c7a`).**
+No hay trabajo local sin guardar, no hay ramas pendientes de mergear, no hay
+migraciones sin aplicar en el entorno local (`scfi_dev`).
+
+**No queda ningún pendiente técnico accionable sin acceso a producción.** Todo lo
+que sigue abierto requiere que un humano (tú o el cliente) lo pruebe en el
+navegador/producción — no es algo que se pueda seguir "programando" a ciegas:
+
+1. **Lista de verificación en producción (12 puntos)** — ver sección justo abajo
+   "PENDIENTES PARA MAÑANA". Empezar por el punto 0 (prioridad: facturas históricas)
+   y el punto 1 (confirmar que Railway tomó el último deploy).
+2. **Backlog de mejoras sin urgencia del cliente** (no bloquea nada, sin fecha):
+   - Motor automático de reglas SRI→cuenta contable (único punto de los 5
+     principios ERP que queda como mejora opcional — la config manual del
+     contador ya cubre el caso real reportado)
+   - Puppeteer en Railway (`nixpacks.toml` ya listo) — solo si el scraper SRI
+     (punto 7 de la lista) sigue fallando tras el fix fetch+JSF
+   - App móvil: logos reales AELA, ESC/POS Bluetooth, build EAS/APK
+   - Pasarela de pagos PayPhone/Stripe, Impuesto a la Renta en nómina (LORTI),
+     tests e2e Playwright, Panel Super Admin (ver "BACKLOG — General" al final)
+
+**Para retomar la próxima sesión:** empezar preguntando por el resultado de la
+verificación en producción de los 12 puntos — si algo falló, ese es el próximo
+bug a arreglar. Si todo pasó, no queda backlog contable urgente; preguntar al
+usuario qué prioridad quiere del backlog general.
 
 ---
 
@@ -119,8 +149,6 @@ UI) sigue sin probarse — eso solo se puede confirmar en producción o con un u
 contraseña de prueba a mano. Los puntos 1 (deploy Railway), 2 (Bancos UI en Consorcio
 Vial), 6 (Buzón SRI) y 7 (scraper) del listado de arriba siguen pendientes de
 verificar ahí.
-
----
 
 ---
 
