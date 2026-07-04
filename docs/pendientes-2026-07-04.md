@@ -15,7 +15,7 @@ reimportar, y cierre de los dos últimos principios de diseño ERP contable eleg
 por el usuario como backlog: Centros de Costo y Provisiones automáticas de nómina
 (décimos, fondos de reserva, aportes IESS).
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`, `358d78e`, `8ad0bb7`, `cf16980`, `23fc46d`, `c6a61da`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`, `358d78e`, `8ad0bb7`, `cf16980`, `23fc46d`, `c6a61da`, `a57a994`, `e7415cb`
 
 ---
 
@@ -69,6 +69,11 @@ Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3
     en Libro Diario el asiento `NOMINA` de provisión (sueldos+décimos+fondos de
     reserva+IESS patronal). Marcarla "✅ Pagar" y confirmar el segundo asiento
     `NOMINA` de pago (Sueldos por Pagar contra Caja).
+12. **Importar facturas de compra históricas** (feature `e7415cb`) — en Compras →
+    "Importar históricas", descargar la plantilla, cargar un Excel con al menos
+    una fila válida (numero_factura y proveedor son obligatorios) y confirmar
+    que se crea la compra + el asiento `COMPRA` en el Libro Diario con la fecha
+    histórica correcta.
 
 Detalle completo de cada punto (causa raíz, qué se cambió) en las secciones abajo.
 
@@ -566,6 +571,53 @@ cuentas nuevas creadas, y luego marcarla como pagada y confirmar el segundo asie
 
 ---
 
+## Feature — Importar facturas de compra históricas (`e7415cb`)
+
+Cierra el otro punto "🟡 PENDIENTE MEDIO" que quedaba documentado: hasta ahora solo
+existía importación masiva de facturas de **venta** históricas (sesión 07-02); las
+compras a proveedores de períodos anteriores no tenían un equivalente y había que
+registrarlas una por una manualmente.
+
+Mismo patrón de wizard de 4 pasos (instrucciones → cargar → preview → resultado),
+adaptado a proveedores:
+- `backend/utils/importarComprasHistoricas.js`: valida cada fila (fecha, tipo/
+  identificación y razón social del **proveedor**, subtotales/IVA, forma de pago,
+  tipo de gasto opcional). A diferencia de la importación de ventas, aquí
+  **`numero_factura` es obligatorio** — es el documento del proveedor, no algo que
+  AELA asigna.
+- `backend/routes/compras.js`: `GET/POST /compras/importar/plantilla|preview|ejecutar`
+  — usa `req.prisma || prisma` (multer rompe el `AsyncLocalStorage` del proxy
+  global, mismo patrón ya establecido para todas las rutas con carga de archivos).
+  Reutiliza `upsertProveedorCompra()` y `normalizarDetalle()` ya existentes en el
+  archivo para no duplicar lógica de la creación manual.
+- **No toca inventario ni crea productos** (`registraInventario: false`,
+  `creaProductos: false`, todo detalle marcado `inventariable: false`) — mismo
+  criterio que las facturas históricas de venta: ajustar retroactivamente el stock
+  actual por una compra ya consumida hace tiempo podría dejarlo incorrecto.
+- **Genera el asiento `COMPRA` automáticamente desde el día uno**, con la fecha
+  histórica real (a diferencia de facturas de venta históricas, donde esto fue
+  un bug encontrado después — aquí se construyó bien desde el inicio).
+- Deduplicación vía el índice único existente `(empresaId, identificacionProveedor,
+  numeroFactura)` — si ya existe, se reporta como error de fila sin abortar el
+  resto del lote.
+- Frontend: nuevo componente `ImportarComprasHistoricas.jsx` (reutiliza los
+  estilos `ifh-*` de `ImportarFacturasHistoricas.css`), ruta
+  `/compras/importar-historicas`, entrada nueva en el menú de Compras.
+
+**Verificado con script de integración contra `scfi_dev` real:** validación de fila
+correcta y de filas inválidas (sin `numero_factura`, sin `identificacion`), creación
+de proveedor+compra+asiento cuadrado ($230 = $200 base + $30 IVA), fecha del asiento
+igual a la fecha histórica de la fila (no la fecha de importación), idempotencia,
+confirmación de que no se tocó inventario, y rechazo de compra duplicada (mismo
+proveedor + mismo número de factura) — 7/7 pasos ✅. Backend arranca limpio, `vite
+build` del frontend compila sin errores, lint sin errores.
+
+**Pendiente de verificar en producción:** importar un lote real de facturas de
+compra históricas y confirmar los asientos `COMPRA` en el Libro Diario con la
+fecha histórica correcta.
+
+---
+
 ## Nota — Deploy de Railway
 
 Se confirmó con una captura de Railway que el deployment "Active" databa de
@@ -603,11 +655,11 @@ DB:       PostgreSQL Railway
 - `frontend/src/components/Ayuda/AyudaSistema.jsx` + `docs/manual-usuario.md` —
   documentación actualizada (multiempresa, contabilidad, bancos, Buzón SRI)
 
-**Variables CSS indefinidas — pendiente en otros módulos:** `ImportarFacturasHistoricas.css`,
-`FormEmpleado.jsx`, `Nomina.jsx`, `TalentoHumano.css` usan el mismo patrón roto
-(`--color-surface`, `--color-text-primary`, `--color-text-secondary`, `--color-border`)
-que no existen en `App.css`. No corregido hoy — revisar si causa problemas visuales
-reportados en Talento Humano o Facturas Históricas.
+**Variables CSS indefinidas en otros módulos — descartado (2026-07-05):** se revisó
+línea por línea `ImportarFacturasHistoricas.css`, `FormEmpleado.jsx`, `Nomina.jsx` y
+`TalentoHumano.css` — los 4 archivos YA tienen fallback inline en cada
+`var(--color-xxx, #hex)` (ej. `var(--color-border,#e2e8f0)`), a diferencia de Bancos
+que no tenía ninguno. No es el mismo bug — no hay nada que corregir ahí.
 
 **Nota de git:** al iniciar esta sesión, `git pull` fue rechazado porque el HEAD local
 estaba en `bc49978` mientras `origin/main` ya iba en `c09e044` (15 commits de sesiones
