@@ -11,7 +11,7 @@ para notas de venta también), fix de aislamiento multiempresa en el módulo Ban
 vínculo con Plan de Cuentas, y actualización completa de la Ayuda del sistema y el
 manual de usuario.
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`
 
 ---
 
@@ -44,12 +44,15 @@ Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3
    registrar un movimiento o emitir un cheque eligiendo una "Cuenta contrapartida",
    confirmar que aparece el asiento `MOVIMIENTO_BANCO` en el Libro Diario. Registrar
    otro SIN elegir contrapartida y confirmar que se sigue guardando normal (sin asiento).
+9. **Retenciones y NC/ND recibidas generan asiento** (feature `f666fbf`) — importar
+   por el Buzón SRI una retención recibida y una nota de crédito/débito recibida,
+   confirmar en el Libro Diario los asientos `RETENCION_RECIBIDA` y `DOC_RECIBIDO`.
 
 Detalle completo de cada punto (causa raíz, qué se cambió) en las secciones abajo.
 
 ---
 
-## ✅ Verificación local (2026-07-04, mañana) — puntos 3, 4, 5, 8 confirmados con datos reales
+## ✅ Verificación local (2026-07-04, mañana) — puntos 3, 4, 5, 8, 9 confirmados con datos reales
 
 Se corrió un script de integración contra `scfi_dev` (Postgres local, sin mocks —
 llama a las mismas funciones de `utils/contabilidad.js`/`utils/inventario.js` que
@@ -74,6 +77,9 @@ usan las rutas reales). 22 asserts, todos ✅:
   Debe=200; movimiento SIN contrapartida se registra igual sin crear asiento;
   idempotencia; y error claro si la cuenta bancaria no está vinculada al Plan de
   Cuentas — 9/9 asserts.
+- **Punto 9 (retenciones/NC/ND recibidas, feature `f666fbf`):** retención con
+  IVA=12.5 + Renta=8.25 → CxC Haber=20.75 cuadrado; Nota de Crédito reduce CxP;
+  Nota de Débito aumenta CxP; idempotencia — 10/10 asserts.
 
 **Nota sobre el entorno local:** estaba desactualizado (4 migraciones pendientes,
 incluida `20260704000000_configuracion_contable` de ayer) — se corrió
@@ -121,9 +127,9 @@ importaran.
   `facturas_compra` creada en los 4 endpoints. No bloqueante: si falla, se loguea pero
   no revierte la importación del documento (mismo criterio que `compras.js`).
 
-**Pendiente (fuera de alcance de este fix):** `retenciones_recibidas` y
-`docs_recibidos_otros` (NC/ND recibidas) aún no tienen tratamiento contable propio —
-no existe una función `crearAsientoXxx` para ellos todavía. Backlog.
+~~**Pendiente (fuera de alcance de este fix):** `retenciones_recibidas` y
+`docs_recibidos_otros` (NC/ND recibidas) aún no tienen tratamiento contable propio.~~
+✅ Resuelto más abajo en esta misma sesión (`f666fbf`).
 
 ---
 
@@ -358,6 +364,31 @@ igual que antes (sin asiento) — no se fuerza nada.
 mismo patrón que ayer): 9/9 asserts — depósito (entrada), retiro (salida), movimiento
 sin contrapartida (se registra igual, sin asiento), idempotencia, y error claro cuando
 la cuenta bancaria no está vinculada al Plan de Cuentas.
+
+---
+
+## Feature — Asiento contable para retenciones y NC/ND recibidas (`f666fbf`)
+
+Cierra el gap que había quedado explícitamente marcado "fuera de alcance" en el fix
+del Buzón SRI de más arriba: `retenciones_recibidas` (un cliente nos retiene al
+pagarnos) y `docs_recibidos_otros` (NC/ND que un proveedor nos envía sobre una
+compra) se importaban y eran visibles en el Historial, pero nunca generaban asiento.
+
+- `crearAsientoRetencionRecibida()`: Debe Retención IVA (**cuenta nueva** `1.1.07.001`,
+  no existía en el plan base) + Debe Retención Renta (**cuenta nueva** `1.1.07.002`) /
+  Haber Cuentas por Cobrar — reduce lo que el cliente nos debe por la parte que
+  retuvo y pagó directo al SRI en nuestro nombre.
+- `crearAsientoDocRecibidoOtro()`: Nota de Crédito (04) reduce Cuentas por Pagar
+  Proveedores; Nota de Débito (05) la aumenta — la contrapartida es la MISMA cuenta
+  de compras/gasto configurable de `configuracion_contable` (sin campos nuevos), ya
+  que `docs_recibidos_otros` no guarda detalle de línea para saber si el ajuste fue
+  de inventario o de gasto puntual.
+- `buzon.js`: `_generarAsientoSiAplica()` ahora despacha según `resultado.modelo`
+  (antes solo manejaba `facturas_compra`).
+
+**Verificado con script de integración contra `scfi_dev` real:** 10/10 asserts
+(retención con IVA+Renta, NC reduce CxP, ND aumenta CxP, partida cuadrada,
+idempotencia).
 
 ---
 
