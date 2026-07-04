@@ -118,6 +118,7 @@ const GRUPOS_MENU = [
     label: 'Compras',
     items: [
       { to: '/compras',       icon: '🛒', label: 'Compras',       planMin: 'medium', permiso: 'compras.gestionar',       modulo: 'comprasHabilitadas' },
+      { to: '/compras/importar-historicas', icon: '📥', label: 'Importar históricas', planMin: 'medium', permiso: 'compras.gestionar', modulo: 'comprasHabilitadas' },
       { to: '/liquidaciones', icon: '📄', label: 'Liquidaciones', planMin: 'pro',    permiso: 'liquidaciones.gestionar', modulo: 'liquidacionesHabilitadas' },
       { to: '/buzon',         icon: '📥', label: 'Buzón SRI',     planMin: 'medium', permiso: 'compras.gestionar',       modulo: 'comprasHabilitadas' },
     ],

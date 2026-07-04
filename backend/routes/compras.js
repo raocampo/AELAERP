@@ -12,6 +12,12 @@ const {
   parsearFacturaCompraDesdeXml,
   obtenerXmlDesdeAutorizacion,
 } = require('../utils/importacionProductos');
+const {
+  leerExcel,
+  validarFilaCompra,
+  construirDetallesCompra,
+  generarPlantillaCompras,
+} = require('../utils/importarComprasHistoricas');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -568,6 +574,173 @@ router.post('/importar/autorizacion', async (req, res) => {
   } catch (error) {
     console.error('POST /compras/importar/autorizacion:', error);
     res.status(400).json({ success: false, mensaje: error.message || 'No se pudo recuperar la autorización SRI' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// IMPORTACIÓN MASIVA DE FACTURAS DE COMPRA HISTÓRICAS
+// (mismo patrón que /api/facturas/importar — no toca inventario ni crea
+// productos, solo registra el gasto/compra para efectos contables, y genera
+// el asiento COMPRA automáticamente con la fecha histórica real)
+// ────────────────────────────────────────────────────────────────────────────
+
+// GET /api/compras/importar/plantilla — descarga la plantilla Excel
+router.get('/importar/plantilla', async (_req, res) => {
+  try {
+    const buffer = generarPlantillaCompras();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="plantilla-compras-historicas.xlsx"');
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ success: false, mensaje: err.message });
+  }
+});
+
+// POST /api/compras/importar/preview — valida el archivo sin importar
+router.post('/importar/preview', upload.single('archivo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, mensaje: 'No se recibió archivo' });
+
+    const filas = leerExcel(req.file.buffer);
+    if (filas.length === 0) return res.status(400).json({ success: false, mensaje: 'El archivo está vacío o no tiene datos en la primera hoja' });
+    if (filas.length > 1000) return res.status(400).json({ success: false, mensaje: 'Máximo 1000 filas por importación' });
+
+    const resultado = filas.map((raw, idx) => {
+      const { valida, errores, datos } = validarFilaCompra(raw);
+      return { fila: idx + 2, valida, errores, datos };
+    });
+
+    const validas = resultado.filter((r) => r.valida).length;
+    res.json({ success: true, filas: resultado, validas, invalidas: resultado.length - validas, total: filas.length });
+  } catch (error) {
+    console.error('POST /compras/importar/preview:', error);
+    res.status(500).json({ success: false, mensaje: `Error al procesar archivo: ${error.message}` });
+  }
+});
+
+// POST /api/compras/importar/ejecutar — importa las filas válidas
+router.post('/importar/ejecutar', upload.single('archivo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, mensaje: 'No se recibió archivo' });
+
+    // req.prisma directo — multer rompe el AsyncLocalStorage del proxy global,
+    // mismo patrón ya usado en /api/facturas/importar/ejecutar.
+    const db = req.prisma || prisma;
+    const empresaId = req.empresa.id;
+
+    const filasRaw = leerExcel(req.file.buffer);
+    if (filasRaw.length === 0) return res.status(400).json({ success: false, mensaje: 'El archivo está vacío' });
+    if (filasRaw.length > 1000) return res.status(400).json({ success: false, mensaje: 'Máximo 1000 filas por importación' });
+
+    const importadas = [];
+    const errores = [];
+
+    for (const [idx, raw] of filasRaw.entries()) {
+      const filaNum = idx + 2;
+      const { valida, errores: errs, datos } = validarFilaCompra(raw);
+
+      if (!valida) {
+        errores.push({ fila: filaNum, errores: errs });
+        continue;
+      }
+
+      try {
+        const detallesNormalizados = construirDetallesCompra(datos).map((d, i) => normalizarDetalle(d, i));
+        const totales = detallesNormalizados.reduce((acc, detalle) => {
+          const pct = parseInt(detalle.porcentajeIva) || 0;
+          if (pct === 5) acc.subtotal5 += detalle.subtotal;
+          else if (pct > 0) acc.subtotal15 += detalle.subtotal;
+          else acc.subtotal0 += detalle.subtotal;
+          acc.totalDescuento += detalle.descuento;
+          acc.totalIva += detalle.totalIva;
+          acc.importeTotal += detalle.total;
+          return acc;
+        }, { subtotal0: 0, subtotal5: 0, subtotal15: 0, totalDescuento: 0, totalIva: 0, importeTotal: 0 });
+
+        const creada = await db.$transaction(async (tx) => {
+          const proveedor = await upsertProveedorCompra(tx, {
+            empresaId,
+            tipoIdentificacionProveedor: datos.tipoId,
+            identificacionProveedor: datos.identificacion,
+            razonSocialProveedor: datos.razonSocial,
+          });
+
+          return tx.facturas_compra.create({
+            data: {
+              empresaId,
+              emisorId: req.usuario.id,
+              proveedorId: proveedor?.id || null,
+              tipoIdentificacionProveedor: datos.tipoId,
+              identificacionProveedor: datos.identificacion,
+              razonSocialProveedor: datos.razonSocial,
+              numeroFactura: datos.numeroFactura,
+              numeroAutorizacion: datos.numeroAutorizacion,
+              fechaEmision: datos.fecha,
+              subtotal0: Number(totales.subtotal0.toFixed(2)),
+              subtotal5: Number(totales.subtotal5.toFixed(2)),
+              subtotal15: Number(totales.subtotal15.toFixed(2)),
+              totalDescuento: Number(totales.totalDescuento.toFixed(2)),
+              totalIva: Number(totales.totalIva.toFixed(2)),
+              importeTotal: Number(totales.importeTotal.toFixed(2)),
+              detalles: detallesNormalizados,
+              pagos: [{ formaPago: datos.formaPago, total: Number(totales.importeTotal.toFixed(2)), plazo: null, unidadTiempo: null }],
+              origenRegistro: 'IMPORTACION',
+              registraInventario: false,
+              creaProductos: false,
+              tipoGasto: datos.tipoGasto,
+              observaciones: datos.observaciones,
+            },
+            select: { id: true, numeroFactura: true, importeTotal: true, fechaEmision: true },
+          });
+        });
+
+        // No se toca inventario aquí — mismo criterio que facturas históricas de
+        // venta: retroactivamente ajustar stock actual por una compra ya
+        // consumida hace tiempo podría dejarlo incorrecto. El asiento contable
+        // (gasto/compra) sí es seguro y es lo que el contador espera ver.
+        let asientoOk = false;
+        try {
+          const rAsiento = await crearAsientoFacturaCompraRegistrada({ compraId: creada.id, usuarioId: req.usuario.id, fecha: datos.fecha, db });
+          asientoOk = !!rAsiento.asiento;
+        } catch (contErr) {
+          console.error(`[Importar compras] Asiento contable fila ${filaNum} (compra ${creada.id}):`, contErr.message);
+        }
+
+        importadas.push({
+          fila: filaNum,
+          id: creada.id,
+          numeroFactura: creada.numeroFactura,
+          proveedor: datos.razonSocial,
+          total: parseFloat(creada.importeTotal),
+          asientoOk,
+        });
+      } catch (err) {
+        if (err.code === 'P2002') {
+          errores.push({ fila: filaNum, errores: [`Ya existe una compra de "${datos.razonSocial}" con el número de factura "${datos.numeroFactura}"`] });
+        } else {
+          console.error(`[Importar compras] fila ${filaNum}:`, err.message);
+          errores.push({ fila: filaNum, errores: [err.message] });
+        }
+      }
+    }
+
+    await registrarAuditoria({
+      usuarioId: req.usuario.id,
+      empresaId,
+      accion: 'IMPORTAR_COMPRAS_HISTORICAS',
+      tabla: 'facturas_compra',
+      datosNuevos: { importadas: importadas.length, errores: errores.length },
+    });
+
+    res.json({
+      success: true,
+      importadas: importadas.length,
+      errores: errores.length,
+      detalle: { importadas, errores },
+    });
+  } catch (error) {
+    console.error('POST /compras/importar/ejecutar:', error);
+    res.status(500).json({ success: false, mensaje: `Error en importación: ${error.message}` });
   }
 });
 

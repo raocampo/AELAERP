@@ -64,6 +64,7 @@ const GestionProductos = lazy(() => import('./components/Productos/GestionProduc
 const ListaCompras = lazy(() => import('./components/Compras/ListaCompras'));
 const FormCompra = lazy(() => import('./components/Compras/FormCompra'));
 const DetalleCompra = lazy(() => import('./components/Compras/DetalleCompra'));
+const ImportarComprasHistoricas = lazy(() => import('./components/Compras/ImportarComprasHistoricas'));
 const CajaDiaria = lazy(() => import('./components/Caja/CajaDiaria'));
 const PuntoVenta = lazy(() => import('./components/POS/PuntoVenta'));
 const ConfiguracionSistema = lazy(() => import('./components/Sistema/ConfiguracionSistema'));
@@ -212,6 +213,7 @@ function App() {
                 {/* Compras — Medium y Pro */}
                 <Route path="compras" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><ListaCompras /></PermissionRoute></ModuleRoute></MediumRoute>} />
                 <Route path="compras/nueva" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><FormCompra /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="compras/importar-historicas" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><ImportarComprasHistoricas /></PermissionRoute></ModuleRoute></MediumRoute>} />
                 <Route path="compras/:id" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><DetalleCompra /></PermissionRoute></ModuleRoute></MediumRoute>} />
 
                 {/* Caja diaria — disponible desde Lite */}
