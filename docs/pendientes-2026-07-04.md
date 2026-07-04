@@ -45,6 +45,43 @@ Detalle completo de cada punto (causa raíz, qué se cambió) en las secciones a
 
 ---
 
+## ✅ Verificación local (2026-07-04, mañana) — puntos 3, 4, 5 confirmados con datos reales
+
+Se corrió un script de integración contra `scfi_dev` (Postgres local, sin mocks —
+llama a las mismas funciones de `utils/contabilidad.js`/`utils/inventario.js` que
+usan las rutas reales). 22 asserts, todos ✅:
+
+- **Punto 3 (config contable):** una compra con `codigoCuentaComprasGasto` configurado
+  a una cuenta propia usó esa cuenta (no la genérica 5.2.01.001) — confirmado con
+  monto exacto.
+- **Punto 4 (costo de ventas factura):** venta de 2 unidades a costo 10 → stock
+  100→98, asiento `COSTO_VENTA` con Debe Costo=20 / Haber Inventario=20, partida
+  cuadrada.
+- **Punto 5 (notas de venta):** venta de 3 unidades → asiento `NOTA_VENTA` (Debe
+  Caja=30 / Haber Ventas=30, sin línea de IVA — correcto para RIMPE Negocio Popular)
+  + asiento `COSTO_VENTA`=30; al anular, el stock se revirtió 95→98 y se generaron
+  2 asientos `ANULACION_NOTA` con débito/crédito invertido correctamente.
+- **Idempotencia:** llamar `crearAsientoFacturaCompraRegistrada` dos veces con el
+  mismo `compraId` NO duplica el asiento.
+- **Bancos:** confirmado que `include: { cuentaContable }` devuelve correctamente
+  código+nombre de la cuenta vinculada.
+
+**Nota sobre el entorno local:** estaba desactualizado (4 migraciones pendientes,
+incluida `20260704000000_configuracion_contable` de ayer) — se corrió
+`npx prisma migrate deploy` + `node scripts/applySchemaFixes.js` contra `scfi_dev`
+antes de probar. Ambos corrieron limpio, validando también que la migración de
+ayer es sintácticamente correcta contra Postgres real (no solo contra el schema).
+
+**Lo que esto NO reemplaza:** el flujo HTTP completo (login, autorización SRI real,
+UI) sigue sin probarse — eso solo se puede confirmar en producción o con un usuario/
+contraseña de prueba a mano. Los puntos 1 (deploy Railway), 2 (Bancos UI en Consorcio
+Vial), 6 (Buzón SRI) y 7 (scraper) del listado de arriba siguen pendientes de
+verificar ahí.
+
+---
+
+---
+
 ## Seguimiento de pendientes (sesión 2026-07-03)
 
 Confirmado por el usuario:
