@@ -11,10 +11,11 @@ para notas de venta también), fix de aislamiento multiempresa en el módulo Ban
 vínculo con Plan de Cuentas, actualización completa de la Ayuda del sistema y el
 manual de usuario, hallazgo y fix de un bug real (facturas históricas importadas por
 Excel nunca generaban asiento contable) con reparación retroactiva sin necesidad de
-reimportar, y cierre del principio #4 (Centros de Costo) elegido por el usuario como
-siguiente pieza del backlog contable.
+reimportar, y cierre de los dos últimos principios de diseño ERP contable elegidos
+por el usuario como backlog: Centros de Costo y Provisiones automáticas de nómina
+(décimos, fondos de reserva, aportes IESS).
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`, `358d78e`, `8ad0bb7`, `cf16980`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`, `358d78e`, `8ad0bb7`, `cf16980`, `23fc46d`, `c6a61da`
 
 ---
 
@@ -63,6 +64,11 @@ Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3
     de Costo", crear uno (ej. "SUC01 - Sucursal Norte"), luego en Libro Diario →
     "Nuevo asiento contable" asignarlo a una línea desde el nuevo selector "Centro
     de Costo" y confirmar que se guarda correctamente.
+11. **Provisiones de nómina** (feature `c6a61da`) — en Talento Humano → Nómina,
+    procesar una nómina con detalles calculados (botón "▶ Procesar") y confirmar
+    en Libro Diario el asiento `NOMINA` de provisión (sueldos+décimos+fondos de
+    reserva+IESS patronal). Marcarla "✅ Pagar" y confirmar el segundo asiento
+    `NOMINA` de pago (Sueldos por Pagar contra Caja).
 
 Detalle completo de cada punto (causa raíz, qué se cambió) en las secciones abajo.
 
@@ -306,11 +312,11 @@ confirmar el asiento `ANULACION_NOTA` que revierte ambos.
 | 2 | Motor de reglas / mapeo SRI → cuenta contable | 🟡 Parcial — implementado como **configuración manual del contador** (este fix), no como motor automático por producto/categoría/proveedor. La tabla `sri_mapeo_cuentas` del backlog original (código retención/IVA → cuenta) sigue sin implementar |
 | 3 | POS + inventario permanente (2 asientos por venta) | ✅ Resuelto para `facturas` (`c7adfd7`) y `notas_venta` (`5c429dd`) — ambos tipos de venta ya generan asiento de venta + costo |
 | 4 | Centros de costo dimensionales | ✅ Resuelto (`cf16980`) — `centroCostoId` opcional en `asientos_contables_detalle` + CRUD |
-| 5 | Provisiones RRHH automáticas | ❌ No implementado — `crearAsientoNominaPeriodo()` literalmente lanza `Error('El módulo de nómina no está implementado en esta versión de AELA')` |
+| 5 | Provisiones RRHH automáticas | ✅ Resuelto (`c6a61da`) — `crearAsientoNominaPeriodo`/`crearAsientoPagoNominaPeriodo` |
 
-**Con los puntos 1, 3 y 4 resueltos, el único pendiente real de diseño contable mayor
-que queda es el punto 5 (provisiones RRHH) — el punto 2 (motor automático de reglas)
-sigue como mejora opcional, no gap crítico.**
+**Con los 5 principios revisados hoy, los puntos 1, 3, 4 y 5 quedan resueltos — el
+único pendiente que queda es el punto 2 (motor automático de reglas SRI→cuenta),
+que sigue siendo una mejora opcional, no un gap crítico de datos incorrectos.**
 
 ---
 
@@ -513,6 +519,50 @@ Migración aplicada localmente con `npx prisma migrate deploy` +
 **Pendiente de verificar en producción:** crear un centro de costo real (ej. por
 sucursal) y asignarlo a una línea de un asiento manual, confirmar que se guarda y
 se puede editar/eliminar sin romper asientos existentes.
+
+---
+
+## Feature — Provisiones automáticas de nómina (`c6a61da`)
+
+Cierra el principio #5 (el último que quedaba pendiente de los 5 principios de diseño
+ERP contable): `crearAsientoNominaPeriodo()` y `crearAsientoPagoNominaPeriodo()` eran
+stubs desde siempre (`throw new Error('...no está implementado...')`), aunque el
+módulo de Talento Humano ya calculaba todo lo necesario por empleado en
+`nomina_detalles` (décimos proporcionales, fondos de reserva, aporte personal y
+patronal IESS, retención IR, préstamos IESS, anticipos).
+
+- **Asiento de provisión** (se dispara al cambiar una nómina de BORRADOR→PROCESADA,
+  hook en `PATCH /talento-humano/nomina/:id/estado`): Debe Gasto Sueldos + Gasto
+  Aporte Patronal + Gasto Provisión Décimo Tercero/Cuarto + Gasto Provisión Fondos de
+  Reserva / Haber Sueldos por Pagar + IESS por Pagar + Retención IR por Pagar +
+  Provisiones por Pagar + Anticipos a Empleados (activo, se acredita para reducirlo) +
+  Otros Descuentos por Pagar. Se registra con fecha de **fin de mes del período**
+  (no la fecha en que el usuario hace clic), para que caiga en el período contable
+  correcto sin importar cuándo se procese en el sistema.
+- **Asiento de pago** (al cambiar PROCESADA→PAGADA): Debe Sueldos por Pagar / Haber
+  Caja, con la fecha real del pago. Valida que exista la provisión previa — no se
+  puede "pagar" una nómina que nunca generó su asiento de provisión.
+- **Neto a pagar derivado algebraicamente** (ingresos − descuentos calculado a nivel
+  agregado), no sumando la columna `netoApagar` fila por fila — así el asiento cuadra
+  exacto por construcción matemática, sin depender de que el redondeo por empleado ya
+  hecho por el módulo de nómina sea perfectamente consistente en agregado.
+- Cuentas nuevas creadas automáticamente la primera vez (mismo patrón que retenciones
+  recibidas de ayer): `5.1.02.001-005` (gastos de nómina), `2.1.05.001-007` (pasivos
+  de nómina), `1.1.08.001` (Anticipos a Empleados). Ambos asientos son idempotentes
+  vía `tipo='NOMINA'` + `referencia` (`NOMINA-{id}` / `NOMINA-PAGO-{id}`).
+- Frontend (`Nomina.jsx`): al procesar/pagar, toast con el resultado del asiento
+  (generado correctamente o el motivo si falló) sin bloquear el cambio de estado.
+
+**Verificado con script de integración contra `scfi_dev` real:** 2 empleados de
+prueba con datos distintos (uno con fondos de reserva/anticipo/préstamo IESS, otro
+con impuesto a la renta/otros descuentos) → asiento de provisión cuadrado ($1,674.96
+debe=haber), idempotencia, asiento de pago cuadrado ($1,102.15 = suma de netos),
+idempotencia del pago, y rechazo correcto al intentar pagar una nómina sin provisión
+previa — 7/7 pasos ✅.
+
+**Pendiente de verificar en producción:** procesar una nómina real con empleados
+calculados, confirmar el asiento `NOMINA` de provisión en el Libro Diario con las
+cuentas nuevas creadas, y luego marcarla como pagada y confirmar el segundo asiento.
 
 ---
 
