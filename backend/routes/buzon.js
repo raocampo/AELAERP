@@ -28,6 +28,7 @@ const {
   isoAFormatoSri,
 } = require('../utils/sriPortal');
 const { obtenerRecibidosScraper } = require('../utils/sriScraper');
+const { crearAsientoFacturaCompraRegistrada } = require('../utils/contabilidad');
 
 const router  = express.Router();
 const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -340,6 +341,23 @@ async function _validarEmpresaActiva(req, res) {
   return true;
 }
 
+// ─── Generar asiento contable automático tras importar una compra ──
+// Las compras registradas manualmente (routes/compras.js) ya generan su asiento;
+// las importadas por el Buzón SRI no lo hacían — quedaban fuera de la contabilidad.
+// No debe abortar la importación si falla (mismo criterio que compras.js).
+async function _generarAsientoSiAplica(resultado, req) {
+  if (resultado?.modelo !== 'facturas_compra' || resultado?.accion !== 'creado') return;
+  try {
+    await crearAsientoFacturaCompraRegistrada({
+      compraId: resultado.id,
+      usuarioId: req.usuario?.id || null,
+      db: req.prisma,
+    });
+  } catch (err) {
+    console.error(`[Buzón] Asiento contable de compra id=${resultado.id}:`, err.message);
+  }
+}
+
 // ─── POST /importar ──────────────────────────────────────────
 router.post('/importar', async (req, res) => {
   try {
@@ -390,6 +408,7 @@ router.post('/importar', async (req, res) => {
           });
         });
 
+        await _generarAsientoSiAplica(resultado, req);
         resultados.push({ clave, tipo: tipo.nombre, estado: resultado.accion, id: resultado.id, motivo: resultado.motivo });
       } catch (err) {
         console.error(`[Buzón] Error importando ${clave}:`, err.message);
@@ -473,6 +492,7 @@ router.post('/importar-zip', upload.single('archivo'), async (req, res) => {
           });
         });
 
+        await _generarAsientoSiAplica(resultado, req);
         resultados.push({ archivo: filename, clave, tipo: tipo.nombre, estado: resultado.accion, id: resultado.id, motivo: resultado.motivo });
       } catch (err) {
         console.error(`[Buzón ZIP] Error importando ${filename}:`, err.message);
@@ -542,6 +562,7 @@ router.post('/importar-xml', upload.array('archivos', MAX_CLAVES_LOTE), async (r
             opcionesFactura: opciones,
           });
         });
+        await _generarAsientoSiAplica(resultado, req);
         resultados.push({ archivo: filename, clave, tipo: tipo.nombre, estado: resultado.accion, id: resultado.id, motivo: resultado.motivo });
       } catch (err) {
         console.error(`[Buzón XML] Error importando ${filename}:`, err.message);
@@ -980,6 +1001,7 @@ router.post('/sri-scraper/importar', async (req, res) => {
             opcionesFactura: opciones,
           })
         );
+        await _generarAsientoSiAplica(resultado, req);
         resultados.push({ clave, tipo: tipo.nombre, estado: resultado.accion, id: resultado.id });
       } catch (err) {
         console.error(`[Scraper importar] Error en ${clave}:`, err.message);

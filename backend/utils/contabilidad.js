@@ -440,13 +440,13 @@ async function crearAsientoLiquidacionCompraAutorizada({ liquidacionId, usuarioI
   return { asiento, creado: true };
 }
 
-async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha = new Date() }) {
+async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha = new Date(), db = prisma }) {
   const compraIdNum = toInt(compraId);
-  const compra = await prisma.facturas_compra.findUnique({ where: { id: compraIdNum } });
+  const compra = await db.facturas_compra.findUnique({ where: { id: compraIdNum } });
   if (!compra) throw new Error('Factura de compra no encontrada');
 
   const referencia = `COMP-${compra.id}`;
-  const existente = await prisma.asientos_contables.findFirst({
+  const existente = await db.asientos_contables.findFirst({
     where: {
       empresaId: compra.empresaId,
       tipo: 'COMPRA',
@@ -469,6 +469,7 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
     nombre: 'Inventario Mercaderias',
     tipo: 'ACTIVO',
     naturaleza: 'DEBITO',
+    tx: db,
   });
 
   const cuentaCompras = await ensureCuentaMovimiento({
@@ -477,6 +478,7 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
     nombre: 'Compras Locales',
     tipo: 'GASTO',
     naturaleza: 'DEBITO',
+    tx: db,
   });
 
   const cuentaIvaCompras = await ensureCuentaMovimiento({
@@ -485,6 +487,7 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
     nombre: 'IVA Credito Tributario Compras',
     tipo: 'ACTIVO',
     naturaleza: 'DEBITO',
+    tx: db,
   });
 
   const cuentaContrapartida = compra.egresoCajaRegistrado
@@ -494,6 +497,7 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
         nombre: 'Caja',
         tipo: 'ACTIVO',
         naturaleza: 'DEBITO',
+        tx: db,
       })
     : await ensureCuentaMovimiento({
         empresaId: compra.empresaId,
@@ -501,6 +505,7 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
         nombre: 'Cuentas por Pagar Proveedores',
         tipo: 'PASIVO',
         naturaleza: 'CREDITO',
+        tx: db,
       });
 
   const movimientos = [];
@@ -543,6 +548,7 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
     referencia,
     usuarioId,
     detalles: movimientos,
+    tx: db,
   });
 
   return { asiento, creado: true };
