@@ -11,17 +11,21 @@ para notas de venta también), fix de aislamiento multiempresa en el módulo Ban
 vínculo con Plan de Cuentas, y actualización completa de la Ayuda del sistema y el
 manual de usuario.
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`, `358d78e`, `8ad0bb7`
 
 ---
 
 ## 🔴 PENDIENTES PARA MAÑANA — verificar en producción, en orden
 
-0. **[PRIORIDAD] Facturas históricas ahora enlazan al diario** (fix `3a032cf`) —
-   importar un lote real de facturas históricas por Excel, confirmar la columna
-   "✓ Enlazada" en el resultado, y confirmar en Contabilidad → Libro Diario que los
-   asientos aparecen con la FECHA HISTÓRICA correcta (no la fecha de hoy). Esto es
-   lo que reportó el cliente como bloqueante — priorizar sobre el resto de la lista.
+0. **[PRIORIDAD] Facturas históricas ahora enlazan al diario** (fix `3a032cf`,
+   reparación retroactiva `8ad0bb7`) — el usuario preguntó si había que reimportar
+   las facturas ya cargadas: **no hace falta**. En Ventas → Importar históricas
+   → paso 1, hay una nueva tarjeta "¿Ya importaste facturas históricas antes?"
+   con el botón **"Generar asientos faltantes"** — genera el asiento contable
+   sobre las facturas que YA existen, usando su fecha histórica real, sin tocar
+   el Excel original. Es seguro correrlo varias veces (idempotente). Para
+   facturas importadas DESPUÉS de `3a032cf`, el asiento ya se genera solo al
+   importar — este botón es solo para las que se importaron ANTES del fix.
 1. **Confirmar deploy de Railway** — abrir pestaña "Details" del deployment activo y
    confirmar que corresponde al commit `62ed9f6` (o posterior). Si Railway no lo tomó,
    forzar redeploy manual ("Clear build cache & redeploy").
@@ -443,6 +447,28 @@ completa de tests de ayer (22 asserts) para confirmar que agregar el parámetro
 reales, confirmar la columna "✓ Enlazada" en el resultado, y confirmar en
 Contabilidad → Libro Diario que los asientos aparecen con la fecha histórica
 correcta (no la fecha de importación).
+
+---
+
+## Feature — Reparación retroactiva de facturas ya importadas (`8ad0bb7`)
+
+El usuario preguntó directamente: las facturas históricas de su cliente ya estaban
+importadas ANTES de este fix — ¿hay que reimportarlas? **No.**
+`crearAsientoFacturaAutorizada()` es idempotente y solo necesita el `facturaId` ya
+existente, así que se puede generar el asiento faltante directamente sin tocar el
+Excel original.
+
+- `POST /api/facturas/importar/generar-asientos-faltantes`: busca todas las
+  facturas de la empresa con `origenRegistro='IMPORTACION'`, genera el asiento
+  para las que no lo tengan (con la fecha histórica de cada una), cuenta las
+  que ya lo tenían, reporta errores por factura sin abortar el resto del lote.
+- `ImportarFacturasHistoricas.jsx`: nueva tarjeta en el paso 1 "¿Ya importaste
+  facturas históricas antes?" con botón **"Generar asientos faltantes"** y
+  resumen del resultado.
+
+**Verificado con script de integración:** 2 facturas históricas simulando el
+estado pre-fix (sin asiento) → primera corrida crea 2 asientos con la fecha
+histórica correcta; segunda corrida (idempotencia) no duplica nada — 9/9 asserts.
 
 ---
 
