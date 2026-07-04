@@ -474,6 +474,54 @@ async function crearAsientoReversoNotaVentaAnulada({ notaVentaId, usuarioId, fec
   return resultados;
 }
 
+// ─── Movimientos bancarios manuales (depósitos, retiros, transferencias, etc.) ──
+// A diferencia de compras/ventas, un movimiento bancario manual no tiene una
+// contrapartida contable predecible (puede ser un aporte de capital, el pago de
+// un gasto puntual, un cobro a un cliente, etc.) — por eso NO se adivina la
+// cuenta: el usuario la elige al registrar el movimiento. Si no la elige, el
+// movimiento se registra igual (como hasta ahora) pero sin asiento contable.
+// Requiere que la cuenta bancaria ya esté vinculada a una cuenta del Plan de
+// Cuentas (bancos.cuentaContableId).
+async function crearAsientoMovimientoBancario({ movimientoId, cuentaContrapartidaId, usuarioId, fecha = new Date(), db = prisma }) {
+  const movimientoIdNum = toInt(movimientoId);
+  const movimiento = await db.movimientos_bancarios.findUnique({ where: { id: movimientoIdNum }, include: { banco: true } });
+  if (!movimiento) throw new Error('Movimiento bancario no encontrado');
+  if (movimiento.asientoId) return { asiento: null, creado: false };
+  if (!movimiento.banco.cuentaContableId) {
+    throw new Error('La cuenta bancaria no tiene una cuenta contable vinculada (Bancos → editar cuenta → Cuenta contable)');
+  }
+
+  const debe  = round2(movimiento.debe);
+  const haber = round2(movimiento.haber);
+  const monto = debe > 0 ? debe : haber;
+  if (monto <= 0) return { asiento: null, creado: false };
+
+  const detalles = debe > 0
+    ? [
+        { cuentaId: movimiento.banco.cuentaContableId, descripcion: movimiento.concepto, debe: monto, haber: 0 },
+        { cuentaId: toInt(cuentaContrapartidaId), descripcion: movimiento.concepto, debe: 0, haber: monto },
+      ]
+    : [
+        { cuentaId: toInt(cuentaContrapartidaId), descripcion: movimiento.concepto, debe: monto, haber: 0 },
+        { cuentaId: movimiento.banco.cuentaContableId, descripcion: movimiento.concepto, debe: 0, haber: monto },
+      ];
+
+  const asiento = await crearAsientoContable({
+    empresaId: movimiento.empresaId,
+    fecha,
+    descripcion: `Movimiento bancario (${movimiento.tipo}): ${movimiento.concepto}`,
+    tipo: 'MOVIMIENTO_BANCO',
+    referencia: `MOVBANCO-${movimiento.id}`,
+    usuarioId,
+    tx: db,
+    detalles,
+  });
+
+  await db.movimientos_bancarios.update({ where: { id: movimiento.id }, data: { asientoId: asiento.id } });
+
+  return { asiento, creado: true };
+}
+
 async function crearAsientoCobroFactura({ facturaId, metodoPago = 'efectivo', usuarioId, fecha = new Date(), cajaId = null }) {
   const facturaIdNum = toInt(facturaId);
   const factura = await prisma.facturas.findUnique({ where: { id: facturaIdNum } });
@@ -1110,6 +1158,7 @@ module.exports = {
   crearAsientoVentaNotaVenta,
   crearAsientoCostoVentaNotaVenta,
   crearAsientoReversoNotaVentaAnulada,
+  crearAsientoMovimientoBancario,
   crearAsientoCobroFactura,
   crearAsientoCompraFarmacia,
   crearAsientoFacturaCompraRegistrada,

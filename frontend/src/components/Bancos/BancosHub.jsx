@@ -16,13 +16,25 @@ function formatDate(d) {
   return formatFechaCorta(d);
 }
 
+// Cuentas del Plan de Cuentas que aceptan movimiento — usado por los selectores
+// de "cuenta contable" (ModalCuenta) y "cuenta contrapartida" (Movimiento/Cheque).
+function useCuentasContables() {
+  const [cuentas, setCuentas] = useState([]);
+  useEffect(() => {
+    api.get('/contabilidad/plan-cuentas', { params: { activo: true, soloMovimiento: true } })
+      .then((r) => setCuentas(r.data?.data?.flat || []))
+      .catch((err) => console.error('No se pudo cargar el plan de cuentas:', err.response?.data?.mensaje || err.message));
+  }, []);
+  return cuentas;
+}
+
 // ─── Modal Cuenta ───────────────────────────────────────────
 function ModalCuenta({ cuenta, onClose, onSaved }) {
   const [form, setForm] = useState({
     nombre: '', banco: '', tipoCuenta: 'CORRIENTE',
     numeroCuenta: '', titular: '', saldoInicial: '0', cuentaContableId: '',
   });
-  const [cuentasContables, setCuentasContables] = useState([]);
+  const cuentasContables = useCuentasContables();
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
@@ -39,16 +51,6 @@ function ModalCuenta({ cuenta, onClose, onSaved }) {
       });
     }
   }, [cuenta]);
-
-  useEffect(() => {
-    // Sin filtro por tipo: algunas cuentas de banco quedan importadas con el tipo
-    // en otra capitalización o agrupadas distinto según el origen del plan de
-    // cuentas — mejor mostrar todas las cuentas de movimiento y dejar que el
-    // usuario elija por código/nombre, que ya es autoexplicativo.
-    api.get('/contabilidad/plan-cuentas', { params: { activo: true, soloMovimiento: true } })
-      .then((r) => setCuentasContables(r.data?.data?.flat || []))
-      .catch((err) => console.error('No se pudo cargar el plan de cuentas para Bancos:', err.response?.data?.mensaje || err.message));
-  }, []);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -136,8 +138,9 @@ function ModalCuenta({ cuenta, onClose, onSaved }) {
 function ModalMovimiento({ bancoId, onClose, onSaved }) {
   const [form, setForm] = useState({
     fecha: new Date().toISOString().slice(0, 10),
-    tipo: 'DEPOSITO', concepto: '', referencia: '', debe: '', haber: '', observaciones: '',
+    tipo: 'DEPOSITO', concepto: '', referencia: '', debe: '', haber: '', observaciones: '', cuentaContrapartidaId: '',
   });
+  const cuentasContables = useCuentasContables();
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
@@ -193,6 +196,20 @@ function ModalMovimiento({ bancoId, onClose, onSaved }) {
               <label>Observaciones</label>
               <input name="observaciones" value={form.observaciones} onChange={handleChange} />
             </div>
+            <div className="form-group full-col">
+              <label>Cuenta contrapartida (opcional)</label>
+              <select name="cuentaContrapartidaId" value={form.cuentaContrapartidaId} onChange={handleChange}>
+                <option value="">— No generar asiento contable —</option>
+                {cuentasContables.map((c) => (
+                  <option key={c.id} value={c.id}>{c.codigo} — {c.nombre}</option>
+                ))}
+              </select>
+              <small style={{ color: 'var(--color-text-muted, #64748b)', fontSize: '0.78rem' }}>
+                Si eliges una cuenta, se genera el asiento contable automáticamente
+                (banco vs. esta cuenta). Si la dejas vacía, el movimiento queda
+                registrado igual pero sin asiento.
+              </small>
+            </div>
           </div>
           {error && <p style={{ color: 'var(--color-danger)', fontSize: '0.85rem', marginTop: '0.75rem' }}>{error}</p>}
           <div className="modal-actions">
@@ -211,9 +228,10 @@ function ModalMovimiento({ bancoId, onClose, onSaved }) {
 function ModalCheque({ bancoId, onClose, onSaved }) {
   const [form, setForm] = useState({
     numero: '', beneficiario: '', fecha: new Date().toISOString().slice(0, 10),
-    fechaVencimiento: '', monto: '', concepto: '', proveedorId: '',
+    fechaVencimiento: '', monto: '', concepto: '', proveedorId: '', cuentaContrapartidaId: '',
   });
   const [proveedores, setProveedores] = useState([]);
+  const cuentasContables = useCuentasContables();
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
@@ -275,6 +293,19 @@ function ModalCheque({ bancoId, onClose, onSaved }) {
                   <option key={p.id} value={p.id}>{p.razonSocial}</option>
                 ))}
               </select>
+            </div>
+            <div className="form-group full-col">
+              <label>Cuenta contrapartida (opcional)</label>
+              <select name="cuentaContrapartidaId" value={form.cuentaContrapartidaId} onChange={handleChange}>
+                <option value="">— No generar asiento contable —</option>
+                {cuentasContables.map((c) => (
+                  <option key={c.id} value={c.id}>{c.codigo} — {c.nombre}</option>
+                ))}
+              </select>
+              <small style={{ color: 'var(--color-text-muted, #64748b)', fontSize: '0.78rem' }}>
+                Ej. la cuenta de Cuentas por Pagar del proveedor o el gasto que este
+                cheque está pagando. Si la dejas vacía, no se genera asiento.
+              </small>
             </div>
           </div>
           {error && <p style={{ color: 'var(--color-danger)', fontSize: '0.85rem', marginTop: '0.75rem' }}>{error}</p>}

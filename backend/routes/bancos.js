@@ -7,6 +7,7 @@ const express = require('express');
 const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
+const { crearAsientoMovimientoBancario } = require('../utils/contabilidad');
 
 const router = express.Router();
 
@@ -239,7 +240,7 @@ router.post('/:id/movimientos', autorizarPermiso('bancos.gestionar'), async (req
     const cuenta = await prisma.bancos.findFirst({ where: { id: bancoId, empresaId } });
     if (!cuenta) return res.status(404).json({ success: false, mensaje: 'Cuenta bancaria no encontrada' });
 
-    const { fecha, tipo, concepto, referencia, debe, haber, observaciones } = req.body;
+    const { fecha, tipo, concepto, referencia, debe, haber, observaciones, cuentaContrapartidaId } = req.body;
 
     const TIPOS_VALIDOS = ['DEPOSITO', 'RETIRO', 'TRANSFERENCIA_IN', 'TRANSFERENCIA_OUT', 'CHEQUE', 'NOTA_DEBITO', 'NOTA_CREDITO', 'AJUSTE'];
     if (!TIPOS_VALIDOS.includes(String(tipo).toUpperCase())) {
@@ -269,6 +270,21 @@ router.post('/:id/movimientos', autorizarPermiso('bancos.gestionar'), async (req
         observaciones: observaciones ? String(observaciones).trim() : null,
       },
     });
+
+    if (cuentaContrapartidaId) {
+      try {
+        await crearAsientoMovimientoBancario({
+          movimientoId: nuevo.id,
+          cuentaContrapartidaId: parseIntSafe(cuentaContrapartidaId),
+          usuarioId: req.usuario?.id || null,
+          fecha: nuevo.fecha,
+          db: req.prisma,
+        });
+      } catch (contErr) {
+        console.error('Error creando asiento de movimiento bancario:', contErr.message);
+      }
+    }
+
     res.status(201).json({ success: true, data: nuevo });
   } catch (error) {
     console.error('POST /bancos/:id/movimientos:', error);
@@ -403,11 +419,12 @@ router.post('/:id/cheques', autorizarPermiso('cheques.gestionar'), async (req, r
     const cuenta = await prisma.bancos.findFirst({ where: { id: bancoId, empresaId } });
     if (!cuenta) return res.status(404).json({ success: false, mensaje: 'Cuenta bancaria no encontrada' });
 
-    const { numero, beneficiario, fecha, fechaVencimiento, monto, concepto, proveedorId } = req.body;
+    const { numero, beneficiario, fecha, fechaVencimiento, monto, concepto, proveedorId, cuentaContrapartidaId } = req.body;
     if (!numero || !beneficiario || !monto) {
       return res.status(400).json({ success: false, mensaje: 'numero, beneficiario y monto son obligatorios' });
     }
 
+    let movimientoId = null;
     const cheque = await prisma.$transaction(async (tx) => {
       const nuevoCheque = await tx.cheques.create({
         data: {
@@ -426,7 +443,7 @@ router.post('/:id/cheques', autorizarPermiso('cheques.gestionar'), async (req, r
       });
 
       // Registrar movimiento de banco automáticamente
-      await tx.movimientos_bancarios.create({
+      const movimiento = await tx.movimientos_bancarios.create({
         data: {
           bancoId,
           empresaId,
@@ -439,9 +456,24 @@ router.post('/:id/cheques', autorizarPermiso('cheques.gestionar'), async (req, r
           chequeId: nuevoCheque.id,
         },
       });
+      movimientoId = movimiento.id;
 
       return nuevoCheque;
     });
+
+    if (cuentaContrapartidaId) {
+      try {
+        await crearAsientoMovimientoBancario({
+          movimientoId,
+          cuentaContrapartidaId: parseIntSafe(cuentaContrapartidaId),
+          usuarioId: req.usuario?.id || null,
+          fecha: cheque.fecha,
+          db: req.prisma,
+        });
+      } catch (contErr) {
+        console.error('Error creando asiento de cheque:', contErr.message);
+      }
+    }
 
     res.status(201).json({ success: true, data: cheque });
   } catch (error) {
