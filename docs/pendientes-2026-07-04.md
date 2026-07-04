@@ -11,7 +11,7 @@ para notas de venta también), fix de aislamiento multiempresa en el módulo Ban
 vínculo con Plan de Cuentas, y actualización completa de la Ayuda del sistema y el
 manual de usuario.
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`
 
 ---
 
@@ -214,12 +214,54 @@ confirmar el asiento `ANULACION_NOTA` que revierte ambos.
 2 (motor automático de reglas, opcional), 4 (centros de costo) y 5 (provisiones RRHH)
 — los tres son mejoras de alcance mayor, no gaps críticos de datos incorrectos.**
 
-**Recomendación de prioridad para seguir (si se retoma el diseño contable):**
-1. **Notas de Venta / POS sin contabilidad** — es el hueco más grande que queda hoy:
-   ninguna venta por POS se refleja en el Libro Diario (ni ingreso ni costo)
-2. Punto 2 completo (mapeo SRI → cuenta) — para retenciones/IVA de compras y ventas
-3. Puntos 4 y 5 — menor urgencia, dependen de que RRHH/reportes por sucursal sean
-   prioridad de negocio
+---
+
+## Bug — Modal de Bancos transparente + selector de cuenta contable vacío (`a3ee110`)
+
+Reportado con captura: al abrir "Nueva Cuenta Bancaria" en Consorcio Vial, el modal se
+veía transparente (el texto "No hay cuentas bancarias registradas" y el botón "+
+Agregar primera cuenta" de la página de atrás se veían superpuestos con el formulario),
+y el selector "Cuenta contable" no mostraba las cuentas que ya existían en el Plan de
+Cuentas de esa empresa.
+
+**Causa raíz #1 (modal transparente):** `Bancos.css` y `BancosHub.jsx` usan variables
+CSS que **nunca se definieron en ningún lado del proyecto**: `--color-surface`,
+`--color-text-primary`, `--color-text-secondary`, `--color-border`. Solo existen
+`--color-bg`, `--color-text`, `--color-text-muted` en `App.css`. `background:
+var(--color-surface)` con la variable indefinida y sin fallback resuelve a
+`transparent` — de ahí el efecto "modal transparente" superpuesto con el fondo.
+**Mismo patrón confirmado en 4 archivos más** (no corregidos en este commit):
+`ImportarFacturasHistoricas.css`, `FormEmpleado.jsx`, `Nomina.jsx`, `TalentoHumano.css`.
+
+**Causa raíz #2 (selector vacío):** `GET /contabilidad/plan-cuentas` filtraba `tipo`
+con comparación EXACTA sensible a mayúsculas (`where.tipo = String(tipo).toUpperCase()`
+sin `mode: 'insensitive'`). Si una cuenta quedó importada con el tipo en otra
+capitalización (ej. "Activo" en vez de "ACTIVO" — plausible tras las importaciones
+de formato externo de la sesión 07-03), quedaba excluida silenciosamente de cualquier
+selector que filtrara por tipo, incluido el nuevo de Bancos.
+
+**Fix:**
+- Todas las referencias a variables indefinidas reemplazadas por las reales del
+  proyecto (con fallback inline donde aplica) en Bancos.css y BancosHub.jsx.
+- `tipo` en `GET /contabilidad/plan-cuentas` ahora usa `mode: 'insensitive'`.
+- El selector de Bancos ya NO filtra por `tipo` en el frontend (solo por
+  `aceptaMovimiento`+`activo`) — más tolerante a datos mal normalizados, el usuario
+  igual puede identificar la cuenta correcta por código/nombre.
+- El error de carga del selector ya no se silencia (`catch(() => {})` →
+  `console.error(...)`), para diagnosticar más rápido la próxima vez.
+
+**Pendiente de verificar:** recargar Bancos en Consorcio Vial, confirmar que el modal
+se ve sólido (no transparente) y que el selector ahora muestra las cuentas del Plan
+de Cuentas ya creadas.
+
+## Nota — Deploy de Railway
+
+Se confirmó con una captura de Railway que el deployment "Active" databa de
+**3 de julio 22:30**, coincidiendo casi exactamente con los últimos commits de esta
+sesión (`2886f8b` 22:18, `5c429dd`/`08c2018` 22:30) — probablemente SÍ incluye esos
+fixes, pero no hay 100% de certeza sin revisar la pestaña "Details" del deployment
+para confirmar el commit exacto de GitHub asociado. Con el push de `a3ee110` debería
+dispararse un nuevo deploy — verificar que se complete antes de volver a probar Bancos.
 
 ---
 
