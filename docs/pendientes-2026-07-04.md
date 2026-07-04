@@ -6,11 +6,12 @@ Sincronización de git (HEAD local desactualizado, sin pérdida de trabajo), seg
 de pendientes de sesiones anteriores, diseño + implementación de la primera pieza del
 "motor de reglas contables" pedido por un cliente (configuración de cuentas contables
 para asientos automáticos de compras), cierre del gap de "POS + inventario permanente"
-de los 5 principios ERP (asiento automático de costo de ventas), fix de aislamiento
-multiempresa en el módulo Bancos + vínculo con Plan de Cuentas, y actualización completa
-de la Ayuda del sistema y el manual de usuario.
+de los 5 principios ERP (asiento automático de costo de ventas para facturas, y luego
+para notas de venta también), fix de aislamiento multiempresa en el módulo Bancos +
+vínculo con Plan de Cuentas, y actualización completa de la Ayuda del sistema y el
+manual de usuario.
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`
 
 ---
 
@@ -177,15 +178,41 @@ Libro Diario automáticamente.
 
 ---
 
+## Feature — Asientos contables para Notas de Venta (`5c429dd`)
+
+Cerraba el gap más grande que había quedado documentado tras el fix de costo de ventas
+de facturas: `notas_venta` (RIMPE Negocio Popular, sin XML electrónico) no generaba
+NINGÚN asiento — ni de venta ni de costo.
+
+- `crearAsientoVentaNotaVenta()`: Debe Caja / Haber Ventas por el total (no llevan IVA).
+  A diferencia de facturas, no hay autorización SRI que gatee el asiento — la nota es
+  válida desde su creación, así que se genera en el mismo request (no en background).
+- `crearAsientoCostoVentaNotaVenta()`: mismo patrón que el de facturas, toma el costo
+  congelado en `movimientos_inventario` (tipo `VENTA_NOTA`). Reutiliza la MISMA
+  configuración contable (`codigoCuentaCostoVentas`/`codigoCuentaInventario`) que
+  facturas — es el mismo concepto contable independientemente del tipo de documento.
+- `crearAsientoReversoNotaVentaAnulada()`: al anular, reversa ambos asientos (venta y
+  costo) invirtiendo débito/crédito de cada línea original.
+
+**Pendiente de verificar:** crear una nota de venta con un producto inventariable,
+confirmar en el Libro Diario los asientos `NOTA_VENTA` + `COSTO_VENTA`; anularla y
+confirmar el asiento `ANULACION_NOTA` que revierte ambos.
+
+---
+
 ## Revisión de los 5 principios de diseño ERP contable (vs. estado real del código)
 
 | # | Principio | Estado |
 |---|-----------|--------|
 | 1 | Cuentas de control (no "cuentitis") | ✅ Seguido — CxC/CxP usan FK a `clientes`/`proveedores`, una sola cuenta contable genérica por concepto, no una por cliente/proveedor |
 | 2 | Motor de reglas / mapeo SRI → cuenta contable | 🟡 Parcial — implementado como **configuración manual del contador** (este fix), no como motor automático por producto/categoría/proveedor. La tabla `sri_mapeo_cuentas` del backlog original (código retención/IVA → cuenta) sigue sin implementar |
-| 3 | POS + inventario permanente (2 asientos por venta) | ✅ Resuelto para `facturas` (`c7adfd7`) — pendiente el mismo tratamiento para `notas_venta`/POS, que hoy no tiene NINGÚN asiento (ni venta ni costo) |
+| 3 | POS + inventario permanente (2 asientos por venta) | ✅ Resuelto para `facturas` (`c7adfd7`) y `notas_venta` (`5c429dd`) — ambos tipos de venta ya generan asiento de venta + costo |
 | 4 | Centros de costo dimensionales | ❌ No implementado — no existe `centroCostoId` en ningún lado del esquema |
 | 5 | Provisiones RRHH automáticas | ❌ No implementado — `crearAsientoNominaPeriodo()` literalmente lanza `Error('El módulo de nómina no está implementado en esta versión de AELA')` |
+
+**Con los puntos 1 y 3 resueltos, los pendientes reales del diseño contable quedan en
+2 (motor automático de reglas, opcional), 4 (centros de costo) y 5 (provisiones RRHH)
+— los tres son mejoras de alcance mayor, no gaps críticos de datos incorrectos.**
 
 **Recomendación de prioridad para seguir (si se retoma el diseño contable):**
 1. **Notas de Venta / POS sin contabilidad** — es el hueco más grande que queda hoy:
