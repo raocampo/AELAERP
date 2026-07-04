@@ -1103,6 +1103,81 @@ router.get('/plan-cuentas/estado', async (req, res) => {
   }
 });
 
+// ─── Configuración de asientos automáticos ───────────────────────────
+// Permite al contador elegir, desde su propio Plan de Cuentas, a qué cuenta se
+// contabilizan las compras (en vez de siempre usar las cuentas genéricas por
+// defecto tipo "5.2.01.001 Compras Locales"). Ver utils/contabilidad.js
+// (obtenerConfiguracionContable, _resolverCuenta).
+const CAMPOS_CONFIG_CONTABLE = [
+  'codigoCuentaComprasGasto',
+  'codigoCuentaInventario',
+  'codigoCuentaIvaCompras',
+  'codigoCuentaCxP',
+  'codigoCuentaCajaCompras',
+];
+
+// GET /api/contabilidad/configuracion-asientos
+router.get('/configuracion-asientos', async (req, res) => {
+  try {
+    const db        = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+
+    const config = await db.configuracion_contable.findUnique({ where: { empresaId } });
+
+    res.json({ success: true, data: config || {} });
+  } catch (error) {
+    console.error('GET /contabilidad/configuracion-asientos:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al obtener la configuración contable' });
+  }
+});
+
+// PUT /api/contabilidad/configuracion-asientos
+router.put('/configuracion-asientos', async (req, res) => {
+  try {
+    const db        = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+
+    const data = {};
+    for (const campo of CAMPOS_CONFIG_CONTABLE) {
+      if (req.body?.[campo] !== undefined) {
+        const valor = String(req.body[campo] || '').trim();
+        data[campo] = valor || null;
+      }
+    }
+
+    // Validar que cada código configurado exista realmente en el plan de cuentas
+    // de la empresa y acepte movimiento — evita guardar una referencia rota.
+    const codigos = Object.values(data).filter(Boolean);
+    if (codigos.length > 0) {
+      const cuentas = await db.plan_cuentas.findMany({
+        where: { empresaId, codigo: { in: codigos } },
+        select: { codigo: true, aceptaMovimiento: true, activo: true },
+      });
+      const porCodigo = new Map(cuentas.map((c) => [c.codigo, c]));
+      for (const codigo of codigos) {
+        const cuenta = porCodigo.get(codigo);
+        if (!cuenta) {
+          return res.status(400).json({ success: false, mensaje: `La cuenta "${codigo}" no existe en el Plan de Cuentas de la empresa` });
+        }
+        if (!cuenta.aceptaMovimiento || !cuenta.activo) {
+          return res.status(400).json({ success: false, mensaje: `La cuenta "${codigo}" no está activa o no acepta movimientos directos` });
+        }
+      }
+    }
+
+    const config = await db.configuracion_contable.upsert({
+      where: { empresaId },
+      update: data,
+      create: { empresaId, ...data },
+    });
+
+    res.json({ success: true, data: config });
+  } catch (error) {
+    console.error('PUT /contabilidad/configuracion-asientos:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al guardar la configuración contable' });
+  }
+});
+
 // GET /api/contabilidad/plan-cuentas/plantilla — descarga Excel de ejemplo
 router.get('/plan-cuentas/plantilla', async (req, res) => {
   try {

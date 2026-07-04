@@ -77,6 +77,18 @@ const FIXES = [
   // Firma digital y sello de empresa para proformas (2026-06-20)
   `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "firmaUrl" TEXT`,
   `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "selloUrl" TEXT`,
+  // Configuración contable — cuentas del plan de cuentas propio enlazadas a los
+  // asientos automáticos de compras (2026-07-04)
+  `CREATE TABLE IF NOT EXISTS "configuracion_contable" (
+    "id"                       SERIAL PRIMARY KEY,
+    "empresaId"                INTEGER NOT NULL UNIQUE,
+    "codigoCuentaComprasGasto" VARCHAR(20),
+    "codigoCuentaInventario"   VARCHAR(20),
+    "codigoCuentaIvaCompras"   VARCHAR(20),
+    "codigoCuentaCxP"          VARCHAR(20),
+    "codigoCuentaCajaCompras"  VARCHAR(20),
+    "updatedAt"                TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

@@ -70,6 +70,7 @@ model empresas {
   productos           productos_servicios[]
   configuracion_sri   configuracion_sri[]
   configuracionSistema configuracion_sistema?
+  configuracionContable configuracion_contable?
   cajasDiarias        cajas_diarias[]
   cajaMovimientos     caja_movimientos[]
   movimientosInventario movimientos_inventario[]
@@ -272,6 +273,30 @@ model configuracion_sistema {
   empresa               empresas  @relation(fields: [empresaId], references: [id])
 
   @@map("configuracion_sistema")
+}
+
+// ====================================
+// CONTABILIDAD — Configuración de asientos automáticos
+// Permite al contador enlazar las cuentas del Plan de Cuentas propio de la
+// empresa con los asientos automáticos de compras/ventas, en vez de usar
+// siempre las cuentas genéricas por defecto (ej. "5.2.01.001 Compras Locales").
+// Guarda el CÓDIGO de la cuenta (no el id) porque el plan de cuentas se
+// reconstruye/reemplaza por empresa y el código es lo estable para el usuario.
+// ====================================
+model configuracion_contable {
+  id                     Int      @id @default(autoincrement())
+  empresaId              Int      @unique
+  // ── Compras ──
+  codigoCuentaComprasGasto String? @db.VarChar(20)  // gasto por defecto (ítems no inventariables)
+  codigoCuentaInventario   String? @db.VarChar(20)  // activo (ítems inventariables)
+  codigoCuentaIvaCompras   String? @db.VarChar(20)  // IVA crédito tributario
+  codigoCuentaCxP          String? @db.VarChar(20)  // cuentas por pagar proveedores
+  codigoCuentaCajaCompras  String? @db.VarChar(20)  // contrapartida si se paga de caja al momento
+  updatedAt              DateTime @updatedAt
+
+  empresa  empresas @relation(fields: [empresaId], references: [id])
+
+  @@map("configuracion_contable")
 }
 
 // ====================================

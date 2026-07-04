@@ -38,6 +38,11 @@ const ContabilidadHub = () => {
 
   const [importPC, setImportPC] = useState({ abierto: false, archivo: null, preview: null, loading: false, resultado: null, reemplazar: false, dragging: false });
   const [estadoPlan, setEstadoPlan] = useState(null);
+  const [configAsientos, setConfigAsientos] = useState({
+    codigoCuentaComprasGasto: '', codigoCuentaInventario: '', codigoCuentaIvaCompras: '',
+    codigoCuentaCxP: '', codigoCuentaCajaCompras: '',
+  });
+  const [guardandoConfigAsientos, setGuardandoConfigAsientos] = useState(false);
   const [cuentaForm, setCuentaForm] = useState({
     id: null,
     codigo: '',
@@ -123,6 +128,42 @@ const ContabilidadHub = () => {
       // no bloquea el flujo
     }
   }, []);
+
+  const cargarConfigAsientos = useCallback(async () => {
+    try {
+      const res = await api.get('/contabilidad/configuracion-asientos');
+      const d = res.data?.data || {};
+      setConfigAsientos({
+        codigoCuentaComprasGasto: d.codigoCuentaComprasGasto || '',
+        codigoCuentaInventario:   d.codigoCuentaInventario   || '',
+        codigoCuentaIvaCompras:   d.codigoCuentaIvaCompras   || '',
+        codigoCuentaCxP:          d.codigoCuentaCxP          || '',
+        codigoCuentaCajaCompras:  d.codigoCuentaCajaCompras  || '',
+      });
+    } catch {
+      // no bloquea el flujo — quedan los defaults del sistema
+    }
+  }, []);
+
+  const guardarConfigAsientos = async () => {
+    setGuardandoConfigAsientos(true);
+    try {
+      const res = await api.put('/contabilidad/configuracion-asientos', configAsientos);
+      toast.success('Configuración de asientos guardada');
+      const d = res.data?.data || {};
+      setConfigAsientos({
+        codigoCuentaComprasGasto: d.codigoCuentaComprasGasto || '',
+        codigoCuentaInventario:   d.codigoCuentaInventario   || '',
+        codigoCuentaIvaCompras:   d.codigoCuentaIvaCompras   || '',
+        codigoCuentaCxP:          d.codigoCuentaCxP          || '',
+        codigoCuentaCajaCompras:  d.codigoCuentaCajaCompras  || '',
+      });
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al guardar la configuración');
+    } finally {
+      setGuardandoConfigAsientos(false);
+    }
+  };
 
   const cargarPlan = useCallback(async () => {
     setPlanLoading(true);
@@ -279,6 +320,7 @@ const ContabilidadHub = () => {
     if (tab === 'plan') {
       cargarPlan();
       cargarEstadoPlan();
+      cargarConfigAsientos();
     }
     if (tab === 'diario') {
       cargarDiario();
@@ -298,7 +340,7 @@ const ContabilidadHub = () => {
     if (tab === 'cierre') {
       cargarEstadosFinancieros();
     }
-  }, [tab, periodos.length, plan.length, mayorFiltros.cuentaId, cargarPeriodos, cargarPlan, cargarEstadoPlan, cargarDiario, cargarLibroMayor, cargarMayorizacionLote, cargarEstadosFinancieros]);
+  }, [tab, periodos.length, plan.length, mayorFiltros.cuentaId, cargarPeriodos, cargarPlan, cargarEstadoPlan, cargarConfigAsientos, cargarDiario, cargarLibroMayor, cargarMayorizacionLote, cargarEstadosFinancieros]);
 
   const guardarPeriodo = async (e) => {
     e.preventDefault();
@@ -1256,6 +1298,44 @@ const ContabilidadHub = () => {
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* ── Card: Configuración de asientos automáticos de compras ─── */}
+          <div className="conta-card">
+            <h3>⚙️ Configuración de asientos automáticos — Compras</h3>
+            <p className="conta-import-sub">
+              Elige a qué cuenta de tu Plan de Cuentas se contabiliza cada compra automáticamente.
+              Si dejas un campo sin elegir, se usa la cuenta genérica por defecto del sistema.
+            </p>
+            <div className="conta-form-grid">
+              {[
+                { campo: 'codigoCuentaComprasGasto', label: 'Gasto por compra (ítems no inventariables)', tipos: ['GASTO', 'COSTO'] },
+                { campo: 'codigoCuentaInventario',    label: 'Inventario (ítems inventariables)',          tipos: ['ACTIVO'] },
+                { campo: 'codigoCuentaIvaCompras',    label: 'IVA crédito tributario compras',             tipos: ['ACTIVO'] },
+                { campo: 'codigoCuentaCxP',           label: 'Cuentas por pagar proveedores',               tipos: ['PASIVO'] },
+                { campo: 'codigoCuentaCajaCompras',   label: 'Caja/Bancos (si se paga de contado)',         tipos: ['ACTIVO'] },
+              ].map(({ campo, label, tipos }) => (
+                <div key={campo}>
+                  <label>{label}</label>
+                  <select
+                    value={configAsientos[campo]}
+                    onChange={(e) => setConfigAsientos((prev) => ({ ...prev, [campo]: e.target.value }))}
+                  >
+                    <option value="">— Usar cuenta por defecto del sistema —</option>
+                    {plan
+                      .filter((c) => c.aceptaMovimiento && c.activo && tipos.includes(c.tipo))
+                      .map((c) => (
+                        <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nombre}</option>
+                      ))}
+                  </select>
+                </div>
+              ))}
+              <div className="conta-form-actions full-width">
+                <button type="button" className="btn-primary" disabled={guardandoConfigAsientos} onClick={guardarConfigAsientos}>
+                  {guardandoConfigAsientos ? 'Guardando...' : 'Guardar configuración'}
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* ── Card: Importar plan de cuentas desde Excel ─────────────── */}

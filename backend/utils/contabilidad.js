@@ -440,6 +440,28 @@ async function crearAsientoLiquidacionCompraAutorizada({ liquidacionId, usuarioI
   return { asiento, creado: true };
 }
 
+// ─── Configuración contable — cuentas enlazadas por el contador ──────
+// Permite que el contador elija, desde su propio Plan de Cuentas, a qué cuenta
+// se contabilizan los asientos automáticos (en vez de usar siempre las cuentas
+// genéricas por defecto). Si no hay configuración o la cuenta configurada ya no
+// existe/no acepta movimiento, cae al valor por defecto sin romper el asiento.
+async function obtenerConfiguracionContable(empresaId, db = prisma) {
+  return db.configuracion_contable.findUnique({ where: { empresaId: toInt(empresaId) } });
+}
+
+async function _resolverCuenta({ empresaId, codigoConfigurado, codigoDefault, nombreDefault, tipoDefault, naturalezaDefault, tx = prisma }) {
+  if (codigoConfigurado) {
+    const cuenta = await tx.plan_cuentas.findFirst({
+      where: { empresaId, codigo: codigoConfigurado, activo: true, aceptaMovimiento: true },
+    });
+    if (cuenta) return cuenta;
+    console.warn(`[Contabilidad] Cuenta configurada "${codigoConfigurado}" no existe o no acepta movimiento — usando cuenta por defecto ${codigoDefault}`);
+  }
+  return ensureCuentaMovimiento({
+    empresaId, codigo: codigoDefault, nombre: nombreDefault, tipo: tipoDefault, naturaleza: naturalezaDefault, tx,
+  });
+}
+
 async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha = new Date(), db = prisma }) {
   const compraIdNum = toInt(compraId);
   const compra = await db.facturas_compra.findUnique({ where: { id: compraIdNum } });
@@ -463,48 +485,55 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
   const total = round2(compra.importeTotal || 0);
   const subtotalGasto = round2(Math.max(total - iva - subtotalInventario, 0));
 
-  const cuentaInventario = await ensureCuentaMovimiento({
+  const config = await obtenerConfiguracionContable(compra.empresaId, db);
+
+  const cuentaInventario = await _resolverCuenta({
     empresaId: compra.empresaId,
-    codigo: '1.1.04.001',
-    nombre: 'Inventario Mercaderias',
-    tipo: 'ACTIVO',
-    naturaleza: 'DEBITO',
+    codigoConfigurado: config?.codigoCuentaInventario,
+    codigoDefault: '1.1.04.001',
+    nombreDefault: 'Inventario Mercaderias',
+    tipoDefault: 'ACTIVO',
+    naturalezaDefault: 'DEBITO',
     tx: db,
   });
 
-  const cuentaCompras = await ensureCuentaMovimiento({
+  const cuentaCompras = await _resolverCuenta({
     empresaId: compra.empresaId,
-    codigo: '5.2.01.001',
-    nombre: 'Compras Locales',
-    tipo: 'GASTO',
-    naturaleza: 'DEBITO',
+    codigoConfigurado: config?.codigoCuentaComprasGasto,
+    codigoDefault: '5.2.01.001',
+    nombreDefault: 'Compras Locales',
+    tipoDefault: 'GASTO',
+    naturalezaDefault: 'DEBITO',
     tx: db,
   });
 
-  const cuentaIvaCompras = await ensureCuentaMovimiento({
+  const cuentaIvaCompras = await _resolverCuenta({
     empresaId: compra.empresaId,
-    codigo: '1.1.05.001',
-    nombre: 'IVA Credito Tributario Compras',
-    tipo: 'ACTIVO',
-    naturaleza: 'DEBITO',
+    codigoConfigurado: config?.codigoCuentaIvaCompras,
+    codigoDefault: '1.1.05.001',
+    nombreDefault: 'IVA Credito Tributario Compras',
+    tipoDefault: 'ACTIVO',
+    naturalezaDefault: 'DEBITO',
     tx: db,
   });
 
   const cuentaContrapartida = compra.egresoCajaRegistrado
-    ? await ensureCuentaMovimiento({
+    ? await _resolverCuenta({
         empresaId: compra.empresaId,
-        codigo: '1.1.01.001',
-        nombre: 'Caja',
-        tipo: 'ACTIVO',
-        naturaleza: 'DEBITO',
+        codigoConfigurado: config?.codigoCuentaCajaCompras,
+        codigoDefault: '1.1.01.001',
+        nombreDefault: 'Caja',
+        tipoDefault: 'ACTIVO',
+        naturalezaDefault: 'DEBITO',
         tx: db,
       })
-    : await ensureCuentaMovimiento({
+    : await _resolverCuenta({
         empresaId: compra.empresaId,
-        codigo: '2.1.04.001',
-        nombre: 'Cuentas por Pagar Proveedores',
-        tipo: 'PASIVO',
-        naturaleza: 'CREDITO',
+        codigoConfigurado: config?.codigoCuentaCxP,
+        codigoDefault: '2.1.04.001',
+        nombreDefault: 'Cuentas por Pagar Proveedores',
+        tipoDefault: 'PASIVO',
+        naturalezaDefault: 'CREDITO',
         tx: db,
       });
 
@@ -858,6 +887,7 @@ async function crearAsientoReversoRetencionAnulada({ retencionId, usuarioId, fec
 
 module.exports = {
   round2,
+  obtenerConfiguracionContable,
   crearAsientoContable,
   crearAsientoNominaPeriodo,
   crearAsientoPagoNominaPeriodo,
