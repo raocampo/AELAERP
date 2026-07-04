@@ -194,13 +194,13 @@ async function crearAsientoPagoNominaPeriodo() {
   throw new Error('El módulo de nómina no está implementado en esta versión de AELA');
 }
 
-async function crearAsientoFacturaAutorizada({ facturaId, usuarioId, fecha = new Date() }) {
+async function crearAsientoFacturaAutorizada({ facturaId, usuarioId, fecha = new Date(), db = prisma }) {
   const facturaIdNum = toInt(facturaId);
-  const factura = await prisma.facturas.findUnique({ where: { id: facturaIdNum } });
+  const factura = await db.facturas.findUnique({ where: { id: facturaIdNum } });
   if (!factura) throw new Error('Factura no encontrada');
 
   const referencia = `FAC-${factura.id}`;
-  const existente = await prisma.asientos_contables.findFirst({
+  const existente = await db.asientos_contables.findFirst({
     where: {
       empresaId: factura.empresaId,
       tipo: 'FACTURA',
@@ -219,6 +219,7 @@ async function crearAsientoFacturaAutorizada({ facturaId, usuarioId, fecha = new
     nombre: 'Cuentas por Cobrar',
     tipo: 'ACTIVO',
     naturaleza: 'DEBITO',
+    tx: db,
   });
 
   const cuentaVentas = await ensureCuentaMovimiento({
@@ -227,6 +228,7 @@ async function crearAsientoFacturaAutorizada({ facturaId, usuarioId, fecha = new
     nombre: 'Ventas Servicios',
     tipo: 'INGRESO',
     naturaleza: 'CREDITO',
+    tx: db,
   });
 
   const cuentaIvaVentas = await ensureCuentaMovimiento({
@@ -235,6 +237,7 @@ async function crearAsientoFacturaAutorizada({ facturaId, usuarioId, fecha = new
     nombre: 'IVA Ventas por Pagar',
     tipo: 'PASIVO',
     naturaleza: 'CREDITO',
+    tx: db,
   });
 
   const detalles = [
@@ -254,6 +257,7 @@ async function crearAsientoFacturaAutorizada({ facturaId, usuarioId, fecha = new
     referencia,
     facturaId: factura.id,
     usuarioId,
+    tx: db,
     detalles,
   });
 

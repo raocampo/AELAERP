@@ -334,7 +334,7 @@ export default function ImportarFacturasHistoricas() {
               <h3>Facturas importadas</h3>
               <table className="ifh-tabla ifh-tabla-compact">
                 <thead>
-                  <tr><th>Fila</th><th>N° Factura</th><th>Total</th><th>Estado</th></tr>
+                  <tr><th>Fila</th><th>N° Factura</th><th>Total</th><th>Estado</th><th>Libro Diario</th></tr>
                 </thead>
                 <tbody>
                   {resultado.detalle.importadas.map(r => (
@@ -348,10 +348,23 @@ export default function ImportarFacturasHistoricas() {
                           : <span className="ifh-badge ifh-badge-historico">Histórica</span>
                         }
                       </td>
+                      <td>
+                        {r.asientoOk
+                          ? <span className="ifh-badge ifh-badge-autorizado" title="Se generó el asiento de venta en el Libro Diario">✓ Enlazada</span>
+                          : <span className="ifh-badge ifh-badge-historico" title="No se pudo generar el asiento contable — revisa el Plan de Cuentas o crea el asiento manualmente en Contabilidad">⚠ Sin asiento</span>
+                        }
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <p className="ifh-nota-diario">
+                💡 Cada factura importada genera automáticamente su asiento de venta en el
+                <strong> Libro Diario</strong> (Contabilidad → Libro Diario). Si un producto es
+                inventariable, el costo de venta y el stock <strong>no</strong> se ajustan
+                automáticamente para facturas históricas (para no alterar tu inventario actual) —
+                regístralos manualmente si corresponde.
+              </p>
             </div>
           )}
 

@@ -1697,12 +1697,28 @@ router.post('/importar/ejecutar', multerImportacion, async (req, res) => {
           select: { id: true, numeroFactura: true, importeTotal: true, estadoSri: true, fechaEmision: true },
         });
 
+        // Las facturas históricas nunca pasan por autorización SRI (ese es el único
+        // punto donde se generaba el asiento contable hasta ahora) — sin esto quedaban
+        // completamente fuera del Libro Diario, sin forma de "enlazarlas" después.
+        // No se toca inventario/costo de venta aquí: retroactivamente descontar stock
+        // actual por una venta ya consumida hace tiempo podría dejarlo negativo o
+        // incorrecto; el asiento de venta (ingreso) sí es seguro y es lo que el
+        // contador espera ver en el diario.
+        let asientoOk = false;
+        try {
+          const rAsiento = await crearAsientoFacturaAutorizada({ facturaId: creada.id, usuarioId: req.usuario.id, fecha: datos.fecha, db });
+          asientoOk = !!rAsiento.asiento;
+        } catch (contErr) {
+          console.error(`[Importar] Asiento contable fila ${filaNum} (factura ${creada.id}):`, contErr.message);
+        }
+
         importadas.push({
           fila:          filaNum,
           id:            creada.id,
           numeroFactura: creada.numeroFactura,
           total:         parseFloat(creada.importeTotal),
           estadoSri:     creada.estadoSri,
+          asientoOk,
         });
       } catch (err) {
         console.error(`[Importar] fila ${filaNum}:`, err.message);
