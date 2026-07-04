@@ -323,6 +323,157 @@ async function crearAsientoCostoVentaFactura({ facturaId, usuarioId, fecha = new
   return { asiento, creado: true };
 }
 
+// ─── Notas de Venta (RIMPE Negocio Popular — no llevan IVA) ──────────
+// A diferencia de facturas, no hay autorización SRI: el documento es válido
+// desde su creación, así que el asiento se genera en el mismo momento del
+// registro (no hay estado "borrador" que lo bloquee).
+async function crearAsientoVentaNotaVenta({ notaVentaId, usuarioId, fecha = new Date(), db = prisma }) {
+  const notaIdNum = toInt(notaVentaId);
+  const nota = await db.notas_venta.findUnique({ where: { id: notaIdNum } });
+  if (!nota) throw new Error('Nota de venta no encontrada');
+
+  const referencia = `NV-${nota.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: nota.empresaId, tipo: 'NOTA_VENTA', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const total = round2(nota.total);
+  if (total <= 0) return { asiento: null, creado: false };
+
+  const cuentaCaja = await ensureCuentaMovimiento({
+    empresaId: nota.empresaId, tx: db,
+    codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+  });
+
+  const cuentaVentas = await ensureCuentaMovimiento({
+    empresaId: nota.empresaId, tx: db,
+    codigo: '4.1.01.001', nombre: 'Ventas Servicios', tipo: 'INGRESO', naturaleza: 'CREDITO',
+  });
+
+  const asiento = await crearAsientoContable({
+    empresaId: nota.empresaId,
+    fecha,
+    descripcion: `Asiento automático nota de venta ${nota.numeroNota}`,
+    tipo: 'NOTA_VENTA',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles: [
+      { cuentaId: cuentaCaja.id, descripcion: `Nota de venta ${nota.numeroNota}`, debe: total, haber: 0 },
+      { cuentaId: cuentaVentas.id, descripcion: `Ventas nota ${nota.numeroNota}`, debe: 0, haber: total },
+    ],
+  });
+
+  return { asiento, creado: true };
+}
+
+async function crearAsientoCostoVentaNotaVenta({ notaVentaId, usuarioId, fecha = new Date(), db = prisma }) {
+  const notaIdNum = toInt(notaVentaId);
+  const nota = await db.notas_venta.findUnique({ where: { id: notaIdNum } });
+  if (!nota) throw new Error('Nota de venta no encontrada');
+
+  const referencia = `NV-COSTO-${nota.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: nota.empresaId, tipo: 'COSTO_VENTA', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const movimientos = await db.movimientos_inventario.findMany({
+    where: { empresaId: nota.empresaId, referencia: nota.numeroNota, tipo: 'VENTA_NOTA' },
+  });
+  const costoTotal = round2(movimientos.reduce(
+    (acc, m) => acc + (Number(m.cantidad) * Number(m.costoUnitario || 0)), 0,
+  ));
+  if (costoTotal <= 0) return { asiento: null, creado: false };
+
+  const config = await obtenerConfiguracionContable(nota.empresaId, db);
+
+  const cuentaCostoVentas = await _resolverCuenta({
+    empresaId: nota.empresaId,
+    codigoConfigurado: config?.codigoCuentaCostoVentas,
+    codigoDefault: '5.1.01.001',
+    nombreDefault: 'Costo de Ventas',
+    tipoDefault: 'COSTO',
+    naturalezaDefault: 'DEBITO',
+    tx: db,
+  });
+
+  const cuentaInventario = await _resolverCuenta({
+    empresaId: nota.empresaId,
+    codigoConfigurado: config?.codigoCuentaInventario,
+    codigoDefault: '1.1.04.001',
+    nombreDefault: 'Inventario Mercaderias',
+    tipoDefault: 'ACTIVO',
+    naturalezaDefault: 'DEBITO',
+    tx: db,
+  });
+
+  const asiento = await crearAsientoContable({
+    empresaId: nota.empresaId,
+    fecha,
+    descripcion: `Costo de ventas nota de venta ${nota.numeroNota}`,
+    tipo: 'COSTO_VENTA',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles: [
+      { cuentaId: cuentaCostoVentas.id, descripcion: `Costo de ventas nota ${nota.numeroNota}`, debe: costoTotal, haber: 0 },
+      { cuentaId: cuentaInventario.id, descripcion: `Salida de inventario por nota ${nota.numeroNota}`, debe: 0, haber: costoTotal },
+    ],
+  });
+
+  return { asiento, creado: true };
+}
+
+// Reversa (por anulación) los asientos de venta y costo de una nota de venta,
+// invirtiendo débito/crédito de cada línea del asiento original — mismo patrón
+// que crearAsientoReversoFacturaAnulada.
+async function crearAsientoReversoNotaVentaAnulada({ notaVentaId, usuarioId, fecha = new Date(), db = prisma }) {
+  const notaIdNum = toInt(notaVentaId);
+  const nota = await db.notas_venta.findUnique({ where: { id: notaIdNum } });
+  if (!nota) throw new Error('Nota de venta no encontrada');
+
+  const asientosOriginales = await db.asientos_contables.findMany({
+    where: {
+      empresaId: nota.empresaId,
+      tipo: { in: ['NOTA_VENTA', 'COSTO_VENTA'] },
+      referencia: { in: [`NV-${nota.id}`, `NV-COSTO-${nota.id}`] },
+    },
+    include: { detalles: true },
+  });
+
+  const resultados = [];
+  for (const original of asientosOriginales) {
+    const referencia = `NV-ANUL-${original.tipo}-${nota.id}`;
+    const existente = await db.asientos_contables.findFirst({
+      where: { empresaId: nota.empresaId, tipo: 'ANULACION_NOTA', referencia },
+    });
+    if (existente) { resultados.push({ asiento: existente, creado: false }); continue; }
+
+    const detalles = original.detalles.map((d) => ({
+      cuentaId: d.cuentaId,
+      descripcion: `Reverso anulación nota ${nota.numeroNota}`,
+      debe: round2(d.haber),
+      haber: round2(d.debe),
+    }));
+
+    const asiento = await crearAsientoContable({
+      empresaId: nota.empresaId,
+      fecha,
+      descripcion: `Reverso por anulación — nota de venta ${nota.numeroNota}`,
+      tipo: 'ANULACION_NOTA',
+      referencia,
+      usuarioId,
+      tx: db,
+      detalles,
+    });
+    resultados.push({ asiento, creado: true });
+  }
+
+  return resultados;
+}
+
 async function crearAsientoCobroFactura({ facturaId, metodoPago = 'efectivo', usuarioId, fecha = new Date(), cajaId = null }) {
   const facturaIdNum = toInt(facturaId);
   const factura = await prisma.facturas.findUnique({ where: { id: facturaIdNum } });
@@ -956,6 +1107,9 @@ module.exports = {
   crearAsientoPagoNominaPeriodo,
   crearAsientoFacturaAutorizada,
   crearAsientoCostoVentaFactura,
+  crearAsientoVentaNotaVenta,
+  crearAsientoCostoVentaNotaVenta,
+  crearAsientoReversoNotaVentaAnulada,
   crearAsientoCobroFactura,
   crearAsientoCompraFarmacia,
   crearAsientoFacturaCompraRegistrada,

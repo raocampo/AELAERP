@@ -18,6 +18,11 @@ const { registrarAuditoria }   = require('../utils/auditoria');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
 const { enviarDocumentoFiscal } = require('../utils/email');
+const {
+  crearAsientoVentaNotaVenta,
+  crearAsientoCostoVentaNotaVenta,
+  crearAsientoReversoNotaVentaAnulada,
+} = require('../utils/contabilidad');
 
 router.use(proteger);
 router.use(autorizarPermiso('notasVenta.gestionar'));
@@ -676,6 +681,13 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
       req,
     });
 
+    try {
+      await crearAsientoVentaNotaVenta({ notaVentaId: nota.id, usuarioId: req.usuario.id, fecha: fechaDoc, db: req.prisma });
+      await crearAsientoCostoVentaNotaVenta({ notaVentaId: nota.id, usuarioId: req.usuario.id, fecha: fechaDoc, db: req.prisma });
+    } catch (contErr) {
+      console.error('Error creando asiento automático de nota de venta:', contErr.message);
+    }
+
     res.status(201).json({ success: true, data: nota, mensaje: 'Nota de venta creada correctamente' });
 
     // Enviar PDF al cliente en background si tiene email
@@ -796,6 +808,12 @@ router.put('/:id/anular', async (req, res) => {
 
       return anulada;
     });
+
+    try {
+      await crearAsientoReversoNotaVentaAnulada({ notaVentaId: nota.id, usuarioId: req.usuario.id, fecha: new Date(), db: req.prisma });
+    } catch (contErr) {
+      console.error('Error creando reverso contable de nota de venta anulada:', contErr.message);
+    }
 
     res.json({ success: true, data: actualizada });
   } catch (err) {
