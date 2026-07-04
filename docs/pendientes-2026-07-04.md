@@ -8,10 +8,13 @@ de pendientes de sesiones anteriores, diseño + implementación de la primera pi
 para asientos automáticos de compras), cierre del gap de "POS + inventario permanente"
 de los 5 principios ERP (asiento automático de costo de ventas para facturas, y luego
 para notas de venta también), fix de aislamiento multiempresa en el módulo Bancos +
-vínculo con Plan de Cuentas, y actualización completa de la Ayuda del sistema y el
-manual de usuario.
+vínculo con Plan de Cuentas, actualización completa de la Ayuda del sistema y el
+manual de usuario, hallazgo y fix de un bug real (facturas históricas importadas por
+Excel nunca generaban asiento contable) con reparación retroactiva sin necesidad de
+reimportar, y cierre del principio #4 (Centros de Costo) elegido por el usuario como
+siguiente pieza del backlog contable.
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`, `358d78e`, `8ad0bb7`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`, `5776d08`, `cbe029f`, `2e75a49`, `f666fbf`, `f4cadb3`, `3a032cf`, `358d78e`, `8ad0bb7`, `cf16980`
 
 ---
 
@@ -56,6 +59,10 @@ Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3
 9. **Retenciones y NC/ND recibidas generan asiento** (feature `f666fbf`) — importar
    por el Buzón SRI una retención recibida y una nota de crédito/débito recibida,
    confirmar en el Libro Diario los asientos `RETENCION_RECIBIDA` y `DOC_RECIBIDO`.
+10. **Centros de Costo** (feature `cf16980`) — en Contabilidad → nuevo tab "Centros
+    de Costo", crear uno (ej. "SUC01 - Sucursal Norte"), luego en Libro Diario →
+    "Nuevo asiento contable" asignarlo a una línea desde el nuevo selector "Centro
+    de Costo" y confirmar que se guarda correctamente.
 
 Detalle completo de cada punto (causa raíz, qué se cambió) en las secciones abajo.
 
@@ -298,12 +305,12 @@ confirmar el asiento `ANULACION_NOTA` que revierte ambos.
 | 1 | Cuentas de control (no "cuentitis") | ✅ Seguido — CxC/CxP usan FK a `clientes`/`proveedores`, una sola cuenta contable genérica por concepto, no una por cliente/proveedor |
 | 2 | Motor de reglas / mapeo SRI → cuenta contable | 🟡 Parcial — implementado como **configuración manual del contador** (este fix), no como motor automático por producto/categoría/proveedor. La tabla `sri_mapeo_cuentas` del backlog original (código retención/IVA → cuenta) sigue sin implementar |
 | 3 | POS + inventario permanente (2 asientos por venta) | ✅ Resuelto para `facturas` (`c7adfd7`) y `notas_venta` (`5c429dd`) — ambos tipos de venta ya generan asiento de venta + costo |
-| 4 | Centros de costo dimensionales | ❌ No implementado — no existe `centroCostoId` en ningún lado del esquema |
+| 4 | Centros de costo dimensionales | ✅ Resuelto (`cf16980`) — `centroCostoId` opcional en `asientos_contables_detalle` + CRUD |
 | 5 | Provisiones RRHH automáticas | ❌ No implementado — `crearAsientoNominaPeriodo()` literalmente lanza `Error('El módulo de nómina no está implementado en esta versión de AELA')` |
 
-**Con los puntos 1 y 3 resueltos, los pendientes reales del diseño contable quedan en
-2 (motor automático de reglas, opcional), 4 (centros de costo) y 5 (provisiones RRHH)
-— los tres son mejoras de alcance mayor, no gaps críticos de datos incorrectos.**
+**Con los puntos 1, 3 y 4 resueltos, el único pendiente real de diseño contable mayor
+que queda es el punto 5 (provisiones RRHH) — el punto 2 (motor automático de reglas)
+sigue como mejora opcional, no gap crítico.**
 
 ---
 
@@ -469,6 +476,43 @@ Excel original.
 **Verificado con script de integración:** 2 facturas históricas simulando el
 estado pre-fix (sin asiento) → primera corrida crea 2 asientos con la fecha
 histórica correcta; segunda corrida (idempotencia) no duplica nada — 9/9 asserts.
+
+---
+
+## Feature — Centros de Costo (`cf16980`)
+
+Cierra el principio #4 de los "5 principios de diseño ERP contable" (`docs/pdf/tips.txt`):
+una dimensión opcional (sucursal/departamento/proyecto) que se puede asignar a cada
+línea de un asiento, sin duplicar el plan de cuentas por cada centro (evita la
+"cuentitis" que el principio #1 ya evitaba para clientes/proveedores).
+
+- **Nueva tabla `centros_costo`** (`empresaId`, `codigo` único por empresa, `nombre`,
+  `descripcion`, `activo`) + **`centroCostoId Int?`** opcional en
+  `asientos_contables_detalle` (FK `SET NULL` al eliminar el centro de costo, para no
+  perder el histórico de asientos ya contabilizados).
+- `crearAsientoContable()` (`utils/contabilidad.js`) valida que cada `centroCostoId`
+  enviado exista para la empresa y esté activo, igual que ya hacía con `cuentaId`.
+  Misma validación duplicada en `routes/contabilidad.js` para el PUT de edición de
+  asientos (que tiene su propia función `normalizarDetallesAsiento`, no reutiliza
+  `utils/contabilidad.js`).
+- **CRUD `GET/POST/PUT/DELETE /api/contabilidad/centros-costo`** — el DELETE se
+  bloquea si el centro de costo ya tiene movimientos contables (sugiere desactivar
+  en vez de eliminar), mismo criterio que `plan_cuentas`.
+- **`ContabilidadHub.jsx`**: nuevo tab "Centros de Costo" con CRUD completo; en el
+  formulario "Nuevo asiento contable" del tab Libro Diario, cada línea de detalle
+  ahora tiene un selector opcional "Centro de Costo" (solo centros activos).
+
+**Verificado con script de integración contra `scfi_dev` real:** crear centro de
+costo, asiento con centroCostoId persistido correctamente (incluyendo el `include`
+en la respuesta), rechazo de centroCostoId inexistente, rechazo de centro de costo
+inactivo, rechazo de código duplicado (P2002), y asiento sin centro de costo
+(sigue funcionando igual que antes, el campo es 100% opcional) — 6/6 pasos ✅.
+Migración aplicada localmente con `npx prisma migrate deploy` +
+`node scripts/applySchemaFixes.js` (31 sentencias, sin errores).
+
+**Pendiente de verificar en producción:** crear un centro de costo real (ej. por
+sucursal) y asignarlo a una línea de un asiento manual, confirmar que se guarda y
+se puede editar/eliminar sin romper asientos existentes.
 
 ---
 
