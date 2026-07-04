@@ -87,6 +87,7 @@ model empresas {
   nominas               nominas[]
   ausencias             ausencias[]
   tablaUtilidades       tabla_utilidades[]
+  centrosCosto          centros_costo[]
 
   @@map("empresas")
 }
@@ -858,17 +859,43 @@ model asientos_contables {
 }
 
 model asientos_contables_detalle {
-  id          Int     @id @default(autoincrement())
-  asientoId   Int
-  cuentaId    Int
-  descripcion String?
-  debe        Decimal @default(0) @db.Decimal(14, 2)
-  haber       Decimal @default(0) @db.Decimal(14, 2)
+  id            Int     @id @default(autoincrement())
+  asientoId     Int
+  cuentaId      Int
+  centroCostoId Int?
+  descripcion   String?
+  debe          Decimal @default(0) @db.Decimal(14, 2)
+  haber         Decimal @default(0) @db.Decimal(14, 2)
 
-  asiento  asientos_contables @relation(fields: [asientoId], references: [id], onDelete: Cascade)
-  cuenta   plan_cuentas       @relation(fields: [cuentaId], references: [id])
+  asiento     asientos_contables @relation(fields: [asientoId], references: [id], onDelete: Cascade)
+  cuenta      plan_cuentas       @relation(fields: [cuentaId], references: [id])
+  centroCosto centros_costo?     @relation(fields: [centroCostoId], references: [id])
 
   @@map("asientos_contables_detalle")
+}
+
+// ====================================
+// CENTROS DE COSTO — dimensión opcional
+// Un solo plan de cuentas de gastos (ej. 5.02.xx) con el centro de costo como
+// atributo dimensional de cada línea de asiento — NO se duplican cuentas por
+// sucursal/departamento/proyecto. Permite reportes de rentabilidad por área.
+// ====================================
+model centros_costo {
+  id          Int      @id @default(autoincrement())
+  empresaId   Int
+  codigo      String   @db.VarChar(20)
+  nombre      String   @db.VarChar(150)
+  descripcion String?  @db.VarChar(300)
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  empresa  empresas                     @relation(fields: [empresaId], references: [id])
+  detalles asientos_contables_detalle[]
+
+  @@unique([empresaId, codigo])
+  @@index([empresaId])
+  @@map("centros_costo")
 }
 
 // ====================================

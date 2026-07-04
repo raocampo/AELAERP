@@ -93,6 +93,20 @@ const FIXES = [
   // Cuenta de costo de ventas (inventario permanente) — agregada después de la
   // creación inicial de configuracion_contable, por eso va también como ALTER idempotente.
   `ALTER TABLE "configuracion_contable" ADD COLUMN IF NOT EXISTS "codigoCuentaCostoVentas" VARCHAR(20)`,
+  // Centros de costo — dimensión opcional en líneas de asiento (2026-07-04)
+  `CREATE TABLE IF NOT EXISTS "centros_costo" (
+    "id"          SERIAL PRIMARY KEY,
+    "empresaId"   INTEGER NOT NULL,
+    "codigo"      VARCHAR(20) NOT NULL,
+    "nombre"      VARCHAR(150) NOT NULL,
+    "descripcion" VARCHAR(300),
+    "activo"      BOOLEAN NOT NULL DEFAULT true,
+    "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "centros_costo_empresaId_codigo_key" ON "centros_costo"("empresaId", "codigo")`,
+  `CREATE INDEX IF NOT EXISTS "centros_costo_empresaId_idx" ON "centros_costo"("empresaId")`,
+  `ALTER TABLE "asientos_contables_detalle" ADD COLUMN IF NOT EXISTS "centroCostoId" INTEGER`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

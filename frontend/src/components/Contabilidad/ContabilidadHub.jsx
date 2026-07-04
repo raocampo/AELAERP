@@ -7,7 +7,7 @@ import { formatFechaCorta } from '../../utils/fecha';
 import './ContabilidadHub.css';
 
 const toMoney = (n) => Number(n || 0).toLocaleString('es-EC', { style: 'currency', currency: 'USD' });
-const crearDetalleVacio = () => ({ cuentaId: '', descripcion: '', debe: '', haber: '' });
+const crearDetalleVacio = () => ({ cuentaId: '', centroCostoId: '', descripcion: '', debe: '', haber: '' });
 
 const ContabilidadHub = () => {
   const navigate = useNavigate();
@@ -52,6 +52,16 @@ const ContabilidadHub = () => {
     naturaleza: 'DEBITO',
     codigoPadre: '',
     aceptaMovimiento: false,
+    activo: true,
+  });
+
+  const [centrosCosto, setCentrosCosto] = useState([]);
+  const [centrosCostoLoading, setCentrosCostoLoading] = useState(false);
+  const [centroCostoForm, setCentroCostoForm] = useState({
+    id: null,
+    codigo: '',
+    nombre: '',
+    descripcion: '',
     activo: true,
   });
 
@@ -185,6 +195,18 @@ const ContabilidadHub = () => {
       setPlanLoading(false);
     }
   }, [planFiltros]);
+
+  const cargarCentrosCosto = useCallback(async () => {
+    setCentrosCostoLoading(true);
+    try {
+      const res = await api.get('/contabilidad/centros-costo', { params: { activo: 'todos' } });
+      setCentrosCosto(res.data?.data || []);
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al cargar centros de costo');
+    } finally {
+      setCentrosCostoLoading(false);
+    }
+  }, []);
 
   const cargarDiario = useCallback(async () => {
     setDiarioLoading(true);
@@ -326,6 +348,7 @@ const ContabilidadHub = () => {
     }
     if (tab === 'diario') {
       cargarDiario();
+      cargarCentrosCosto();
       if (plan.length === 0) {
         setPlanFiltros((prev) => ({ ...prev, soloMovimiento: true, activo: 'true' }));
       }
@@ -342,7 +365,10 @@ const ContabilidadHub = () => {
     if (tab === 'cierre') {
       cargarEstadosFinancieros();
     }
-  }, [tab, periodos.length, plan.length, mayorFiltros.cuentaId, cargarPeriodos, cargarPlan, cargarEstadoPlan, cargarConfigAsientos, cargarDiario, cargarLibroMayor, cargarMayorizacionLote, cargarEstadosFinancieros]);
+    if (tab === 'centros-costo') {
+      cargarCentrosCosto();
+    }
+  }, [tab, periodos.length, plan.length, mayorFiltros.cuentaId, cargarPeriodos, cargarPlan, cargarEstadoPlan, cargarConfigAsientos, cargarDiario, cargarLibroMayor, cargarMayorizacionLote, cargarEstadosFinancieros, cargarCentrosCosto]);
 
   const guardarPeriodo = async (e) => {
     e.preventDefault();
@@ -450,6 +476,56 @@ const ContabilidadHub = () => {
       await cargar();
     } catch (error) {
       toast.error(error.response?.data?.mensaje || 'No se pudo eliminar la cuenta');
+    }
+  };
+
+  const limpiarCentroCostoForm = () => {
+    setCentroCostoForm({ id: null, codigo: '', nombre: '', descripcion: '', activo: true });
+  };
+
+  const guardarCentroCosto = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        codigo: centroCostoForm.codigo,
+        nombre: centroCostoForm.nombre,
+        descripcion: centroCostoForm.descripcion || null,
+        activo: Boolean(centroCostoForm.activo),
+      };
+
+      if (centroCostoForm.id) {
+        await api.put(`/contabilidad/centros-costo/${centroCostoForm.id}`, payload);
+        toast.success('Centro de costo actualizado');
+      } else {
+        await api.post('/contabilidad/centros-costo', payload);
+        toast.success('Centro de costo creado');
+      }
+
+      limpiarCentroCostoForm();
+      await cargarCentrosCosto();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo guardar el centro de costo');
+    }
+  };
+
+  const editarCentroCosto = (centro) => {
+    setCentroCostoForm({
+      id: centro.id,
+      codigo: centro.codigo,
+      nombre: centro.nombre,
+      descripcion: centro.descripcion || '',
+      activo: Boolean(centro.activo),
+    });
+  };
+
+  const eliminarCentroCosto = async (id) => {
+    if (!window.confirm('¿Seguro que deseas eliminar este centro de costo?')) return;
+    try {
+      await api.delete(`/contabilidad/centros-costo/${id}`);
+      toast.success('Centro de costo eliminado');
+      await cargarCentrosCosto();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo eliminar el centro de costo');
     }
   };
 
@@ -580,6 +656,7 @@ const ContabilidadHub = () => {
         referencia: asientoForm.referencia || null,
         detalles: asientoForm.detalles.map((d) => ({
           cuentaId: Number(d.cuentaId),
+          centroCostoId: d.centroCostoId ? Number(d.centroCostoId) : null,
           descripcion: d.descripcion || null,
           debe: Number(d.debe || 0),
           haber: Number(d.haber || 0),
@@ -616,6 +693,7 @@ const ContabilidadHub = () => {
         referencia: asiento.referencia || '',
         detalles: (asiento.detalles || []).map((d) => ({
           cuentaId: d.cuentaId,
+          centroCostoId: d.centroCostoId || '',
           descripcion: d.descripcion || '',
           debe: Number(d.debe || 0),
           haber: Number(d.haber || 0),
@@ -756,6 +834,7 @@ const ContabilidadHub = () => {
         <button className={tab === 'cierre' ? 'active' : ''} onClick={() => setTab('cierre')}>Cierre y Estados</button>
         <button className={tab === 'periodos' ? 'active' : ''} onClick={() => setTab('periodos')}>Períodos Contables</button>
         <button className={tab === 'plan' ? 'active' : ''} onClick={() => setTab('plan')}>Plan de Cuentas</button>
+        <button className={tab === 'centros-costo' ? 'active' : ''} onClick={() => setTab('centros-costo')}>Centros de Costo</button>
       </div>
 
       {tab === 'resumen' && (loading ? (
@@ -871,6 +950,7 @@ const ContabilidadHub = () => {
                   <thead>
                     <tr>
                       <th>Cuenta</th>
+                      <th>Centro de Costo</th>
                       <th>Descripción</th>
                       <th>Debe</th>
                       <th>Haber</th>
@@ -884,6 +964,14 @@ const ContabilidadHub = () => {
                           <select value={detalle.cuentaId} onChange={(e) => cambiarDetalle(index, 'cuentaId', e.target.value)} required>
                             <option value="">Seleccione...</option>
                             {cuentasMovimiento.map((c) => (
+                              <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <select value={detalle.centroCostoId} onChange={(e) => cambiarDetalle(index, 'centroCostoId', e.target.value)}>
+                            <option value="">— Sin centro de costo —</option>
+                            {centrosCosto.filter((c) => c.activo).map((c) => (
                               <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
                             ))}
                           </select>
@@ -1704,6 +1792,75 @@ const ContabilidadHub = () => {
                   ))}
                   {plan.length === 0 && (
                     <tr><td colSpan="7" className="conta-empty">No hay cuentas para el filtro aplicado.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'centros-costo' && (
+        <div className="conta-tab-body">
+          <div className="conta-card">
+            <h3>{centroCostoForm.id ? 'Editar centro de costo' : 'Nuevo centro de costo'}</h3>
+            <p className="conta-import-sub">
+              Los centros de costo son una dimensión opcional que se puede asignar a cada línea de
+              un asiento contable (ej. sucursal, departamento, proyecto) sin duplicar el plan de cuentas.
+            </p>
+            <form className="conta-form-grid" onSubmit={guardarCentroCosto}>
+              <div>
+                <label>Código</label>
+                <input value={centroCostoForm.codigo} onChange={(e) => setCentroCostoForm((prev) => ({ ...prev, codigo: e.target.value }))} required />
+              </div>
+              <div>
+                <label>Nombre</label>
+                <input value={centroCostoForm.nombre} onChange={(e) => setCentroCostoForm((prev) => ({ ...prev, nombre: e.target.value }))} required />
+              </div>
+              <div className="full-width">
+                <label>Descripción (opcional)</label>
+                <input value={centroCostoForm.descripcion} onChange={(e) => setCentroCostoForm((prev) => ({ ...prev, descripcion: e.target.value }))} />
+              </div>
+              <div className="conta-check-row">
+                <label><input type="checkbox" checked={centroCostoForm.activo} onChange={(e) => setCentroCostoForm((prev) => ({ ...prev, activo: e.target.checked }))} /> Activo</label>
+              </div>
+              <div className="conta-form-actions full-width">
+                <button type="submit" className="btn-primary">{centroCostoForm.id ? 'Actualizar centro de costo' : 'Crear centro de costo'}</button>
+                <button type="button" className="btn-secondary" onClick={limpiarCentroCostoForm}>Limpiar</button>
+              </div>
+            </form>
+          </div>
+
+          <div className="conta-card">
+            <h3>Centros de costo</h3>
+            {centrosCostoLoading ? (
+              <div className="conta-loading">Cargando centros de costo...</div>
+            ) : (
+              <table className="conta-table">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Descripción</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {centrosCosto.map((c) => (
+                    <tr key={c.id}>
+                      <td>{c.codigo}</td>
+                      <td>{c.nombre}</td>
+                      <td>{c.descripcion || '-'}</td>
+                      <td>{c.activo ? 'Activo' : 'Inactivo'}</td>
+                      <td>
+                        <button className="btn-link" onClick={() => editarCentroCosto(c)}>Editar</button>
+                        <button className="btn-link danger" onClick={() => eliminarCentroCosto(c.id)}>Eliminar</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {centrosCosto.length === 0 && (
+                    <tr><td colSpan="5" className="conta-empty">No hay centros de costo creados.</td></tr>
                   )}
                 </tbody>
               </table>

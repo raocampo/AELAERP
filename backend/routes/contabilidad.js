@@ -206,6 +206,7 @@ async function normalizarDetallesAsiento(empresaId, detalles = []) {
 
   const normalizados = detalles.map((detalle) => ({
     cuentaId: parseIntSafe(detalle.cuentaId),
+    centroCostoId: parseIntSafe(detalle.centroCostoId) || null,
     descripcion: detalle.descripcion || null,
     debe: round2(detalle.debe || 0),
     haber: round2(detalle.haber || 0),
@@ -230,6 +231,19 @@ async function normalizarDetallesAsiento(empresaId, detalles = []) {
   const mapa = new Map(cuentas.map((cuenta) => [cuenta.id, cuenta]));
   if (normalizados.some((d) => !mapa.get(d.cuentaId)?.aceptaMovimiento || !mapa.get(d.cuentaId)?.activo)) {
     throw new Error('Solo cuentas activas y de movimiento pueden usarse en asientos');
+  }
+
+  const centroCostoIds = [...new Set(normalizados.map((d) => d.centroCostoId).filter(Boolean))];
+  if (centroCostoIds.length > 0) {
+    const centros = await prisma.centros_costo.findMany({
+      where: { empresaId, id: { in: centroCostoIds } },
+    });
+    if (centros.length !== centroCostoIds.length) {
+      throw new Error('Uno o más centros de costo no existen para la empresa actual');
+    }
+    if (centros.some((c) => !c.activo)) {
+      throw new Error('Solo centros de costo activos pueden usarse en asientos');
+    }
   }
 
   const totalDebe = round2(normalizados.reduce((acc, d) => acc + d.debe, 0));
@@ -977,6 +991,111 @@ router.delete('/plan-cuentas/:id', async (req, res) => {
   }
 });
 
+// GET /api/contabilidad/centros-costo
+router.get('/centros-costo', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const { activo = 'true' } = req.query;
+    const where = { empresaId };
+    if (activo !== 'todos') where.activo = String(activo) === 'true';
+
+    const centros = await prisma.centros_costo.findMany({
+      where,
+      orderBy: { codigo: 'asc' },
+    });
+
+    res.json({ success: true, data: centros });
+  } catch (error) {
+    console.error('GET /contabilidad/centros-costo:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al listar centros de costo' });
+  }
+});
+
+// POST /api/contabilidad/centros-costo
+router.post('/centros-costo', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const { codigo, nombre, descripcion = null, activo = true } = req.body || {};
+
+    if (!codigo || !nombre) {
+      return res.status(400).json({ success: false, mensaje: 'codigo y nombre son requeridos' });
+    }
+
+    const centro = await prisma.centros_costo.create({
+      data: {
+        empresaId,
+        codigo: String(codigo).trim(),
+        nombre: String(nombre).trim(),
+        descripcion: descripcion || null,
+        activo: Boolean(activo),
+      },
+    });
+
+    res.status(201).json({ success: true, data: centro });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, mensaje: 'Código de centro de costo ya existe en esta empresa' });
+    }
+    console.error('POST /contabilidad/centros-costo:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al crear centro de costo' });
+  }
+});
+
+// PUT /api/contabilidad/centros-costo/:id
+router.put('/centros-costo/:id', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const actual = await prisma.centros_costo.findFirst({ where: { id, empresaId } });
+    if (!actual) return res.status(404).json({ success: false, mensaje: 'Centro de costo no encontrado' });
+
+    const codigo = req.body?.codigo || actual.codigo;
+    const nombre = req.body?.nombre || actual.nombre;
+    const descripcion = req.body?.descripcion === undefined ? actual.descripcion : (req.body.descripcion || null);
+    const activo = req.body?.activo === undefined ? actual.activo : Boolean(req.body.activo);
+
+    const centro = await prisma.centros_costo.update({
+      where: { id },
+      data: { codigo: String(codigo).trim(), nombre: String(nombre).trim(), descripcion, activo },
+    });
+
+    res.json({ success: true, data: centro });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, mensaje: 'Código de centro de costo ya existe en esta empresa' });
+    }
+    console.error('PUT /contabilidad/centros-costo/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al actualizar centro de costo' });
+  }
+});
+
+// DELETE /api/contabilidad/centros-costo/:id
+router.delete('/centros-costo/:id', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const centro = await prisma.centros_costo.findFirst({ where: { id, empresaId } });
+    if (!centro) return res.status(404).json({ success: false, mensaje: 'Centro de costo no encontrado' });
+
+    const tieneMovimientos = await prisma.asientos_contables_detalle.count({
+      where: { centroCostoId: id },
+    });
+    if (tieneMovimientos > 0) {
+      return res.status(400).json({ success: false, mensaje: 'No se puede eliminar un centro de costo con movimientos contables. Desactívalo en su lugar.' });
+    }
+
+    await prisma.centros_costo.delete({ where: { id } });
+    res.json({ success: true, mensaje: 'Centro de costo eliminado' });
+  } catch (error) {
+    console.error('DELETE /contabilidad/centros-costo/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al eliminar centro de costo' });
+  }
+});
+
 // POST /api/contabilidad/importar-plan
 router.post('/importar-plan', async (req, res) => {
   try {
@@ -1431,7 +1550,7 @@ router.get('/asientos/:id', async (req, res) => {
       where: { id, empresaId },
       include: {
         detalles: {
-          include: { cuenta: true },
+          include: { cuenta: true, centroCosto: true },
           orderBy: { id: 'asc' },
         },
       },
@@ -1501,7 +1620,7 @@ router.put('/asientos/:id', async (req, res) => {
         },
         include: {
           detalles: {
-            include: { cuenta: true },
+            include: { cuenta: true, centroCosto: true },
             orderBy: { id: 'asc' },
           },
         },

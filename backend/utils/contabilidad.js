@@ -100,6 +100,7 @@ function normalizarDetalles(detalles = []) {
 
   const normalizados = detalles.map((d) => ({
     cuentaId: toInt(d.cuentaId),
+    centroCostoId: toInt(d.centroCostoId) || null,
     descripcion: d.descripcion || null,
     debe: round2(d.debe || 0),
     haber: round2(d.haber || 0),
@@ -139,6 +140,23 @@ async function validarCuentasMovimiento({ empresaId, detalles, tx = prisma }) {
   return cuentas;
 }
 
+async function validarCentrosCostoMovimiento({ empresaId, detalles, tx = prisma }) {
+  const empresaIdNum = toInt(empresaId);
+  const centroCostoIds = [...new Set(detalles.map((d) => d.centroCostoId).filter(Boolean))];
+  if (centroCostoIds.length === 0) return;
+
+  const centros = await tx.centros_costo.findMany({
+    where: { empresaId: empresaIdNum, id: { in: centroCostoIds } },
+  });
+
+  if (centros.length !== centroCostoIds.length) {
+    throw new Error('Uno o más centros de costo no existen para la empresa actual');
+  }
+  if (centros.some((c) => !c.activo)) {
+    throw new Error('Solo centros de costo activos pueden usarse en asientos');
+  }
+}
+
 async function crearAsientoContable({
   empresaId,
   fecha = new Date(),
@@ -158,6 +176,7 @@ async function crearAsientoContable({
 
   const { normalizados, totalDebe, totalHaber } = normalizarDetalles(detalles);
   await validarCuentasMovimiento({ empresaId: empresaIdNum, detalles: normalizados, tx });
+  await validarCentrosCostoMovimiento({ empresaId: empresaIdNum, detalles: normalizados, tx });
 
   const numero = await siguienteNumeroAsiento({ empresaId: empresaIdNum, fecha, tx });
 
@@ -179,7 +198,7 @@ async function crearAsientoContable({
     },
     include: {
       detalles: {
-        include: { cuenta: true },
+        include: { cuenta: true, centroCosto: true },
         orderBy: { id: 'asc' },
       },
     },
