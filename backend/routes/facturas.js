@@ -13,6 +13,7 @@ const sri     = require('../utils/sri');
 const { registrarAuditoria } = require('../utils/auditoria');
 const {
   crearAsientoFacturaAutorizada,
+  crearAsientoCostoVentaFactura,
   crearAsientoNotaCreditoEmitida,
   crearAsientoReversoFacturaAnulada,
 } = require('../utils/contabilidad');
@@ -234,6 +235,16 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config) {
         });
       } catch (contErr) {
         console.error('Error creando asiento automático de factura:', contErr.message);
+      }
+
+      try {
+        await crearAsientoCostoVentaFactura({
+          facturaId,
+          usuarioId: factura.emisorId,
+          fecha: factura.fechaEmision || new Date(),
+        });
+      } catch (contErr) {
+        console.error('Error creando asiento de costo de ventas:', contErr.message);
       }
 
       if (factura.emailComprador) {

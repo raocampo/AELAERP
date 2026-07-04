@@ -292,6 +292,8 @@ model configuracion_contable {
   codigoCuentaIvaCompras   String? @db.VarChar(20)  // IVA crédito tributario
   codigoCuentaCxP          String? @db.VarChar(20)  // cuentas por pagar proveedores
   codigoCuentaCajaCompras  String? @db.VarChar(20)  // contrapartida si se paga de caja al momento
+  // ── Ventas — costo de ventas (inventario permanente) ──
+  codigoCuentaCostoVentas  String? @db.VarChar(20)  // gasto/costo por la mercadería vendida
   updatedAt              DateTime @updatedAt
 
   empresa  empresas @relation(fields: [empresaId], references: [id])

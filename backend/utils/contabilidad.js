@@ -260,6 +260,69 @@ async function crearAsientoFacturaAutorizada({ facturaId, usuarioId, fecha = new
   return { asiento, creado: true };
 }
 
+// ─── Costo de ventas (inventario permanente) ─────────────────────────
+// Segundo asiento de la venta: Costo de Ventas (gasto) vs Inventario (activo),
+// por la mercadería inventariable efectivamente vendida. Usa el costoUnitario
+// congelado en movimientos_inventario al momento de la venta (aplicarMovimientosVentaDesdeDetalles),
+// no el costoUnitario actual del producto — así el asiento refleja el costo real
+// de lo que salió de bodega en ese momento, aunque el costo del producto cambie después.
+// Si la factura no tiene ítems inventariables (solo servicios) no genera nada.
+async function crearAsientoCostoVentaFactura({ facturaId, usuarioId, fecha = new Date() }) {
+  const facturaIdNum = toInt(facturaId);
+  const factura = await prisma.facturas.findUnique({ where: { id: facturaIdNum } });
+  if (!factura) throw new Error('Factura no encontrada');
+
+  const referencia = `FAC-COSTO-${factura.id}`;
+  const existente = await prisma.asientos_contables.findFirst({
+    where: { empresaId: factura.empresaId, tipo: 'COSTO_VENTA', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const movimientos = await prisma.movimientos_inventario.findMany({
+    where: { empresaId: factura.empresaId, referencia: factura.numeroFactura, tipo: 'VENTA_FACTURA' },
+  });
+  const costoTotal = round2(movimientos.reduce(
+    (acc, m) => acc + (Number(m.cantidad) * Number(m.costoUnitario || 0)), 0,
+  ));
+  if (costoTotal <= 0) return { asiento: null, creado: false };
+
+  const config = await obtenerConfiguracionContable(factura.empresaId);
+
+  const cuentaCostoVentas = await _resolverCuenta({
+    empresaId: factura.empresaId,
+    codigoConfigurado: config?.codigoCuentaCostoVentas,
+    codigoDefault: '5.1.01.001',
+    nombreDefault: 'Costo de Ventas',
+    tipoDefault: 'COSTO',
+    naturalezaDefault: 'DEBITO',
+  });
+
+  const cuentaInventario = await _resolverCuenta({
+    empresaId: factura.empresaId,
+    codigoConfigurado: config?.codigoCuentaInventario,
+    codigoDefault: '1.1.04.001',
+    nombreDefault: 'Inventario Mercaderias',
+    tipoDefault: 'ACTIVO',
+    naturalezaDefault: 'DEBITO',
+  });
+
+  const asiento = await crearAsientoContable({
+    empresaId: factura.empresaId,
+    fecha,
+    descripcion: `Costo de ventas factura ${factura.numeroFactura}`,
+    tipo: 'COSTO_VENTA',
+    referencia,
+    facturaId: factura.id,
+    usuarioId,
+    detalles: [
+      { cuentaId: cuentaCostoVentas.id, descripcion: `Costo de ventas factura ${factura.numeroFactura}`, debe: costoTotal, haber: 0 },
+      { cuentaId: cuentaInventario.id, descripcion: `Salida de inventario por factura ${factura.numeroFactura}`, debe: 0, haber: costoTotal },
+    ],
+  });
+
+  return { asiento, creado: true };
+}
+
 async function crearAsientoCobroFactura({ facturaId, metodoPago = 'efectivo', usuarioId, fecha = new Date(), cajaId = null }) {
   const facturaIdNum = toInt(facturaId);
   const factura = await prisma.facturas.findUnique({ where: { id: facturaIdNum } });
@@ -892,6 +955,7 @@ module.exports = {
   crearAsientoNominaPeriodo,
   crearAsientoPagoNominaPeriodo,
   crearAsientoFacturaAutorizada,
+  crearAsientoCostoVentaFactura,
   crearAsientoCobroFactura,
   crearAsientoCompraFarmacia,
   crearAsientoFacturaCompraRegistrada,

@@ -87,8 +87,12 @@ const FIXES = [
     "codigoCuentaIvaCompras"   VARCHAR(20),
     "codigoCuentaCxP"          VARCHAR(20),
     "codigoCuentaCajaCompras"  VARCHAR(20),
+    "codigoCuentaCostoVentas"  VARCHAR(20),
     "updatedAt"                TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
+  // Cuenta de costo de ventas (inventario permanente) — agregada después de la
+  // creación inicial de configuracion_contable, por eso va también como ALTER idempotente.
+  `ALTER TABLE "configuracion_contable" ADD COLUMN IF NOT EXISTS "codigoCuentaCostoVentas" VARCHAR(20)`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

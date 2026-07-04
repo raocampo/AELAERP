@@ -1114,6 +1114,7 @@ const CAMPOS_CONFIG_CONTABLE = [
   'codigoCuentaIvaCompras',
   'codigoCuentaCxP',
   'codigoCuentaCajaCompras',
+  'codigoCuentaCostoVentas',
 ];
 
 // GET /api/contabilidad/configuracion-asientos

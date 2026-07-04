@@ -40,7 +40,7 @@ const ContabilidadHub = () => {
   const [estadoPlan, setEstadoPlan] = useState(null);
   const [configAsientos, setConfigAsientos] = useState({
     codigoCuentaComprasGasto: '', codigoCuentaInventario: '', codigoCuentaIvaCompras: '',
-    codigoCuentaCxP: '', codigoCuentaCajaCompras: '',
+    codigoCuentaCxP: '', codigoCuentaCajaCompras: '', codigoCuentaCostoVentas: '',
   });
   const [guardandoConfigAsientos, setGuardandoConfigAsientos] = useState(false);
   const [cuentaForm, setCuentaForm] = useState({
@@ -139,6 +139,7 @@ const ContabilidadHub = () => {
         codigoCuentaIvaCompras:   d.codigoCuentaIvaCompras   || '',
         codigoCuentaCxP:          d.codigoCuentaCxP          || '',
         codigoCuentaCajaCompras:  d.codigoCuentaCajaCompras  || '',
+        codigoCuentaCostoVentas:  d.codigoCuentaCostoVentas  || '',
       });
     } catch {
       // no bloquea el flujo — quedan los defaults del sistema
@@ -157,6 +158,7 @@ const ContabilidadHub = () => {
         codigoCuentaIvaCompras:   d.codigoCuentaIvaCompras   || '',
         codigoCuentaCxP:          d.codigoCuentaCxP          || '',
         codigoCuentaCajaCompras:  d.codigoCuentaCajaCompras  || '',
+        codigoCuentaCostoVentas:  d.codigoCuentaCostoVentas  || '',
       });
     } catch (error) {
       toast.error(error.response?.data?.mensaje || 'Error al guardar la configuración');
@@ -1300,12 +1302,13 @@ const ContabilidadHub = () => {
             </form>
           </div>
 
-          {/* ── Card: Configuración de asientos automáticos de compras ─── */}
+          {/* ── Card: Configuración de asientos automáticos de compras/ventas ─── */}
           <div className="conta-card">
-            <h3>⚙️ Configuración de asientos automáticos — Compras</h3>
+            <h3>⚙️ Configuración de asientos automáticos — Compras y Ventas</h3>
             <p className="conta-import-sub">
-              Elige a qué cuenta de tu Plan de Cuentas se contabiliza cada compra automáticamente.
-              Si dejas un campo sin elegir, se usa la cuenta genérica por defecto del sistema.
+              Elige a qué cuenta de tu Plan de Cuentas se contabiliza cada compra y el costo
+              de cada venta automáticamente. Si dejas un campo sin elegir, se usa la cuenta
+              genérica por defecto del sistema.
             </p>
             <div className="conta-form-grid">
               {[
@@ -1314,6 +1317,7 @@ const ContabilidadHub = () => {
                 { campo: 'codigoCuentaIvaCompras',    label: 'IVA crédito tributario compras',             tipos: ['ACTIVO'] },
                 { campo: 'codigoCuentaCxP',           label: 'Cuentas por pagar proveedores',               tipos: ['PASIVO'] },
                 { campo: 'codigoCuentaCajaCompras',   label: 'Caja/Bancos (si se paga de contado)',         tipos: ['ACTIVO'] },
+                { campo: 'codigoCuentaCostoVentas',   label: 'Costo de ventas (mercadería vendida)',        tipos: ['GASTO', 'COSTO'] },
               ].map(({ campo, label, tipos }) => (
                 <div key={campo}>
                   <label>{label}</label>

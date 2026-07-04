@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS "configuracion_contable" (
     "codigoCuentaIvaCompras" VARCHAR(20),
     "codigoCuentaCxP" VARCHAR(20),
     "codigoCuentaCajaCompras" VARCHAR(20),
+    "codigoCuentaCostoVentas" VARCHAR(20),
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "configuracion_contable_pkey" PRIMARY KEY ("id")
