@@ -845,6 +845,124 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
   return { asiento, creado: true };
 }
 
+// ─── Retenciones y NC/ND recibidas por el Buzón SRI ──────────────────
+// Documentos que un tercero nos envía (no los emitimos nosotros): retenciones
+// que un cliente nos hizo al pagarnos, y notas de crédito/débito que un
+// proveedor nos envía sobre una compra ya registrada. No tenían asiento
+// contable propio — quedaban visibles solo en el Historial del Buzón.
+
+async function crearAsientoRetencionRecibida({ retencionRecibidaId, usuarioId, fecha = new Date(), db = prisma }) {
+  const idNum = toInt(retencionRecibidaId);
+  const retencion = await db.retenciones_recibidas.findUnique({ where: { id: idNum } });
+  if (!retencion) throw new Error('Retención recibida no encontrada');
+
+  const referencia = `RETREC-${retencion.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: retencion.empresaId, tipo: 'RETENCION_RECIBIDA', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const iva   = round2(retencion.totalRetencionIva);
+  const renta = round2(retencion.totalRetencionRenta);
+  const total = round2(iva + renta);
+  if (total <= 0) return { asiento: null, creado: false };
+
+  const cuentaCxC = await ensureCuentaMovimiento({
+    empresaId: retencion.empresaId, tx: db,
+    codigo: '1.1.03.001', nombre: 'Cuentas por Cobrar', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+  });
+
+  const detalles = [];
+  if (iva > 0) {
+    const cuentaIvaRet = await ensureCuentaMovimiento({
+      empresaId: retencion.empresaId, tx: db,
+      codigo: '1.1.07.001', nombre: 'Retención IVA (Crédito Tributario)', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+    });
+    detalles.push({ cuentaId: cuentaIvaRet.id, descripcion: `Retención IVA — ${retencion.razonSocialAgente}`, debe: iva, haber: 0 });
+  }
+  if (renta > 0) {
+    const cuentaRentaRet = await ensureCuentaMovimiento({
+      empresaId: retencion.empresaId, tx: db,
+      codigo: '1.1.07.002', nombre: 'Retención Impuesto a la Renta (Anticipo)', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+    });
+    detalles.push({ cuentaId: cuentaRentaRet.id, descripcion: `Retención Renta — ${retencion.razonSocialAgente}`, debe: renta, haber: 0 });
+  }
+  detalles.push({ cuentaId: cuentaCxC.id, descripcion: `Retención recibida de ${retencion.razonSocialAgente}`, debe: 0, haber: total });
+
+  const asiento = await crearAsientoContable({
+    empresaId: retencion.empresaId,
+    fecha,
+    descripcion: `Retención recibida — ${retencion.razonSocialAgente}`,
+    tipo: 'RETENCION_RECIBIDA',
+    referencia,
+    facturaId: retencion.facturaId,
+    usuarioId,
+    tx: db,
+    detalles,
+  });
+
+  return { asiento, creado: true };
+}
+
+async function crearAsientoDocRecibidoOtro({ docRecibidoId, usuarioId, fecha = new Date(), db = prisma }) {
+  const idNum = toInt(docRecibidoId);
+  const doc = await db.docs_recibidos_otros.findUnique({ where: { id: idNum } });
+  if (!doc) throw new Error('Documento recibido no encontrado');
+
+  const referencia = `DOCREC-${doc.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: doc.empresaId, tipo: 'DOC_RECIBIDO', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const total = round2(doc.importeTotal);
+  if (total <= 0) return { asiento: null, creado: false };
+
+  // '04' Nota de Crédito recibida → reduce lo que le debemos al proveedor.
+  // '05' Nota de Débito recibida → aumenta lo que le debemos.
+  // No hay detalle de línea (docs_recibidos_otros no lo guarda) — se contabiliza
+  // el ajuste completo contra la cuenta de gasto/compras configurada, igual que
+  // una compra sin inventario (reutiliza configuracion_contable, sin campos nuevos).
+  const esNotaCredito = doc.tipoDocumento === '04';
+  const config = await obtenerConfiguracionContable(doc.empresaId, db);
+
+  const cuentaGasto = await _resolverCuenta({
+    empresaId: doc.empresaId,
+    codigoConfigurado: config?.codigoCuentaComprasGasto,
+    codigoDefault: '5.2.01.001', nombreDefault: 'Compras Locales', tipoDefault: 'GASTO', naturalezaDefault: 'DEBITO',
+    tx: db,
+  });
+  const cuentaCxP = await _resolverCuenta({
+    empresaId: doc.empresaId,
+    codigoConfigurado: config?.codigoCuentaCxP,
+    codigoDefault: '2.1.04.001', nombreDefault: 'Cuentas por Pagar Proveedores', tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO',
+    tx: db,
+  });
+
+  const detalles = esNotaCredito
+    ? [
+        { cuentaId: cuentaCxP.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: total, haber: 0 },
+        { cuentaId: cuentaGasto.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: 0, haber: total },
+      ]
+    : [
+        { cuentaId: cuentaGasto.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: total, haber: 0 },
+        { cuentaId: cuentaCxP.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: 0, haber: total },
+      ];
+
+  const asiento = await crearAsientoContable({
+    empresaId: doc.empresaId,
+    fecha,
+    descripcion: `${doc.tipoDescripcion} recibida de ${doc.razonSocialEmisor}`,
+    tipo: 'DOC_RECIBIDO',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles,
+  });
+
+  return { asiento, creado: true };
+}
+
 async function crearAsientoRetencionAutorizada({ retencionId, usuarioId, fecha = new Date() }) {
   const retencionIdNum = toInt(retencionId);
   const retencion = await prisma.retenciones.findUnique({ where: { id: retencionIdNum } });
@@ -1162,6 +1280,8 @@ module.exports = {
   crearAsientoCobroFactura,
   crearAsientoCompraFarmacia,
   crearAsientoFacturaCompraRegistrada,
+  crearAsientoRetencionRecibida,
+  crearAsientoDocRecibidoOtro,
   crearAsientoLiquidacionCompraAutorizada,
   crearAsientoRetencionAutorizada,
   crearAsientoNotaCreditoEmitida,

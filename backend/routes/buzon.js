@@ -28,7 +28,11 @@ const {
   isoAFormatoSri,
 } = require('../utils/sriPortal');
 const { obtenerRecibidosScraper } = require('../utils/sriScraper');
-const { crearAsientoFacturaCompraRegistrada } = require('../utils/contabilidad');
+const {
+  crearAsientoFacturaCompraRegistrada,
+  crearAsientoRetencionRecibida,
+  crearAsientoDocRecibidoOtro,
+} = require('../utils/contabilidad');
 
 const router  = express.Router();
 const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -341,20 +345,24 @@ async function _validarEmpresaActiva(req, res) {
   return true;
 }
 
-// ─── Generar asiento contable automático tras importar una compra ──
+// ─── Generar asiento contable automático tras importar un documento ──
 // Las compras registradas manualmente (routes/compras.js) ya generan su asiento;
-// las importadas por el Buzón SRI no lo hacían — quedaban fuera de la contabilidad.
+// lo importado por el Buzón SRI no lo hacía — quedaba fuera de la contabilidad.
 // No debe abortar la importación si falla (mismo criterio que compras.js).
 async function _generarAsientoSiAplica(resultado, req) {
-  if (resultado?.modelo !== 'facturas_compra' || resultado?.accion !== 'creado') return;
+  if (resultado?.accion !== 'creado') return;
+  const usuarioId = req.usuario?.id || null;
+  const db = req.prisma;
   try {
-    await crearAsientoFacturaCompraRegistrada({
-      compraId: resultado.id,
-      usuarioId: req.usuario?.id || null,
-      db: req.prisma,
-    });
+    if (resultado.modelo === 'facturas_compra') {
+      await crearAsientoFacturaCompraRegistrada({ compraId: resultado.id, usuarioId, db });
+    } else if (resultado.modelo === 'retenciones_recibidas') {
+      await crearAsientoRetencionRecibida({ retencionRecibidaId: resultado.id, usuarioId, db });
+    } else if (resultado.modelo === 'docs_recibidos_otros') {
+      await crearAsientoDocRecibidoOtro({ docRecibidoId: resultado.id, usuarioId, db });
+    }
   } catch (err) {
-    console.error(`[Buzón] Asiento contable de compra id=${resultado.id}:`, err.message);
+    console.error(`[Buzón] Asiento contable de ${resultado.modelo} id=${resultado.id}:`, err.message);
   }
 }
 
