@@ -3,11 +3,12 @@
 ## Resumen ejecutivo
 
 Sincronización de git (HEAD local desactualizado, sin pérdida de trabajo), seguimiento
-de pendientes de sesiones anteriores, y diseño + implementación de la primera pieza del
-"motor de reglas contables" pedido por un cliente: configuración de cuentas contables
-para asientos automáticos de compras.
+de pendientes de sesiones anteriores, diseño + implementación de la primera pieza del
+"motor de reglas contables" pedido por un cliente (configuración de cuentas contables
+para asientos automáticos de compras), y cierre del gap de "POS + inventario permanente"
+de los 5 principios ERP (asiento automático de costo de ventas).
 
-Commits pusheados: `de6b37e`, `6b081f3`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`
 
 ---
 
@@ -98,20 +99,46 @@ cuenta configurada (no la genérica).
 
 ---
 
+## Feature — Asiento automático de costo de ventas (`c7adfd7`)
+
+Al revisar el principio #3 se confirmó que el inventario **sí se descontaba** al vender
+(`aplicarMovimientosVentaDesdeDetalles`, ya implementado y funcionando en facturas.js y
+notasVenta.js), pero la factura autorizada solo generaba el asiento de venta
+(CxC/Ventas/IVA) — nunca el segundo asiento de **Costo de Ventas vs Inventario**. Los
+estados financieros no reflejaban el costo de la mercadería vendida.
+
+**Fix:** `crearAsientoCostoVentaFactura()` en `utils/contabilidad.js` — toma el costo
+real congelado en `movimientos_inventario` al momento de la venta (no el costoUnitario
+actual del producto, que puede haber cambiado desde entonces), y solo genera asiento si
+hubo ítems inventariables (facturas de solo servicios no generan nada). Se llama junto a
+`crearAsientoFacturaAutorizada`, en el mismo punto (tras autorización SRI), respetando la
+regla de no contabilizar en borrador. Reutiliza `configuracion_contable` (feature de
+arriba): nuevo campo `codigoCuentaCostoVentas`, default `5.1.01.001` si no se configura.
+
+**Importante — gap distinto sin resolver:** `notas_venta` (POS) **no tiene ningún**
+asiento contable propio todavía, ni de venta ni de costo — es un problema más grande y
+separado (habría que agregar ambos asientos ahí, no solo el de costo). Queda en backlog.
+
+### Pendiente de verificar
+Emitir una factura con al menos un producto inventariable, esperar la autorización SRI,
+y confirmar en el Libro Diario que aparece el asiento tipo `COSTO_VENTA` además del de
+`FACTURA`, con el monto correcto (cantidad × costoUnitario de esa venta).
+
+---
+
 ## Revisión de los 5 principios de diseño ERP contable (vs. estado real del código)
 
 | # | Principio | Estado |
 |---|-----------|--------|
 | 1 | Cuentas de control (no "cuentitis") | ✅ Seguido — CxC/CxP usan FK a `clientes`/`proveedores`, una sola cuenta contable genérica por concepto, no una por cliente/proveedor |
 | 2 | Motor de reglas / mapeo SRI → cuenta contable | 🟡 Parcial — implementado como **configuración manual del contador** (este fix), no como motor automático por producto/categoría/proveedor. La tabla `sri_mapeo_cuentas` del backlog original (código retención/IVA → cuenta) sigue sin implementar |
-| 3 | POS + inventario permanente (2 asientos por venta) | ❌ Falta — `crearAsientoFacturaAutorizada()` solo genera el asiento de venta (CxC/Ventas/IVA). Falta el segundo asiento de **Costo de Ventas vs Inventario** en cada venta con ítems inventariables |
+| 3 | POS + inventario permanente (2 asientos por venta) | ✅ Resuelto para `facturas` (`c7adfd7`) — pendiente el mismo tratamiento para `notas_venta`/POS, que hoy no tiene NINGÚN asiento (ni venta ni costo) |
 | 4 | Centros de costo dimensionales | ❌ No implementado — no existe `centroCostoId` en ningún lado del esquema |
 | 5 | Provisiones RRHH automáticas | ❌ No implementado — `crearAsientoNominaPeriodo()` literalmente lanza `Error('El módulo de nómina no está implementado en esta versión de AELA')` |
 
 **Recomendación de prioridad para seguir (si se retoma el diseño contable):**
-1. Punto 3 (POS + costo de venta) — es el que más distorsiona los estados financieros
-   hoy: toda venta de mercadería inventariable no descarga el inventario contablemente,
-   solo a nivel de stock físico
+1. **Notas de Venta / POS sin contabilidad** — es el hueco más grande que queda hoy:
+   ninguna venta por POS se refleja en el Libro Diario (ni ingreso ni costo)
 2. Punto 2 completo (mapeo SRI → cuenta) — para retenciones/IVA de compras y ventas
 3. Puntos 4 y 5 — menor urgencia, dependen de que RRHH/reportes por sucursal sean
    prioridad de negocio
