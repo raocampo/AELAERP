@@ -11,7 +11,37 @@ para notas de venta también), fix de aislamiento multiempresa en el módulo Ban
 vínculo con Plan de Cuentas, y actualización completa de la Ayuda del sistema y el
 manual de usuario.
 
-Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`
+Commits pusheados: `de6b37e`, `6b081f3`, `c7adfd7`, `59b673d`, `2886f8b`, `b46a3b2`, `5c429dd`, `08c2018`, `a3ee110`, `62ed9f6`
+
+---
+
+## 🔴 PENDIENTES PARA MAÑANA — verificar en producción, en orden
+
+1. **Confirmar deploy de Railway** — abrir pestaña "Details" del deployment activo y
+   confirmar que corresponde al commit `62ed9f6` (o posterior). Si Railway no lo tomó,
+   forzar redeploy manual ("Clear build cache & redeploy").
+2. **Bancos en Consorcio Vial** — recargar (Ctrl+Shift+R), confirmar que el modal
+   "Nueva Cuenta Bancaria" se ve sólido (no transparente) y que el selector "Cuenta
+   contable" muestra las cuentas ya creadas en el Plan de Cuentas de esa empresa.
+   Crear una cuenta bancaria de prueba vinculada, guardar, y confirmar que aparece
+   bajo Consorcio Vial (no bajo la empresa base del usuario).
+3. **Configuración contable de compras** — en Contabilidad → Plan de Cuentas, elegir
+   una cuenta de gasto propia en "Configuración de asientos automáticos", registrar
+   o importar una compra no inventariable, confirmar en el Libro Diario que usa esa
+   cuenta (no la genérica "5.2.01.001 Compras Locales").
+4. **Costo de ventas en facturas** — emitir una factura con un producto inventariable,
+   esperar autorización SRI, confirmar asiento `COSTO_VENTA` en el Libro Diario además
+   del `FACTURA`.
+5. **Asientos de Notas de Venta** — crear una nota de venta (POS) con producto
+   inventariable, confirmar asientos `NOTA_VENTA` + `COSTO_VENTA`; anularla y
+   confirmar `ANULACION_NOTA` que reversa ambos.
+6. **Buzón SRI genera asiento** — importar una factura de compra por el Buzón
+   (XML/ZIP/scraper) y confirmar que aparece un asiento `COMPRA` en el Libro Diario.
+7. **Scraper SRI login** — pendiente desde antes, el cliente priorizó lo contable.
+   Confirmar en logs de Railway: `[SRI] sriScraper.js build 2026-07-01 — incluye
+   hash MD5+SHA-512`.
+
+Detalle completo de cada punto (causa raíz, qué se cambió) en las secciones abajo.
 
 ---
 
@@ -276,10 +306,26 @@ DB:       PostgreSQL Railway
 
 **Archivos clave de esta sesión:**
 - `backend/utils/contabilidad.js` — `crearAsientoFacturaCompraRegistrada`,
-  `obtenerConfiguracionContable`, `_resolverCuenta`
-- `backend/routes/contabilidad.js` — `GET/PUT /configuracion-asientos`
+  `obtenerConfiguracionContable`, `_resolverCuenta`, `crearAsientoCostoVentaFactura`,
+  `crearAsientoVentaNotaVenta`, `crearAsientoCostoVentaNotaVenta`,
+  `crearAsientoReversoNotaVentaAnulada`
+- `backend/routes/contabilidad.js` — `GET/PUT /configuracion-asientos`, filtro `tipo`
+  case-insensitive en `GET /plan-cuentas`
 - `backend/routes/buzon.js` — `_generarAsientoSiAplica`
+- `backend/routes/facturas.js` — llamada a `crearAsientoCostoVentaFactura`
+- `backend/routes/notasVenta.js` — llamadas a los 3 asientos de nota de venta
+- `backend/routes/bancos.js` — fix `obtenerEmpresaId` (empresa activa, no base)
 - `frontend/src/components/Contabilidad/ContabilidadHub.jsx` — tarjeta de configuración
+- `frontend/src/components/Bancos/BancosHub.jsx` + `Bancos.css` — selector cuenta
+  contable, variables CSS corregidas (`--color-surface` y similares no existían)
+- `frontend/src/components/Ayuda/AyudaSistema.jsx` + `docs/manual-usuario.md` —
+  documentación actualizada (multiempresa, contabilidad, bancos, Buzón SRI)
+
+**Variables CSS indefinidas — pendiente en otros módulos:** `ImportarFacturasHistoricas.css`,
+`FormEmpleado.jsx`, `Nomina.jsx`, `TalentoHumano.css` usan el mismo patrón roto
+(`--color-surface`, `--color-text-primary`, `--color-text-secondary`, `--color-border`)
+que no existen en `App.css`. No corregido hoy — revisar si causa problemas visuales
+reportados en Talento Humano o Facturas Históricas.
 
 **Nota de git:** al iniciar esta sesión, `git pull` fue rechazado porque el HEAD local
 estaba en `bc49978` mientras `origin/main` ya iba en `c09e044` (15 commits de sesiones
