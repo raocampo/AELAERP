@@ -1552,6 +1552,55 @@ router.get('/importar/plantilla', async (_req, res) => {
 });
 
 // POST /api/facturas/importar/preview — valida el archivo sin importar
+// POST /api/facturas/importar/generar-asientos-faltantes — reparación retroactiva
+// Facturas históricas importadas ANTES del fix que engancha crearAsientoFacturaAutorizada
+// al import (2026-07-04) se quedaron sin asiento contable. En vez de forzar al
+// usuario a reimportar el Excel (riesgo de duplicados, aunque la unicidad de
+// claveAcceso los bloquearía), esto genera el asiento faltante directamente sobre
+// las facturas que YA existen — es idempotente, no crea duplicados, no requiere
+// el archivo original.
+router.post('/importar/generar-asientos-faltantes', async (req, res) => {
+  try {
+    const db = req.prisma || prisma;
+    const empresaId = req.empresa.id;
+
+    const historicas = await db.facturas.findMany({
+      where: { empresaId, origenRegistro: 'IMPORTACION' },
+      select: { id: true, numeroFactura: true, fechaEmision: true },
+      orderBy: { fechaEmision: 'asc' },
+    });
+
+    let creados = 0;
+    let yaTenian = 0;
+    const errores = [];
+
+    for (const factura of historicas) {
+      try {
+        const r = await crearAsientoFacturaAutorizada({
+          facturaId: factura.id,
+          usuarioId: req.usuario.id,
+          fecha: factura.fechaEmision,
+          db,
+        });
+        if (r.creado) creados += 1; else yaTenian += 1;
+      } catch (err) {
+        errores.push({ numeroFactura: factura.numeroFactura, error: err.message });
+      }
+    }
+
+    res.json({
+      ok: true,
+      totalFacturasHistoricas: historicas.length,
+      asientosCreados: creados,
+      yaTeniaAsiento: yaTenian,
+      errores,
+    });
+  } catch (err) {
+    console.error('[Importar] generar-asientos-faltantes:', err);
+    res.status(500).json({ ok: false, error: `Error al generar asientos: ${err.message}` });
+  }
+});
+
 router.post('/importar/preview', multerImportacion, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió archivo' });

@@ -30,7 +30,25 @@ export default function ImportarFacturasHistoricas() {
   const [resultado, setResultado] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError]       = useState('');
+  const [reparando, setReparando]           = useState(false);
+  const [resultadoReparacion, setResultadoReparacion] = useState(null);
   const inputRef = useRef();
+
+  // Facturas históricas importadas ANTES del 2026-07-04 quedaron sin asiento
+  // contable (bug ya corregido para importaciones nuevas). Esto genera los
+  // asientos faltantes sobre las que YA existen, sin reimportar el Excel.
+  const generarAsientosFaltantes = async () => {
+    setReparando(true);
+    setResultadoReparacion(null);
+    try {
+      const { data } = await api.post('/facturas/importar/generar-asientos-faltantes');
+      setResultadoReparacion(data);
+    } catch (err) {
+      setResultadoReparacion({ ok: false, error: err.response?.data?.error || 'No se pudo completar la reparación' });
+    } finally {
+      setReparando(false);
+    }
+  };
 
   const descargarPlantilla = async () => {
     try {
@@ -170,6 +188,40 @@ export default function ImportarFacturasHistoricas() {
               Continuar → Cargar archivo
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── ¿Ya importaste facturas antes de esta corrección? Repara sin reimportar ── */}
+      {paso === 0 && (
+        <div className="ifh-card">
+          <h2 className="ifh-card-titulo">¿Ya importaste facturas históricas antes?</h2>
+          <p className="ifh-card-desc">
+            Las facturas históricas importadas antes del <strong>4 de julio de 2026</strong> no
+            generaron su asiento contable (era un bug — ya corregido para nuevas importaciones).
+            No necesitas volver a subir el Excel: este botón genera el asiento faltante
+            directamente sobre las facturas que ya tienes registradas, usando la fecha
+            histórica original de cada una.
+          </p>
+          <div className="ifh-acciones">
+            <button className="btn-secondary" onClick={generarAsientosFaltantes} disabled={reparando}>
+              {reparando ? 'Generando asientos...' : 'Generar asientos faltantes'}
+            </button>
+          </div>
+          {resultadoReparacion && (
+            resultadoReparacion.ok ? (
+              <div className="ifh-nota" style={{ marginTop: 12 }}>
+                Revisadas <strong>{resultadoReparacion.totalFacturasHistoricas}</strong> facturas
+                históricas — <strong>{resultadoReparacion.asientosCreados}</strong> asientos nuevos
+                generados, <strong>{resultadoReparacion.yaTeniaAsiento}</strong> ya los tenían.
+                {resultadoReparacion.errores?.length > 0 && (
+                  <> {resultadoReparacion.errores.length} con error (revisa el Plan de Cuentas):{' '}
+                    {resultadoReparacion.errores.map(e => e.numeroFactura).join(', ')}</>
+                )}
+              </div>
+            ) : (
+              <div className="ifh-alerta-error" style={{ marginTop: 12 }}>{resultadoReparacion.error}</div>
+            )
+          )}
         </div>
       )}
 
