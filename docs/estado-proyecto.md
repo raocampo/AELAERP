@@ -1,6 +1,6 @@
 # Estado del Proyecto AELA
 
-Fecha de referencia: `2026-04-29`
+Fecha de referencia: `2026-07-06`
 
 ## Resumen general
 
@@ -10,8 +10,8 @@ AELA ya cuenta con una base funcional operativa para:
 - autenticacion por usuario o correo
 - gestion de usuarios y roles
 - configuracion SRI separada de configuracion del sistema
-- facturacion electronica
-- notas de venta
+- facturacion electronica con asientos contables automáticos (venta + costo)
+- notas de venta con asientos automáticos (venta + costo + reverso al anular)
 - caja diaria
 - POS
 - productos e inventario
@@ -339,6 +339,107 @@ Durante la implementacion se verifico:
 - sincronizacion del esquema Prisma con PostgreSQL
 - migracion `20260427231353_talento_humano` aplicada exitosamente
 
+### 24. Sesión 2026-07-04/05 — Motor contable completo: 5 principios ERP implementados
+
+Ver `docs/pendientes-2026-07-04.md` para detalle exhaustivo (commits, scripts de integración, causa raíz de cada bug).
+
+#### Fix — Bancos: empresa activa vs. empresa base (`2886f8b`)
+`routes/bancos.js` tenía `obtenerEmpresaId` propio que devolvía `req.usuario.empresaId`
+(empresa base fija) en vez de `req.empresa.id` (empresa activa del EmpresaSwitcher).
+Admin Macro como Robert Ocampo operaba silenciosamente sobre su empresa base al ver
+Consorcio Vial — potencial mezcla de datos entre empresas.
+
+#### Feature — Bancos vinculados al Plan de Cuentas (`2886f8b`)
+- Modal Nueva/Editar Cuenta Bancaria: selector de cuenta contable
+- Tarjeta de cuenta muestra la cuenta contable vinculada o aviso "Sin cuenta contable"
+
+#### Bug — Modal de Bancos transparente + selector vacío (`a3ee110`)
+- Variables CSS `--color-surface`, `--color-text-primary` no definidas en ningún lado
+  → `background: transparent` al abrir el modal. Reemplazadas por valores reales con fallback.
+- `GET /plan-cuentas` filtraba `tipo` sin `mode: 'insensitive'` → cuentas mal capitalizadas
+  excluidas. Corregido con comparación case-insensitive.
+
+#### Feature — Configuración contable (asientos automáticos configurables) (`6b081f3`)
+Nueva tabla `configuracion_contable` (1 fila por empresa) con 6 campos de código de cuenta:
+`codigoCuentaComprasGasto`, `codigoCuentaInventario`, `codigoCuentaIvaCompras`,
+`codigoCuentaCxP`, `codigoCuentaCajaCompras`, `codigoCuentaCostoVentas`.
+- `GET/PUT /api/contabilidad/configuracion-asientos` — valida que el código exista y acepte movimiento
+- UI en ContabilidadHub → tab Plan de Cuentas: 5 selectores por tipo de cuenta
+- `_resolverCuenta()` en `utils/contabilidad.js`: usa la cuenta configurada o cae al default
+  sin romper nunca el asiento (fallback gracioso con log de advertencia)
+- Migración: `20260704000000_configuracion_contable/migration.sql`
+
+#### Feature — Asiento automático de costo de ventas en facturas (Principio #3) (`c7adfd7`)
+`crearAsientoCostoVentaFactura()`: toma el costo real congelado en `movimientos_inventario`
+al momento de la venta (no el costo actual del producto). Solo genera asiento si la factura
+tiene ítems inventariables. Se llama junto al asiento de venta tras autorización SRI.
+
+#### Feature — Asientos completos para Notas de Venta (`5c429dd`)
+- `crearAsientoVentaNotaVenta()`: Debe Caja / Haber Ventas (sin IVA — RIMPE)
+- `crearAsientoCostoVentaNotaVenta()`: Debe Costo de Ventas / Haber Inventario
+- `crearAsientoReversoNotaVentaAnulada()`: reversa ambos asientos al anular
+
+#### Fix — Buzón SRI no generaba asientos de compra (`de6b37e`)
+Los 4 endpoints de importación del Buzón SRI nunca llamaban a `crearAsientoFacturaCompraRegistrada`.
+Fix: nuevo helper `_generarAsientoSiAplica()` en `buzon.js`, no bloqueante.
+
+#### Feature — Asientos para retenciones y NC/ND recibidas (`f666fbf`)
+- `crearAsientoRetencionRecibida()`: Debe Retención IVA (`1.1.07.001`) + Retención Renta
+  (`1.1.07.002`) / Haber CxC
+- `crearAsientoDocRecibidoOtro()`: NC reduce CxP, ND aumenta CxP
+
+#### Feature — Asiento opcional para movimientos bancarios y cheques (`cbe029f`)
+`crearAsientoMovimientoBancario()`: usuario elige cuenta contrapartida; si no la elige,
+el movimiento se registra sin asiento (no se fuerza nada). Requiere cuenta bancaria vinculada al plan.
+
+#### Bug crítico — Facturas históricas (Excel) nunca generaban asiento (`3a032cf`)
+`crearAsientoFacturaAutorizada` solo se llamaba desde el job SRI. Las facturas con
+`origenRegistro='IMPORTACION'` nunca pasaban por ese job → 0 asientos contables.
+Fix: llamar la función con la **fecha histórica** de cada factura, no la de hoy.
+Se agrega columna "Libro Diario" (✓ Enlazada / ⚠ Sin asiento) en el resultado de importación.
+
+#### Feature — Reparación retroactiva sin reimportar (`8ad0bb7`)
+`POST /api/facturas/importar/generar-asientos-faltantes`: genera asientos para facturas
+ya importadas antes del fix, idempotente. Botón "Generar asientos faltantes" en la UI.
+
+#### Feature — Centros de Costo dimensionales (Principio #4) (`cf16980`)
+- Nueva tabla `centros_costo` (`codigo`, `nombre`, `descripcion`, `empresaId`, `activo`)
+- Campo `centroCostoId Int?` opcional en `asientos_contables_detalle` (FK SET NULL)
+- CRUD `GET/POST/PUT/DELETE /api/contabilidad/centros-costo`
+- Nuevo tab "Centros de Costo" en ContabilidadHub
+- Selector de centro de costo en cada línea al crear/editar asientos manuales
+- Migración: `20260704120000_centros_costo/migration.sql`
+
+#### Feature — Provisiones automáticas de nómina (Principio #5) (`c6a61da`)
+- `crearAsientoNominaPeriodo()`: Debe Gasto Sueldos + Aporte Patronal + Provisiones /
+  Haber Sueldos por Pagar + IESS + Retención IR + Provisiones + Anticipos. Se dispara
+  al cambiar nómina BORRADOR→PROCESADA. Fecha = fin de mes del período.
+- `crearAsientoPagoNominaPeriodo()`: Debe Sueldos por Pagar / Haber Caja. Al marcar PAGADA.
+- Crea cuentas `5.1.02.001-005` y `2.1.05.001-007` automáticamente si no existen.
+- Nómina.jsx: toast con resultado del asiento al procesar/pagar.
+
+#### Feature — Importar facturas de COMPRA históricas (`e7415cb`)
+- `backend/utils/importarComprasHistoricas.js`: valida proveedor (tipo/RUC/nombre),
+  `numero_factura` obligatorio, genera asiento `COMPRA` con fecha histórica desde el día uno.
+  No toca inventario (mismo criterio que ventas históricas).
+- `frontend/src/components/Compras/ImportarComprasHistoricas.jsx`: wizard 4 pasos.
+- Ruta `/compras/importar-historicas`, entrada en menú de Compras.
+
+#### Docs actualizados
+- `AyudaSistema.jsx`: sección multiempresa, Plan de Cuentas avanzado, configuración
+  contable, Bancos, facturas históricas, Buzón SRI corregido
+- `docs/manual-usuario.md`: contabilidad (12.3.1), Bancos (13.1), Facturación (7.7),
+  Compras (9.7 — Buzón SRI con información correcta)
+
+#### Estado 5 principios ERP contable
+| # | Principio | Estado |
+|---|-----------|--------|
+| 1 | Cuentas de control (no cuentitis) | ✅ Seguido — CxC/CxP usan FK a clientes/proveedores |
+| 2 | Mapeo SRI → cuenta contable | 🟡 Parcial — configuración manual del contador (tabla `configuracion_contable`); motor automático por código SRI es mejora opcional futura |
+| 3 | POS + inventario permanente | ✅ Facturas (`c7adfd7`) + Notas de Venta (`5c429dd`) |
+| 4 | Centros de costo dimensionales | ✅ `cf16980` |
+| 5 | Provisiones RRHH automáticas | ✅ `c6a61da` |
+
 ### 23. Sesión 2026-07-03 — Plan de cuentas avanzado + auditoría multi-tenant
 
 Ver `docs/pendientes-2026-07-03.md` para detalle completo.
@@ -505,13 +606,30 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
    - Activar/suspender tenants
    - Ver logs de provisioning fallidos
 
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-04/05)
+
+Ver `docs/pendientes-2026-07-04.md` sección "PENDIENTES PARA MAÑANA" para lista completa de 12 puntos.
+Los más críticos:
+
+0. **Generar asientos faltantes** — facturas históricas ya importadas antes del fix `3a032cf`:
+   ir a Ventas → Importar históricas → "Generar asientos faltantes". Idempotente, seguro.
+1. **Confirmar deploy Railway** — verificar que el deployment activo corresponde al commit
+   `62ed9f6` (o posterior). Si no, forzar "Clear build cache & redeploy".
+2. **Bancos en Consorcio Vial** — modal sólido (no transparente), selector cuenta contable funcional.
+3. **Configuración contable de compras** — configurar cuenta de gasto propia, importar una compra,
+   confirmar en Libro Diario que usa esa cuenta (no la genérica).
+4. **Costo de ventas en facturas** — factura con producto inventariable → asiento `COSTO_VENTA`.
+5. **Asientos de Notas de Venta** — nota de venta + anulación → asientos `NOTA_VENTA`, `COSTO_VENTA`, `ANULACION_NOTA`.
+10. **Centros de Costo** — crear centro de costo, asignarlo en un asiento manual.
+11. **Provisiones de nómina** — procesar nómina → asiento `NOMINA` de provisión; pagar → asiento de pago.
+12. **Importar compras históricas** — importar un lote y confirmar asientos `COMPRA` con fecha histórica.
+
 ### 🟢 Prioridad funcional (mejoras del sistema)
 
-8. **Contabilidad — ERP design (pendientes de implementar)**
-   - **Tabla `sri_mapeo_cuentas`** (Alta): código retención/IVA → cuenta contable; asiento automático en facturación
-   - **POS → asientos contables** (Alta): 2 asientos automáticos por venta (venta + costo de inventario permanente)
-   - **Centros de costo dimensionales** (Media): campo `centroCostoId` en `asientos_contables_detalle`, tabla `centros_costo`
-   - **Provisiones RRHH automáticas** (Baja): asiento de provisión al cerrar nómina (décimos, fondos reserva, IESS patronal)
+8. **Contabilidad — mejoras opcionales (los 5 principios ERP ya están implementados)**
+   - **Motor automático SRI → cuenta** (Mejora opcional): código retención/IVA → cuenta automática
+     sin configuración manual del contador. La `configuracion_contable` ya cubre el caso real reportado.
+   - **Puppeteer en Railway** — solo si el scraper SRI sigue fallando tras el fix fetch+JSF
 
 9. **Talento Humano**
    - Impuesto a la Renta auto-calculado (tabla progresiva LORTI)
