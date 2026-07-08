@@ -541,7 +541,16 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ success: false, mensaje: 'Factura de compra no encontrada' });
     }
 
-    res.json({ success: true, data: compra });
+    // Enriquecer con nombre de cuenta de gasto si está configurada
+    let cuentaGasto = null;
+    if (compra.cuentaGastoId) {
+      cuentaGasto = await prisma.plan_cuentas.findFirst({
+        where: { id: compra.cuentaGastoId },
+        select: { id: true, codigo: true, nombre: true, tipo: true },
+      });
+    }
+
+    res.json({ success: true, data: { ...compra, cuentaGasto } });
   } catch (error) {
     console.error('GET /compras/:id:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo cargar la compra' });
@@ -1100,12 +1109,25 @@ router.put('/:id', async (req, res) => {
     if (compra.anulada) return res.status(400).json({ success: false, mensaje: 'No se puede editar una compra anulada' });
 
     const { observaciones, proveedorId, fechaEmision, tipoGasto,
-            subtotal0, subtotal15, totalIva } = req.body || {};
+            subtotal0, subtotal15, totalIva, cuentaGastoId } = req.body || {};
 
     const data = {};
     if (observaciones !== undefined) data.observaciones = limpiarTexto(observaciones) || null;
     if (proveedorId !== undefined) data.proveedorId = proveedorId ? parseInt(proveedorId, 10) : null;
     if (tipoGasto !== undefined) data.tipoGasto = limpiarTexto(tipoGasto) || null;
+
+    if (cuentaGastoId !== undefined) {
+      if (!cuentaGastoId) {
+        data.cuentaGastoId = null;
+      } else {
+        const cuentaIdNum = parseInt(cuentaGastoId, 10);
+        const cuenta = await prisma.plan_cuentas.findFirst({
+          where: { id: cuentaIdNum, empresaId, activo: true, aceptaMovimiento: true },
+        });
+        if (!cuenta) return res.status(400).json({ success: false, mensaje: 'Cuenta contable no encontrada o no acepta movimiento' });
+        data.cuentaGastoId = cuentaIdNum;
+      }
+    }
 
     // Corrección manual del desglose IVA (para registros importados sin desglose)
     if (subtotal0  !== undefined) data.subtotal0  = Math.max(0, parseFloat(subtotal0)  || 0);
@@ -1413,6 +1435,53 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
   } catch (error) {
     console.error('POST /compras/:id/registrar-inventario:', error);
     res.status(500).json({ success: false, mensaje: error.message || 'Error al registrar inventario' });
+  }
+});
+
+// DELETE /api/compras/:id — eliminación física definitiva
+// Requiere: sin pagos CxP activos. Si tiene movimientos de inventario no revertidos,
+// exige anular primero (para que el stock quede en orden).
+router.delete('/:id', async (req, res) => {
+  try {
+    const compraId = parseInt(req.params.id, 10);
+    const empresaId = req.empresa.id;
+
+    const compra = await prisma.facturas_compra.findFirst({ where: { id: compraId, empresaId } });
+    if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
+
+    const pagosActivos = await prisma.pagos_proveedor.count({ where: { compraId, anulado: false } });
+    if (pagosActivos > 0) {
+      return res.status(400).json({
+        success: false,
+        mensaje: `No se puede eliminar: tiene ${pagosActivos} pago(s) de proveedor activos. Anule los pagos primero.`,
+      });
+    }
+
+    if ((compra.movimientosInventario || 0) > 0 && !compra.anulada) {
+      return res.status(400).json({
+        success: false,
+        mensaje: 'La compra tiene movimientos de inventario. Anúlela primero para revertir el stock, luego elimínela.',
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.retenciones.deleteMany({ where: { compraId } });
+      await tx.facturas_compra.delete({ where: { id: compraId } });
+    });
+
+    await registrarAuditoria({
+      usuarioId: req.usuario.id,
+      accion: 'ELIMINAR',
+      tabla: 'facturas_compra',
+      registroId: compraId,
+      datosNuevos: { eliminada: true, numeroFactura: compra.numeroFactura },
+      req,
+    });
+
+    res.json({ success: true, mensaje: `Compra ${compra.numeroFactura} eliminada definitivamente` });
+  } catch (error) {
+    console.error('DELETE /compras/:id:', error);
+    res.status(500).json({ success: false, mensaje: error.message || 'No se pudo eliminar la compra' });
   }
 });
 

@@ -1186,15 +1186,25 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
     tx: db,
   });
 
-  const cuentaCompras = await _resolverCuenta({
-    empresaId: compra.empresaId,
-    codigoConfigurado: config?.codigoCuentaComprasGasto,
-    codigoDefault: '5.2.01.001',
-    nombreDefault: 'Compras Locales',
-    tipoDefault: 'GASTO',
-    naturalezaDefault: 'DEBITO',
-    tx: db,
-  });
+  // Si la factura tiene cuenta de gasto específica configurada, usarla en lugar del default global
+  let cuentaCompras = null;
+  if (compra.cuentaGastoId) {
+    cuentaCompras = await db.plan_cuentas.findFirst({
+      where: { id: compra.cuentaGastoId, empresaId: compra.empresaId, activo: true },
+    });
+    if (!cuentaCompras) console.warn(`[Contabilidad] cuentaGastoId ${compra.cuentaGastoId} no encontrada — usando cuenta default`);
+  }
+  if (!cuentaCompras) {
+    cuentaCompras = await _resolverCuenta({
+      empresaId: compra.empresaId,
+      codigoConfigurado: config?.codigoCuentaComprasGasto,
+      codigoDefault: '5.2.01.001',
+      nombreDefault: 'Compras Locales',
+      tipoDefault: 'GASTO',
+      naturalezaDefault: 'DEBITO',
+      tx: db,
+    });
+  }
 
   const cuentaIvaCompras = await _resolverCuenta({
     empresaId: compra.empresaId,

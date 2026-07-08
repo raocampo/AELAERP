@@ -561,6 +561,7 @@ model facturas_compra {
   xmlOrigen                     String?
   observaciones                 String?
   tipoGasto                     String?   @db.VarChar(30)
+  cuentaGastoId                 Int?
   createdAt                     DateTime  @default(now())
   updatedAt                     DateTime  @updatedAt
 

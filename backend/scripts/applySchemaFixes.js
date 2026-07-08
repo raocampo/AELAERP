@@ -231,6 +231,8 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "movimientos_caja_chica_cajaChicaId_idx" ON "movimientos_caja_chica"("cajaChicaId")`,
   `CREATE INDEX IF NOT EXISTS "movimientos_caja_chica_empresaId_idx" ON "movimientos_caja_chica"("empresaId")`,
   `CREATE INDEX IF NOT EXISTS "movimientos_caja_chica_fecha_idx" ON "movimientos_caja_chica"("fecha")`,
+  // Cuenta contable específica por factura de compra — anula el default global (2026-07-08)
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "cuentaGastoId" INTEGER`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

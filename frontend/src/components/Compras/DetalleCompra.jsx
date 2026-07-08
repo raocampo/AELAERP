@@ -80,6 +80,17 @@ export default function DetalleCompra() {
   const [modalAsiento, setModalAsiento] = useState(null);
   const [cargandoAsiento, setCargandoAsiento] = useState(false);
 
+  // Modal eliminar definitivamente
+  const [modalEliminar, setModalEliminar] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
+
+  // Modal cuenta contable de gasto
+  const [modalCuenta, setModalCuenta] = useState(false);
+  const [cuentas, setCuentas] = useState([]);
+  const [cargandoCuentas, setCargandoCuentas] = useState(false);
+  const [cuentaBusqueda, setCuentaBusqueda] = useState('');
+  const [editCuentaId, setEditCuentaId] = useState(null);
+
   const verAsiento = async () => {
     setCargandoAsiento(true);
     try {
@@ -197,6 +208,47 @@ export default function DetalleCompra() {
       toast.error(err.response?.data?.mensaje || 'Error al registrar inventario');
     } finally {
       setRegistrandoInv(false);
+    }
+  };
+
+  const eliminarCompra = async () => {
+    setEliminando(true);
+    try {
+      const res = await api.delete(`/compras/${id}`);
+      toast.success(res.data?.mensaje || 'Compra eliminada definitivamente');
+      navigate('/compras', { replace: true });
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo eliminar');
+      setModalEliminar(false);
+    } finally {
+      setEliminando(false);
+    }
+  };
+
+  const abrirModalCuenta = async () => {
+    setCuentaBusqueda('');
+    setEditCuentaId(compra?.cuentaGastoId || null);
+    setModalCuenta(true);
+    if (cuentas.length > 0) return;
+    setCargandoCuentas(true);
+    try {
+      const res = await api.get('/contabilidad/plan-cuentas', { params: { soloMovimiento: 'true' } });
+      setCuentas(res.data?.data || []);
+    } catch {
+      toast.error('No se pudo cargar el plan de cuentas');
+    } finally {
+      setCargandoCuentas(false);
+    }
+  };
+
+  const guardarCuentaGasto = async () => {
+    try {
+      await api.put(`/compras/${id}`, { cuentaGastoId: editCuentaId || null });
+      toast.success(editCuentaId ? 'Cuenta contable configurada' : 'Cuenta contable restablecida al default');
+      setModalCuenta(false);
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo guardar');
     }
   };
 
@@ -422,6 +474,84 @@ export default function DetalleCompra() {
         </div>
       )}
 
+      {/* MODAL ELIMINAR DEFINITIVAMENTE */}
+      {modalEliminar && (
+        <div className="dc-modal-overlay">
+          <div className="dc-modal dc-modal--danger" onClick={(e) => e.stopPropagation()}>
+            <h3>Eliminar factura de compra</h3>
+            <p className="dc-modal-warn">
+              Se eliminará permanentemente la factura <strong>{compra.numeroFactura}</strong> de {compra.razonSocialProveedor}.
+              Esta acción no se puede deshacer.
+              {(compra.movimientosInventario || 0) > 0 && !compra.anulada && (
+                <span style={{ display: 'block', marginTop: '.5rem', color: '#b45309' }}>
+                  Tiene {compra.movimientosInventario} mov. de inventario — anúlela primero para revertir el stock.
+                </span>
+              )}
+            </p>
+            <div className="dc-modal-actions">
+              <button className="btn-secondary" onClick={() => setModalEliminar(false)} disabled={eliminando}>Cancelar</button>
+              <button className="btn-danger" onClick={eliminarCompra} disabled={eliminando}>
+                {eliminando ? 'Eliminando…' : 'Eliminar definitivamente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CUENTA CONTABLE DE GASTO */}
+      {modalCuenta && (() => {
+        const filtradas = cuentas.filter((c) => {
+          if (!cuentaBusqueda.trim()) return true;
+          const q = cuentaBusqueda.toLowerCase();
+          return c.codigo.toLowerCase().includes(q) || c.nombre.toLowerCase().includes(q);
+        });
+        return (
+          <div className="dc-modal-overlay" onClick={() => setModalCuenta(false)}>
+            <div className="dc-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+              <h3>Cuenta contable de gasto</h3>
+              <p style={{ fontSize: '.85rem', color: '#64748b', marginBottom: '.75rem' }}>
+                Elige la cuenta que se debitará al generar el asiento automático de esta compra.
+                Por defecto usa "Compras Locales" (configuración global).
+              </p>
+              <input
+                type="text"
+                placeholder="Buscar por código o nombre…"
+                style={{ width: '100%', padding: '.45rem .75rem', borderRadius: '.45rem', border: '1.5px solid #e2e8f0', fontSize: '.9rem', marginBottom: '.5rem' }}
+                value={cuentaBusqueda}
+                onChange={(e) => setCuentaBusqueda(e.target.value)}
+              />
+              {cargandoCuentas ? (
+                <p style={{ color: '#64748b', fontSize: '.9rem' }}>Cargando cuentas…</p>
+              ) : (
+                <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '.45rem' }}>
+                  <div
+                    onClick={() => setEditCuentaId(null)}
+                    style={{ padding: '.5rem .75rem', cursor: 'pointer', background: editCuentaId === null ? '#ede9fe' : undefined, borderBottom: '1px solid #f1f5f9', fontSize: '.9rem' }}>
+                    — Usar default global (Compras Locales)
+                  </div>
+                  {filtradas.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => setEditCuentaId(c.id)}
+                      style={{ padding: '.5rem .75rem', cursor: 'pointer', background: editCuentaId === c.id ? '#ede9fe' : undefined, borderBottom: '1px solid #f1f5f9', fontSize: '.9rem' }}>
+                      <strong>{c.codigo}</strong> — {c.nombre}
+                      <span style={{ marginLeft: '.5rem', fontSize: '.75rem', color: '#94a3b8' }}>{c.tipo}</span>
+                    </div>
+                  ))}
+                  {filtradas.length === 0 && (
+                    <p style={{ padding: '.75rem', color: '#94a3b8', fontSize: '.9rem' }}>Sin resultados</p>
+                  )}
+                </div>
+              )}
+              <div className="dc-modal-actions" style={{ marginTop: '1rem' }}>
+                <button className="btn-secondary" onClick={() => setModalCuenta(false)}>Cancelar</button>
+                <button className="btn-primary" onClick={guardarCuentaGasto}>Guardar</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="detalle-compra-header">
         <div>
           <h1>Compra {compra.numeroFactura}</h1>
@@ -452,10 +582,20 @@ export default function DetalleCompra() {
             <button className="btn-secondary" onClick={abrirEditar}>✏️ Editar</button>
           )}
           {!compra.anulada && (
-            <button className="btn-danger" onClick={() => { setMotivoAnulacion(''); setModalAnular(true); }}>
-              🗑 Anular
+            <button className="btn-secondary" onClick={abrirModalCuenta} title="Configurar cuenta contable de gasto para el asiento automático">
+              📒 Cuenta contable
             </button>
           )}
+          {!compra.anulada && (
+            <button className="btn-danger" onClick={() => { setMotivoAnulacion(''); setModalAnular(true); }}>
+              Anular
+            </button>
+          )}
+          <button className="btn-secondary" style={{ color: '#dc2626', borderColor: '#fca5a5' }}
+            onClick={() => setModalEliminar(true)}
+            title="Eliminar permanentemente este registro">
+            Eliminar
+          </button>
           <button className="btn-primary" onClick={() => navigate('/compras/nueva')}>Nueva compra</button>
         </div>
       </div>
@@ -493,6 +633,14 @@ export default function DetalleCompra() {
           <div className="detalle-compra-row"><span>Egreso en caja</span><strong>{fmtBool(compra.egresoCajaRegistrado)}</strong></div>
           <div className="detalle-compra-row"><span>Productos auto-creados</span><strong>{fmtBool(compra.creaProductos)}</strong></div>
           <div className="detalle-compra-row"><span>Registrada por</span><span>{compra.emisor?.nombre || compra.emisor?.username || 'Sistema'}</span></div>
+          <div className="detalle-compra-row">
+            <span>Cuenta de gasto</span>
+            {compra.cuentaGasto ? (
+              <strong style={{ color: '#6366f1' }}>{compra.cuentaGasto.codigo} — {compra.cuentaGasto.nombre}</strong>
+            ) : (
+              <span style={{ color: '#94a3b8' }}>Default global</span>
+            )}
+          </div>
         </article>
       </section>
 
