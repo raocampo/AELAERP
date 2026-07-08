@@ -92,6 +92,8 @@ model empresas {
   cobrosCliente         cobros_cliente[]
   pagosProveedor        pagos_proveedor[]
   transportistas        transportistas[]
+  cajasChicas           cajas_chicas[]
+  movimientosCajaChica  movimientos_caja_chica[]
 
   @@map("empresas")
 }
@@ -128,6 +130,8 @@ model usuarios {
   cajaMovimientos   caja_movimientos[]
   movimientosInventario movimientos_inventario[]
   guiasRemision         guias_remision[]
+  cajasChicaResponsable cajas_chicas[]          @relation("CajaChicaResponsable")
+  movimientosCajaChica  movimientos_caja_chica[] @relation("MovCajaChicaUsuario")
 
   empresasAcceso      usuario_empresas[]
 
@@ -963,9 +967,10 @@ model asientos_contables {
   usuario      usuarios?       @relation(fields: [usuarioId], references: [id], map: "asientos_usuario_fk")
   bloqueadoBy  usuarios?       @relation("AsientoBloqueadoPor", fields: [bloqueadoPor], references: [id])
   detalles     asientos_contables_detalle[]
-  movimientos  movimientos_bancarios[]
-  cobrosCliente  cobros_cliente[]
-  pagosProveedor pagos_proveedor[]
+  movimientos          movimientos_bancarios[]
+  cobrosCliente        cobros_cliente[]
+  pagosProveedor       pagos_proveedor[]
+  movimientosCajaChica movimientos_caja_chica[]
 
   @@index([empresaId])
   @@index([fecha])
@@ -1004,8 +1009,9 @@ model centros_costo {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  empresa  empresas                     @relation(fields: [empresaId], references: [id])
-  detalles asientos_contables_detalle[]
+  empresa              empresas                     @relation(fields: [empresaId], references: [id])
+  detalles             asientos_contables_detalle[]
+  movimientosCajaChica movimientos_caja_chica[]
 
   @@unique([empresaId, codigo])
   @@index([empresaId])
@@ -1266,6 +1272,78 @@ model transportistas {
   @@unique([empresaId, identificacion])
   @@index([empresaId])
   @@map("transportistas")
+}
+
+// ====================================
+// CAJA CHICA — Fondos y movimientos
+// Cada empresa puede tener múltiples fondos (CC-001, CC-002…). El saldo
+// disponible se calcula al vuelo (apertura + reposiciones + incrementos
+// − gastos − disminuciones), sin columna redundante.
+// Los asientos contables se generan en apertura, reposición, incremento,
+// disminución y cierre — los vales individuales de gasto NO generan asiento.
+// ====================================
+model cajas_chicas {
+  id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  codigo                String    @db.VarChar(20)
+  nombre                String    @db.VarChar(150)
+  responsableId         Int?
+  montoFondo            Decimal   @db.Decimal(12, 2)
+  // Monto autorizado actual del fondo (cambia con INCREMENTO/DISMINUCION)
+  cuentaFondoId         Int?
+  // FK plan_cuentas — cuenta "Caja Chica" (solo Int, sin @relation para evitar multi-FK en plan_cuentas)
+  cuentaContrapartidaId Int?
+  // FK plan_cuentas — banco/caja desde donde sale el dinero al reponer
+  estado                String    @default("ACTIVO") @db.VarChar(20)
+  // ACTIVO | CERRADO
+  fechaApertura         DateTime  @default(now())
+  fechaCierre           DateTime?
+  observaciones         String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  empresa     empresas   @relation(fields: [empresaId], references: [id])
+  responsable usuarios?  @relation("CajaChicaResponsable", fields: [responsableId], references: [id])
+  movimientos movimientos_caja_chica[]
+
+  @@unique([empresaId, codigo])
+  @@index([empresaId])
+  @@map("cajas_chicas")
+}
+
+model movimientos_caja_chica {
+  id              Int       @id @default(autoincrement())
+  cajaChicaId     Int
+  empresaId       Int
+  numero          String?   @db.VarChar(30)
+  // VALE-AAAAMM-NNNN para GASTO, REP-AAAAMM-NNNN para REPOSICION, etc.
+  tipo            String    @db.VarChar(20)
+  // APERTURA | GASTO | REPOSICION | INCREMENTO | DISMINUCION | CIERRE
+  fecha           DateTime
+  concepto        String    @db.VarChar(300)
+  monto           Decimal   @db.Decimal(12, 2)
+  nroComprobante  String?   @db.VarChar(50)
+  proveedor       String?   @db.VarChar(200)
+  cuentaGastoId   Int?
+  // FK plan_cuentas (solo Int) — cuenta de gasto para el asiento de REPOSICION
+  centroCostoId   Int?
+  asientoId       Int?
+  anulado         Boolean   @default(false)
+  motivoAnulacion String?   @db.VarChar(300)
+  usuarioId       Int
+
+  createdAt DateTime @default(now())
+
+  cajaChica   cajas_chicas        @relation(fields: [cajaChicaId], references: [id])
+  empresa     empresas            @relation(fields: [empresaId], references: [id])
+  centroCosto centros_costo?      @relation(fields: [centroCostoId], references: [id])
+  asiento     asientos_contables? @relation(fields: [asientoId], references: [id])
+  usuario     usuarios            @relation("MovCajaChicaUsuario", fields: [usuarioId], references: [id])
+
+  @@index([cajaChicaId])
+  @@index([empresaId])
+  @@index([fecha])
+  @@map("movimientos_caja_chica")
 }
 
 // ====================================

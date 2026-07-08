@@ -161,6 +161,7 @@ const GRUPOS_MENU = [
       { to: '/bancos',       icon: '🏦', label: 'Bancos',       planMin: 'medium', permiso: 'bancos.ver' },
       { to: '/cuentas-por-cobrar', icon: '💰', label: 'Cuentas por Cobrar', planMin: 'medium', permiso: 'cxc.ver' },
       { to: '/cuentas-por-pagar',  icon: '💳', label: 'Cuentas por Pagar',  planMin: 'medium', permiso: 'cxp.ver' },
+      { to: '/caja-chica',         icon: '💵', label: 'Caja Chica',         planMin: 'medium', permiso: 'cajaChica.ver' },
     ],
   },
   {

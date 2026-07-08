@@ -1802,6 +1802,238 @@ async function crearAsientoReversoRetencionAnulada({ retencionId, usuarioId, fec
   return { asiento, creado: true };
 }
 
+// ============================================================
+// CAJA CHICA — asientos contables automáticos
+// ============================================================
+
+// APERTURA: Debe Caja Chica / Haber Caja o Banco
+async function crearAsientoAperturaCajaChica(db = prisma, {
+  empresaId, cajaChicaId, monto,
+  cuentaFondoId, cuentaContrapartidaId,
+  descripcion, fecha, usuarioId,
+}) {
+  const ref = `CC-APER-${cajaChicaId}`;
+  const existe = await db.asientos_contables.findFirst({ where: { empresaId, referencia: ref } });
+  if (existe) return existe;
+
+  const [cuentaFondo, cuentaContra] = await Promise.all([
+    cuentaFondoId
+      ? db.plan_cuentas.findUnique({ where: { id: cuentaFondoId } })
+      : ensureCuentaMovimiento({ empresaId, codigo: '1.1.01.002', nombre: 'Caja Chica', tipo: 'ACTIVO', naturaleza: 'DEUDORA', tx: db }),
+    cuentaContrapartidaId
+      ? db.plan_cuentas.findUnique({ where: { id: cuentaContrapartidaId } })
+      : ensureCuentaMovimiento({ empresaId, codigo: '1.1.01.001', nombre: 'Caja General', tipo: 'ACTIVO', naturaleza: 'DEUDORA', tx: db }),
+  ]);
+  if (!cuentaFondo) throw new Error('Cuenta de caja chica no encontrada');
+  if (!cuentaContra) throw new Error('Cuenta contrapartida no encontrada');
+
+  const montoN = round2(monto);
+  const fechaAsiento = fecha ? new Date(fecha) : new Date();
+  const numero = await siguienteNumeroAsiento({ empresaId, fecha: fechaAsiento, tx: db });
+
+  return db.asientos_contables.create({
+    data: {
+      empresaId, numero, fecha: fechaAsiento,
+      descripcion: descripcion || `Apertura fondo caja chica`,
+      tipo: 'CAJA_CHICA_APERTURA', referencia: ref,
+      totalDebe: montoN, totalHaber: montoN, usuarioId,
+      detalles: {
+        create: [
+          { cuentaId: cuentaFondo.id, descripcion: 'Apertura fondo caja chica', debe: montoN, haber: 0 },
+          { cuentaId: cuentaContra.id, descripcion: 'Entrega de fondos a custodio', debe: 0, haber: montoN },
+        ],
+      },
+    },
+  });
+}
+
+// REPOSICIÓN: Debe [Gastos por cuenta] / Haber Caja o Banco
+// gastos: array de { codigoCuenta, nombreCuenta, concepto, monto }
+async function crearAsientoReposicionCajaChica(db = prisma, {
+  empresaId, reposicionId,
+  gastos,                   // [{ codigoCuenta, nombreCuenta, concepto, monto }]
+  cuentaContrapartidaId,
+  descripcion, fecha, usuarioId,
+}) {
+  const ref = `CC-REP-${reposicionId}`;
+  const existe = await db.asientos_contables.findFirst({ where: { empresaId, referencia: ref } });
+  if (existe) return existe;
+
+  const cuentaContra = cuentaContrapartidaId
+    ? await db.plan_cuentas.findUnique({ where: { id: cuentaContrapartidaId } })
+    : await ensureCuentaMovimiento({ empresaId, codigo: '1.1.01.001', nombre: 'Caja General', tipo: 'ACTIVO', naturaleza: 'DEUDORA', tx: db });
+  if (!cuentaContra) throw new Error('Cuenta contrapartida no encontrada');
+
+  // Agrupar gastos por cuenta para deduplicar líneas
+  const porCuenta = new Map();
+  for (const g of gastos) {
+    const key = g.codigoCuenta || '5.2.01.001';
+    if (!porCuenta.has(key)) {
+      porCuenta.set(key, { nombre: g.nombreCuenta || 'Gastos Varios Caja Chica', monto: 0, conceptos: [] });
+    }
+    porCuenta.get(key).monto += round2(g.monto);
+    porCuenta.get(key).conceptos.push(g.concepto);
+  }
+
+  const lineasDebe = [];
+  for (const [codigo, info] of porCuenta.entries()) {
+    const cuenta = await ensureCuentaMovimiento({
+      empresaId, codigo, nombre: info.nombre,
+      tipo: 'GASTO', naturaleza: 'DEUDORA', nivel: 4,
+      codigoPadre: codigo.split('.').slice(0, -1).join('.') || null,
+      tx: db,
+    });
+    lineasDebe.push({
+      cuentaId: cuenta.id,
+      descripcion: info.conceptos.slice(0, 3).join(' / '),
+      debe: round2(info.monto),
+      haber: 0,
+    });
+  }
+
+  const totalN = round2(lineasDebe.reduce((a, l) => a + l.debe, 0));
+  const fechaAsiento = fecha ? new Date(fecha) : new Date();
+  const numero = await siguienteNumeroAsiento({ empresaId, fecha: fechaAsiento, tx: db });
+
+  return db.asientos_contables.create({
+    data: {
+      empresaId, numero, fecha: fechaAsiento,
+      descripcion: descripcion || `Reposición caja chica`,
+      tipo: 'CAJA_CHICA_REPOSICION', referencia: ref,
+      totalDebe: totalN, totalHaber: totalN, usuarioId,
+      detalles: {
+        create: [
+          ...lineasDebe,
+          { cuentaId: cuentaContra.id, descripcion: 'Reposición fondos', debe: 0, haber: totalN },
+        ],
+      },
+    },
+  });
+}
+
+// INCREMENTO: Debe Caja Chica / Haber Caja o Banco
+async function crearAsientoIncrementoCajaChica(db = prisma, {
+  empresaId, movimientoId, monto,
+  cuentaFondoId, cuentaContrapartidaId,
+  descripcion, fecha, usuarioId,
+}) {
+  const ref = `CC-INC-${movimientoId}`;
+  const existe = await db.asientos_contables.findFirst({ where: { empresaId, referencia: ref } });
+  if (existe) return existe;
+
+  const [cuentaFondo, cuentaContra] = await Promise.all([
+    cuentaFondoId
+      ? db.plan_cuentas.findUnique({ where: { id: cuentaFondoId } })
+      : ensureCuentaMovimiento({ empresaId, codigo: '1.1.01.002', nombre: 'Caja Chica', tipo: 'ACTIVO', naturaleza: 'DEUDORA', tx: db }),
+    cuentaContrapartidaId
+      ? db.plan_cuentas.findUnique({ where: { id: cuentaContrapartidaId } })
+      : ensureCuentaMovimiento({ empresaId, codigo: '1.1.01.001', nombre: 'Caja General', tipo: 'ACTIVO', naturaleza: 'DEUDORA', tx: db }),
+  ]);
+  if (!cuentaFondo) throw new Error('Cuenta de caja chica no encontrada');
+  if (!cuentaContra) throw new Error('Cuenta contrapartida no encontrada');
+
+  const montoN = round2(monto);
+  const fechaAsiento = fecha ? new Date(fecha) : new Date();
+  const numero = await siguienteNumeroAsiento({ empresaId, fecha: fechaAsiento, tx: db });
+
+  return db.asientos_contables.create({
+    data: {
+      empresaId, numero, fecha: fechaAsiento,
+      descripcion: descripcion || `Incremento fondo caja chica`,
+      tipo: 'CAJA_CHICA_INCREMENTO', referencia: ref,
+      totalDebe: montoN, totalHaber: montoN, usuarioId,
+      detalles: {
+        create: [
+          { cuentaId: cuentaFondo.id, descripcion: 'Incremento fondo', debe: montoN, haber: 0 },
+          { cuentaId: cuentaContra.id, descripcion: 'Entrega adicional de fondos', debe: 0, haber: montoN },
+        ],
+      },
+    },
+  });
+}
+
+// DISMINUCIÓN: Debe Caja o Banco / Haber Caja Chica
+async function crearAsientoDisminucionCajaChica(db = prisma, {
+  empresaId, movimientoId, monto,
+  cuentaFondoId, cuentaContrapartidaId,
+  descripcion, fecha, usuarioId,
+}) {
+  const ref = `CC-DEC-${movimientoId}`;
+  const existe = await db.asientos_contables.findFirst({ where: { empresaId, referencia: ref } });
+  if (existe) return existe;
+
+  const [cuentaFondo, cuentaContra] = await Promise.all([
+    cuentaFondoId
+      ? db.plan_cuentas.findUnique({ where: { id: cuentaFondoId } })
+      : ensureCuentaMovimiento({ empresaId, codigo: '1.1.01.002', nombre: 'Caja Chica', tipo: 'ACTIVO', naturaleza: 'DEUDORA', tx: db }),
+    cuentaContrapartidaId
+      ? db.plan_cuentas.findUnique({ where: { id: cuentaContrapartidaId } })
+      : ensureCuentaMovimiento({ empresaId, codigo: '1.1.01.001', nombre: 'Caja General', tipo: 'ACTIVO', naturaleza: 'DEUDORA', tx: db }),
+  ]);
+  if (!cuentaFondo) throw new Error('Cuenta de caja chica no encontrada');
+  if (!cuentaContra) throw new Error('Cuenta contrapartida no encontrada');
+
+  const montoN = round2(monto);
+  const fechaAsiento = fecha ? new Date(fecha) : new Date();
+  const numero = await siguienteNumeroAsiento({ empresaId, fecha: fechaAsiento, tx: db });
+
+  return db.asientos_contables.create({
+    data: {
+      empresaId, numero, fecha: fechaAsiento,
+      descripcion: descripcion || `Disminución fondo caja chica`,
+      tipo: 'CAJA_CHICA_DISMINUCION', referencia: ref,
+      totalDebe: montoN, totalHaber: montoN, usuarioId,
+      detalles: {
+        create: [
+          { cuentaId: cuentaContra.id, descripcion: 'Devolución parcial de fondos', debe: montoN, haber: 0 },
+          { cuentaId: cuentaFondo.id, descripcion: 'Reducción fondo caja chica', debe: 0, haber: montoN },
+        ],
+      },
+    },
+  });
+}
+
+// CIERRE: Debe Caja o Banco / Haber Caja Chica (por el saldo que queda en caja)
+async function crearAsientoCierreCajaChica(db = prisma, {
+  empresaId, cajaChicaId, saldoActual,
+  cuentaFondoId, cuentaContrapartidaId,
+  descripcion, fecha, usuarioId,
+}) {
+  const ref = `CC-CIERRE-${cajaChicaId}`;
+  const existe = await db.asientos_contables.findFirst({ where: { empresaId, referencia: ref } });
+  if (existe) return existe;
+
+  const [cuentaFondo, cuentaContra] = await Promise.all([
+    cuentaFondoId
+      ? db.plan_cuentas.findUnique({ where: { id: cuentaFondoId } })
+      : ensureCuentaMovimiento({ empresaId, codigo: '1.1.01.002', nombre: 'Caja Chica', tipo: 'ACTIVO', naturaleza: 'DEUDORA', tx: db }),
+    cuentaContrapartidaId
+      ? db.plan_cuentas.findUnique({ where: { id: cuentaContrapartidaId } })
+      : ensureCuentaMovimiento({ empresaId, codigo: '1.1.01.001', nombre: 'Caja General', tipo: 'ACTIVO', naturaleza: 'DEUDORA', tx: db }),
+  ]);
+  if (!cuentaFondo) throw new Error('Cuenta de caja chica no encontrada');
+  if (!cuentaContra) throw new Error('Cuenta contrapartida no encontrada');
+
+  const montoN = round2(saldoActual);
+  const fechaAsiento = fecha ? new Date(fecha) : new Date();
+  const numero = await siguienteNumeroAsiento({ empresaId, fecha: fechaAsiento, tx: db });
+
+  return db.asientos_contables.create({
+    data: {
+      empresaId, numero, fecha: fechaAsiento,
+      descripcion: descripcion || `Cierre fondo caja chica`,
+      tipo: 'CAJA_CHICA_CIERRE', referencia: ref,
+      totalDebe: montoN, totalHaber: montoN, usuarioId,
+      detalles: {
+        create: [
+          { cuentaId: cuentaContra.id, descripcion: 'Devolución de saldo al cerrar fondo', debe: montoN, haber: 0 },
+          { cuentaId: cuentaFondo.id, descripcion: 'Cierre fondo caja chica', debe: 0, haber: montoN },
+        ],
+      },
+    },
+  });
+}
+
 module.exports = {
   round2,
   obtenerConfiguracionContable,
@@ -1830,5 +2062,10 @@ module.exports = {
   crearAsientoPagoProveedor,
   crearAsientoReversoCobroCliente,
   crearAsientoReversoPagoProveedor,
+  crearAsientoAperturaCajaChica,
+  crearAsientoReposicionCajaChica,
+  crearAsientoIncrementoCajaChica,
+  crearAsientoDisminucionCajaChica,
+  crearAsientoCierreCajaChica,
   siguienteNumeroGenerico,
 };
