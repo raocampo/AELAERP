@@ -107,6 +107,19 @@ const FIXES = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "centros_costo_empresaId_codigo_key" ON "centros_costo"("empresaId", "codigo")`,
   `CREATE INDEX IF NOT EXISTS "centros_costo_empresaId_idx" ON "centros_costo"("empresaId")`,
   `ALTER TABLE "asientos_contables_detalle" ADD COLUMN IF NOT EXISTS "centroCostoId" INTEGER`,
+  // Configuración de cuentas por referencia — mapeo genérico código->cuenta para
+  // catálogos largos: retenciones compras/ventas, nómina, general (2026-07-07)
+  `CREATE TABLE IF NOT EXISTS "configuracion_cuentas_referencia" (
+    "id"               SERIAL PRIMARY KEY,
+    "empresaId"        INTEGER NOT NULL,
+    "categoria"        VARCHAR(30) NOT NULL,
+    "codigoReferencia" VARCHAR(20) NOT NULL,
+    "cuentaId"         INTEGER NOT NULL,
+    "updatedAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "config_cuentas_ref_empresa_cat_cod_key" ON "configuracion_cuentas_referencia"("empresaId", "categoria", "codigoReferencia")`,
+  `CREATE INDEX IF NOT EXISTS "config_cuentas_ref_empresaId_idx" ON "configuracion_cuentas_referencia"("empresaId")`,
+  `CREATE INDEX IF NOT EXISTS "config_cuentas_ref_cuentaId_idx" ON "configuracion_cuentas_referencia"("cuentaId")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

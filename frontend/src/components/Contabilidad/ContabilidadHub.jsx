@@ -4,6 +4,7 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { normalizarPeriodoMMYYYY } from '../../utils/periodo';
 import { formatFechaCorta } from '../../utils/fecha';
+import ConfiguracionCuentasReferencia from './ConfiguracionCuentasReferencia';
 import './ContabilidadHub.css';
 
 const toMoney = (n) => Number(n || 0).toLocaleString('es-EC', { style: 'currency', currency: 'USD' });
@@ -15,6 +16,7 @@ const ContabilidadHub = () => {
   const [tab, setTab] = useState('resumen');
 
   const [plan, setPlan] = useState([]);
+  const [subTabRef, setSubTabRef] = useState('compras');
   const [asientos, setAsientos] = useState([]);
   const [balance, setBalance] = useState(null);
   const [estadoResultados, setEstadoResultados] = useState(null);
@@ -1471,6 +1473,26 @@ const ContabilidadHub = () => {
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* ── Card: Configuración de cuentas por referencia (retenciones, nómina, general) ─── */}
+          <div className="conta-card">
+            <h3>⚙️ Configuración de cuentas contables por referencia</h3>
+            <p className="conta-import-sub">
+              Relaciona cada referencia (código de retención SRI, concepto de nómina) con la cuenta
+              de tu Plan de Cuentas correspondiente. Si no configuras una referencia, se usa la
+              cuenta genérica por defecto del sistema.
+            </p>
+            <div className="conta-tabs">
+              <button className={subTabRef === 'compras' ? 'active' : ''} onClick={() => setSubTabRef('compras')}>Compras</button>
+              <button className={subTabRef === 'ventas' ? 'active' : ''} onClick={() => setSubTabRef('ventas')}>Ventas</button>
+              <button className={subTabRef === 'empleados' ? 'active' : ''} onClick={() => setSubTabRef('empleados')}>Empleados</button>
+              <button className={subTabRef === 'general' ? 'active' : ''} onClick={() => setSubTabRef('general')}>General</button>
+            </div>
+            {subTabRef === 'compras' && <ConfiguracionCuentasReferencia categoria="RETENCION_COMPRA" titulo="Retenciones — Compras" plan={plan} />}
+            {subTabRef === 'ventas' && <ConfiguracionCuentasReferencia categoria="RETENCION_VENTA" titulo="Retenciones — Ventas" plan={plan} />}
+            {subTabRef === 'empleados' && <ConfiguracionCuentasReferencia categoria="NOMINA" titulo="Empleados — Nómina" plan={plan} />}
+            {subTabRef === 'general' && <ConfiguracionCuentasReferencia categoria="GENERAL" titulo="General" plan={plan} />}
           </div>
 
           {/* ── Card: Importar plan de cuentas desde Excel ─────────────── */}

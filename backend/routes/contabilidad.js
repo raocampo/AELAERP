@@ -6,6 +6,7 @@ const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { crearAsientoContable, crearAsientoNominaPeriodo, round2 } = require('../utils/contabilidad');
+const { CATEGORIAS: CATEGORIAS_CONFIG_REFERENCIA, obtenerCatalogoReferencias } = require('../utils/catalogosCuentasReferencia');
 const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
 const { sembrarPlanSupercias }  = require('../utils/planCuentasSupercias');
 const { parsearBuffer, parsearPlanCuentas, generarPlantillaPlanCuentas } = require('../utils/importarPlanCuentas');
@@ -1298,6 +1299,92 @@ router.put('/configuracion-asientos', async (req, res) => {
   } catch (error) {
     console.error('PUT /contabilidad/configuracion-asientos:', error);
     res.status(500).json({ success: false, mensaje: 'Error al guardar la configuración contable' });
+  }
+});
+
+// ─── Configuración de cuentas por referencia — catálogos largos ─────
+// Complementa a configuracion-asientos (6 campos fijos, solo Compras). Para
+// listas largas que crecen (retenciones por código SRI, conceptos de nómina,
+// cuentas generales) sin seguir agregando columnas. Ver
+// utils/catalogosCuentasReferencia.js (catálogo fijo) y
+// utils/contabilidad.js (obtenerCuentasReferenciaConfiguradas, resolución).
+// GET /api/contabilidad/configuracion-referencias/:categoria
+router.get('/configuracion-referencias/:categoria', async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const { categoria } = req.params;
+    if (!CATEGORIAS_CONFIG_REFERENCIA.includes(categoria)) {
+      return res.status(400).json({ success: false, mensaje: 'Categoría inválida' });
+    }
+
+    const catalogo = obtenerCatalogoReferencias(categoria);
+    const filas = await db.configuracion_cuentas_referencia.findMany({
+      where: { empresaId, categoria },
+      include: { cuenta: { select: { id: true, codigo: true, nombre: true } } },
+    });
+    const porCodigo = new Map(filas.map((f) => [f.codigoReferencia, f.cuenta]));
+
+    const data = catalogo.map((item) => ({
+      codigoReferencia: item.codigoReferencia,
+      etiqueta: item.etiqueta,
+      cuenta: porCodigo.get(item.codigoReferencia) || null,
+    }));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /contabilidad/configuracion-referencias/:categoria:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al obtener la configuración de referencias' });
+  }
+});
+
+// PUT /api/contabilidad/configuracion-referencias/:categoria
+router.put('/configuracion-referencias/:categoria', async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const { categoria } = req.params;
+    if (!CATEGORIAS_CONFIG_REFERENCIA.includes(categoria)) {
+      return res.status(400).json({ success: false, mensaje: 'Categoría inválida' });
+    }
+
+    const catalogo = obtenerCatalogoReferencias(categoria);
+    const codigosValidos = new Set(catalogo.map((c) => c.codigoReferencia));
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+
+    for (const it of items) {
+      if (!codigosValidos.has(String(it.codigoReferencia))) {
+        return res.status(400).json({ success: false, mensaje: `Referencia "${it.codigoReferencia}" no pertenece a ${categoria}` });
+      }
+    }
+
+    const cuentaIds = [...new Set(items.filter((i) => i.cuentaId).map((i) => Number(i.cuentaId)))];
+    if (cuentaIds.length > 0) {
+      const cuentas = await db.plan_cuentas.findMany({
+        where: { empresaId, id: { in: cuentaIds }, activo: true, aceptaMovimiento: true },
+        select: { id: true },
+      });
+      if (cuentas.length !== cuentaIds.length) {
+        return res.status(400).json({ success: false, mensaje: 'Una o más cuentas no existen, no están activas o no aceptan movimiento' });
+      }
+    }
+
+    await db.$transaction(items.map((it) => (
+      it.cuentaId
+        ? db.configuracion_cuentas_referencia.upsert({
+            where: { empresaId_categoria_codigoReferencia: { empresaId, categoria, codigoReferencia: String(it.codigoReferencia) } },
+            update: { cuentaId: Number(it.cuentaId) },
+            create: { empresaId, categoria, codigoReferencia: String(it.codigoReferencia), cuentaId: Number(it.cuentaId) },
+          })
+        : db.configuracion_cuentas_referencia.deleteMany({
+            where: { empresaId, categoria, codigoReferencia: String(it.codigoReferencia) },
+          })
+    )));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('PUT /contabilidad/configuracion-referencias/:categoria:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al guardar la configuración de referencias' });
   }
 });
 

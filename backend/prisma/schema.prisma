@@ -88,6 +88,7 @@ model empresas {
   ausencias             ausencias[]
   tablaUtilidades       tabla_utilidades[]
   centrosCosto          centros_costo[]
+  configuracionesCuentasReferencia configuracion_cuentas_referencia[]
 
   @@map("empresas")
 }
@@ -300,6 +301,27 @@ model configuracion_contable {
   empresa  empresas @relation(fields: [empresaId], references: [id])
 
   @@map("configuracion_contable")
+}
+
+// Mapeo genérico código->cuenta para catálogos largos (retenciones compras/
+// ventas, conceptos de nómina, cuentas generales). El catálogo de referencias
+// (texto fijo) vive en código — ver backend/utils/catalogosCuentasReferencia.js.
+// Ausencia de fila = "no configurado" = el motor usa la cuenta genérica default.
+model configuracion_cuentas_referencia {
+  id               Int      @id @default(autoincrement())
+  empresaId        Int
+  categoria        String   @db.VarChar(30)  // RETENCION_COMPRA | RETENCION_VENTA | NOMINA | GENERAL
+  codigoReferencia String   @db.VarChar(20)  // '303', '721', 'GASTO_SUELDOS', 'CAJA_GENERAL', ...
+  cuentaId         Int
+  updatedAt        DateTime @updatedAt
+
+  empresa empresas     @relation(fields: [empresaId], references: [id])
+  cuenta  plan_cuentas @relation(fields: [cuentaId], references: [id])
+
+  @@unique([empresaId, categoria, codigoReferencia])
+  @@index([empresaId])
+  @@index([cuentaId])
+  @@map("configuracion_cuentas_referencia")
 }
 
 // ====================================
@@ -819,6 +841,7 @@ model plan_cuentas {
 
   detalles  asientos_contables_detalle[]
   bancos    bancos[]
+  configuracionesCuentasReferencia configuracion_cuentas_referencia[]
 
   @@unique([empresaId, codigo])
   @@index([empresaId])

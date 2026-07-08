@@ -342,6 +342,29 @@
   color: #64748b;
 }
 
+.conta-subcard {
+  margin-top: 12px;
+}
+
+.conta-subcard h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.conta-table-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.conta-table-scroll .conta-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 1;
+}
+
 .conta-import-body {
   margin-top: 16px;
   border-top: 1px solid #e2e8f0;

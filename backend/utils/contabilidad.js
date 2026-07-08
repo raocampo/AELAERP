@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { CONCEPTOS_NOMINA } = require('./catalogosCuentasReferencia');
 
 const round2 = (n) => Number((Number(n || 0)).toFixed(2));
 
@@ -259,97 +260,67 @@ async function crearAsientoNominaPeriodo({ empresaId, periodo, usuarioId, fecha 
   const t = _calcularTotalesNomina(detallesNomina);
   if (t.totalIngresos <= 0) return { asiento: null, creado: false };
 
+  const mapaConfig = await obtenerCuentasReferenciaConfiguradas({ empresaId: empresaIdNum, categoria: 'NOMINA', tx: db });
+  const cuentaPorConcepto = (codigoReferencia) => {
+    const c = CONCEPTOS_NOMINA.find((x) => x.codigoReferencia === codigoReferencia);
+    return _resolverCuentaPorCodigo({
+      empresaId: empresaIdNum, mapaConfig, codigoReferencia,
+      codigoDefault: c.codigoDefault, nombreDefault: c.nombreDefault, tipoDefault: c.tipoDefault, naturalezaDefault: c.naturalezaDefault, tx: db,
+    });
+  };
+
   const detalles = [];
 
-  const cuentaGastoSueldos = await ensureCuentaMovimiento({
-    empresaId: empresaIdNum, tx: db,
-    codigo: '5.1.02.001', nombre: 'Gasto Sueldos y Salarios', tipo: 'GASTO', naturaleza: 'DEBITO',
-  });
+  const cuentaGastoSueldos = await cuentaPorConcepto('GASTO_SUELDOS');
   detalles.push({ cuentaId: cuentaGastoSueldos.id, descripcion: `Sueldos ${periodo}`, debe: t.totalIngresos, haber: 0 });
 
   if (t.totalAportePatronal > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '5.1.02.002', nombre: 'Gasto Aporte Patronal IESS', tipo: 'GASTO', naturaleza: 'DEBITO',
-    });
+    const cuenta = await cuentaPorConcepto('GASTO_APORTE_PATRONAL');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Aporte patronal IESS ${periodo}`, debe: t.totalAportePatronal, haber: 0 });
   }
   if (t.totalDecimoTercero > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '5.1.02.003', nombre: 'Gasto Provisión Décimo Tercer Sueldo', tipo: 'GASTO', naturaleza: 'DEBITO',
-    });
+    const cuenta = await cuentaPorConcepto('GASTO_PROV_DECIMO_TERCERO');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión décimo tercero ${periodo}`, debe: t.totalDecimoTercero, haber: 0 });
   }
   if (t.totalDecimoCuarto > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '5.1.02.004', nombre: 'Gasto Provisión Décimo Cuarto Sueldo', tipo: 'GASTO', naturaleza: 'DEBITO',
-    });
+    const cuenta = await cuentaPorConcepto('GASTO_PROV_DECIMO_CUARTO');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión décimo cuarto ${periodo}`, debe: t.totalDecimoCuarto, haber: 0 });
   }
   if (t.totalFondosReserva > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '5.1.02.005', nombre: 'Gasto Provisión Fondos de Reserva', tipo: 'GASTO', naturaleza: 'DEBITO',
-    });
+    const cuenta = await cuentaPorConcepto('GASTO_PROV_FONDOS_RESERVA');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión fondos de reserva ${periodo}`, debe: t.totalFondosReserva, haber: 0 });
   }
 
-  const cuentaSueldosPagar = await ensureCuentaMovimiento({
-    empresaId: empresaIdNum, tx: db,
-    codigo: '2.1.05.001', nombre: 'Sueldos por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
-  });
+  const cuentaSueldosPagar = await cuentaPorConcepto('SUELDOS_POR_PAGAR');
   detalles.push({ cuentaId: cuentaSueldosPagar.id, descripcion: `Neto a pagar ${periodo}`, debe: 0, haber: t.totalNeto });
 
   const totalIess = round2(t.totalAportePersonal + t.totalAportePatronal + t.totalPrestamosIESS);
   if (totalIess > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '2.1.05.002', nombre: 'IESS por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
-    });
+    const cuenta = await cuentaPorConcepto('IESS_POR_PAGAR');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Aportes IESS ${periodo}`, debe: 0, haber: totalIess });
   }
   if (t.totalImpuestoRenta > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '2.1.05.003', nombre: 'Retención IR Relación de Dependencia por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
-    });
+    const cuenta = await cuentaPorConcepto('RETENCION_IR_POR_PAGAR');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Retención IR ${periodo}`, debe: 0, haber: t.totalImpuestoRenta });
   }
   if (t.totalDecimoTercero > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '2.1.05.004', nombre: 'Provisión Décimo Tercero por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
-    });
+    const cuenta = await cuentaPorConcepto('PROV_DECIMO_TERCERO_PAGAR');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión décimo tercero ${periodo}`, debe: 0, haber: t.totalDecimoTercero });
   }
   if (t.totalDecimoCuarto > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '2.1.05.005', nombre: 'Provisión Décimo Cuarto por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
-    });
+    const cuenta = await cuentaPorConcepto('PROV_DECIMO_CUARTO_PAGAR');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión décimo cuarto ${periodo}`, debe: 0, haber: t.totalDecimoCuarto });
   }
   if (t.totalFondosReserva > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '2.1.05.006', nombre: 'Provisión Fondos de Reserva por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
-    });
+    const cuenta = await cuentaPorConcepto('PROV_FONDOS_RESERVA_PAGAR');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión fondos de reserva ${periodo}`, debe: 0, haber: t.totalFondosReserva });
   }
   if (t.totalAnticipos > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '1.1.08.001', nombre: 'Anticipos a Empleados', tipo: 'ACTIVO', naturaleza: 'DEBITO',
-    });
+    const cuenta = await cuentaPorConcepto('ANTICIPOS_EMPLEADOS');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Descuento anticipos ${periodo}`, debe: 0, haber: t.totalAnticipos });
   }
   if (t.totalOtrosDescuentos > 0) {
-    const cuenta = await ensureCuentaMovimiento({
-      empresaId: empresaIdNum, tx: db,
-      codigo: '2.1.05.007', nombre: 'Otros Descuentos de Nómina por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
-    });
+    const cuenta = await cuentaPorConcepto('OTROS_DESCUENTOS_NOMINA');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Otros descuentos ${periodo}`, debe: 0, haber: t.totalOtrosDescuentos });
   }
 
@@ -392,9 +363,15 @@ async function crearAsientoPagoNominaPeriodo({ empresaId, periodo, usuarioId, fe
   const { totalNeto } = _calcularTotalesNomina(detallesNomina);
   if (totalNeto <= 0) return { asiento: null, creado: false };
 
-  const cuentaSueldosPagar = await ensureCuentaMovimiento({
-    empresaId: empresaIdNum, tx: db,
-    codigo: '2.1.05.001', nombre: 'Sueldos por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
+  // Misma cuenta configurable que la provisión (crearAsientoNominaPeriodo) —
+  // deben coincidir siempre, si no el saldo de "Sueldos por Pagar" queda
+  // descuadrado entre dos cuentas distintas del mayor.
+  const mapaConfig = await obtenerCuentasReferenciaConfiguradas({ empresaId: empresaIdNum, categoria: 'NOMINA', tx: db });
+  const conceptoSueldosPagar = CONCEPTOS_NOMINA.find((x) => x.codigoReferencia === 'SUELDOS_POR_PAGAR');
+  const cuentaSueldosPagar = await _resolverCuentaPorCodigo({
+    empresaId: empresaIdNum, mapaConfig, codigoReferencia: 'SUELDOS_POR_PAGAR',
+    codigoDefault: conceptoSueldosPagar.codigoDefault, nombreDefault: conceptoSueldosPagar.nombreDefault,
+    tipoDefault: conceptoSueldosPagar.tipoDefault, naturalezaDefault: conceptoSueldosPagar.naturalezaDefault, tx: db,
   });
   const cuentaCaja = await ensureCuentaMovimiento({
     empresaId: empresaIdNum, tx: db,
@@ -952,6 +929,48 @@ async function _resolverCuenta({ empresaId, codigoConfigurado, codigoDefault, no
   });
 }
 
+// ─── Configuración de cuentas por referencia — catálogos largos ─────
+// Complementa a obtenerConfiguracionContable/_resolverCuenta (que son de
+// Compras/Costo de Ventas, 6 campos fijos). Este mapeo es para catálogos que
+// crecen sin tocar el esquema: retenciones por código SRI y conceptos de
+// nómina. El catálogo de referencias posibles vive en código (ver
+// catalogosCuentasReferencia.js) — aquí solo se resuelve el mapeo guardado.
+async function obtenerCuentasReferenciaConfiguradas({ empresaId, categoria, tx = prisma }) {
+  const filas = await tx.configuracion_cuentas_referencia.findMany({
+    where: { empresaId: toInt(empresaId), categoria },
+    include: { cuenta: true },
+  });
+  const mapa = new Map();
+  for (const f of filas) {
+    if (f.cuenta?.activo && f.cuenta?.aceptaMovimiento) {
+      mapa.set(f.codigoReferencia, f.cuenta);
+    } else {
+      console.warn(`[Contabilidad] Cuenta configurada para ${categoria}/${f.codigoReferencia} no está activa o no acepta movimiento — se usa el default`);
+    }
+  }
+  return mapa;
+}
+
+function _resolverCuentaPorCodigo({ empresaId, mapaConfig, codigoReferencia, codigoDefault, nombreDefault, tipoDefault, naturalezaDefault, tx = prisma }) {
+  const configurada = mapaConfig.get(codigoReferencia);
+  if (configurada) return Promise.resolve(configurada);
+  return ensureCuentaMovimiento({ empresaId, codigo: codigoDefault, nombre: nombreDefault, tipo: tipoDefault, naturaleza: naturalezaDefault, tx });
+}
+
+// Colapsa líneas que terminaron apuntando a la misma cuenta (varios códigos
+// sin configurar caen todos en la cuenta genérica) — evita N líneas idénticas
+// cuando nada está configurado, preservando el comportamiento actual.
+function _agruparDetallesPorCuenta(detalles) {
+  const mapa = new Map();
+  for (const d of detalles) {
+    const acc = mapa.get(d.cuentaId) || { cuentaId: d.cuentaId, descripcion: d.descripcion, debe: 0, haber: 0 };
+    acc.debe = round2(acc.debe + (d.debe || 0));
+    acc.haber = round2(acc.haber + (d.haber || 0));
+    mapa.set(d.cuentaId, acc);
+  }
+  return [...mapa.values()].filter((d) => d.debe > 0 || d.haber > 0);
+}
+
 async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha = new Date(), db = prisma }) {
   const compraIdNum = toInt(compraId);
   const compra = await db.facturas_compra.findUnique({ where: { id: compraIdNum } });
@@ -1092,29 +1111,62 @@ async function crearAsientoRetencionRecibida({ retencionRecibidaId, usuarioId, f
 
   const iva   = round2(retencion.totalRetencionIva);
   const renta = round2(retencion.totalRetencionRenta);
-  const total = round2(iva + renta);
-  if (total <= 0) return { asiento: null, creado: false };
 
   const cuentaCxC = await ensureCuentaMovimiento({
     empresaId: retencion.empresaId, tx: db,
     codigo: '1.1.03.001', nombre: 'Cuentas por Cobrar', tipo: 'ACTIVO', naturaleza: 'DEBITO',
   });
 
-  const detalles = [];
-  if (iva > 0) {
-    const cuentaIvaRet = await ensureCuentaMovimiento({
-      empresaId: retencion.empresaId, tx: db,
-      codigo: '1.1.07.001', nombre: 'Retención IVA (Crédito Tributario)', tipo: 'ACTIVO', naturaleza: 'DEBITO',
-    });
-    detalles.push({ cuentaId: cuentaIvaRet.id, descripcion: `Retención IVA — ${retencion.razonSocialAgente}`, debe: iva, haber: 0 });
+  // Desglose por código de retención SRI (detalles JSON), con cuenta
+  // configurable por código (categoría RETENCION_VENTA). Sin detalle o sin
+  // nada configurado: caen las 2 líneas agregadas IVA/Renta de siempre.
+  const mapaConfig = await obtenerCuentasReferenciaConfiguradas({ empresaId: retencion.empresaId, categoria: 'RETENCION_VENTA', tx: db });
+  const detallesJson = Array.isArray(retencion.detalles) ? retencion.detalles : [];
+
+  const porCodigo = new Map(); // codigo -> { valor, esIva }
+  for (const d of detallesJson) {
+    const codigo = String(d.codigoRetencion || '').trim();
+    const valor = round2(d.valorRetener || 0);
+    if (!codigo || valor <= 0) continue;
+    const esIva = ['2', '4', '6'].includes(String(d.codigo));
+    const prev = porCodigo.get(codigo) || { valor: 0, esIva };
+    porCodigo.set(codigo, { valor: round2(prev.valor + valor), esIva });
   }
-  if (renta > 0) {
-    const cuentaRentaRet = await ensureCuentaMovimiento({
-      empresaId: retencion.empresaId, tx: db,
-      codigo: '1.1.07.002', nombre: 'Retención Impuesto a la Renta (Anticipo)', tipo: 'ACTIVO', naturaleza: 'DEBITO',
-    });
-    detalles.push({ cuentaId: cuentaRentaRet.id, descripcion: `Retención Renta — ${retencion.razonSocialAgente}`, debe: renta, haber: 0 });
+
+  let detalles;
+  if (porCodigo.size === 0) {
+    detalles = [];
+    if (iva > 0) {
+      const cuentaIvaRet = await ensureCuentaMovimiento({
+        empresaId: retencion.empresaId, tx: db,
+        codigo: '1.1.07.001', nombre: 'Retención IVA (Crédito Tributario)', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+      });
+      detalles.push({ cuentaId: cuentaIvaRet.id, descripcion: `Retención IVA — ${retencion.razonSocialAgente}`, debe: iva, haber: 0 });
+    }
+    if (renta > 0) {
+      const cuentaRentaRet = await ensureCuentaMovimiento({
+        empresaId: retencion.empresaId, tx: db,
+        codigo: '1.1.07.002', nombre: 'Retención Impuesto a la Renta (Anticipo)', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+      });
+      detalles.push({ cuentaId: cuentaRentaRet.id, descripcion: `Retención Renta — ${retencion.razonSocialAgente}`, debe: renta, haber: 0 });
+    }
+  } else {
+    detalles = [];
+    for (const [codigo, info] of porCodigo) {
+      const cuenta = await _resolverCuentaPorCodigo({
+        empresaId: retencion.empresaId, mapaConfig, codigoReferencia: codigo,
+        codigoDefault: info.esIva ? '1.1.07.001' : '1.1.07.002',
+        nombreDefault: info.esIva ? 'Retención IVA (Crédito Tributario)' : 'Retención Impuesto a la Renta (Anticipo)',
+        tipoDefault: 'ACTIVO', naturalezaDefault: 'DEBITO', tx: db,
+      });
+      detalles.push({ cuentaId: cuenta.id, descripcion: `Retención ${codigo} — ${retencion.razonSocialAgente}`, debe: info.valor, haber: 0 });
+    }
+    detalles = _agruparDetallesPorCuenta(detalles);
   }
+
+  const total = round2(detalles.reduce((acc, d) => acc + d.debe, 0));
+  if (total <= 0) return { asiento: null, creado: false };
+
   detalles.push({ cuentaId: cuentaCxC.id, descripcion: `Retención recibida de ${retencion.razonSocialAgente}`, debe: 0, haber: total });
 
   const asiento = await crearAsientoContable({
@@ -1191,13 +1243,13 @@ async function crearAsientoDocRecibidoOtro({ docRecibidoId, usuarioId, fecha = n
   return { asiento, creado: true };
 }
 
-async function crearAsientoRetencionAutorizada({ retencionId, usuarioId, fecha = new Date() }) {
+async function crearAsientoRetencionAutorizada({ retencionId, usuarioId, fecha = new Date(), db = prisma }) {
   const retencionIdNum = toInt(retencionId);
-  const retencion = await prisma.retenciones.findUnique({ where: { id: retencionIdNum } });
+  const retencion = await db.retenciones.findUnique({ where: { id: retencionIdNum } });
   if (!retencion) throw new Error('Retención no encontrada');
 
   const referencia = `RET-${retencion.id}`;
-  const existente = await prisma.asientos_contables.findFirst({
+  const existente = await db.asientos_contables.findFirst({
     where: {
       empresaId: retencion.empresaId,
       tipo: 'RETENCION',
@@ -1215,15 +1267,46 @@ async function crearAsientoRetencionAutorizada({ retencionId, usuarioId, fecha =
     nombre: 'Cuentas por Pagar Proveedores',
     tipo: 'PASIVO',
     naturaleza: 'CREDITO',
+    tx: db,
   });
 
-  const cuentaRetPagar = await ensureCuentaMovimiento({
-    empresaId: retencion.empresaId,
-    codigo: '2.1.05.001',
-    nombre: 'Retenciones por Pagar',
-    tipo: 'PASIVO',
-    naturaleza: 'CREDITO',
-  });
+  // Desglose por código de retención SRI (impuestos JSON), con cuenta
+  // configurable por código (categoría RETENCION_COMPRA). Sin detalle o sin
+  // nada configurado: cae en la única cuenta genérica de siempre.
+  const mapaConfig = await obtenerCuentasReferenciaConfiguradas({ empresaId: retencion.empresaId, categoria: 'RETENCION_COMPRA', tx: db });
+  const impuestos = Array.isArray(retencion.impuestos) ? retencion.impuestos : [];
+
+  const porCodigo = new Map();
+  for (const imp of impuestos) {
+    const codigo = String(imp.codigoPorcentaje || '').trim();
+    const valor = round2(imp.valorRetenido || 0);
+    if (!codigo || valor <= 0) continue;
+    porCodigo.set(codigo, round2((porCodigo.get(codigo) || 0) + valor));
+  }
+
+  let lineasRetencion;
+  if (porCodigo.size === 0) {
+    const cuentaGenerica = await ensureCuentaMovimiento({
+      empresaId: retencion.empresaId, tx: db,
+      codigo: '2.1.05.001', nombre: 'Retenciones por Pagar', tipo: 'PASIVO', naturaleza: 'CREDITO',
+    });
+    lineasRetencion = [{ cuentaId: cuentaGenerica.id, descripcion: 'Obligación por retenciones emitidas', debe: 0, haber: total }];
+  } else {
+    lineasRetencion = [];
+    for (const [codigo, valor] of porCodigo) {
+      const cuenta = await _resolverCuentaPorCodigo({
+        empresaId: retencion.empresaId, mapaConfig, codigoReferencia: codigo,
+        codigoDefault: '2.1.05.001', nombreDefault: 'Retenciones por Pagar', tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO', tx: db,
+      });
+      lineasRetencion.push({ cuentaId: cuenta.id, descripcion: `Retención ${codigo} — ${retencion.numeroRetencion}`, debe: 0, haber: valor });
+    }
+    lineasRetencion = _agruparDetallesPorCuenta(lineasRetencion);
+  }
+
+  // El debe de CxP se deriva de la suma real de las líneas de retención (no de
+  // `total`) para que el asiento siempre cuadre exacto pase lo que pase con
+  // redondeos del JSON de impuestos.
+  const sumaRetenciones = round2(lineasRetencion.reduce((acc, l) => acc + l.haber, 0));
 
   const asiento = await crearAsientoContable({
     empresaId: retencion.empresaId,
@@ -1232,9 +1315,10 @@ async function crearAsientoRetencionAutorizada({ retencionId, usuarioId, fecha =
     tipo: 'RETENCION',
     referencia,
     usuarioId,
+    tx: db,
     detalles: [
-      { cuentaId: cuentaCxP.id, descripcion: 'Disminución cuenta por pagar por retención', debe: total, haber: 0 },
-      { cuentaId: cuentaRetPagar.id, descripcion: 'Obligación por retenciones emitidas', debe: 0, haber: total },
+      { cuentaId: cuentaCxP.id, descripcion: 'Disminución cuenta por pagar por retención', debe: sumaRetenciones, haber: 0 },
+      ...lineasRetencion,
     ],
   });
 
