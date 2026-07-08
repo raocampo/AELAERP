@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
-import { IcPDF, IcXML, IcReenviar, IcAnular } from '../../utils/icons';
+import { IcPDF, IcXML, IcReenviar, IcAnular, IcEditar } from '../../utils/icons';
 import './ListaRetenciones.css';
 
 const BADGE = {
@@ -33,6 +33,10 @@ export default function ListaRetenciones() {
 
   const [modalAnular, setModalAnular]   = useState(null); // id de la retención
   const [motivoAnular, setMotivoAnular] = useState('');
+
+  const [modalEditar, setModalEditar] = useState(null); // retención completa
+  const [impuestosEdit, setImpuestosEdit] = useState([]);
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
 
   const cargar = useCallback(async (pg = 1) => {
     setLoading(true);
@@ -107,6 +111,38 @@ export default function ListaRetenciones() {
       cargar(page);
     } catch (err) {
       alert('Error: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const abrirEditar = (ret) => {
+    setModalEditar(ret);
+    setImpuestosEdit((ret.impuestos || []).map((i) => ({ ...i })));
+  };
+
+  const cambiarImpuestoEdit = (index, campo, valor) => {
+    setImpuestosEdit((prev) => prev.map((imp, i) => {
+      if (i !== index) return imp;
+      const actualizado = { ...imp, [campo]: valor };
+      if (campo === 'baseImponible' || campo === 'porcentajeRetener') {
+        const base = Number(campo === 'baseImponible' ? valor : actualizado.baseImponible) || 0;
+        const pct = Number(campo === 'porcentajeRetener' ? valor : actualizado.porcentajeRetener) || 0;
+        actualizado.valorRetenido = Number((base * pct / 100).toFixed(2));
+      }
+      return actualizado;
+    }));
+  };
+
+  const guardarEdicion = async () => {
+    setGuardandoEdit(true);
+    try {
+      await api.put(`/retenciones/${modalEditar.id}`, { impuestos: impuestosEdit });
+      alert('Retención actualizada. Use "Reenviar" para firmarla y enviarla al SRI.');
+      setModalEditar(null);
+      cargar(page);
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setGuardandoEdit(false);
     }
   };
 
@@ -193,6 +229,12 @@ export default function ListaRetenciones() {
                           <IcXML/>
                         </button>
                         {!ret.anulada && ret.estadoSri !== 'AUTORIZADO' && (
+                          <button className="btn-icon ic-editar" title="Editar códigos/montos"
+                            onClick={() => abrirEditar(ret)}>
+                            <IcEditar/>
+                          </button>
+                        )}
+                        {!ret.anulada && ret.estadoSri !== 'AUTORIZADO' && (
                           <button className="btn-icon ic-reenviar" title="Reenviar al SRI"
                             onClick={() => reenviar(ret.id)}>
                             <IcReenviar/>
@@ -242,6 +284,53 @@ export default function ListaRetenciones() {
             <div className="ret-modal-btns">
               <button className="btn-secondary" onClick={() => setModalAnular(null)}>Cancelar</button>
               <button className="btn-danger" onClick={anular}>Confirmar Anulación</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar códigos/montos */}
+      {modalEditar && (
+        <div className="ret-modal-overlay">
+          <div className="ret-modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+            <h3>Editar retención {modalEditar.numeroRetencion}</h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
+              Solo se puede editar mientras no esté autorizada por el SRI. Al guardar, deberás
+              usar &quot;Reenviar&quot; para volver a firmarla y enviarla.
+            </p>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '0.5rem' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
+                  <th style={{ padding: '0.3rem' }}>Código</th>
+                  <th style={{ padding: '0.3rem', textAlign: 'right' }}>Base imponible</th>
+                  <th style={{ padding: '0.3rem', textAlign: 'right' }}>% Retener</th>
+                  <th style={{ padding: '0.3rem', textAlign: 'right' }}>Valor retenido</th>
+                </tr>
+              </thead>
+              <tbody>
+                {impuestosEdit.map((imp, index) => (
+                  <tr key={index}>
+                    <td style={{ padding: '0.3rem' }}>{imp.codigoPorcentaje || imp.codigo}</td>
+                    <td style={{ padding: '0.3rem' }}>
+                      <input type="number" step="0.01" value={imp.baseImponible}
+                        onChange={(e) => cambiarImpuestoEdit(index, 'baseImponible', e.target.value)}
+                        style={{ width: '100%', textAlign: 'right' }} />
+                    </td>
+                    <td style={{ padding: '0.3rem' }}>
+                      <input type="number" step="0.01" value={imp.porcentajeRetener}
+                        onChange={(e) => cambiarImpuestoEdit(index, 'porcentajeRetener', e.target.value)}
+                        style={{ width: '100%', textAlign: 'right' }} />
+                    </td>
+                    <td style={{ padding: '0.3rem', textAlign: 'right' }}>${Number(imp.valorRetenido || 0).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="ret-modal-btns">
+              <button className="btn-secondary" onClick={() => setModalEditar(null)} disabled={guardandoEdit}>Cancelar</button>
+              <button className="btn-primary" onClick={guardarEdicion} disabled={guardandoEdit}>
+                {guardandoEdit ? 'Guardando...' : 'Guardar cambios'}
+              </button>
             </div>
           </div>
         </div>

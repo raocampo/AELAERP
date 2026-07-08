@@ -76,6 +76,22 @@ export default function DetalleCompra() {
   const [crearSiNoExiste, setCrearSiNoExiste] = useState(true);
   const [registrandoInv, setRegistrandoInv] = useState(false);
 
+  // Modal ver asiento contable
+  const [modalAsiento, setModalAsiento] = useState(null);
+  const [cargandoAsiento, setCargandoAsiento] = useState(false);
+
+  const verAsiento = async () => {
+    setCargandoAsiento(true);
+    try {
+      const res = await api.get(`/compras/${id}/asiento`);
+      setModalAsiento(res.data?.data || null);
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Esta compra no tiene asiento contable generado');
+    } finally {
+      setCargandoAsiento(false);
+    }
+  };
+
   const cargar = async (ignore = false) => {
     setLoading(true);
     try {
@@ -373,6 +389,39 @@ export default function DetalleCompra() {
         </div>
       )}
 
+      {/* MODAL VER ASIENTO */}
+      {modalAsiento && (
+        <div className="dc-modal-overlay" onClick={() => setModalAsiento(null)}>
+          <div className="dc-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>📒 Asiento contable — {modalAsiento.numero}</h3>
+            <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
+              {fmtFecha(modalAsiento.fecha)} · {modalAsiento.tipo} · {modalAsiento.descripcion}
+            </p>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '0.75rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                  <th style={{ padding: '0.4rem' }}>Cuenta</th>
+                  <th style={{ padding: '0.4rem', textAlign: 'right' }}>Debe</th>
+                  <th style={{ padding: '0.4rem', textAlign: 'right' }}>Haber</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(modalAsiento.detalles || []).map((d) => (
+                  <tr key={d.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '0.4rem' }}>{d.cuenta?.codigo} — {d.cuenta?.nombre}</td>
+                    <td style={{ padding: '0.4rem', textAlign: 'right' }}>{Number(d.debe) > 0 ? fmtMoneda(d.debe) : '—'}</td>
+                    <td style={{ padding: '0.4rem', textAlign: 'right' }}>{Number(d.haber) > 0 ? fmtMoneda(d.haber) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="dc-modal-actions">
+              <button className="btn-secondary" onClick={() => setModalAsiento(null)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="detalle-compra-header">
         <div>
           <h1>Compra {compra.numeroFactura}</h1>
@@ -396,6 +445,9 @@ export default function DetalleCompra() {
           {!compra.anulada && (compra.movimientosInventario || 0) === 0 && (
             <button className="btn-secondary" onClick={abrirModalInv}>📦 Registrar en inventario</button>
           )}
+          <button className="btn-secondary" onClick={verAsiento} disabled={cargandoAsiento}>
+            {cargandoAsiento ? 'Cargando...' : '📒 Ver asiento'}
+          </button>
           {!compra.anulada && (
             <button className="btn-secondary" onClick={abrirEditar}>✏️ Editar</button>
           )}

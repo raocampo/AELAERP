@@ -292,6 +292,65 @@ router.get('/:id', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/retenciones/:id — Editar códigos/montos de una retención NO autorizada.
+// Mismo guard que /reenviar: solo se puede editar antes de que el SRI la autorice
+// y mientras no esté anulada. Regenera el XML (el usuario debe usar "Reenviar"
+// después para volver a firmarlo y enviarlo al SRI).
+// ─────────────────────────────────────────────────────────────────────────────
+router.put('/:id', async (req, res) => {
+  try {
+    const ret = await prisma.retenciones.findFirst({
+      where: { id: parseInt(req.params.id, 10), empresaId: req.empresa.id },
+    });
+    if (!ret) return res.status(404).json({ ok: false, error: 'Retención no encontrada' });
+    if (ret.estadoSri === 'AUTORIZADO') return res.status(400).json({ ok: false, error: 'La retención ya está autorizada por el SRI y no puede editarse' });
+    if (ret.anulada) return res.status(400).json({ ok: false, error: 'La retención está anulada' });
+
+    const { impuestos, observaciones } = req.body;
+    if (!Array.isArray(impuestos) || impuestos.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Debe ingresar al menos un impuesto retenido' });
+    }
+
+    const totalRetenido = impuestos.reduce((s, i) => s + parseFloat(i.valorRetenido || 0), 0);
+    const config = await getConfigSRI(req.empresa.id);
+
+    const { xml: xmlGenerado } = sri.generarXMLRetencion({
+      claveAcceso: ret.claveAcceso,
+      secuencial: ret.secuencial,
+      fechaEmision: ret.fechaEmision,
+      periodoFiscal: ret.periodoFiscal,
+      tipoIdentificacionProveedor: ret.tipoIdentificacionProveedor,
+      identificacionProveedor: ret.identificacionProveedor,
+      razonSocialProveedor: ret.razonSocialProveedor,
+      tipoDocSustento: ret.tipoDocSustento,
+      numeroDocSustento: ret.numeroDocSustento,
+      fechaEmisionDocSustento: ret.fechaEmisionDocSustento,
+      impuestos,
+      observaciones: observaciones !== undefined ? observaciones : ret.observaciones,
+    }, config);
+
+    const actualizada = await prisma.retenciones.update({
+      where: { id: ret.id },
+      data: {
+        impuestos,
+        totalRetenido: parseFloat(totalRetenido.toFixed(2)),
+        observaciones: observaciones !== undefined ? observaciones : ret.observaciones,
+        xmlGenerado,
+        xmlFirmado: null,
+        xmlAutorizado: null,
+        estadoSri: 'PENDIENTE_FIRMA',
+        mensajesSri: null,
+      },
+    });
+
+    res.json({ ok: true, data: actualizada, mensaje: 'Retención actualizada. Use "Reenviar" para firmarla y enviarla al SRI.' });
+  } catch (err) {
+    console.error('PUT /retenciones/:id:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/retenciones  — Emitir comprobante de retención
 // Body: {
 //   periodoFiscal, tipoIdentificacionProveedor, identificacionProveedor, razonSocialProveedor,

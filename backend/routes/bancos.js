@@ -7,7 +7,15 @@ const express = require('express');
 const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
-const { crearAsientoMovimientoBancario } = require('../utils/contabilidad');
+const { crearAsientoMovimientoBancario, siguienteNumeroGenerico } = require('../utils/contabilidad');
+
+// Prefijo de comprobante por categoría de movimiento — equivalente a los
+// "Comprobantes de ingreso/pago/crédito/débito" de otros ERP contables.
+const PREFIJO_COMPROBANTE = {
+  DEPOSITO: 'ING', TRANSFERENCIA_IN: 'ING',
+  RETIRO: 'EGR', TRANSFERENCIA_OUT: 'EGR', CHEQUE: 'EGR',
+  NOTA_CREDITO: 'NC', NOTA_DEBITO: 'ND', AJUSTE: 'AJU',
+};
 
 const router = express.Router();
 
@@ -257,12 +265,21 @@ router.post('/:id/movimientos', autorizarPermiso('bancos.gestionar'), async (req
       return res.status(400).json({ success: false, mensaje: 'Ingrese un valor en debe o haber' });
     }
 
+    const tipoNorm = String(tipo).toUpperCase();
+    const fechaMov = fecha ? new Date(fecha) : new Date();
+    const numero = await siguienteNumeroGenerico({
+      modelo: 'movimientos_bancarios',
+      prefijo: PREFIJO_COMPROBANTE[tipoNorm] || 'MOV',
+      empresaId, fecha: fechaMov,
+    });
+
     const nuevo = await prisma.movimientos_bancarios.create({
       data: {
         bancoId,
         empresaId,
-        fecha: fecha ? new Date(fecha) : new Date(),
-        tipo: String(tipo).toUpperCase(),
+        fecha: fechaMov,
+        tipo: tipoNorm,
+        numero,
         concepto: String(concepto).trim(),
         referencia: referencia ? String(referencia).trim() : null,
         debe: debeNum,
@@ -443,12 +460,17 @@ router.post('/:id/cheques', autorizarPermiso('cheques.gestionar'), async (req, r
       });
 
       // Registrar movimiento de banco automáticamente
+      const numeroComprobante = await siguienteNumeroGenerico({
+        modelo: 'movimientos_bancarios', prefijo: PREFIJO_COMPROBANTE.CHEQUE,
+        empresaId, fecha: nuevoCheque.fecha, tx,
+      });
       const movimiento = await tx.movimientos_bancarios.create({
         data: {
           bancoId,
           empresaId,
           fecha: nuevoCheque.fecha,
           tipo: 'CHEQUE',
+          numero: numeroComprobante,
           concepto: `Cheque #${nuevoCheque.numero} - ${nuevoCheque.beneficiario}`,
           referencia: nuevoCheque.numero,
           debe: 0,

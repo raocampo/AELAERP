@@ -159,6 +159,8 @@ const GRUPOS_MENU = [
     items: [
       { to: '/contabilidad', icon: '💼', label: 'Contabilidad', planMin: 'pro',    permiso: 'contabilidad.ver', modulo: 'contabilidadHabilitada' },
       { to: '/bancos',       icon: '🏦', label: 'Bancos',       planMin: 'medium', permiso: 'bancos.ver' },
+      { to: '/cuentas-por-cobrar', icon: '💰', label: 'Cuentas por Cobrar', planMin: 'medium', permiso: 'cxc.ver' },
+      { to: '/cuentas-por-pagar',  icon: '💳', label: 'Cuentas por Pagar',  planMin: 'medium', permiso: 'cxp.ver' },
     ],
   },
   {

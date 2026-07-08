@@ -7,7 +7,7 @@ const { requiereModulo } = require('../middleware/modulos');
 const { registrarAuditoria } = require('../utils/auditoria');
 const { aplicarMovimientoInventario } = require('../utils/inventario');
 const { registrarMovimientoCaja } = require('../utils/caja');
-const { crearAsientoFacturaCompraRegistrada } = require('../utils/contabilidad');
+const { crearAsientoFacturaCompraRegistrada, crearAsientoReversoCompraAnulada } = require('../utils/contabilidad');
 const {
   parsearFacturaCompraDesdeXml,
   obtenerXmlDesdeAutorizacion,
@@ -1211,6 +1211,17 @@ router.patch('/:id/anular', async (req, res) => {
           resumen.cajaRevertida = Boolean(movCaja?.id);
         }
       }
+
+      // 4. Reversar el asiento contable si la compra ya estaba contabilizada
+      // (antes de este fix, anular no revertía la contabilidad — la compra
+      // quedaba anulada en el módulo pero seguía afectando el Libro Diario).
+      try {
+        const reverso = await crearAsientoReversoCompraAnulada({ compraId, usuarioId: req.usuario.id, db: tx });
+        resumen.asientoReversado = Boolean(reverso?.creado);
+      } catch (contErr) {
+        console.error('Error reversando asiento de compra anulada:', contErr.message);
+        resumen.asientoReversado = false;
+      }
     });
 
     await registrarAuditoria({
@@ -1236,6 +1247,28 @@ router.patch('/:id/anular', async (req, res) => {
 // POST /api/compras/:id/registrar-inventario
 // Registra movimientos de inventario para una compra que ya existe pero
 // no los tiene registrados (p.ej. importada del Buzón SRI sin la opción activada).
+// GET /api/compras/:id/asiento — ver el asiento contable vinculado (solo lectura)
+router.get('/:id/asiento', autorizarPermiso('compras.gestionar'), async (req, res) => {
+  const compraId  = parseInt(req.params.id, 10);
+  const empresaId = req.empresa.id;
+
+  try {
+    const compra = await prisma.facturas_compra.findFirst({ where: { id: compraId, empresaId } });
+    if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
+
+    const asiento = await prisma.asientos_contables.findFirst({
+      where: { empresaId, tipo: 'COMPRA', referencia: `COMP-${compraId}` },
+      include: { detalles: { include: { cuenta: true, centroCosto: true }, orderBy: { id: 'asc' } } },
+    });
+    if (!asiento) return res.status(404).json({ success: false, mensaje: 'Esta compra no tiene asiento contable generado' });
+
+    res.json({ success: true, data: asiento });
+  } catch (error) {
+    console.error('GET /compras/:id/asiento:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo obtener el asiento contable' });
+  }
+});
+
 router.post('/:id/generar-asiento', autorizarPermiso('compras.gestionar'), async (req, res) => {
   const compraId  = parseInt(req.params.id, 10);
   const empresaId = req.empresa.id;

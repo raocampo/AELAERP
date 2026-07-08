@@ -44,6 +44,32 @@ async function siguienteNumeroAsiento({ empresaId, fecha = new Date(), tx = pris
   return `${periodo}-${String(consecutivo).padStart(4, '0')}`;
 }
 
+// Numeración genérica "PREFIJO-AAAAMM-NNNN" para documentos de otros módulos
+// (cobros, pagos a proveedor, comprobantes bancarios) — mismo criterio que
+// siguienteNumeroAsiento (busca el máximo del mes vía regex, sin tabla de
+// secuencias separada), parametrizado por modelo Prisma y prefijo.
+async function siguienteNumeroGenerico({ modelo, prefijo, empresaId, fecha = new Date(), tx = prisma }) {
+  const empresaIdNum = toInt(empresaId);
+  if (!empresaIdNum) throw new Error('empresaId es requerido para numerar el documento');
+
+  const inicio = startOfMonth(fecha);
+  const fin = endOfMonth(fecha);
+  const ultimo = await tx[modelo].findFirst({
+    where: {
+      empresaId: empresaIdNum,
+      fecha: { gte: inicio, lte: fin },
+      numero: { startsWith: `${prefijo}-` },
+    },
+    orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+    select: { numero: true },
+  });
+
+  const consecutivo = extractSequence(ultimo?.numero) + 1;
+  const date = new Date(fecha);
+  const periodo = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
+  return `${prefijo}-${periodo}-${String(consecutivo).padStart(4, '0')}`;
+}
+
 async function ensureCuentaMovimiento({
   empresaId,
   codigo,
@@ -780,6 +806,160 @@ async function crearAsientoCobroFactura({ facturaId, metodoPago = 'efectivo', us
       { cuentaId: cuentaCobro.id, descripcion: 'Cobro recibido', debe: total, haber: 0 },
       { cuentaId: cuentaCxC.id, descripcion: 'Cancelación cuenta por cobrar', debe: 0, haber: total },
     ],
+  });
+
+  return { asiento, creado: true };
+}
+
+// ─── Cuentas por Cobrar / Cuentas por Pagar — subledger de cobros y pagos ──
+// A diferencia de crearAsientoCobroFactura (arriba, huérfana — nunca invocada
+// desde ningún route, asienta SIEMPRE el total de la factura de una sola vez
+// y su referencia es única POR FACTURA, incompatible con abonos parciales),
+// estas funciones se referencian por el ID del registro de cobro/pago —
+// permiten múltiples cobros/pagos parciales sobre el mismo documento.
+async function crearAsientoCobroCliente({ cobroId, usuarioId, fecha = new Date(), db = prisma }) {
+  const cobro = await db.cobros_cliente.findUnique({ where: { id: toInt(cobroId) }, include: { factura: true } });
+  if (!cobro) throw new Error('Cobro no encontrado');
+
+  const referencia = `COBRO-${cobro.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: cobro.empresaId, tipo: 'COBRO', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const monto = round2(cobro.monto);
+  const cuentaCxC = await ensureCuentaMovimiento({
+    empresaId: cobro.empresaId, tx: db,
+    codigo: '1.1.03.001', nombre: 'Cuentas por Cobrar', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+  });
+  const cuentaCobro = (cobro.metodoPago || '').toLowerCase() === 'efectivo'
+    ? await ensureCuentaMovimiento({ empresaId: cobro.empresaId, tx: db, codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO' })
+    : await ensureCuentaMovimiento({ empresaId: cobro.empresaId, tx: db, codigo: '1.1.02.001', nombre: 'Bancos', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+
+  const asiento = await crearAsientoContable({
+    empresaId: cobro.empresaId,
+    fecha,
+    descripcion: `Cobro ${cobro.numero} factura ${cobro.factura.numeroFactura} (${cobro.metodoPago})`,
+    tipo: 'COBRO',
+    referencia,
+    facturaId: cobro.facturaId,
+    usuarioId,
+    tx: db,
+    detalles: [
+      { cuentaId: cuentaCobro.id, descripcion: 'Cobro recibido', debe: monto, haber: 0 },
+      { cuentaId: cuentaCxC.id, descripcion: 'Abono cuenta por cobrar', debe: 0, haber: monto },
+    ],
+  });
+
+  await db.cobros_cliente.update({ where: { id: cobro.id }, data: { asientoId: asiento.id } });
+  return { asiento, creado: true };
+}
+
+async function crearAsientoPagoProveedor({ pagoId, usuarioId, fecha = new Date(), db = prisma }) {
+  const pago = await db.pagos_proveedor.findUnique({ where: { id: toInt(pagoId) }, include: { compra: true } });
+  if (!pago) throw new Error('Pago no encontrado');
+
+  const referencia = `PAGO-${pago.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: pago.empresaId, tipo: 'PAGO', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const config = await obtenerConfiguracionContable(pago.empresaId, db);
+  const monto = round2(pago.monto);
+  const cuentaCxP = await _resolverCuenta({
+    empresaId: pago.empresaId,
+    codigoConfigurado: config?.codigoCuentaCxP,
+    codigoDefault: '2.1.04.001', nombreDefault: 'Cuentas por Pagar Proveedores', tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO',
+    tx: db,
+  });
+  const cuentaPago = (pago.metodoPago || '').toLowerCase() === 'efectivo'
+    ? await ensureCuentaMovimiento({ empresaId: pago.empresaId, tx: db, codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO' })
+    : await ensureCuentaMovimiento({ empresaId: pago.empresaId, tx: db, codigo: '1.1.02.001', nombre: 'Bancos', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+
+  const asiento = await crearAsientoContable({
+    empresaId: pago.empresaId,
+    fecha,
+    descripcion: `Pago ${pago.numero} compra ${pago.compra.numeroFactura} (${pago.metodoPago})`,
+    tipo: 'PAGO',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles: [
+      { cuentaId: cuentaCxP.id, descripcion: 'Cancelación cuenta por pagar', debe: monto, haber: 0 },
+      { cuentaId: cuentaPago.id, descripcion: 'Pago realizado', debe: 0, haber: monto },
+    ],
+  });
+
+  await db.pagos_proveedor.update({ where: { id: pago.id }, data: { asientoId: asiento.id } });
+  return { asiento, creado: true };
+}
+
+async function crearAsientoReversoCobroCliente({ cobroId, usuarioId, fecha = new Date(), db = prisma }) {
+  const cobro = await db.cobros_cliente.findUnique({ where: { id: toInt(cobroId) } });
+  if (!cobro) throw new Error('Cobro no encontrado');
+  if (!cobro.asientoId) return { asiento: null, creado: false };
+
+  const referencia = `COBRO-ANUL-${cobro.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: cobro.empresaId, tipo: 'REVERSO_COBRO', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const original = await db.asientos_contables.findUnique({ where: { id: cobro.asientoId }, include: { detalles: true } });
+  if (!original) return { asiento: null, creado: false };
+
+  const detalles = original.detalles.map((d) => ({
+    cuentaId: d.cuentaId,
+    descripcion: `Reverso cobro ${cobro.numero}`,
+    debe: round2(d.haber),
+    haber: round2(d.debe),
+  }));
+
+  const asiento = await crearAsientoContable({
+    empresaId: cobro.empresaId,
+    fecha,
+    descripcion: `Anulación cobro ${cobro.numero}`,
+    tipo: 'REVERSO_COBRO',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles,
+  });
+
+  return { asiento, creado: true };
+}
+
+async function crearAsientoReversoPagoProveedor({ pagoId, usuarioId, fecha = new Date(), db = prisma }) {
+  const pago = await db.pagos_proveedor.findUnique({ where: { id: toInt(pagoId) } });
+  if (!pago) throw new Error('Pago no encontrado');
+  if (!pago.asientoId) return { asiento: null, creado: false };
+
+  const referencia = `PAGO-ANUL-${pago.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: pago.empresaId, tipo: 'REVERSO_PAGO', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const original = await db.asientos_contables.findUnique({ where: { id: pago.asientoId }, include: { detalles: true } });
+  if (!original) return { asiento: null, creado: false };
+
+  const detalles = original.detalles.map((d) => ({
+    cuentaId: d.cuentaId,
+    descripcion: `Reverso pago ${pago.numero}`,
+    debe: round2(d.haber),
+    haber: round2(d.debe),
+  }));
+
+  const asiento = await crearAsientoContable({
+    empresaId: pago.empresaId,
+    fecha,
+    descripcion: `Anulación pago ${pago.numero}`,
+    tipo: 'REVERSO_PAGO',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles,
   });
 
   return { asiento, creado: true };
@@ -1528,6 +1708,51 @@ async function crearAsientoReversoLiquidacionAnulada({ liquidacionId, usuarioId,
   return { asiento, creado: true };
 }
 
+// Reverso contable al anular una compra que ya tenía asiento generado (fix de
+// cobertura: antes, PATCH /compras/:id/anular marcaba `anulada:true` y
+// revertía inventario/caja, pero nunca reversaba el asiento COMPRA — quedaba
+// contabilizada la compra pese a estar anulada).
+async function crearAsientoReversoCompraAnulada({ compraId, usuarioId, fecha = new Date(), db = prisma }) {
+  const compraIdNum = toInt(compraId);
+  const compra = await db.facturas_compra.findUnique({ where: { id: compraIdNum } });
+  if (!compra) throw new Error('Compra no encontrada');
+
+  const referencia = `COMP-ANUL-${compra.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: compra.empresaId, tipo: 'ANULACION', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const asientoOriginal = await db.asientos_contables.findFirst({
+    where: { empresaId: compra.empresaId, tipo: 'COMPRA', referencia: `COMP-${compra.id}` },
+    include: { detalles: true },
+    orderBy: { id: 'desc' },
+  });
+  if (!asientoOriginal?.detalles?.length) {
+    return { asiento: null, creado: false, motivo: 'SIN_ASIENTO_ORIGINAL' };
+  }
+
+  const detalles = asientoOriginal.detalles.map((detalle) => ({
+    cuentaId: detalle.cuentaId,
+    descripcion: `Reverso anulación compra ${compra.numeroFactura}`,
+    debe: round2(detalle.haber),
+    haber: round2(detalle.debe),
+  }));
+
+  const asiento = await crearAsientoContable({
+    empresaId: compra.empresaId,
+    fecha,
+    descripcion: `Asiento reverso anulación compra ${compra.numeroFactura}`,
+    tipo: 'ANULACION',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles,
+  });
+
+  return { asiento, creado: true };
+}
+
 async function crearAsientoReversoRetencionAnulada({ retencionId, usuarioId, fecha = new Date() }) {
   const retencionIdNum = toInt(retencionId);
   const retencion = await prisma.retenciones.findUnique({ where: { id: retencionIdNum } });
@@ -1600,4 +1825,10 @@ module.exports = {
   crearAsientoReversoFacturaAnulada,
   crearAsientoReversoLiquidacionAnulada,
   crearAsientoReversoRetencionAnulada,
+  crearAsientoReversoCompraAnulada,
+  crearAsientoCobroCliente,
+  crearAsientoPagoProveedor,
+  crearAsientoReversoCobroCliente,
+  crearAsientoReversoPagoProveedor,
+  siguienteNumeroGenerico,
 };

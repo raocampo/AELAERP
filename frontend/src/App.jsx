@@ -89,6 +89,8 @@ const BuzonSRI = lazy(() => import('./components/Buzon/BuzonSRI'));
 const ListaGuiasRemision = lazy(() => import('./components/GuiasRemision/ListaGuiasRemision'));
 const FormGuiaRemision = lazy(() => import('./components/GuiasRemision/FormGuiaRemision'));
 const BancosHub = lazy(() => import('./components/Bancos/BancosHub'));
+const CuentasPorCobrarHub = lazy(() => import('./components/CuentasPorCobrar/CuentasPorCobrarHub'));
+const CuentasPorPagarHub = lazy(() => import('./components/CuentasPorPagar/CuentasPorPagarHub'));
 const ListaNotasVenta = lazy(() => import('./components/NotasVenta/ListaNotasVenta'));
 const FormNotaVenta = lazy(() => import('./components/NotasVenta/FormNotaVenta'));
 const DetalleNotaVenta = lazy(() => import('./components/NotasVenta/DetalleNotaVenta'));
@@ -260,6 +262,8 @@ function App() {
                 {/* Contabilidad — solo Pro */}
                 <Route path="contabilidad" element={<ProRoute><ModuleRoute moduleKey="contabilidad"><PermissionRoute permission="contabilidad.ver"><ContabilidadHub /></PermissionRoute></ModuleRoute></ProRoute>} />
                 <Route path="bancos" element={<MediumRoute><PermissionRoute permission="bancos.ver"><BancosHub /></PermissionRoute></MediumRoute>} />
+                <Route path="cuentas-por-cobrar" element={<MediumRoute><PermissionRoute permission="cxc.ver"><CuentasPorCobrarHub /></PermissionRoute></MediumRoute>} />
+                <Route path="cuentas-por-pagar" element={<MediumRoute><PermissionRoute permission="cxp.ver"><CuentasPorPagarHub /></PermissionRoute></MediumRoute>} />
 
                 {/* Configuración SRI — todos los planes */}
                 <Route path="configuracion-sri" element={<PermissionRoute permission="sri.configurar"><ConfiguracionSRI /></PermissionRoute>} />

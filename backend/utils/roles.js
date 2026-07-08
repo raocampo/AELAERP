@@ -67,6 +67,11 @@ const PERMISSIONS = {
   'bancos.gestionar':['admin', 'supervisor', 'contador'],
   'cheques.gestionar':['admin', 'supervisor', 'contador'],
 
+  'cxc.ver':       ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],
+  'cxc.gestionar': ['admin', 'supervisor', 'contador', 'asistente_contabilidad'],
+  'cxp.ver':       ['admin', 'supervisor', 'contador', 'asistente_contabilidad'],
+  'cxp.gestionar': ['admin', 'supervisor', 'contador'],
+
   'clientes.gestionar':   ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador'],
   'productos.ver':        ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador'],
   'productos.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],

@@ -440,7 +440,80 @@ ya importadas antes del fix, idempotente. Botón "Generar asientos faltantes" en
 | 4 | Centros de costo dimensionales | ✅ `cf16980` |
 | 5 | Provisiones RRHH automáticas | ✅ `c6a61da` |
 
-### 23. Sesión 2026-07-03 — Plan de cuentas avanzado + auditoría multi-tenant
+### 25. Sesión 2026-07-07 — Benchmark vs "Sofía", Configuración de cuentas por referencia, CxC/CxP
+
+Ver `docs/pendientes-2026-07-07.md` para el detalle exhaustivo (endpoints, modelos, scripts
+de verificación). Sesión de dos partes, ambas motivadas por comparar AELA contra "Sofía"
+(otro ERP contable ecuatoriano) a partir de capturas de pantalla compartidas por el cliente.
+
+#### Parte 1 — Configuración de cuentas contables por referencia (commit `d07f1ec`)
+Nueva tabla genérica `configuracion_cuentas_referencia` (empresaId+categoria+codigoReferencia
+→ cuentaId) para catálogos largos que no caben en columnas fijas — reemplaza el patrón de
+seguir agregando campos a `configuracion_contable` (que se deja intacta, sigue sirviendo solo
+para Compras/Costo de Ventas). Catálogo de referencias en código
+(`backend/utils/catalogosCuentasReferencia.js`), reexportando `CODIGOS_RETENCION_RENTA`/
+`CODIGOS_RETENCION_IVA` de `sri.js` (ya existían, usados para emitir retenciones) en vez de
+retipear la lista de Sofía. 4 categorías: Compras/Ventas (retenciones por código SRI, 19 c/u),
+Empleados (13 conceptos de nómina), General (9 referencias, config-only — sin motor que las
+use todavía). `crearAsientoRetencionAutorizada`/`crearAsientoRetencionRecibida` ahora desglosan
+el asiento por código de retención en vez de 1-2 líneas genéricas fijas; `crearAsientoNominaPeriodo`/
+`crearAsientoPagoNominaPeriodo` comparten el mismo mecanismo (se corrigió de paso una
+inconsistencia real: antes cada una hardcodeaba su propia cuenta "Sueldos por Pagar" por
+separado). Endpoints `GET/PUT /api/contabilidad/configuracion-referencias/:categoria`.
+UI: nuevo card con sub-tabs en ContabilidadHub → Plan de Cuentas.
+
+#### Parte 2 — Inventario de módulos + Cuentas por Cobrar/Pagar + 3 mejoras (commit siguiente)
+Se auditó el menú completo de Sofía contra AELA (12 áreas). 3 ya existían sólidas (Bancos,
+Guías de remisión, Compras), 1 con otro nombre (Ventas=Facturación, Directorio=Clientes/
+Proveedores), y **5 módulos no existían en absoluto**: Importaciones/aduanas, Caja chica
+formal, Anticipos, Cuentas por Cobrar/Pagar como subledger, Inventario multi-bodega. El
+cliente priorizó Cuentas por Cobrar/Pagar; los otros 4 quedan en backlog (ver pendientes).
+
+**Hallazgo clave**: `crearAsientoCobroFactura` (contabilidad.js) ya existía con la lógica de
+asiento de cobro correcta, pero estaba huérfana — ningún endpoint la invocaba, y su diseño
+(asienta el total de una sola vez, referencia única por factura) es incompatible con cobros
+parciales. Se dejó intacta y se crearon 4 funciones nuevas para el subledger real:
+`crearAsientoCobroCliente`, `crearAsientoPagoProveedor`, `crearAsientoReversoCobroCliente`,
+`crearAsientoReversoPagoProveedor` — referenciadas por el id del cobro/pago (no de la
+factura), permitiendo múltiples abonos parciales.
+
+**Cuentas por Cobrar/Pagar** — 2 tablas nuevas (`cobros_cliente`, `pagos_proveedor`),
+independientes del JSON `pagos` de facturas/compras (que es metadata SRI de forma de pago,
+escrita una vez al emitir, no un log de abonos — se confirmó que `cobrada`/`fechaCobro` en
+`facturas` están muertos, ningún endpoint los escribía). Saldo pendiente calculado al vuelo
+(importeTotal − suma de cobros/pagos no anulados), sin columna redundante. Validaciones:
+factura/compra no anulada, sobre-pago rechazado, lock `SELECT ... FOR UPDATE` dentro de
+transacción para evitar condición de carrera con cobros simultáneos. Endpoints
+`GET/POST /api/cxc/*` y `/api/cxp/*` (vigentes, canceladas, historial, registrar, anular).
+Frontend: `CuentasPorCobrarHub.jsx`/`CuentasPorPagarHub.jsx` (clonan el patrón de tabs de
+`BancosHub.jsx`). Permisos nuevos `cxc.ver`/`cxc.gestionar`/`cxp.ver`/`cxp.gestionar`
+(backend `utils/roles.js` + frontend `utils/roles.js`, se mantienen como copias espejadas).
+
+**Backlog explícito dentro de CxC/CxP** (no implementado, alcance acotado a propósito):
+cheques recibidos de clientes con tracking propio (hoy "cheque" es solo un método de pago
+más, sin número/vencimiento/estado), tarjetas de crédito (CxP), importar Excel, reportes
+dedicados.
+
+**3 mejoras a módulos existentes** (mismo commit):
+- **Bancos**: comprobantes numerados por categoría (`ING-`/`EGR-`/`NC-`/`ND-`/`AJU-`,
+  columna `numero` en `movimientos_bancarios`, nullable — sin backfill de movimientos viejos).
+- **Compras**: `GET /api/compras/:id/asiento` (ver asiento, antes solo se podía generar, no
+  visualizar) + modal de solo lectura en `DetalleCompra.jsx`; `crearAsientoReversoCompraAnulada`
+  — **fix de cobertura real**: antes, anular una compra con asiento ya generado no reversaba
+  la contabilidad, solo marcaba `anulada:true` — la compra seguía afectando el Libro Diario.
+- **Retenciones**: `PUT /api/retenciones/:id` para editar códigos/montos mientras
+  `estadoSri !== 'AUTORIZADO' && !anulada` (mismo guard que ya usaba `/reenviar`), regenera
+  el XML pero no reenvía automáticamente al SRI.
+- **Guías de remisión**: catálogo `transportistas` (mismo patrón CRUD que `centros_costo`) para
+  autocompletar — los campos planos en `guias_remision` se mantienen intactos (el XSD del SRI
+  los exige así), el catálogo solo evita re-teclear.
+
+**Verificación**: toda la sesión se verificó contra Postgres real (`scfi_dev` local disponible
+esta vez, a diferencia de sesiones anteriores) con scripts de integración ad-hoc (crear
+datos de prueba, ejercitar la función real, verificar resultado, limpiar) — no solo
+`node -c`/`require()`. Sin acceso a navegador en este entorno, así que el flujo de UI
+completo (clicks reales) queda pendiente de que el usuario lo pruebe en producción/local.
+
 
 Ver `docs/pendientes-2026-07-03.md` para detalle completo.
 
@@ -624,11 +697,32 @@ Los más críticos:
 11. **Provisiones de nómina** — procesar nómina → asiento `NOMINA` de provisión; pagar → asiento de pago.
 12. **Importar compras históricas** — importar un lote y confirmar asientos `COMPRA` con fecha histórica.
 
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-07)
+
+Ver `docs/pendientes-2026-07-07.md` para la lista completa. Los más críticos (probar en
+navegador — todo lo demás ya se verificó con scripts de integración contra Postgres real):
+
+1. **Cuentas por Cobrar/Pagar** — registrar un cobro parcial y uno total sobre una factura real,
+   confirmar que pasa de "Vigentes" a "Canceladas" y que el asiento `COBRO` aparece en el Libro
+   Diario; repetir el flujo simétrico en Cuentas por Pagar con una compra.
+2. **Anular una compra que ya tenga asiento generado** — confirmar que ahora SÍ aparece el
+   asiento `ANULACION` de reverso en el Libro Diario (antes de este fix, no se generaba).
+3. **Ver asiento desde el detalle de una compra** — botón nuevo en `DetalleCompra.jsx`.
+4. **Editar una retención NO autorizada** — cambiar un monto, confirmar que se puede reenviar
+   después con los datos nuevos.
+5. **Comprobantes bancarios numerados** — registrar un depósito y un retiro, confirmar que
+   aparecen con número `ING-AAAAMM-NNNN`/`EGR-AAAAMM-NNNN` en la tabla de movimientos.
+6. **Transportistas en Guías de Remisión** — crear una guía con un transportista nuevo, crear
+   una segunda guía y confirmar que aparece sugerido al escribir el nombre.
+7. **Configuración de cuentas por referencia** (Parte 1) — configurar una cuenta específica para
+   un código de retención, generar una retención con ese código, confirmar que el asiento usa
+   la cuenta configurada y no la genérica.
+
 ### 🟢 Prioridad funcional (mejoras del sistema)
 
-8. **Contabilidad — mejoras opcionales (los 5 principios ERP ya están implementados)**
-   - **Motor automático SRI → cuenta** (Mejora opcional): código retención/IVA → cuenta automática
-     sin configuración manual del contador. La `configuracion_contable` ya cubre el caso real reportado.
+8. **Contabilidad — mejoras opcionales**
+   - ~~Motor automático SRI → cuenta~~ ✅ resuelto 2026-07-07 — "Configuración de cuentas por
+     referencia" (retenciones por código SRI, nómina, general). Ver sección 25.
    - **Puppeteer en Railway** — solo si el scraper SRI sigue fallando tras el fix fetch+JSF
 
 9. **Talento Humano**

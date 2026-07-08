@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import api from '../../services/api';
 import './GuiasRemision.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
@@ -50,6 +51,30 @@ export default function FormGuiaRemision() {
   const [saving,  setSaving]  = useState(false);
   const [loading, setLoading] = useState(esEdicion);
   const [error,   setError]   = useState('');
+  const [transportistasSug, setTransportistasSug] = useState([]);
+
+  // ── Autocompletado de transportistas (catálogo) ──
+  useEffect(() => {
+    const termino = form.nombreTransportista?.trim();
+    if (!termino || termino.length < 2) { setTransportistasSug([]); return; }
+    const timeout = setTimeout(() => {
+      api.get('/transportistas', { params: { q: termino } })
+        .then((r) => setTransportistasSug(r.data?.data || []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [form.nombreTransportista]);
+
+  const seleccionarTransportista = (nombreSeleccionado) => {
+    const encontrado = transportistasSug.find((t) => t.nombre === nombreSeleccionado);
+    if (!encontrado) return;
+    setForm((f) => ({
+      ...f,
+      nombreTransportista: encontrado.nombre,
+      rucTransportista: encontrado.identificacion,
+      placaVehiculo: encontrado.placaVehiculo || f.placaVehiculo,
+    }));
+  };
 
   // ── Cargar datos en modo edición ──
   useEffect(() => {
@@ -128,6 +153,17 @@ export default function FormGuiaRemision() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.mensaje || 'Error al guardar');
+
+      // Guarda/actualiza el transportista en el catálogo para autocompletar la
+      // próxima guía — no bloqueante, si falla (ej. ya existe) no interrumpe.
+      if (form.rucTransportista && form.nombreTransportista) {
+        api.post('/transportistas', {
+          identificacion: form.rucTransportista,
+          nombre: form.nombreTransportista,
+          placaVehiculo: form.placaVehiculo || null,
+        }).catch(() => {});
+      }
+
       navigate('/guias-remision');
     } catch (err) {
       setError(err.message);
@@ -208,7 +244,14 @@ export default function FormGuiaRemision() {
               <label>Nombre / Razón Social *</label>
               <input type="text" required value={form.nombreTransportista}
                 onChange={(e) => set('nombreTransportista', e.target.value)}
-                className="gr-input" />
+                onBlur={(e) => seleccionarTransportista(e.target.value)}
+                list="dl-transportistas"
+                className="gr-input" placeholder="Escribe para buscar en el catálogo..." />
+              <datalist id="dl-transportistas">
+                {transportistasSug.map((t) => (
+                  <option key={t.id} value={t.nombre} />
+                ))}
+              </datalist>
             </div>
             <div className="gr-field">
               <label>Placa del Vehículo</label>

@@ -401,6 +401,7 @@ function TabMovimientos({ cuenta }) {
           <table className="movimientos-tabla">
             <thead>
               <tr>
+                <th>N° Comprobante</th>
                 <th>Fecha</th>
                 <th>Tipo</th>
                 <th>Concepto</th>
@@ -413,6 +414,7 @@ function TabMovimientos({ cuenta }) {
             <tbody>
               {movimientos.map((m) => (
                 <tr key={m.id}>
+                  <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{m.numero || '—'}</td>
                   <td>{formatDate(m.fecha)}</td>
                   <td>
                     <span className={`tipo-badge tipo-${m.tipo}`}>{m.tipo.replace(/_/g, ' ')}</span>

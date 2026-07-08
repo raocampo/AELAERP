@@ -89,6 +89,9 @@ model empresas {
   tablaUtilidades       tabla_utilidades[]
   centrosCosto          centros_costo[]
   configuracionesCuentasReferencia configuracion_cuentas_referencia[]
+  cobrosCliente         cobros_cliente[]
+  pagosProveedor        pagos_proveedor[]
+  transportistas        transportistas[]
 
   @@map("empresas")
 }
@@ -171,6 +174,7 @@ model clientes {
   empresa              empresas   @relation(fields: [empresaId], references: [id])
   facturas             facturas[]
   notas_venta          notas_venta[]
+  cobros               cobros_cliente[]
 
   @@unique([empresaId, identificacion])
   @@index([empresaId])
@@ -201,6 +205,7 @@ model proveedores {
   empresa              empresas          @relation(fields: [empresaId], references: [id])
   compras              facturas_compra[]
   cheques              cheques[]
+  pagos                pagos_proveedor[]
 
   @@unique([empresaId, identificacion])
   @@index([empresaId])
@@ -505,6 +510,7 @@ model facturas {
   notas_credito        notas_credito[]
   retencionesRecibidas retenciones_recibidas[]
   asientos             asientos_contables[]
+  cobros               cobros_cliente[]
 
   @@index([empresaId])
   @@index([estadoSri])
@@ -558,6 +564,7 @@ model facturas_compra {
   emisor   usuarios?  @relation(fields: [emisorId], references: [id])
   proveedor proveedores? @relation(fields: [proveedorId], references: [id])
   retenciones retenciones[]
+  pagosProveedor pagos_proveedor[]
 
   @@unique([empresaId, identificacionProveedor, numeroFactura])
   @@index([empresaId])
@@ -565,6 +572,88 @@ model facturas_compra {
   @@index([identificacionProveedor])
   @@index([proveedorId])
   @@map("facturas_compra")
+}
+
+// ====================================
+// CUENTAS POR COBRAR / PAGAR — subledger de cobros y pagos
+// Independiente del JSON `pagos` (metadata de forma de pago SRI, escrita una
+// sola vez al emitir el documento) y de `cobrada`/`fechaCobro` (sin uso). El
+// saldo pendiente de una factura/compra se calcula al vuelo (importeTotal -
+// suma de cobros/pagos no anulados), sin columna redundante.
+// ====================================
+model cobros_cliente {
+  id                 Int       @id @default(autoincrement())
+  empresaId          Int
+  facturaId          Int
+  clienteId          Int?
+  numero             String    @db.VarChar(20)
+  fecha              DateTime  @default(now())
+  monto              Decimal   @db.Decimal(14, 2)
+  metodoPago         String    @db.VarChar(20)
+  // efectivo | transferencia | cheque | tarjeta
+  bancoId            Int?
+  chequeId           Int?
+  referencia         String?   @db.VarChar(100)
+  observaciones      String?
+  asientoId          Int?
+  anulado            Boolean   @default(false)
+  motivoAnulacion    String?   @db.VarChar(500)
+  fechaAnulacion     DateTime?
+  usuarioId          Int?
+  usuarioAnulacionId Int?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  empresa empresas            @relation(fields: [empresaId], references: [id])
+  factura facturas            @relation(fields: [facturaId], references: [id])
+  cliente clientes?           @relation(fields: [clienteId], references: [id])
+  banco   bancos?             @relation(fields: [bancoId], references: [id])
+  cheque  cheques?            @relation(fields: [chequeId], references: [id])
+  asiento asientos_contables? @relation(fields: [asientoId], references: [id])
+
+  @@unique([empresaId, numero])
+  @@index([empresaId])
+  @@index([facturaId])
+  @@index([clienteId])
+  @@index([fecha])
+  @@map("cobros_cliente")
+}
+
+model pagos_proveedor {
+  id                 Int       @id @default(autoincrement())
+  empresaId          Int
+  compraId           Int
+  proveedorId        Int?
+  numero             String    @db.VarChar(20)
+  fecha              DateTime  @default(now())
+  monto              Decimal   @db.Decimal(14, 2)
+  metodoPago         String    @db.VarChar(20)
+  bancoId            Int?
+  chequeId           Int?
+  referencia         String?   @db.VarChar(100)
+  observaciones      String?
+  asientoId          Int?
+  anulado            Boolean   @default(false)
+  motivoAnulacion    String?   @db.VarChar(500)
+  fechaAnulacion     DateTime?
+  usuarioId          Int?
+  usuarioAnulacionId Int?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  empresa   empresas            @relation(fields: [empresaId], references: [id])
+  compra    facturas_compra     @relation(fields: [compraId], references: [id])
+  proveedor proveedores?        @relation(fields: [proveedorId], references: [id])
+  banco     bancos?             @relation(fields: [bancoId], references: [id])
+  cheque    cheques?            @relation(fields: [chequeId], references: [id])
+  asiento   asientos_contables? @relation(fields: [asientoId], references: [id])
+
+  @@unique([empresaId, numero])
+  @@index([empresaId])
+  @@index([compraId])
+  @@index([proveedorId])
+  @@index([fecha])
+  @@map("pagos_proveedor")
 }
 
 // ====================================
@@ -875,6 +964,8 @@ model asientos_contables {
   bloqueadoBy  usuarios?       @relation("AsientoBloqueadoPor", fields: [bloqueadoPor], references: [id])
   detalles     asientos_contables_detalle[]
   movimientos  movimientos_bancarios[]
+  cobrosCliente  cobros_cliente[]
+  pagosProveedor pagos_proveedor[]
 
   @@index([empresaId])
   @@index([fecha])
@@ -1156,6 +1247,27 @@ model guias_remision {
   @@map("guias_remision")
 }
 
+// Catálogo de transportistas para autocompletar guías de remisión — los
+// campos rucTransportista/nombreTransportista/placaVehiculo en guias_remision
+// se mantienen embebidos (el XML del SRI los exige planos); este catálogo
+// solo evita re-teclear los mismos datos en cada guía nueva.
+model transportistas {
+  id             Int      @id @default(autoincrement())
+  empresaId      Int
+  identificacion String   @db.VarChar(20)
+  nombre         String   @db.VarChar(300)
+  placaVehiculo  String?  @db.VarChar(20)
+  activo         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  empresa empresas @relation(fields: [empresaId], references: [id])
+
+  @@unique([empresaId, identificacion])
+  @@index([empresaId])
+  @@map("transportistas")
+}
+
 // ====================================
 // BANCOS — Cuentas Bancarias de la Empresa
 // ====================================
@@ -1182,6 +1294,8 @@ model bancos {
   cuentaContable plan_cuentas? @relation(fields: [cuentaContableId], references: [id])
   movimientos    movimientos_bancarios[]
   cheques        cheques[]
+  cobrosCliente    cobros_cliente[]
+  pagosProveedor   pagos_proveedor[]
 
   @@unique([empresaId, numeroCuenta])
   @@index([empresaId])
@@ -1195,6 +1309,8 @@ model movimientos_bancarios {
   fecha       DateTime
   tipo        String   @db.VarChar(30)
   // DEPOSITO | RETIRO | TRANSFERENCIA_IN | TRANSFERENCIA_OUT | CHEQUE | NOTA_DEBITO | NOTA_CREDITO | AJUSTE
+  numero      String?  @db.VarChar(20)
+  // Comprobante numerado por categoría: ING- (ingresos) | EGR- (egresos) | NC- | ND- | AJU-
   concepto    String   @db.VarChar(300)
   referencia  String?  @db.VarChar(100)
   // # cheque, # transferencia, etc.
@@ -1242,6 +1358,8 @@ model cheques {
   proveedor   proveedores?  @relation(fields: [proveedorId], references: [id])
   usuario     usuarios?     @relation(fields: [usuarioId], references: [id])
   movimientos movimientos_bancarios[]
+  cobrosCliente  cobros_cliente[]
+  pagosProveedor pagos_proveedor[]
 
   @@unique([bancoId, numero])
   @@index([bancoId])
