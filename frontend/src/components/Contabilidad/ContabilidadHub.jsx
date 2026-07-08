@@ -77,6 +77,7 @@ const ContabilidadHub = () => {
     referencia: '',
     detalles: [crearDetalleVacio(), crearDetalleVacio()],
   });
+  const [asientoSoloLectura, setAsientoSoloLectura] = useState(false);
 
   const [mayorLoading, setMayorLoading] = useState(false);
   const [mayorFiltros, setMayorFiltros] = useState({ cuentaId: '', desde: '', hasta: '' });
@@ -626,6 +627,7 @@ const ContabilidadHub = () => {
       referencia: '',
       detalles: [crearDetalleVacio(), crearDetalleVacio()],
     });
+    setAsientoSoloLectura(false);
   };
 
   const cambiarDetalle = (index, key, value) => {
@@ -648,6 +650,7 @@ const ContabilidadHub = () => {
 
   const guardarAsiento = async (e) => {
     e.preventDefault();
+    if (asientoSoloLectura) return;
     try {
       const payload = {
         fecha: asientoForm.fecha,
@@ -679,11 +682,27 @@ const ContabilidadHub = () => {
     }
   };
 
-  const editarAsiento = async (id) => {
+  const TIPOS_ASIENTO_AUTOMATICOS = ['MANUAL', 'AJUSTE'];
+  const TIPOS_ASIENTO_TODOS = [
+    'MANUAL', 'AJUSTE', 'INICIAL', 'FACTURA', 'COSTO_VENTA', 'NOTA_VENTA', 'ANULACION_NOTA',
+    'MOVIMIENTO_BANCO', 'CAJA', 'COMPRA', 'NOMINA', 'RETENCION_RECIBIDA', 'DOC_RECIBIDO',
+    'RETENCION', 'NC', 'ANULACION',
+  ];
+
+  const cargarAsientoEnFormulario = async (id, soloLectura) => {
     try {
       const res = await api.get(`/contabilidad/asientos/${id}`);
       const asiento = res.data?.data;
       if (!asiento) return;
+
+      if (!soloLectura && !TIPOS_ASIENTO_AUTOMATICOS.includes(asiento.tipo)) {
+        const confirmado = window.confirm(
+          `Este es un asiento automático (tipo ${asiento.tipo}), generado por el sistema a partir de un documento fuente (factura, compra, nómina, etc.).\n\n` +
+          'Editarlo directamente puede hacer que deje de coincidir con los montos del documento original.\n\n' +
+          '¿Deseas continuar de todos modos?'
+        );
+        if (!confirmado) return;
+      }
 
       setAsientoForm({
         id: asiento.id,
@@ -699,11 +718,15 @@ const ContabilidadHub = () => {
           haber: Number(d.haber || 0),
         })),
       });
+      setAsientoSoloLectura(soloLectura);
       setTab('diario');
     } catch (error) {
-      toast.error(error.response?.data?.mensaje || 'No se pudo cargar el asiento para edición');
+      toast.error(error.response?.data?.mensaje || 'No se pudo cargar el asiento');
     }
   };
+
+  const editarAsiento = (id) => cargarAsientoEnFormulario(id, false);
+  const verAsiento = (id) => cargarAsientoEnFormulario(id, true);
 
   const cerrarAsiento = async (id) => {
     if (!window.confirm('¿Deseas cerrar este asiento?')) return;
@@ -921,27 +944,40 @@ const ContabilidadHub = () => {
           </div>
 
           <div className="conta-card">
-            <h3>{asientoForm.id ? `Formulario de corrección del asiento #${asientoForm.id}` : 'Nuevo asiento contable'}</h3>
+            <h3>
+              {asientoForm.id
+                ? (asientoSoloLectura
+                  ? `Viendo asiento #${asientoForm.id} (solo lectura)`
+                  : `Formulario de corrección del asiento #${asientoForm.id}`)
+                : 'Nuevo asiento contable'}
+            </h3>
+            {asientoForm.id && !TIPOS_ASIENTO_AUTOMATICOS.includes(asientoForm.tipo) && !asientoSoloLectura && (
+              <div className="conta-warning">
+                ⚠ Este es un asiento automático (tipo {asientoForm.tipo}). Editarlo puede romper la
+                trazabilidad con el documento fuente (factura, compra, nómina, etc.).
+              </div>
+            )}
             <form onSubmit={guardarAsiento}>
               <div className="conta-form-grid">
                 <div>
                   <label>Fecha</label>
-                  <input type="date" value={asientoForm.fecha} onChange={(e) => setAsientoForm((prev) => ({ ...prev, fecha: e.target.value }))} required />
+                  <input type="date" value={asientoForm.fecha} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, fecha: e.target.value }))} required />
                 </div>
                 <div>
                   <label>Tipo</label>
-                  <select value={asientoForm.tipo} onChange={(e) => setAsientoForm((prev) => ({ ...prev, tipo: e.target.value }))}>
-                    <option value="MANUAL">MANUAL</option>
-                    <option value="AJUSTE">AJUSTE</option>
+                  <select value={asientoForm.tipo} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, tipo: e.target.value }))}>
+                    {TIPOS_ASIENTO_TODOS.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <label>Referencia</label>
-                  <input value={asientoForm.referencia} onChange={(e) => setAsientoForm((prev) => ({ ...prev, referencia: e.target.value }))} />
+                  <input value={asientoForm.referencia} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, referencia: e.target.value }))} />
                 </div>
                 <div className="full-width">
                   <label>Descripción</label>
-                  <input value={asientoForm.descripcion} onChange={(e) => setAsientoForm((prev) => ({ ...prev, descripcion: e.target.value }))} required />
+                  <input value={asientoForm.descripcion} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, descripcion: e.target.value }))} required />
                 </div>
               </div>
 
@@ -961,7 +997,7 @@ const ContabilidadHub = () => {
                     {asientoForm.detalles.map((detalle, index) => (
                       <tr key={`det-${index}`}>
                         <td>
-                          <select value={detalle.cuentaId} onChange={(e) => cambiarDetalle(index, 'cuentaId', e.target.value)} required>
+                          <select value={detalle.cuentaId} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'cuentaId', e.target.value)} required>
                             <option value="">Seleccione...</option>
                             {cuentasMovimiento.map((c) => (
                               <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
@@ -969,7 +1005,7 @@ const ContabilidadHub = () => {
                           </select>
                         </td>
                         <td>
-                          <select value={detalle.centroCostoId} onChange={(e) => cambiarDetalle(index, 'centroCostoId', e.target.value)}>
+                          <select value={detalle.centroCostoId} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'centroCostoId', e.target.value)}>
                             <option value="">— Sin centro de costo —</option>
                             {centrosCosto.filter((c) => c.activo).map((c) => (
                               <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
@@ -977,30 +1013,36 @@ const ContabilidadHub = () => {
                           </select>
                         </td>
                         <td>
-                          <input value={detalle.descripcion} onChange={(e) => cambiarDetalle(index, 'descripcion', e.target.value)} />
+                          <input value={detalle.descripcion} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'descripcion', e.target.value)} />
                         </td>
                         <td>
-                          <input type="number" min="0" step="0.01" value={detalle.debe} onChange={(e) => cambiarDetalle(index, 'debe', e.target.value)} />
+                          <input type="number" min="0" step="0.01" value={detalle.debe} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'debe', e.target.value)} />
                         </td>
                         <td>
-                          <input type="number" min="0" step="0.01" value={detalle.haber} onChange={(e) => cambiarDetalle(index, 'haber', e.target.value)} />
+                          <input type="number" min="0" step="0.01" value={detalle.haber} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'haber', e.target.value)} />
                         </td>
                         <td>
-                          <button type="button" className="btn-link danger" onClick={() => eliminarLineaDetalle(index)}>Quitar</button>
+                          {!asientoSoloLectura && (
+                            <button type="button" className="btn-link danger" onClick={() => eliminarLineaDetalle(index)}>Quitar</button>
+                          )}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 <div className="conta-form-actions">
-                  <button type="button" className="btn-secondary" onClick={agregarLineaDetalle}>+ Línea</button>
+                  {!asientoSoloLectura && (
+                    <button type="button" className="btn-secondary" onClick={agregarLineaDetalle}>+ Línea</button>
+                  )}
                   <span className={`conta-balance ${Number(totalDebeForm.toFixed(2)) === Number(totalHaberForm.toFixed(2)) ? 'ok' : 'warn'}`}>
                     Debe: {toMoney(totalDebeForm)} | Haber: {toMoney(totalHaberForm)}
                   </span>
                 </div>
                 <div className="conta-form-actions">
-                  <button type="submit" className="btn-primary">{asientoForm.id ? 'Actualizar asiento' : 'Crear asiento'}</button>
-                  <button type="button" className="btn-secondary" onClick={limpiarAsientoForm}>Limpiar</button>
+                  {!asientoSoloLectura && (
+                    <button type="submit" className="btn-primary">{asientoForm.id ? 'Actualizar asiento' : 'Crear asiento'}</button>
+                  )}
+                  <button type="button" className="btn-secondary" onClick={limpiarAsientoForm}>{asientoSoloLectura ? 'Cerrar vista' : 'Limpiar'}</button>
                 </div>
               </div>
             </form>
@@ -1088,7 +1130,8 @@ const ContabilidadHub = () => {
                         }
                       </td>
                       <td>
-                        {(a.tipo === 'MANUAL' || a.tipo === 'AJUSTE') && !a.cerrado && !a.bloqueado && (
+                        <button className="btn-link" onClick={() => verAsiento(a.id)}>Ver</button>
+                        {!a.cerrado && !a.bloqueado && (
                           <button className="btn-link" onClick={() => editarAsiento(a.id)}>Editar</button>
                         )}
                         {!a.cerrado && (

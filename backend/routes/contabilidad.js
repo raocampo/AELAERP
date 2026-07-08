@@ -1576,9 +1576,6 @@ router.put('/asientos/:id', async (req, res) => {
       include: { detalles: true },
     });
     if (!actual) return res.status(404).json({ success: false, mensaje: 'Asiento no encontrado' });
-    if (!TIPOS_ASIENTO_EDITABLES.includes(actual.tipo)) {
-      return res.status(400).json({ success: false, mensaje: 'Solo los asientos MANUAL o AJUSTE pueden editarse' });
-    }
     if (actual.cerrado) {
       return res.status(400).json({ success: false, mensaje: 'El asiento está cerrado y no puede modificarse' });
     }
@@ -1594,10 +1591,6 @@ router.put('/asientos/:id', async (req, res) => {
     const descripcion = req.body?.descripcion || actual.descripcion;
     const referencia = req.body?.referencia === undefined ? actual.referencia : (req.body.referencia || null);
     const detalles = req.body?.detalles || actual.detalles;
-
-    if (!TIPOS_ASIENTO_EDITABLES.includes(tipo)) {
-      return res.status(400).json({ success: false, mensaje: 'Solo se permiten asientos MANUAL o AJUSTE' });
-    }
 
     await validarPeriodoAbiertoParaFecha(empresaId, fecha);
     const { normalizados, totalDebe, totalHaber } = await normalizarDetallesAsiento(empresaId, detalles);

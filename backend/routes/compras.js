@@ -469,9 +469,23 @@ router.get('/', async (req, res) => {
       total:  Number(agr._sum.importeTotal || 0),
     };
 
+    // Marca por fila si ya existe el asiento contable COMPRA correspondiente
+    const referencias = items.map((it) => `COMP-${it.id}`);
+    const asientosExistentes = referencias.length
+      ? await prisma.asientos_contables.findMany({
+          where: { empresaId: req.empresa.id, tipo: 'COMPRA', referencia: { in: referencias } },
+          select: { referencia: true },
+        })
+      : [];
+    const referenciasConAsiento = new Set(asientosExistentes.map((a) => a.referencia));
+    const itemsConAsiento = items.map((it) => ({
+      ...it,
+      tieneAsientoContable: referenciasConAsiento.has(`COMP-${it.id}`),
+    }));
+
     res.json({
       success: true,
-      data: items,
+      data: itemsConAsiento,
       total,
       pages: Math.ceil(total / parseInt(limit, 10)),
       totalesGenerales,
@@ -1222,6 +1236,33 @@ router.patch('/:id/anular', async (req, res) => {
 // POST /api/compras/:id/registrar-inventario
 // Registra movimientos de inventario para una compra que ya existe pero
 // no los tiene registrados (p.ej. importada del Buzón SRI sin la opción activada).
+router.post('/:id/generar-asiento', autorizarPermiso('compras.gestionar'), async (req, res) => {
+  const compraId  = parseInt(req.params.id, 10);
+  const empresaId = req.empresa.id;
+  const usuarioId = req.usuario?.id || null;
+
+  try {
+    const compra = await prisma.facturas_compra.findFirst({ where: { id: compraId, empresaId } });
+    if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
+
+    const resultado = await crearAsientoFacturaCompraRegistrada({
+      compraId,
+      usuarioId,
+      fecha: compra.fechaEmision || new Date(),
+    });
+
+    res.json({
+      success: true,
+      creado: resultado.creado,
+      mensaje: resultado.creado ? 'Asiento contable generado' : 'Esta compra ya tenía un asiento contable registrado',
+      data: resultado.asiento,
+    });
+  } catch (error) {
+    console.error('POST /compras/:id/generar-asiento:', error);
+    res.status(400).json({ success: false, mensaje: error.message || 'No se pudo generar el asiento contable' });
+  }
+});
+
 router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), async (req, res) => {
   const compraId  = parseInt(req.params.id, 10);
   const empresaId = req.empresa.id;

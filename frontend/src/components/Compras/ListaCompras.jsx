@@ -71,6 +71,7 @@ export default function ListaCompras() {
   const [quickEdit, setQuickEdit] = useState(null); // { id, tipoGasto }
   const [guardandoGasto, setGuardandoGasto] = useState(false);
   const [autoClasificando, setAutoClasificando] = useState(false);
+  const [generandoAsientoId, setGenerandoAsientoId] = useState(null);
 
   useEffect(() => {
     let ignore = false;
@@ -119,6 +120,21 @@ export default function ListaCompras() {
       toast.error('No se pudo actualizar el tipo de gasto');
     } finally {
       setGuardandoGasto(false);
+    }
+  };
+
+  const generarAsiento = async (id) => {
+    setGenerandoAsientoId(id);
+    try {
+      const res = await api.post(`/compras/${id}/generar-asiento`);
+      setItems((prev) => prev.map((it) =>
+        it.id === id ? { ...it, tieneAsientoContable: true } : it
+      ));
+      toast.success(res.data?.mensaje || 'Asiento contable generado');
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo generar el asiento contable');
+    } finally {
+      setGenerandoAsientoId(null);
     }
   };
 
@@ -411,6 +427,20 @@ export default function ListaCompras() {
                             onClick={() => navigate(`/compras/${item.id}`)}>
                             <IcVer/>
                           </button>
+                        </div>
+                        <div className="compras-op-row">
+                          {item.tieneAsientoContable ? (
+                            <span className="compras-flag ok" title="Ya tiene asiento en el Libro Diario">✓ Con asiento</span>
+                          ) : (
+                            <button
+                              className="compras-btn-asiento"
+                              disabled={generandoAsientoId === item.id}
+                              onClick={() => generarAsiento(item.id)}
+                              title="Esta compra no tiene asiento contable en el Libro Diario"
+                            >
+                              {generandoAsientoId === item.id ? 'Generando…' : '⚠ Generar asiento'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </td>

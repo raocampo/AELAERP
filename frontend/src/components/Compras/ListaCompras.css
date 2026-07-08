@@ -178,6 +178,21 @@
 .compras-flag.ok   { background: #dcfce7; border-color: #86efac; color: #16a34a; }
 .compras-flag.warn { background: #fef3c7; border-color: #fcd34d; color: #b45309; }
 
+.compras-btn-asiento {
+  display: inline-flex;
+  align-items: center;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  border: 1px solid #fcd34d;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: .72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.compras-btn-asiento:hover:not(:disabled) { background: #fde68a; }
+.compras-btn-asiento:disabled { opacity: .6; cursor: default; }
+
 /* ── Paginación ─────────────────────────────────────────────────── */
 .compras-pagination {
   display: flex;
