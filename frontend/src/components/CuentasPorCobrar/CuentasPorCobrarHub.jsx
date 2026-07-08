@@ -241,11 +241,32 @@ function TabHistorial() {
   );
 }
 
+function TabProximamente({ nombre }) {
+  return (
+    <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted,#64748b)' }}>
+      <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🚧</div>
+      <h3 style={{ margin: '0 0 0.5rem', color: '#1e293b' }}>{nombre}</h3>
+      <p style={{ margin: 0 }}>Este módulo estará disponible próximamente.</p>
+    </div>
+  );
+}
+
 // ─── CuentasPorCobrarHub — componente principal ─────────────────
 export default function CuentasPorCobrarHub() {
   const [tabActivo, setTabActivo] = useState('vigentes');
   const [modalCobro, setModalCobro] = useState(null);
   const [refresco, setRefresco] = useState(0);
+
+  const tabs = [
+    { id: 'vigentes',   label: 'Cuentas vigentes' },
+    { id: 'canceladas', label: 'Cuentas canceladas' },
+    { id: 'historial',  label: 'Historial de cobros' },
+    { id: 'cheques',    label: 'Cheques' },
+    { id: 'ordenes',    label: 'Órdenes de pago' },
+    { id: 'recibos',    label: 'Recibos' },
+    { id: 'importar',   label: 'Importar' },
+    { id: 'reportes',   label: 'Reportes' },
+  ];
 
   return (
     <div style={{ padding: '1.5rem' }}>
@@ -253,15 +274,22 @@ export default function CuentasPorCobrarHub() {
         <h1>💰 Cuentas por Cobrar</h1>
       </div>
 
-      <div className="bancos-tabs">
-        <button className={`bancos-tab ${tabActivo === 'vigentes' ? 'active' : ''}`} onClick={() => setTabActivo('vigentes')}>Vigentes</button>
-        <button className={`bancos-tab ${tabActivo === 'canceladas' ? 'active' : ''}`} onClick={() => setTabActivo('canceladas')}>Canceladas</button>
-        <button className={`bancos-tab ${tabActivo === 'historial' ? 'active' : ''}`} onClick={() => setTabActivo('historial')}>Historial de cobros</button>
+      <div className="bancos-tabs" style={{ flexWrap: 'wrap' }}>
+        {tabs.map((t) => (
+          <button key={t.id} className={`bancos-tab ${tabActivo === t.id ? 'active' : ''}`} onClick={() => setTabActivo(t.id)}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {tabActivo === 'vigentes' && <TabFacturas estado="vigentes" onCobrar={setModalCobro} key={`vig-${refresco}`} />}
+      {tabActivo === 'vigentes'   && <TabFacturas estado="vigentes"   onCobrar={setModalCobro} key={`vig-${refresco}`} />}
       {tabActivo === 'canceladas' && <TabFacturas estado="canceladas" key={`can-${refresco}`} />}
-      {tabActivo === 'historial' && <TabHistorial key={`hist-${refresco}`} />}
+      {tabActivo === 'historial'  && <TabHistorial key={`hist-${refresco}`} />}
+      {tabActivo === 'cheques'    && <TabProximamente nombre="Cheques recibidos" />}
+      {tabActivo === 'ordenes'    && <TabProximamente nombre="Órdenes de pago" />}
+      {tabActivo === 'recibos'    && <TabProximamente nombre="Recibos" />}
+      {tabActivo === 'importar'   && <TabProximamente nombre="Importar cobros" />}
+      {tabActivo === 'reportes'   && <TabProximamente nombre="Reportes de CxC" />}
 
       {modalCobro && (
         <ModalCobro

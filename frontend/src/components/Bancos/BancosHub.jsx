@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../../services/api';
+import ComprobantesView from './ComprobantesView';
 import { formatFechaCorta } from '../../utils/fecha';
 import './Bancos.css';
 
@@ -618,6 +619,16 @@ export default function BancosHub() {
     setCuentaEditar(cuenta);
     setModalCuenta(true);
   };
+
+  // Comprobantes bancarios van en su propia vista
+  const tipoComprobante = { ingreso: 'INGRESO', pago: 'PAGO', credito: 'CREDITO', debito: 'DEBITO' }[urlTab];
+  if (tipoComprobante) {
+    return (
+      <div style={{ padding: '1.5rem' }}>
+        <ComprobantesView tipo={tipoComprobante} key={urlTab} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '1.5rem' }}>
