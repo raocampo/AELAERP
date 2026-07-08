@@ -2,6 +2,7 @@
   display: grid;
   gap: 1.25rem;
 }
+.clientes-page > * { min-width: 0; }
 
 .clientes-header,
 .clientes-summary,
@@ -98,6 +99,7 @@
 .clientes-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 620px;
   font-size: 0.92rem;
 }
 
