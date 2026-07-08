@@ -204,6 +204,91 @@ router.post('/pagos', autorizarPermiso('cxp.gestionar'), async (req, res) => {
   }
 });
 
+// GET /api/cxp/reporte/antiguedad — antigüedad de saldos por rangos
+router.get('/reporte/antiguedad', autorizarPermiso('cxp.ver'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const hoy = new Date();
+
+    const compras = await db.facturas_compra.findMany({
+      where: { empresaId, anulada: false },
+      select: { id: true, numeroFactura: true, fechaEmision: true, importeTotal: true, razonSocialProveedor: true, identificacionProveedor: true, proveedorId: true },
+    });
+
+    const pagado = await obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id));
+    const vigentes = compras
+      .map((c) => ({ ...c, pagado: pagado.get(c.id) || 0, saldoPendiente: round2(c.importeTotal - (pagado.get(c.id) || 0)) }))
+      .filter((c) => c.saldoPendiente > 0.009);
+
+    const totales = { d0_30: 0, d31_60: 0, d61_90: 0, d91_mas: 0 };
+    const detalle = { d0_30: [], d31_60: [], d61_90: [], d91_mas: [] };
+    vigentes.forEach((c) => {
+      const dias = Math.floor((hoy - new Date(c.fechaEmision)) / (1000 * 60 * 60 * 24));
+      const rango = dias <= 30 ? 'd0_30' : dias <= 60 ? 'd31_60' : dias <= 90 ? 'd61_90' : 'd91_mas';
+      totales[rango] = round2(totales[rango] + c.saldoPendiente);
+      detalle[rango].push({ ...c, diasVencidos: dias });
+    });
+
+    res.json({ success: true, data: { totales, detalle, totalGeneral: round2(vigentes.reduce((s, c) => s + c.saldoPendiente, 0)) } });
+  } catch (error) {
+    console.error('GET /cxp/reporte/antiguedad:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo generar el reporte' });
+  }
+});
+
+// GET /api/cxp/reporte/estado-cuenta — proveedores con saldo o detalle de uno
+router.get('/reporte/estado-cuenta', autorizarPermiso('cxp.ver'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const proveedorId = parseIntSafe(req.query.proveedorId);
+
+    if (!proveedorId) {
+      const compras = await db.facturas_compra.findMany({
+        where: { empresaId, anulada: false },
+        select: { id: true, proveedorId: true, importeTotal: true, razonSocialProveedor: true, identificacionProveedor: true },
+      });
+      const pagado = await obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id));
+      const proveedoresMap = new Map();
+      compras.forEach((c) => {
+        const saldo = round2(c.importeTotal - (pagado.get(c.id) || 0));
+        if (saldo > 0.009) {
+          const key = c.identificacionProveedor || `noid-${c.id}`;
+          if (!proveedoresMap.has(key)) proveedoresMap.set(key, { razonSocial: c.razonSocialProveedor, identificacion: c.identificacionProveedor, proveedorId: c.proveedorId, saldoTotal: 0 });
+          proveedoresMap.get(key).saldoTotal = round2(proveedoresMap.get(key).saldoTotal + saldo);
+        }
+      });
+      return res.json({ success: true, data: Array.from(proveedoresMap.values()).sort((a, b) => b.saldoTotal - a.saldoTotal) });
+    }
+
+    const [compras, pagos] = await Promise.all([
+      db.facturas_compra.findMany({
+        where: { empresaId, proveedorId, anulada: false },
+        select: { id: true, numeroFactura: true, fechaEmision: true, importeTotal: true },
+        orderBy: { fechaEmision: 'asc' },
+      }),
+      db.pagos_proveedor.findMany({
+        where: { empresaId, proveedorId, anulado: false },
+        select: { id: true, numero: true, fecha: true, monto: true, metodoPago: true, compraId: true },
+        orderBy: { fecha: 'asc' },
+      }),
+    ]);
+    const pagado = await obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id));
+
+    res.json({
+      success: true,
+      data: {
+        compras: compras.map((c) => ({ ...c, pagado: pagado.get(c.id) || 0, saldoPendiente: round2(c.importeTotal - (pagado.get(c.id) || 0)) })),
+        pagos,
+      },
+    });
+  } catch (error) {
+    console.error('GET /cxp/reporte/estado-cuenta:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo generar el reporte' });
+  }
+});
+
 // PATCH /api/cxp/pagos/:id/anular
 router.patch('/pagos/:id/anular', autorizarPermiso('cxp.gestionar'), async (req, res) => {
   try {

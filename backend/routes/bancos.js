@@ -309,6 +309,48 @@ router.post('/:id/movimientos', autorizarPermiso('bancos.gestionar'), async (req
   }
 });
 
+// PATCH /api/bancos/movimientos/:movId/conciliar — marcar/desmarcar conciliado
+router.patch('/movimientos/:movId/conciliar', autorizarPermiso('bancos.gestionar'), async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const movId = parseIntSafe(req.params.movId);
+    if (!movId) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const { conciliado } = req.body;
+    const mov = await prisma.movimientos_bancarios.findFirst({ where: { id: movId, empresaId } });
+    if (!mov) return res.status(404).json({ success: false, mensaje: 'Movimiento no encontrado' });
+
+    await prisma.movimientos_bancarios.update({ where: { id: movId }, data: { conciliado: Boolean(conciliado) } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('PATCH /bancos/movimientos/:movId/conciliar:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al actualizar conciliación' });
+  }
+});
+
+// PATCH /api/bancos/:id/movimientos/conciliar-lote — conciliar/desconciliar múltiples
+router.patch('/:id/movimientos/conciliar-lote', autorizarPermiso('bancos.gestionar'), async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const bancoId = parseIntSafe(req.params.id);
+    if (!bancoId) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const { ids, conciliado } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'ids debe ser un arreglo no vacío' });
+    }
+
+    const result = await prisma.movimientos_bancarios.updateMany({
+      where: { id: { in: ids.map((id) => parseInt(id, 10)) }, bancoId, empresaId },
+      data: { conciliado: Boolean(conciliado) },
+    });
+    res.json({ success: true, data: { count: result.count } });
+  } catch (error) {
+    console.error('PATCH /bancos/:id/movimientos/conciliar-lote:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al conciliar movimientos' });
+  }
+});
+
 // DELETE /api/bancos/movimientos/:movId — eliminar movimiento manual
 router.delete('/movimientos/:movId', autorizarPermiso('bancos.gestionar'), async (req, res) => {
   try {

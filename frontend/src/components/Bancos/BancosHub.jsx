@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import ComprobantesView from './ComprobantesView';
+import LibroBancos from './LibroBancos';
 import { formatFechaCorta } from '../../utils/fecha';
 import './Bancos.css';
 
@@ -619,6 +620,18 @@ export default function BancosHub() {
     setCuentaEditar(cuenta);
     setModalCuenta(true);
   };
+
+  // Libro de Bancos
+  if (urlTab === 'libro') {
+    return (
+      <div style={{ padding: '1.5rem' }}>
+        <div className="bancos-header" style={{ marginBottom: '1.25rem' }}>
+          <h1>📖 Libro de Bancos</h1>
+        </div>
+        <LibroBancos />
+      </div>
+    );
+  }
 
   // Comprobantes bancarios van en su propia vista
   const tipoComprobante = { ingreso: 'INGRESO', pago: 'PAGO', credito: 'CREDITO', debito: 'DEBITO' }[urlTab];

@@ -251,6 +251,218 @@ function TabProximamente({ nombre }) {
   );
 }
 
+// ─── Tab Reportes CxP ──────────────────────────────────────────
+function TabReportesCxP() {
+  const [vista, setVista] = useState('antiguedad');
+  const [antiguedad, setAntiguedad] = useState(null);
+  const [cargandoAnt, setCargandoAnt] = useState(false);
+  const [proveedoresList, setProveedoresList] = useState([]);
+  const [cargandoProvs, setCargandoProvs] = useState(false);
+  const [provSeleccionado, setProvSeleccionado] = useState(null);
+  const [estadoCuenta, setEstadoCuenta] = useState(null);
+  const [cargandoEc, setCargandoEc] = useState(false);
+
+  useEffect(() => {
+    if (vista === 'antiguedad' && !antiguedad) {
+      setCargandoAnt(true);
+      api.get('/cxp/reporte/antiguedad').then((r) => setAntiguedad(r.data?.data || null)).catch(() => {}).finally(() => setCargandoAnt(false));
+    }
+    if (vista === 'estado-cuenta' && proveedoresList.length === 0) {
+      setCargandoProvs(true);
+      api.get('/cxp/reporte/estado-cuenta').then((r) => setProveedoresList(r.data?.data || [])).catch(() => {}).finally(() => setCargandoProvs(false));
+    }
+  }, [vista]); // eslint-disable-line
+
+  const verEstadoCuenta = async (prov) => {
+    setProvSeleccionado(prov);
+    if (!prov.proveedorId) return;
+    setCargandoEc(true);
+    try {
+      const r = await api.get(`/cxp/reporte/estado-cuenta?proveedorId=${prov.proveedorId}`);
+      setEstadoCuenta(r.data?.data || null);
+    } catch (e) { console.error(e); }
+    finally { setCargandoEc(false); }
+  };
+
+  const RANGOS = [
+    { key: 'd0_30', label: '0 – 30 días' },
+    { key: 'd31_60', label: '31 – 60 días' },
+    { key: 'd61_90', label: '61 – 90 días' },
+    { key: 'd91_mas', label: '> 90 días' },
+  ];
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        <button className={`bancos-tab ${vista === 'antiguedad' ? 'active' : ''}`} onClick={() => setVista('antiguedad')}>
+          📊 Antigüedad de saldos
+        </button>
+        <button className={`bancos-tab ${vista === 'estado-cuenta' ? 'active' : ''}`} onClick={() => setVista('estado-cuenta')}>
+          📋 Estado de cuenta por proveedor
+        </button>
+      </div>
+
+      {vista === 'antiguedad' && (
+        <div>
+          {cargandoAnt ? (
+            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted, #64748b)' }}>Cargando reporte...</p>
+          ) : !antiguedad ? null : (
+            <>
+              <div className="saldo-resumen" style={{ marginBottom: '1.25rem' }}>
+                {RANGOS.map((r) => (
+                  <div key={r.key} className="saldo-item">
+                    <div className="saldo-item-label">{r.label}</div>
+                    <div className="saldo-item-valor" style={{ color: antiguedad.totales[r.key] > 0 ? (r.key === 'd91_mas' ? '#dc2626' : r.key === 'd61_90' ? '#d97706' : '#2563eb') : 'inherit' }}>
+                      ${parseFloat(antiguedad.totales[r.key] || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                ))}
+                <div className="saldo-item">
+                  <div className="saldo-item-label">TOTAL</div>
+                  <div className="saldo-item-valor" style={{ fontWeight: 800 }}>
+                    ${parseFloat(antiguedad.totalGeneral || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+
+              {RANGOS.map((r) => antiguedad.detalle[r.key]?.length > 0 && (
+                <div key={r.key} style={{ marginBottom: '1.5rem' }}>
+                  <h3 style={{ fontSize: '0.92rem', fontWeight: 700, margin: '0 0 0.5rem', color: r.key === 'd91_mas' ? '#dc2626' : r.key === 'd61_90' ? '#d97706' : '#1e293b' }}>
+                    {r.label} ({antiguedad.detalle[r.key].length} compras)
+                  </h3>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="movimientos-tabla">
+                      <thead>
+                        <tr>
+                          <th>Compra</th><th>Proveedor</th><th>Fecha emisión</th><th>Días</th>
+                          <th style={{ textAlign: 'right' }}>Total</th>
+                          <th style={{ textAlign: 'right' }}>Pagado</th>
+                          <th style={{ textAlign: 'right' }}>Saldo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {antiguedad.detalle[r.key].map((c) => (
+                          <tr key={c.id}>
+                            <td style={{ fontWeight: 600 }}>{c.numeroFactura}</td>
+                            <td>{c.razonSocialProveedor}</td>
+                            <td>{formatFechaCorta(c.fechaEmision)}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 600, color: r.key === 'd91_mas' ? '#dc2626' : 'inherit' }}>{c.diasVencidos}</td>
+                            <td style={{ textAlign: 'right' }}>${parseFloat(c.importeTotal).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td style={{ textAlign: 'right' }}>${parseFloat(c.pagado).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 700 }}>${parseFloat(c.saldoPendiente).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {vista === 'estado-cuenta' && (
+        <div style={{ display: 'grid', gridTemplateColumns: provSeleccionado ? '280px 1fr' : '1fr', gap: '1rem' }}>
+          <div>
+            <h3 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 0.75rem' }}>Proveedores con saldo</h3>
+            {cargandoProvs ? (
+              <p style={{ color: 'var(--color-text-muted, #64748b)', fontSize: '0.85rem' }}>Cargando...</p>
+            ) : proveedoresList.length === 0 ? (
+              <p style={{ color: 'var(--color-text-muted, #64748b)', fontSize: '0.85rem' }}>Sin saldos pendientes</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                {proveedoresList.map((p, i) => (
+                  <button
+                    key={i}
+                    onClick={() => verEstadoCuenta(p)}
+                    style={{
+                      textAlign: 'left', padding: '0.6rem 0.8rem', border: '1px solid #e2e8f0', borderRadius: '6px',
+                      background: provSeleccionado?.identificacion === p.identificacion ? 'var(--color-primary-50, #eff6ff)' : 'white',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{p.razonSocial}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted, #64748b)' }}>{p.identificacion}</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#dc2626', marginTop: '0.25rem' }}>
+                      ${parseFloat(p.saldoTotal).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {provSeleccionado && (
+            <div>
+              <h3 style={{ fontSize: '0.92rem', fontWeight: 700, margin: '0 0 0.75rem' }}>
+                Estado de cuenta — {provSeleccionado.razonSocial}
+              </h3>
+              {cargandoEc ? (
+                <p style={{ color: 'var(--color-text-muted, #64748b)', fontSize: '0.85rem' }}>Cargando...</p>
+              ) : estadoCuenta ? (
+                <>
+                  <h4 style={{ fontSize: '0.82rem', fontWeight: 700, margin: '0 0 0.4rem', color: '#475569' }}>Compras</h4>
+                  <div style={{ overflowX: 'auto', marginBottom: '1rem' }}>
+                    <table className="movimientos-tabla">
+                      <thead>
+                        <tr>
+                          <th>Compra</th><th>Fecha</th>
+                          <th style={{ textAlign: 'right' }}>Total</th>
+                          <th style={{ textAlign: 'right' }}>Pagado</th>
+                          <th style={{ textAlign: 'right' }}>Saldo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {estadoCuenta.compras.map((c) => (
+                          <tr key={c.id}>
+                            <td style={{ fontWeight: 600 }}>{c.numeroFactura}</td>
+                            <td>{formatFechaCorta(c.fechaEmision)}</td>
+                            <td style={{ textAlign: 'right' }}>${parseFloat(c.importeTotal).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td style={{ textAlign: 'right' }}>${parseFloat(c.pagado).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: c.saldoPendiente > 0 ? '#dc2626' : '#16a34a' }}>
+                              ${parseFloat(c.saldoPendiente).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {estadoCuenta.pagos.length > 0 && (
+                    <>
+                      <h4 style={{ fontSize: '0.82rem', fontWeight: 700, margin: '0 0 0.4rem', color: '#475569' }}>Pagos registrados</h4>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="movimientos-tabla">
+                          <thead>
+                            <tr><th>N° Orden de pago</th><th>Fecha</th><th>Método</th><th style={{ textAlign: 'right' }}>Monto</th></tr>
+                          </thead>
+                          <tbody>
+                            {estadoCuenta.pagos.map((p) => (
+                              <tr key={p.id}>
+                                <td style={{ fontWeight: 600 }}>{p.numero}</td>
+                                <td>{formatFechaCorta(p.fecha)}</td>
+                                <td>{p.metodoPago}</td>
+                                <td style={{ textAlign: 'right', fontWeight: 700 }} className="monto-haber">
+                                  ${parseFloat(p.monto).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : null}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── CuentasPorPagarHub — componente principal ──────────────────
 export default function CuentasPorPagarHub() {
   const [tabActivo, setTabActivo] = useState('vigentes');
@@ -285,7 +497,7 @@ export default function CuentasPorPagarHub() {
       {tabActivo === 'historial'      && <TabHistorial key={`hist-${refresco}`} />}
       {tabActivo === 'tarjetas'       && <TabProximamente nombre="Tarjetas de crédito" />}
       {tabActivo === 'libro-tarjetas' && <TabProximamente nombre="Libro tarjetas de crédito" />}
-      {tabActivo === 'reportes'       && <TabProximamente nombre="Reportes de CxP" />}
+      {tabActivo === 'reportes'       && <TabReportesCxP />}
 
       {modalPago && (
         <ModalPago
