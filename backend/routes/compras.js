@@ -550,7 +550,22 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    res.json({ success: true, data: { ...compra, cuentaGasto } });
+    // Verificar si ya existe un asiento contable para esta compra
+    const asientoExistente = await prisma.asientos_contables.findFirst({
+      where: { empresaId: compra.empresaId, tipo: 'COMPRA', referencia: `COMP-${compra.id}` },
+      select: { id: true, numero: true, cerrado: true },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...compra,
+        cuentaGasto,
+        tieneAsientoContable: Boolean(asientoExistente),
+        asientoId: asientoExistente?.id || null,
+        asientoCerrado: asientoExistente?.cerrado || false,
+      },
+    });
   } catch (error) {
     console.error('GET /compras/:id:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo cargar la compra' });
@@ -1435,6 +1450,53 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
   } catch (error) {
     console.error('POST /compras/:id/registrar-inventario:', error);
     res.status(500).json({ success: false, mensaje: error.message || 'Error al registrar inventario' });
+  }
+});
+
+// POST /api/compras/:id/regenerar-asiento — elimina el asiento COMPRA existente y crea uno nuevo
+// Útil para actualizar el asiento cuando se cambia la cuentaGastoId u otro dato relevante.
+router.post('/:id/regenerar-asiento', autorizarPermiso('compras.gestionar'), async (req, res) => {
+  try {
+    const compraId = parseInt(req.params.id, 10);
+    const empresaId = req.empresa.id;
+
+    const compra = await prisma.facturas_compra.findFirst({ where: { id: compraId, empresaId } });
+    if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
+    if (compra.anulada) return res.status(400).json({ success: false, mensaje: 'La compra está anulada — no se puede regenerar' });
+
+    const asientoExistente = await prisma.asientos_contables.findFirst({
+      where: { empresaId, tipo: 'COMPRA', referencia: `COMP-${compraId}` },
+      select: { id: true, cerrado: true, bloqueado: true },
+    });
+
+    if (asientoExistente) {
+      if (asientoExistente.cerrado) {
+        return res.status(400).json({ success: false, mensaje: 'El asiento está en un período cerrado y no puede modificarse' });
+      }
+      if (asientoExistente.bloqueado) {
+        return res.status(400).json({ success: false, mensaje: 'El asiento está bloqueado. Desblóqueelo desde Contabilidad antes de regenerar' });
+      }
+      // Eliminar el asiento viejo y sus líneas
+      await prisma.$transaction(async (tx) => {
+        await tx.asientos_contables_detalle.deleteMany({ where: { asientoId: asientoExistente.id } });
+        await tx.asientos_contables.delete({ where: { id: asientoExistente.id } });
+      });
+    }
+
+    const resultado = await crearAsientoFacturaCompraRegistrada({
+      compraId,
+      usuarioId: req.usuario?.id,
+      fecha: compra.fechaEmision || new Date(),
+    });
+
+    res.json({
+      success: true,
+      mensaje: asientoExistente ? 'Asiento regenerado con la cuenta de gasto actualizada' : 'Asiento generado',
+      data: resultado.asiento,
+    });
+  } catch (error) {
+    console.error('POST /compras/:id/regenerar-asiento:', error);
+    res.status(500).json({ success: false, mensaje: error.message || 'No se pudo regenerar el asiento' });
   }
 });
 

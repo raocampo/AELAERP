@@ -157,11 +157,28 @@ const GRUPOS_MENU = [
     icon: '💼',
     label: 'Contabilidad',
     items: [
-      { to: '/contabilidad', icon: '💼', label: 'Contabilidad', planMin: 'pro',    permiso: 'contabilidad.ver', modulo: 'contabilidadHabilitada' },
-      { to: '/bancos',       icon: '🏦', label: 'Bancos',       planMin: 'medium', permiso: 'bancos.ver' },
-      { to: '/cuentas-por-cobrar', icon: '💰', label: 'Cuentas por Cobrar', planMin: 'medium', permiso: 'cxc.ver' },
-      { to: '/cuentas-por-pagar',  icon: '💳', label: 'Cuentas por Pagar',  planMin: 'medium', permiso: 'cxp.ver' },
-      { to: '/caja-chica',         icon: '💵', label: 'Caja Chica',         planMin: 'medium', permiso: 'cajaChica.ver' },
+      { to: '/contabilidad?tab=diario',   icon: '📒', label: 'Libro Diario',          planMin: 'pro',    permiso: 'contabilidad.ver', modulo: 'contabilidadHabilitada' },
+      { to: '/contabilidad?tab=plan',     icon: '🗂️', label: 'Plan de Cuentas',        planMin: 'pro',    permiso: 'contabilidad.ver', modulo: 'contabilidadHabilitada' },
+      { to: '/contabilidad?tab=periodos', icon: '📅', label: 'Períodos Contables',     planMin: 'pro',    permiso: 'contabilidad.ver', modulo: 'contabilidadHabilitada' },
+      { to: '/contabilidad?tab=mayor',    icon: '📖', label: 'Libro Mayor',            planMin: 'pro',    permiso: 'contabilidad.ver', modulo: 'contabilidadHabilitada' },
+      { to: '/contabilidad?tab=cierre',   icon: '📊', label: 'Estados Financieros',    planMin: 'pro',    permiso: 'contabilidad.ver', modulo: 'contabilidadHabilitada' },
+      { to: '/contabilidad',              icon: '⚙️', label: 'Configuración Contable', planMin: 'pro',    permiso: 'contabilidad.ver', modulo: 'contabilidadHabilitada' },
+      { to: '/cuentas-por-cobrar',        icon: '💰', label: 'Cuentas por Cobrar',     planMin: 'medium', permiso: 'cxc.ver' },
+      { to: '/cuentas-por-pagar',         icon: '💳', label: 'Cuentas por Pagar',      planMin: 'medium', permiso: 'cxp.ver' },
+      { to: '/caja-chica',                icon: '💵', label: 'Caja Chica',             planMin: 'medium', permiso: 'cajaChica.ver' },
+    ],
+  },
+  {
+    id: 'bancos',
+    icon: '🏦',
+    label: 'Bancos',
+    items: [
+      { to: '/bancos',             icon: '🏦', label: 'Cuentas Bancarias',       planMin: 'medium', permiso: 'bancos.ver' },
+      { to: '/bancos?tab=libro',   icon: '📋', label: 'Libro de Bancos',         planMin: 'medium', permiso: 'bancos.ver' },
+      { to: '/bancos?tab=ingreso', icon: '⬇️', label: 'Comprobantes de Ingreso', planMin: 'medium', permiso: 'bancos.gestionar' },
+      { to: '/bancos?tab=pago',    icon: '⬆️', label: 'Comprobantes de Pago',    planMin: 'medium', permiso: 'bancos.gestionar' },
+      { to: '/bancos?tab=credito', icon: '✚',  label: 'Notas de Crédito',        planMin: 'medium', permiso: 'bancos.gestionar' },
+      { to: '/bancos?tab=debito',  icon: '−',  label: 'Notas de Débito',         planMin: 'medium', permiso: 'bancos.gestionar' },
     ],
   },
   {
@@ -203,9 +220,10 @@ const GRUPOS_MENU = [
 /** Devuelve el id del grupo que contiene la ruta activa (null si es ítem suelto) */
 function grupoDeRuta(pathname) {
   for (const grupo of GRUPOS_MENU) {
-    const match = grupo.items.some(
-      (item) => pathname === item.to || pathname.startsWith(item.to + '/')
-    );
+    const match = grupo.items.some((item) => {
+      const itemPath = item.to.split('?')[0];
+      return pathname === itemPath || pathname.startsWith(itemPath + '/');
+    });
     if (match) return grupo.id;
   }
   return null;
@@ -422,9 +440,10 @@ export default function Layout() {
             if (itemsProcesados.length === 0) return null;
 
             const isOpen   = !!gruposAbiertos[grupo.id];
-            const isActive = itemsProcesados.some(
-              (item) => location.pathname === item.to || location.pathname.startsWith(item.to + '/')
-            );
+            const isActive = itemsProcesados.some((item) => {
+              const itemPath = item.to.split('?')[0];
+              return location.pathname === itemPath || location.pathname.startsWith(itemPath + '/');
+            });
 
             // En modo colapsado: mostrar solo el icono del grupo; clic expande el sidebar
             if (sidebarColapsado) {
@@ -469,7 +488,13 @@ export default function Layout() {
                         <NavLink
                           key={item.to}
                           to={item.to}
-                          className={({ isActive: active }) => `sidebar-sublink ${active ? 'active' : ''}`}
+                          className={() => {
+                            const itemPath = item.to.split('?')[0];
+                            const itemSearch = item.to.includes('?') ? '?' + item.to.split('?')[1] : '';
+                            const pathMatch = location.pathname === itemPath || location.pathname.startsWith(itemPath + '/');
+                            const searchMatch = !itemSearch || location.search === itemSearch;
+                            return `sidebar-sublink ${pathMatch && searchMatch ? 'active' : ''}`;
+                          }}
                         >
                           {item.icon} {item.label}
                         </NavLink>

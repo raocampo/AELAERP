@@ -169,6 +169,41 @@
   margin-bottom: 12px;
 }
 
+.conta-origen-doc {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.conta-origen-doc.conta-origen-loading {
+  color: #64748b;
+  font-style: italic;
+}
+.conta-origen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.conta-origen-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  color: #1e40af;
+}
+.btn-link {
+  background: none;
+  border: none;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  text-decoration: underline;
+}
+.btn-link:hover { color: #1d4ed8; }
+
 .conta-mini-list {
   display: grid;
   gap: 8px;

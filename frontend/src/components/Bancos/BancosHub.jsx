@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import './Bancos.css';
@@ -100,12 +101,15 @@ function ModalCuenta({ cuenta, onClose, onSaved }) {
               <label>Titular</label>
               <input name="titular" value={form.titular} onChange={handleChange} placeholder="Nombre del titular" />
             </div>
-            {!cuenta?.id && (
-              <div className="form-group">
-                <label>Saldo inicial</label>
-                <input name="saldoInicial" type="number" step="0.01" value={form.saldoInicial} onChange={handleChange} />
-              </div>
-            )}
+            <div className="form-group">
+              <label>Saldo inicial</label>
+              <input name="saldoInicial" type="number" step="0.01" value={form.saldoInicial} onChange={handleChange} />
+              {cuenta?.id && (
+                <small style={{ color: 'var(--color-warning, #b45309)', fontSize: '0.78rem' }}>
+                  ⚠ Cambiar el saldo inicial recalcula el saldo actual. Usar solo para corregir errores de carga.
+                </small>
+              )}
+            </div>
             <div className="form-group full-col">
               <label>Cuenta contable (Plan de Cuentas)</label>
               <select name="cuentaContableId" value={form.cuentaContableId} onChange={handleChange}>
@@ -321,13 +325,28 @@ function ModalCheque({ bancoId, onClose, onSaved }) {
   );
 }
 
+const TAB_TIPO_MOV = {
+  ingreso: 'DEPOSITO',
+  pago: 'RETIRO',
+  credito: 'NOTA_CREDITO',
+  debito: 'NOTA_DEBITO',
+};
+
+const TAB_LABELS = {
+  libro: 'Libro de Bancos',
+  ingreso: 'Comprobantes de Ingreso',
+  pago: 'Comprobantes de Pago',
+  credito: 'Notas de Crédito Bancarias',
+  debito: 'Notas de Débito Bancarias',
+};
+
 // ─── Tab Movimientos ─────────────────────────────────────────
-function TabMovimientos({ cuenta }) {
+function TabMovimientos({ cuenta, initialTipo = '' }) {
   const [movimientos, setMovimientos] = useState([]);
   const [saldo, setSaldo] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [modalMov, setModalMov] = useState(false);
-  const [filtros, setFiltros] = useState({ fechaDesde: '', fechaHasta: '', tipo: '' });
+  const [filtros, setFiltros] = useState({ fechaDesde: '', fechaHasta: '', tipo: initialTipo });
 
   const cargar = useCallback(async () => {
     if (!cuenta) return;
@@ -547,6 +566,11 @@ function TabCheques({ cuenta }) {
 
 // ─── BancosHub — componente principal ────────────────────────
 export default function BancosHub() {
+  const location = useLocation();
+  const urlTab = new URLSearchParams(location.search).get('tab') || 'cuentas';
+  const movTipoFiltro = TAB_TIPO_MOV[urlTab] || '';
+  const viewLabel = TAB_LABELS[urlTab] || 'Cuentas Bancarias';
+
   const [cuentas, setCuentas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [cuentaSeleccionada, setCuentaSeleccionada] = useState(null);
@@ -598,7 +622,7 @@ export default function BancosHub() {
   return (
     <div style={{ padding: '1.5rem' }}>
       <div className="bancos-header">
-        <h1>🏦 Cuentas Bancarias</h1>
+        <h1>🏦 {viewLabel}</h1>
         <button className="btn btn-primary" onClick={() => { setCuentaEditar(null); setModalCuenta(true); }}>
           + Nueva Cuenta
         </button>
@@ -676,7 +700,7 @@ export default function BancosHub() {
                 </button>
               </div>
 
-              {tabActivo === 'movimientos' && <TabMovimientos cuenta={cuentaSeleccionada} key={`mov-${cuentaSeleccionada.id}`} />}
+              {tabActivo === 'movimientos' && <TabMovimientos cuenta={cuentaSeleccionada} key={`mov-${cuentaSeleccionada.id}-${urlTab}`} initialTipo={movTipoFiltro} />}
               {tabActivo === 'cheques'     && <TabCheques     cuenta={cuentaSeleccionada} key={`chq-${cuentaSeleccionada.id}`} />}
             </div>
           )}

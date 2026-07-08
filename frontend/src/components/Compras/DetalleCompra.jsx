@@ -80,6 +80,9 @@ export default function DetalleCompra() {
   const [modalAsiento, setModalAsiento] = useState(null);
   const [cargandoAsiento, setCargandoAsiento] = useState(false);
 
+  // Regenerar asiento contable
+  const [regenerandoAsiento, setRegenerandoAsiento] = useState(false);
+
   // Modal eliminar definitivamente
   const [modalEliminar, setModalEliminar] = useState(false);
   const [eliminando, setEliminando] = useState(false);
@@ -208,6 +211,19 @@ export default function DetalleCompra() {
       toast.error(err.response?.data?.mensaje || 'Error al registrar inventario');
     } finally {
       setRegistrandoInv(false);
+    }
+  };
+
+  const regenerarAsiento = async () => {
+    setRegenerandoAsiento(true);
+    try {
+      const res = await api.post(`/compras/${id}/regenerar-asiento`);
+      toast.success(res.data?.mensaje || 'Asiento regenerado');
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo regenerar el asiento');
+    } finally {
+      setRegenerandoAsiento(false);
     }
   };
 
@@ -584,6 +600,12 @@ export default function DetalleCompra() {
           {!compra.anulada && (
             <button className="btn-secondary" onClick={abrirModalCuenta} title="Configurar cuenta contable de gasto para el asiento automático">
               📒 Cuenta contable
+            </button>
+          )}
+          {!compra.anulada && compra.tieneAsientoContable && !compra.asientoCerrado && (
+            <button className="btn-secondary" onClick={regenerarAsiento} disabled={regenerandoAsiento}
+              title="Elimina el asiento actual y genera uno nuevo con la cuenta de gasto configurada">
+              {regenerandoAsiento ? 'Regenerando…' : '↺ Regenerar asiento'}
             </button>
           )}
           {!compra.anulada && (

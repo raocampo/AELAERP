@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { normalizarPeriodoMMYYYY } from '../../utils/periodo';
@@ -10,10 +10,19 @@ import './ContabilidadHub.css';
 const toMoney = (n) => Number(n || 0).toLocaleString('es-EC', { style: 'currency', currency: 'USD' });
 const crearDetalleVacio = () => ({ cuentaId: '', centroCostoId: '', descripcion: '', debe: '', haber: '' });
 
+const TABS_VALIDOS = ['resumen', 'diario', 'mayor', 'cierre', 'periodos', 'plan', 'centros-costo'];
+
 const ContabilidadHub = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('resumen');
+  const [tab, setTab] = useState(() => {
+    const urlTab = searchParams.get('tab');
+    return TABS_VALIDOS.includes(urlTab) ? urlTab : 'resumen';
+  });
+
+  const [origenDoc, setOrigenDoc] = useState(null);
+  const [cargandoOrigen, setCargandoOrigen] = useState(false);
 
   const [plan, setPlan] = useState([]);
   const [subTabRef, setSubTabRef] = useState('compras');
@@ -620,6 +629,33 @@ const ContabilidadHub = () => {
     }
   };
 
+  // Cargar doc origen cuando la referencia del asiento apunta a una compra/factura
+  useEffect(() => {
+    const ref = asientoForm.referencia;
+    const tipo = asientoForm.tipo;
+    if (!ref || !tipo) { setOrigenDoc(null); return; }
+
+    let url = null;
+    let docTipo = null;
+    let docId = null;
+
+    if (['COMPRA', 'ANULACION'].includes(tipo)) {
+      const m = ref.match(/^COMP-(?:ANUL-)?(\d+)$/);
+      if (m) { url = `/compras/${m[1]}`; docTipo = 'compra'; docId = m[1]; }
+    } else if (['FACTURA', 'COSTO_VENTA'].includes(tipo)) {
+      const m = ref.match(/^FAC-(?:COSTO-)?(\d+)$/);
+      if (m) { url = `/facturas/${m[1]}`; docTipo = 'factura'; docId = m[1]; }
+    }
+
+    if (!url) { setOrigenDoc(null); return; }
+
+    setCargandoOrigen(true);
+    api.get(url)
+      .then((res) => setOrigenDoc({ tipo: docTipo, id: docId, data: res.data?.data || null }))
+      .catch(() => setOrigenDoc(null))
+      .finally(() => setCargandoOrigen(false));
+  }, [asientoForm.referencia, asientoForm.tipo]);
+
   const limpiarAsientoForm = () => {
     setAsientoForm({
       id: null,
@@ -630,6 +666,7 @@ const ContabilidadHub = () => {
       detalles: [crearDetalleVacio(), crearDetalleVacio()],
     });
     setAsientoSoloLectura(false);
+    setOrigenDoc(null);
   };
 
   const cambiarDetalle = (index, key, value) => {
@@ -957,6 +994,35 @@ const ContabilidadHub = () => {
               <div className="conta-warning">
                 ⚠ Este es un asiento automático (tipo {asientoForm.tipo}). Editarlo puede romper la
                 trazabilidad con el documento fuente (factura, compra, nómina, etc.).
+              </div>
+            )}
+            {cargandoOrigen && (
+              <div className="conta-origen-doc conta-origen-loading">Cargando documento origen...</div>
+            )}
+            {!cargandoOrigen && origenDoc?.data && (
+              <div className="conta-origen-doc">
+                <div className="conta-origen-header">
+                  <strong>{origenDoc.tipo === 'compra' ? '🛒 Compra relacionada' : '🧾 Factura relacionada'}</strong>
+                  <button type="button" className="btn-link" onClick={() => navigate(`/${origenDoc.tipo === 'compra' ? 'compras' : 'facturas'}/${origenDoc.id}`)}>
+                    → Ir al documento
+                  </button>
+                </div>
+                {origenDoc.tipo === 'compra' && (
+                  <div className="conta-origen-grid">
+                    <span><strong>Proveedor:</strong> {origenDoc.data.proveedor?.razonSocial || origenDoc.data.proveedorNombre || '—'}</span>
+                    <span><strong>N° Factura:</strong> {origenDoc.data.numeroFactura || '—'}</span>
+                    <span><strong>Total:</strong> ${Number(origenDoc.data.total || 0).toFixed(2)}</span>
+                    <span><strong>Fecha:</strong> {formatFechaCorta(origenDoc.data.fechaEmision)}</span>
+                  </div>
+                )}
+                {origenDoc.tipo === 'factura' && (
+                  <div className="conta-origen-grid">
+                    <span><strong>Cliente:</strong> {origenDoc.data.cliente?.razonSocial || origenDoc.data.clienteNombre || '—'}</span>
+                    <span><strong>N° Factura:</strong> {origenDoc.data.numero || origenDoc.data.claveAcceso?.slice(-37, -27) || '—'}</span>
+                    <span><strong>Total:</strong> ${Number(origenDoc.data.total || origenDoc.data.importeTotal || 0).toFixed(2)}</span>
+                    <span><strong>Fecha:</strong> {formatFechaCorta(origenDoc.data.fecha || origenDoc.data.fechaEmision)}</span>
+                  </div>
+                )}
               </div>
             )}
             <form onSubmit={guardarAsiento}>
