@@ -1,6 +1,6 @@
 # Estado del Proyecto AELA
 
-Fecha de referencia: `2026-07-06`
+Fecha de referencia: `2026-07-08`
 
 ## Resumen general
 
