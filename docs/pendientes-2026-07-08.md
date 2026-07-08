@@ -15,8 +15,41 @@ Pull exitoso con stash `local-antes-pull-2026-07-08`.
 
 - `git pull` exitoso (fast-forward desde `4941b67` a `5b27fa5`)
 - Documentación actualizada:
-  - `docs/estado-proyecto.md`: fecha de referencia → 2026-07-08 (§25 ya estaba completa desde casa)
+  - `docs/estado-proyecto.md`: fecha de referencia → 2026-07-08
   - `docs/pendientes-2026-07-08.md`: este archivo
+
+---
+
+## ✅ Implementado en sesión 2026-07-08
+
+### Caja Chica — `d0ab17d`
+- Nuevo módulo: `cajas_chicas` + `movimientos_caja_chica` (tabla, schema, migración, applySchemaFixes)
+- Endpoints completos: CRUD cajas, vales de gasto, reposición, cierre
+- Asientos automáticos: APERTURA_CAJA_CHICA, GASTO_CAJA_CHICA, REPOSICION_CAJA_CHICA
+- Frontend: CajaChica.jsx con list/form/detalle + hooks de contabilidad
+- Menú en sidebar: Caja Chica bajo Contabilidad
+
+### Fix contabilidad 500 errors — `fa9ddd3`
+- `prismaTenant.js`: lazy `applySchemaFixes` al crear cliente tenant (cubre tenants que el startup no alcanzó)
+- `contabilidad.js` (routes): 3 endpoints manejan Prisma P2021 (tabla no existe) con defaults graceful:
+  - `plan-cuentas/estado` → planVacio:true
+  - `configuracion-asientos` → {}
+  - `configuracion-referencias/:categoria` → catálogo sin cuentas asignadas
+
+### Facturas de compra: eliminar y cuenta contable — `d20091c`
+- `DELETE /api/compras/:id`: eliminación física con guards (bloquea si CxP activos o inventario sin revertir)
+- `PUT /api/compras/:id`: acepta `cuentaGastoId` (cuenta contable que anula el default global)
+- `GET /api/compras/:id`: enriquece respuesta con datos de `cuentaGasto` (código + nombre)
+- `contabilidad.js` (utils): `crearAsientoFacturaCompraRegistrada` usa `cuentaGastoId` si está configurado
+- Schema/migración/applySchemaFixes: columna `cuentaGastoId INTEGER` en `facturas_compra`
+- `DetalleCompra.jsx`:
+  - Botón "Eliminar" + modal confirmación (con advertencias si tiene inventario no revertido)
+  - Botón "Cuenta contable" + selector buscable del plan de cuentas
+  - Display de cuenta configurada en tarjeta "Operacion"
+
+### Módulos por empresa — confirmado funcional
+- `Layout.jsx` ya usa `modulo` key en cada ítem del menú + `moduloDeshabilitadoPorConfiguracion()`
+- `configuracion_sistema` por empresa controla qué módulos se muestran — funciona correctamente en multi-empresa
 
 ---
 
