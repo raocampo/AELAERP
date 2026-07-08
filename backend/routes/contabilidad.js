@@ -1221,6 +1221,11 @@ router.get('/plan-cuentas/estado', async (req, res) => {
       },
     });
   } catch (error) {
+    // Si la tabla aún no existe en este tenant (BD recién migrada), retornar
+    // estado "vacío" en lugar de 500 — el frontend mostrará opción de instalar plan.
+    if (error?.code === 'P2021' || /does not exist/i.test(error?.message || '')) {
+      return res.json({ success: true, data: { planVacio: true, tieneMovimientos: false, totalCuentas: 0, totalAsientos: 0 } });
+    }
     console.error('GET /contabilidad/plan-cuentas/estado:', error);
     res.status(500).json({ success: false, mensaje: 'Error al consultar estado del plan' });
   }
@@ -1250,6 +1255,9 @@ router.get('/configuracion-asientos', async (req, res) => {
 
     res.json({ success: true, data: config || {} });
   } catch (error) {
+    if (error?.code === 'P2021' || /does not exist/i.test(error?.message || '')) {
+      return res.json({ success: true, data: {} });
+    }
     console.error('GET /contabilidad/configuracion-asientos:', error);
     res.status(500).json({ success: false, mensaje: 'Error al obtener la configuración contable' });
   }
@@ -1333,6 +1341,15 @@ router.get('/configuracion-referencias/:categoria', async (req, res) => {
 
     res.json({ success: true, data });
   } catch (error) {
+    // Tabla aún no existe en este tenant — retornar catálogo sin cuentas asignadas
+    if (error?.code === 'P2021' || /does not exist/i.test(error?.message || '')) {
+      const catalogo = obtenerCatalogoReferencias(req.params.categoria || '').map((item) => ({
+        codigoReferencia: item.codigoReferencia,
+        etiqueta: item.etiqueta,
+        cuenta: null,
+      }));
+      return res.json({ success: true, data: catalogo });
+    }
     console.error('GET /contabilidad/configuracion-referencias/:categoria:', error);
     res.status(500).json({ success: false, mensaje: 'Error al obtener la configuración de referencias' });
   }

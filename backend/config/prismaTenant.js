@@ -10,6 +10,7 @@
 
 const { PrismaClient } = require('@prisma/client');
 const { descifrar }    = require('../utils/cifrado');
+const { applyFixesToDb } = require('../scripts/applySchemaFixes');
 
 // Pool de clientes Prisma — una instancia por BD de tenant
 // Se mantienen vivos durante el proceso para reutilizar conexiones
@@ -18,6 +19,9 @@ const _pool = new Map(); // slug → PrismaClient
 /**
  * Retorna un PrismaClient conectado a la BD del tenant.
  * Si ya existe en el pool, lo reutiliza.
+ * En la primera creación, aplica schema fixes en background para garantizar
+ * que la BD del tenant tenga las últimas tablas/columnas aunque el script de
+ * startup no haya podido contactarla (p.ej. aela_master.tenants no existe).
  * @param {object} tenant - Registro de la tabla tenants
  * @returns {PrismaClient}
  */
@@ -36,6 +40,12 @@ function getTenantPrisma(tenant) {
   });
 
   _pool.set(key, client);
+
+  // Aplica schema fixes al DB del tenant (non-blocking, idempotente).
+  // Garantía extra si el startup no cubrió esta BD específica.
+  applyFixesToDb(url, `tenant:${key}`)
+    .catch((err) => console.error(`[schema-fix] Tenant ${key}:`, err.message));
+
   return client;
 }
 
