@@ -1,5 +1,7 @@
 /* ── Layout general ─────────────────────────────────────────────── */
 .compras-page { display: grid; gap: 1.25rem; }
+/* Critical: grid children must not expand beyond available width */
+.compras-page > * { min-width: 0; }
 
 .compras-header,
 .compras-summary,
@@ -97,11 +99,11 @@
   font-size: .9rem;
 }
 
-.compras-table-wrap { overflow-x: auto; }
+.compras-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .compras-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 620px;
+  min-width: 860px;
 }
 .compras-table th,
 .compras-table td {
@@ -213,15 +215,13 @@
 }
 .compras-btn-dots:hover { background: #e2e8f0; color: #1e293b; }
 
+/* Dropdown rendered via portal to body — uses position:fixed from JS */
 .compras-dropdown {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: .6rem;
-  box-shadow: 0 6px 20px rgba(0,0,0,.12);
-  z-index: 200;
+  box-shadow: 0 6px 20px rgba(0,0,0,.15);
+  z-index: 9999;
   min-width: 175px;
   overflow: hidden;
 }
@@ -266,20 +266,23 @@
 .compras-pagination--bottom { border-top: 1px solid #e2e8f0; margin-top: .5rem; padding-top: .75rem; }
 .compras-pagination-info { font-size: .85rem; color: #64748b; }
 
+/* ── Responsive tablet ancho (hide auth column) ─────────────────── */
+@media (max-width: 1100px) {
+  .compras-col-auth { display: none; }
+  .compras-table { min-width: 680px; }
+}
+
 /* ── Responsive tablet ──────────────────────────────────────────── */
 @media (max-width: 900px) {
   .compras-filtros { grid-template-columns: 1fr 1fr; }
   .compras-header-actions { width: 100%; }
 }
 
-/* ── Responsive móvil ───────────────────────────────────────────── */
-@media (max-width: 640px) {
+/* ── Responsive tarjetas (tablet chico + móvil) ─────────────────── */
+@media (max-width: 768px) {
   .compras-header { padding: 1rem; }
   .compras-header h1 { font-size: 1.2rem; }
   .compras-filtros { grid-template-columns: 1fr; }
-
-  /* Ocultar columna autorización */
-  .compras-col-auth { display: none; }
 
   /* Tabla → tarjetas */
   .compras-table      { min-width: unset; }
@@ -319,4 +322,10 @@
   .compras-resumen-tabla { font-size: .75rem; }
   .compras-resumen-tabla th,
   .compras-resumen-tabla td { padding: .3rem .4rem; }
+}
+
+/* ── Responsive móvil pequeño ───────────────────────────────────── */
+@media (max-width: 480px) {
+  .compras-summary { grid-template-columns: repeat(2, 1fr); }
+  .compras-filtros { grid-template-columns: 1fr; }
 }

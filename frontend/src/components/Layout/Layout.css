@@ -1,4 +1,4 @@
-.layout-root { display: flex; min-height: 100vh; overflow-x: clip; }
+.layout-root { display: flex; min-height: 100vh; overflow-x: hidden; }
 
 .sidebar {
   width: 240px;

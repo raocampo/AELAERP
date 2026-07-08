@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
@@ -55,29 +56,40 @@ function fmtMoneda(valor) {
   }).format(Number(valor || 0));
 }
 
-// ─── Dropdown ⋯ ─────────────────────────────────────────────────
+// ─── Dropdown ⋯ — portal a body para evitar clipping de scroll ───
 function DropdownOps({ item, onVer, onCuenta }) {
   const [abierto, setAbierto] = useState(false);
-  const ref = useRef(null);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
+  const btnRef = useRef(null);
+  const dropRef = useRef(null);
 
   useEffect(() => {
     if (!abierto) return;
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
+    const handler = (e) => {
+      if (
+        dropRef.current && !dropRef.current.contains(e.target) &&
+        btnRef.current && !btnRef.current.contains(e.target)
+      ) setAbierto(false);
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [abierto]);
 
+  const handleOpen = () => {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    }
+    setAbierto((v) => !v);
+  };
+
   return (
-    <div style={{ position: 'relative' }} ref={ref}>
-      <button
-        className="compras-btn-dots"
-        onClick={() => setAbierto((v) => !v)}
-        title="Más acciones"
-      >
+    <>
+      <button ref={btnRef} className="compras-btn-dots" onClick={handleOpen} title="Más acciones">
         ···
       </button>
-      {abierto && (
-        <div className="compras-dropdown">
+      {abierto && createPortal(
+        <div ref={dropRef} className="compras-dropdown" style={{ position: 'fixed', top: pos.top, right: pos.right }}>
           <button onClick={() => { setAbierto(false); onVer(); }}>
             <IcVer /> Ver detalle
           </button>
@@ -86,9 +98,10 @@ function DropdownOps({ item, onVer, onCuenta }) {
               📒 Cuenta contable
             </button>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
 
