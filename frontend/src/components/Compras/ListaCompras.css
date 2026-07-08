@@ -193,6 +193,67 @@
 .compras-btn-asiento:hover:not(:disabled) { background: #fde68a; }
 .compras-btn-asiento:disabled { opacity: .6; cursor: default; }
 
+/* ── Dropdown ⋯ ─────────────────────────────────────────────────── */
+.compras-btn-dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: .78rem;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 1px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.compras-btn-dots:hover { background: #e2e8f0; color: #1e293b; }
+
+.compras-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: .6rem;
+  box-shadow: 0 6px 20px rgba(0,0,0,.12);
+  z-index: 200;
+  min-width: 175px;
+  overflow: hidden;
+}
+.compras-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  width: 100%;
+  padding: .5rem .8rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: .82rem;
+  color: #1e293b;
+  text-align: left;
+  white-space: nowrap;
+}
+.compras-dropdown button:hover { background: #f1f5f9; }
+.compras-dropdown button + button { border-top: 1px solid #f1f5f9; }
+
+/* ── Selector de cuenta contable ────────────────────────────────── */
+.cuenta-opcion {
+  padding: .45rem .75rem;
+  cursor: pointer;
+  font-size: .82rem;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background .1s;
+}
+.cuenta-opcion:last-child { border-bottom: none; }
+.cuenta-opcion:hover { background: #f8fafc; }
+.cuenta-opcion-sel { background: #ede9fe !important; color: #4c1d95; font-weight: 600; }
+
 /* ── Paginación ─────────────────────────────────────────────────── */
 .compras-pagination {
   display: flex;

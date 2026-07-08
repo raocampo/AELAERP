@@ -417,7 +417,7 @@ router.get('/', async (req, res) => {
       fechaEmision: true, razonSocialProveedor: true, identificacionProveedor: true,
       subtotal0: true, subtotal5: true, subtotal15: true, totalIva: true,
       importeTotal: true, registraInventario: true, egresoCajaRegistrado: true,
-      movimientosInventario: true, origenRegistro: true,
+      movimientosInventario: true, origenRegistro: true, cuentaGastoId: true,
       ...(cols.tipoGasto ? { tipoGasto: true } : {}),
       ...(cols.anulada ? { anulada: true } : {}),
       ...(cols.motivoAnulacion ? { motivoAnulacion: true } : {}),
@@ -474,13 +474,14 @@ router.get('/', async (req, res) => {
     const asientosExistentes = referencias.length
       ? await prisma.asientos_contables.findMany({
           where: { empresaId: req.empresa.id, tipo: 'COMPRA', referencia: { in: referencias } },
-          select: { referencia: true },
+          select: { referencia: true, cerrado: true },
         })
       : [];
-    const referenciasConAsiento = new Set(asientosExistentes.map((a) => a.referencia));
+    const asientoMap = new Map(asientosExistentes.map((a) => [a.referencia, a]));
     const itemsConAsiento = items.map((it) => ({
       ...it,
-      tieneAsientoContable: referenciasConAsiento.has(`COMP-${it.id}`),
+      tieneAsientoContable: asientoMap.has(`COMP-${it.id}`),
+      asientoCerrado: asientoMap.get(`COMP-${it.id}`)?.cerrado || false,
     }));
 
     res.json({
