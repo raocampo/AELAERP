@@ -1,6 +1,10 @@
 const router = require('express').Router();
-const { autorizarPermiso } = require('../middleware/auth');
+const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { soloMediumOPro } = require('../middleware/edition');
 const prisma = require('../config/prisma');
+
+router.use(proteger);
+router.use(soloMediumOPro);
 
 const TIPOS_VALIDOS = ['INGRESO', 'PAGO', 'CREDITO', 'DEBITO'];
 const PREFIJOS = { INGRESO: 'ING', PAGO: 'PAG', CREDITO: 'CRE', DEBITO: 'DEB' };

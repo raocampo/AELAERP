@@ -115,9 +115,42 @@ router.post('/', proteger, soloAdmin, checkLimiteUsuarios, async (req, res) => {
     res.status(201).json({ success: true, data: normalizarUsuarioSalida(usuario) });
   } catch (error) {
     if (error.code === 'P2002') {
+      // Detectar si el conflicto es por username en otra empresa para dar mensaje accionable
+      try {
+        const existente = await prisma.usuarios.findUnique({
+          where: { username: normalizarUsername(req.body.username || '') },
+          select: { id: true, username: true, nombre: true, empresaId: true },
+        });
+        if (existente && existente.empresaId !== empresaId) {
+          return res.status(409).json({
+            success: false,
+            mensaje: `El usuario "${existente.username}" ya existe asignado a otra empresa.`,
+            codigo: 'USERNAME_OTRA_EMPRESA',
+            data: { usuarioId: existente.id, username: existente.username, nombre: existente.nombre },
+          });
+        }
+      } catch (_) { /* si falla la consulta extra, caer al mensaje genérico */ }
       return res.status(409).json({ success: false, mensaje: mensajeDuplicidadUsuario(error) });
     }
     res.status(500).json({ success: false, mensaje: 'Error al crear usuario' });
+  }
+});
+
+// POST /api/usuarios/:id/reasignar-empresa — mueve un usuario existente a la empresa activa
+router.post('/:id/reasignar-empresa', proteger, soloAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const empresaId = obtenerEmpresaActual(req);
+    const existente = await prisma.usuarios.findUnique({ where: { id }, select: { id: true, username: true } });
+    if (!existente) return res.status(404).json({ success: false, mensaje: 'Usuario no encontrado' });
+    const actualizado = await prisma.usuarios.update({
+      where: { id },
+      data: { empresaId },
+      select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true },
+    });
+    res.json({ success: true, data: normalizarUsuarioSalida(actualizado) });
+  } catch (error) {
+    res.status(500).json({ success: false, mensaje: 'Error al reasignar usuario' });
   }
 });
 

@@ -29,6 +29,8 @@ export default function GestionUsuarios() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState(FORM_VACIO);
+  // Estado para reasignación cuando el usuario existe en otra empresa
+  const [conflictoOtraEmpresa, setConflictoOtraEmpresa] = useState(null); // { usuarioId, username, nombre }
 
   useEffect(() => {
     cargar();
@@ -128,7 +130,29 @@ export default function GestionUsuarios() {
       setForm(FORM_VACIO);
       await cargar();
     } catch (err) {
-      toast.error(err.response?.data?.mensaje || 'Error al guardar usuario');
+      const res = err.response?.data;
+      if (res?.codigo === 'USERNAME_OTRA_EMPRESA') {
+        setConflictoOtraEmpresa(res.data);
+        return;
+      }
+      toast.error(res?.mensaje || 'Error al guardar usuario');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleReasignar = async () => {
+    if (!conflictoOtraEmpresa) return;
+    setGuardando(true);
+    try {
+      await api.post(`/usuarios/${conflictoOtraEmpresa.usuarioId}/reasignar-empresa`);
+      toast.success(`Usuario "${conflictoOtraEmpresa.username}" reasignado a esta empresa`);
+      setConflictoOtraEmpresa(null);
+      setMostrarForm(false);
+      setForm(FORM_VACIO);
+      await cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al reasignar usuario');
     } finally {
       setGuardando(false);
     }
@@ -295,6 +319,41 @@ export default function GestionUsuarios() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de conflicto: usuario existe en otra empresa */}
+      {conflictoOtraEmpresa && (
+        <div className="usu-modal-overlay">
+          <div className="usu-modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div className="usu-modal-header">
+              <div className="usu-modal-header-left">
+                <div className="usu-modal-header-icon">⚠️</div>
+                <div className="usu-modal-header-text">
+                  <h3>Usuario ya existe</h3>
+                  <p>El usuario pertenece a otra empresa.</p>
+                </div>
+              </div>
+              <button className="usu-modal-close" onClick={() => setConflictoOtraEmpresa(null)}>✕</button>
+            </div>
+            <div style={{ padding: '1rem 1.5rem' }}>
+              <p style={{ margin: 0, fontSize: '0.92rem', lineHeight: 1.6 }}>
+                El usuario <strong>"{conflictoOtraEmpresa.username}"</strong> ({conflictoOtraEmpresa.nombre}) ya existe en el sistema
+                pero está asignado a otra empresa.
+              </p>
+              <p style={{ margin: '0.75rem 0 0', fontSize: '0.88rem', color: '#64748b' }}>
+                ¿Deseas reasignarlo a la empresa actual? El usuario mantendrá su contraseña y podrá iniciar sesión normalmente.
+              </p>
+            </div>
+            <div className="usu-modal-footer">
+              <button type="button" className="btn-secondary" onClick={() => setConflictoOtraEmpresa(null)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn-primary" onClick={handleReasignar} disabled={guardando}>
+                {guardando ? 'Reasignando...' : 'Reasignar a esta empresa'}
+              </button>
+            </div>
           </div>
         </div>
       )}
