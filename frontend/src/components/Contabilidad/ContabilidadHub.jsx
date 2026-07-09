@@ -79,6 +79,8 @@ const ContabilidadHub = () => {
   const [diarioLoading, setDiarioLoading] = useState(false);
   const [diarioAsientos, setDiarioAsientos] = useState([]);
   const [diarioFiltros, setDiarioFiltros] = useState({ desde: '', hasta: '', tipo: '', q: '', cerrado: 'todos', periodo: '' });
+  const [diarioSubTab, setDiarioSubTab] = useState('libro'); // 'libro' | 'correccion'
+  const [modalAsientoAbierto, setModalAsientoAbierto] = useState(false);
   const [asientoCorreccionId, setAsientoCorreccionId] = useState('');
   const [asientoForm, setAsientoForm] = useState({
     id: null,
@@ -667,6 +669,21 @@ const ContabilidadHub = () => {
     });
     setAsientoSoloLectura(false);
     setOrigenDoc(null);
+    setModalAsientoAbierto(false);
+  };
+
+  const abrirNuevoAsiento = () => {
+    setAsientoForm({
+      id: null,
+      fecha: new Date().toISOString().slice(0, 10),
+      descripcion: '',
+      tipo: 'MANUAL',
+      referencia: '',
+      detalles: [crearDetalleVacio(), crearDetalleVacio()],
+    });
+    setAsientoSoloLectura(false);
+    setOrigenDoc(null);
+    setModalAsientoAbierto(true);
   };
 
   const cambiarDetalle = (index, key, value) => {
@@ -758,7 +775,7 @@ const ContabilidadHub = () => {
         })),
       });
       setAsientoSoloLectura(soloLectura);
-      setTab('diario');
+      setModalAsientoAbierto(true);
     } catch (error) {
       toast.error(error.response?.data?.mensaje || 'No se pudo cargar el asiento');
     }
@@ -957,273 +974,306 @@ const ContabilidadHub = () => {
 
       {tab === 'diario' && (
         <div className="conta-tab-body">
-          <div className="conta-card">
-            <h3>Corrección de asientos contables</h3>
-            <div className="conta-filters">
-              <select value={asientoCorreccionId} onChange={(e) => setAsientoCorreccionId(e.target.value)}>
-                <option value="">Seleccione asiento abierto (MANUAL/AJUSTE)...</option>
-                {asientosCorregibles.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    #{a.numero} | {formatFechaCorta(a.fecha)} | {a.tipo} | {a.descripcion}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="btn-primary"
-                type="button"
-                onClick={() => asientoCorreccionId && editarAsiento(Number(asientoCorreccionId))}
-                disabled={!asientoCorreccionId}
-              >
-                Cargar en formulario de corrección
-              </button>
-            </div>
-            {asientosCorregibles.length === 0 && (
-              <div className="conta-empty">No hay asientos abiertos MANUAL/AJUSTE disponibles para corrección.</div>
-            )}
+          {/* Sub-tab nav */}
+          <div className="conta-subtab-nav">
+            <button
+              className={`conta-subtab${diarioSubTab === 'libro' ? ' active' : ''}`}
+              onClick={() => setDiarioSubTab('libro')}
+            >
+              📒 Libro Diario
+            </button>
+            <button
+              className={`conta-subtab${diarioSubTab === 'correccion' ? ' active' : ''}`}
+              onClick={() => setDiarioSubTab('correccion')}
+            >
+              ✏️ Corrección
+            </button>
+            <button className="btn-primary conta-subtab-action" onClick={abrirNuevoAsiento}>
+              + Nuevo Asiento
+            </button>
           </div>
 
-          <div className="conta-card">
-            <h3>
-              {asientoForm.id
-                ? (asientoSoloLectura
-                  ? `Viendo asiento #${asientoForm.id} (solo lectura)`
-                  : `Formulario de corrección del asiento #${asientoForm.id}`)
-                : 'Nuevo asiento contable'}
-            </h3>
-            {asientoForm.id && !TIPOS_ASIENTO_AUTOMATICOS.includes(asientoForm.tipo) && !asientoSoloLectura && (
-              <div className="conta-warning">
-                ⚠ Este es un asiento automático (tipo {asientoForm.tipo}). Editarlo puede romper la
-                trazabilidad con el documento fuente (factura, compra, nómina, etc.).
+          {/* Sub-tab: Libro Diario */}
+          {diarioSubTab === 'libro' && (
+            <div className="conta-card">
+              <div className="conta-filters">
+                <input
+                  placeholder="Buscar descripción/referencia"
+                  value={diarioFiltros.q}
+                  onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, q: e.target.value }))}
+                />
+                <input
+                  placeholder="Período MM/YYYY"
+                  value={diarioFiltros.periodo}
+                  onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, periodo: e.target.value }))}
+                  onBlur={() => {
+                    const normalizado = normalizarPeriodoMMYYYY(diarioFiltros.periodo);
+                    if (normalizado) {
+                      setDiarioFiltros((prev) => ({ ...prev, periodo: normalizado }));
+                    }
+                  }}
+                />
+                <input type="date" value={diarioFiltros.desde} onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, desde: e.target.value }))} />
+                <input type="date" value={diarioFiltros.hasta} onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, hasta: e.target.value }))} />
+                <select value={diarioFiltros.tipo} onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, tipo: e.target.value }))}>
+                  <option value="">Todos los tipos</option>
+                  <option value="MANUAL">MANUAL</option>
+                  <option value="AJUSTE">AJUSTE</option>
+                  <option value="FACTURA">FACTURA</option>
+                  <option value="COMPRA">COMPRA</option>
+                  <option value="CAJA">CAJA</option>
+                  <option value="NOMINA">NOMINA</option>
+                  <option value="ANULACION">ANULACION</option>
+                </select>
+                <select value={diarioFiltros.cerrado} onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, cerrado: e.target.value }))}>
+                  <option value="todos">Todos</option>
+                  <option value="false">Abiertos</option>
+                  <option value="true">Cerrados</option>
+                </select>
+                <button className="btn-secondary" onClick={cargarDiario}>Filtrar</button>
+                <button className="btn-secondary" onClick={() => descargarReporteContable('diario', 'csv', diarioFiltros)}>
+                  Exportar Excel (CSV)
+                </button>
+                <button className="btn-secondary" onClick={() => descargarReporteContable('diario', 'pdf', diarioFiltros)}>
+                  PDF Servidor
+                </button>
               </div>
-            )}
-            {cargandoOrigen && (
-              <div className="conta-origen-doc conta-origen-loading">Cargando documento origen...</div>
-            )}
-            {!cargandoOrigen && origenDoc?.data && (
-              <div className="conta-origen-doc">
-                <div className="conta-origen-header">
-                  <strong>{origenDoc.tipo === 'compra' ? '🛒 Compra relacionada' : '🧾 Factura relacionada'}</strong>
-                  <button type="button" className="btn-link" onClick={() => navigate(`/${origenDoc.tipo === 'compra' ? 'compras' : 'facturas'}/${origenDoc.id}`)}>
-                    → Ir al documento
-                  </button>
-                </div>
-                {origenDoc.tipo === 'compra' && (
-                  <div className="conta-origen-grid">
-                    <span><strong>Proveedor:</strong> {origenDoc.data.proveedor?.razonSocial || origenDoc.data.proveedorNombre || '—'}</span>
-                    <span><strong>N° Factura:</strong> {origenDoc.data.numeroFactura || '—'}</span>
-                    <span><strong>Total:</strong> ${Number(origenDoc.data.total || 0).toFixed(2)}</span>
-                    <span><strong>Fecha:</strong> {formatFechaCorta(origenDoc.data.fechaEmision)}</span>
-                  </div>
-                )}
-                {origenDoc.tipo === 'factura' && (
-                  <div className="conta-origen-grid">
-                    <span><strong>Cliente:</strong> {origenDoc.data.cliente?.razonSocial || origenDoc.data.clienteNombre || '—'}</span>
-                    <span><strong>N° Factura:</strong> {origenDoc.data.numero || origenDoc.data.claveAcceso?.slice(-37, -27) || '—'}</span>
-                    <span><strong>Total:</strong> ${Number(origenDoc.data.total || origenDoc.data.importeTotal || 0).toFixed(2)}</span>
-                    <span><strong>Fecha:</strong> {formatFechaCorta(origenDoc.data.fecha || origenDoc.data.fechaEmision)}</span>
-                  </div>
-                )}
-              </div>
-            )}
-            <form onSubmit={guardarAsiento}>
-              <div className="conta-form-grid">
-                <div>
-                  <label>Fecha</label>
-                  <input type="date" value={asientoForm.fecha} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, fecha: e.target.value }))} required />
-                </div>
-                <div>
-                  <label>Tipo</label>
-                  <select value={asientoForm.tipo} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, tipo: e.target.value }))}>
-                    {TIPOS_ASIENTO_TODOS.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label>Referencia</label>
-                  <input value={asientoForm.referencia} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, referencia: e.target.value }))} />
-                </div>
-                <div className="full-width">
-                  <label>Descripción</label>
-                  <input value={asientoForm.descripcion} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, descripcion: e.target.value }))} required />
-                </div>
-              </div>
-
-              <div className="conta-detail-box">
+              {diarioLoading ? (
+                <div className="conta-loading">Cargando libro diario...</div>
+              ) : (
                 <table className="conta-table">
                   <thead>
                     <tr>
-                      <th>Cuenta</th>
-                      <th>Centro de Costo</th>
+                      <th>#</th>
+                      <th>Fecha</th>
+                      <th>Tipo</th>
                       <th>Descripción</th>
                       <th>Debe</th>
                       <th>Haber</th>
-                      <th></th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {asientoForm.detalles.map((detalle, index) => (
-                      <tr key={`det-${index}`}>
+                    {diarioAsientos.map((a) => (
+                      <tr key={a.id}>
+                        <td>{a.numero}</td>
+                        <td>{formatFechaCorta(a.fecha)}</td>
+                        <td>{a.tipo}</td>
+                        <td>{a.descripcion}</td>
+                        <td>{toMoney(a.totalDebe)}</td>
+                        <td>{toMoney(a.totalHaber)}</td>
                         <td>
-                          <select value={detalle.cuentaId} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'cuentaId', e.target.value)} required>
-                            <option value="">Seleccione...</option>
-                            {cuentasMovimiento.map((c) => (
-                              <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
-                            ))}
-                          </select>
+                          {a.bloqueado
+                            ? <span title="Bloqueado">🔒 BLOQUEADO</span>
+                            : (a.cerrado ? 'CERRADO' : 'ABIERTO')
+                          }
                         </td>
                         <td>
-                          <select value={detalle.centroCostoId} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'centroCostoId', e.target.value)}>
-                            <option value="">— Sin centro de costo —</option>
-                            {centrosCosto.filter((c) => c.activo).map((c) => (
-                              <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input value={detalle.descripcion} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'descripcion', e.target.value)} />
-                        </td>
-                        <td>
-                          <input type="number" min="0" step="0.01" value={detalle.debe} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'debe', e.target.value)} />
-                        </td>
-                        <td>
-                          <input type="number" min="0" step="0.01" value={detalle.haber} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'haber', e.target.value)} />
-                        </td>
-                        <td>
-                          {!asientoSoloLectura && (
-                            <button type="button" className="btn-link danger" onClick={() => eliminarLineaDetalle(index)}>Quitar</button>
+                          <button className="btn-link" onClick={() => verAsiento(a.id)}>Ver</button>
+                          {!a.cerrado && !a.bloqueado && (
+                            <button className="btn-link" onClick={() => editarAsiento(a.id)}>Editar</button>
+                          )}
+                          {!a.cerrado && (
+                            <button className="btn-link" onClick={() => cerrarAsiento(a.id)}>Cerrar</button>
+                          )}
+                          {!a.bloqueado && (
+                            <button className="btn-link" title="Bloquear asiento" onClick={() => bloquearAsiento(a.id)}>🔒</button>
+                          )}
+                          {a.bloqueado && (
+                            <button className="btn-link" title="Desbloquear asiento" onClick={() => desbloquearAsiento(a.id)}>🔓</button>
+                          )}
+                          {a.tipo !== 'ANULACION' && (
+                            <button className="btn-link danger" onClick={() => anularAsiento(a.id)}>Anular</button>
                           )}
                         </td>
                       </tr>
                     ))}
+                    {diarioAsientos.length === 0 && (
+                      <tr><td colSpan="8" className="conta-empty">No hay asientos para el filtro aplicado.</td></tr>
+                    )}
                   </tbody>
                 </table>
-                <div className="conta-form-actions">
-                  {!asientoSoloLectura && (
-                    <button type="button" className="btn-secondary" onClick={agregarLineaDetalle}>+ Línea</button>
-                  )}
-                  <span className={`conta-balance ${Number(totalDebeForm.toFixed(2)) === Number(totalHaberForm.toFixed(2)) ? 'ok' : 'warn'}`}>
-                    Debe: {toMoney(totalDebeForm)} | Haber: {toMoney(totalHaberForm)}
-                  </span>
-                </div>
-                <div className="conta-form-actions">
-                  {!asientoSoloLectura && (
-                    <button type="submit" className="btn-primary">{asientoForm.id ? 'Actualizar asiento' : 'Crear asiento'}</button>
-                  )}
-                  <button type="button" className="btn-secondary" onClick={limpiarAsientoForm}>{asientoSoloLectura ? 'Cerrar vista' : 'Limpiar'}</button>
-                </div>
-              </div>
-            </form>
-          </div>
-
-          <div className="conta-card">
-            <h3>Libro diario</h3>
-            <div className="conta-filters">
-              <input
-                placeholder="Buscar descripción/referencia"
-                value={diarioFiltros.q}
-                onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, q: e.target.value }))}
-              />
-              <input
-                placeholder="Período MM/YYYY"
-                value={diarioFiltros.periodo}
-                onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, periodo: e.target.value }))}
-                onBlur={() => {
-                  const normalizado = normalizarPeriodoMMYYYY(diarioFiltros.periodo);
-                  if (normalizado) {
-                    setDiarioFiltros((prev) => ({ ...prev, periodo: normalizado }));
-                  }
-                }}
-              />
-              <input type="date" value={diarioFiltros.desde} onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, desde: e.target.value }))} />
-              <input type="date" value={diarioFiltros.hasta} onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, hasta: e.target.value }))} />
-              <select value={diarioFiltros.tipo} onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, tipo: e.target.value }))}>
-                <option value="">Todos los tipos</option>
-                <option value="MANUAL">MANUAL</option>
-                <option value="AJUSTE">AJUSTE</option>
-                <option value="FACTURA">FACTURA</option>
-                <option value="COMPRA">COMPRA</option>
-                <option value="CAJA">CAJA</option>
-                <option value="NOMINA">NOMINA</option>
-                <option value="ANULACION">ANULACION</option>
-              </select>
-              <select value={diarioFiltros.cerrado} onChange={(e) => setDiarioFiltros((prev) => ({ ...prev, cerrado: e.target.value }))}>
-                <option value="todos">Todos</option>
-                <option value="false">Abiertos</option>
-                <option value="true">Cerrados</option>
-              </select>
-              <button className="btn-secondary" onClick={cargarDiario}>Filtrar</button>
-              <button
-                className="btn-secondary"
-                onClick={() => descargarReporteContable('diario', 'csv', diarioFiltros)}
-              >
-                Exportar Excel (CSV)
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => descargarReporteContable('diario', 'pdf', diarioFiltros)}
-              >
-                PDF Servidor
-              </button>
+              )}
             </div>
-            {diarioLoading ? (
-              <div className="conta-loading">Cargando libro diario...</div>
-            ) : (
-              <table className="conta-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Fecha</th>
-                    <th>Tipo</th>
-                    <th>Descripción</th>
-                    <th>Debe</th>
-                    <th>Haber</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {diarioAsientos.map((a) => (
-                    <tr key={a.id}>
-                      <td>{a.numero}</td>
-                      <td>{formatFechaCorta(a.fecha)}</td>
-                      <td>{a.tipo}</td>
-                      <td>{a.descripcion}</td>
-                      <td>{toMoney(a.totalDebe)}</td>
-                      <td>{toMoney(a.totalHaber)}</td>
-                      <td>
-                        {a.bloqueado
-                          ? <span title="Bloqueado">🔒 BLOQUEADO</span>
-                          : (a.cerrado ? 'CERRADO' : 'ABIERTO')
-                        }
-                      </td>
-                      <td>
-                        <button className="btn-link" onClick={() => verAsiento(a.id)}>Ver</button>
-                        {!a.cerrado && !a.bloqueado && (
-                          <button className="btn-link" onClick={() => editarAsiento(a.id)}>Editar</button>
-                        )}
-                        {!a.cerrado && (
-                          <button className="btn-link" onClick={() => cerrarAsiento(a.id)}>Cerrar</button>
-                        )}
-                        {!a.bloqueado && (
-                          <button className="btn-link" title="Bloquear asiento" onClick={() => bloquearAsiento(a.id)}>🔒</button>
-                        )}
-                        {a.bloqueado && (
-                          <button className="btn-link" title="Desbloquear asiento" onClick={() => desbloquearAsiento(a.id)}>🔓</button>
-                        )}
-                        {a.tipo !== 'ANULACION' && (
-                          <button className="btn-link danger" onClick={() => anularAsiento(a.id)}>Anular</button>
-                        )}
-                      </td>
-                    </tr>
+          )}
+
+          {/* Sub-tab: Corrección */}
+          {diarioSubTab === 'correccion' && (
+            <div className="conta-card">
+              <h3>Corrección de asientos contables</h3>
+              <p className="conta-subtab-hint">
+                Seleccione un asiento abierto (MANUAL o AJUSTE) para cargarlo en el formulario de edición.
+              </p>
+              <div className="conta-filters">
+                <select value={asientoCorreccionId} onChange={(e) => setAsientoCorreccionId(e.target.value)}>
+                  <option value="">Seleccione asiento abierto (MANUAL/AJUSTE)...</option>
+                  {asientosCorregibles.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      #{a.numero} | {formatFechaCorta(a.fecha)} | {a.tipo} | {a.descripcion}
+                    </option>
                   ))}
-                  {diarioAsientos.length === 0 && (
-                    <tr><td colSpan="8" className="conta-empty">No hay asientos para el filtro aplicado.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </div>
+                </select>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={() => asientoCorreccionId && editarAsiento(Number(asientoCorreccionId))}
+                  disabled={!asientoCorreccionId}
+                >
+                  Abrir en formulario
+                </button>
+              </div>
+              {asientosCorregibles.length === 0 && (
+                <div className="conta-empty">No hay asientos abiertos MANUAL/AJUSTE disponibles para corrección.</div>
+              )}
+            </div>
+          )}
+
+          {/* Modal: formulario de asiento (nuevo / ver / editar) */}
+          {modalAsientoAbierto && (
+            <div className="conta-modal-overlay" onClick={limpiarAsientoForm}>
+              <div className="conta-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="conta-modal-header">
+                  <h3>
+                    {asientoForm.id
+                      ? (asientoSoloLectura
+                        ? `Asiento #${asientoForm.id} — solo lectura`
+                        : `Editar asiento #${asientoForm.id}`)
+                      : 'Nuevo asiento contable'}
+                  </h3>
+                  <button className="conta-modal-close" onClick={limpiarAsientoForm}>✕</button>
+                </div>
+
+                {asientoForm.id && !TIPOS_ASIENTO_AUTOMATICOS.includes(asientoForm.tipo) && !asientoSoloLectura && (
+                  <div className="conta-warning">
+                    ⚠ Este es un asiento automático (tipo {asientoForm.tipo}). Editarlo puede romper la
+                    trazabilidad con el documento fuente (factura, compra, nómina, etc.).
+                  </div>
+                )}
+                {cargandoOrigen && (
+                  <div className="conta-origen-doc conta-origen-loading">Cargando documento origen...</div>
+                )}
+                {!cargandoOrigen && origenDoc?.data && (
+                  <div className="conta-origen-doc">
+                    <div className="conta-origen-header">
+                      <strong>{origenDoc.tipo === 'compra' ? '🛒 Compra relacionada' : '🧾 Factura relacionada'}</strong>
+                      <button type="button" className="btn-link" onClick={() => navigate(`/${origenDoc.tipo === 'compra' ? 'compras' : 'facturas'}/${origenDoc.id}`)}>
+                        → Ir al documento
+                      </button>
+                    </div>
+                    {origenDoc.tipo === 'compra' && (
+                      <div className="conta-origen-grid">
+                        <span><strong>Proveedor:</strong> {origenDoc.data.proveedor?.razonSocial || origenDoc.data.proveedorNombre || '—'}</span>
+                        <span><strong>N° Factura:</strong> {origenDoc.data.numeroFactura || '—'}</span>
+                        <span><strong>Total:</strong> ${Number(origenDoc.data.total || 0).toFixed(2)}</span>
+                        <span><strong>Fecha:</strong> {formatFechaCorta(origenDoc.data.fechaEmision)}</span>
+                      </div>
+                    )}
+                    {origenDoc.tipo === 'factura' && (
+                      <div className="conta-origen-grid">
+                        <span><strong>Cliente:</strong> {origenDoc.data.cliente?.razonSocial || origenDoc.data.clienteNombre || '—'}</span>
+                        <span><strong>N° Factura:</strong> {origenDoc.data.numero || origenDoc.data.claveAcceso?.slice(-37, -27) || '—'}</span>
+                        <span><strong>Total:</strong> ${Number(origenDoc.data.total || origenDoc.data.importeTotal || 0).toFixed(2)}</span>
+                        <span><strong>Fecha:</strong> {formatFechaCorta(origenDoc.data.fecha || origenDoc.data.fechaEmision)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <form onSubmit={guardarAsiento}>
+                  <div className="conta-form-grid">
+                    <div>
+                      <label>Fecha</label>
+                      <input type="date" value={asientoForm.fecha} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, fecha: e.target.value }))} required />
+                    </div>
+                    <div>
+                      <label>Tipo</label>
+                      <select value={asientoForm.tipo} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, tipo: e.target.value }))}>
+                        {TIPOS_ASIENTO_TODOS.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label>Referencia</label>
+                      <input value={asientoForm.referencia} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, referencia: e.target.value }))} />
+                    </div>
+                    <div className="full-width">
+                      <label>Descripción</label>
+                      <input value={asientoForm.descripcion} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, descripcion: e.target.value }))} required />
+                    </div>
+                  </div>
+
+                  <div className="conta-detail-box">
+                    <table className="conta-table">
+                      <thead>
+                        <tr>
+                          <th>Cuenta</th>
+                          <th>Centro de Costo</th>
+                          <th>Descripción</th>
+                          <th>Debe</th>
+                          <th>Haber</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {asientoForm.detalles.map((detalle, index) => (
+                          <tr key={`det-${index}`}>
+                            <td>
+                              <select value={detalle.cuentaId} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'cuentaId', e.target.value)} required>
+                                <option value="">Seleccione...</option>
+                                {cuentasMovimiento.map((c) => (
+                                  <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              <select value={detalle.centroCostoId} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'centroCostoId', e.target.value)}>
+                                <option value="">— Sin centro de costo —</option>
+                                {centrosCosto.filter((c) => c.activo).map((c) => (
+                                  <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              <input value={detalle.descripcion} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'descripcion', e.target.value)} />
+                            </td>
+                            <td>
+                              <input type="number" min="0" step="0.01" value={detalle.debe} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'debe', e.target.value)} />
+                            </td>
+                            <td>
+                              <input type="number" min="0" step="0.01" value={detalle.haber} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'haber', e.target.value)} />
+                            </td>
+                            <td>
+                              {!asientoSoloLectura && (
+                                <button type="button" className="btn-link danger" onClick={() => eliminarLineaDetalle(index)}>Quitar</button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="conta-form-actions">
+                      {!asientoSoloLectura && (
+                        <button type="button" className="btn-secondary" onClick={agregarLineaDetalle}>+ Línea</button>
+                      )}
+                      <span className={`conta-balance ${Number(totalDebeForm.toFixed(2)) === Number(totalHaberForm.toFixed(2)) ? 'ok' : 'warn'}`}>
+                        Debe: {toMoney(totalDebeForm)} | Haber: {toMoney(totalHaberForm)}
+                      </span>
+                    </div>
+                    <div className="conta-form-actions">
+                      {!asientoSoloLectura && (
+                        <button type="submit" className="btn-primary">{asientoForm.id ? 'Actualizar asiento' : 'Crear asiento'}</button>
+                      )}
+                      <button type="button" className="btn-secondary" onClick={limpiarAsientoForm}>
+                        {asientoSoloLectura ? 'Cerrar' : 'Cancelar'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
