@@ -14,9 +14,10 @@
 .detalle-compra-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
   padding: 1.5rem;
+  flex-wrap: wrap;
 }
 
 .detalle-compra-header h1 {
@@ -46,6 +47,12 @@
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
 }
 
+@media (max-width: 1280px) {
+  .detalle-compra-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .detalle-compra-card {
   padding: 1.25rem;
 }
@@ -58,7 +65,8 @@
 .detalle-compra-row {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  align-items: baseline;
+  gap: 0.75rem;
   padding: 0.7rem 0;
   border-bottom: 1px solid #e2e8f0;
 }
@@ -70,6 +78,16 @@
 
 .detalle-compra-row span:first-child {
   color: #64748b;
+  flex-shrink: 0;
+  max-width: 55%;
+}
+
+.detalle-compra-row > strong,
+.detalle-compra-row > span:not(:first-child) {
+  min-width: 0;
+  word-break: break-word;
+  text-align: right;
+  color: #1e293b;
 }
 
 .detalle-compra-wrap {
@@ -248,10 +266,30 @@
   }
 }
 
-@media (max-width: 820px) {
-  .detalle-compra-header,
-  .detalle-compra-actions,
-  .detalle-compra-row,
+@media (max-width: 900px) {
+  .detalle-compra-header {
+    flex-direction: column;
+  }
+  .detalle-compra-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .detalle-compra-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  .detalle-compra-row > strong,
+  .detalle-compra-row > span:not(:first-child) {
+    text-align: left;
+    max-width: 100%;
+  }
+  .detalle-compra-row span:first-child {
+    max-width: 100%;
+  }
   .detalle-compra-payment,
   .detalle-compra-ret-item {
     flex-direction: column;

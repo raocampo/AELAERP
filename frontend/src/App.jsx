@@ -74,6 +74,7 @@ const FormFactura = lazy(() => import('./components/Facturacion/FormFactura'));
 const DetalleFactura = lazy(() => import('./components/Facturacion/DetalleFactura'));
 const ImportarFacturasHistoricas = lazy(() => import('./components/Facturacion/ImportarFacturasHistoricas'));
 const ListaRetenciones = lazy(() => import('./components/Facturacion/ListaRetenciones'));
+const ListaRetencionesRecibidas = lazy(() => import('./components/Facturacion/ListaRetencionesRecibidas'));
 const FormRetencion = lazy(() => import('./components/Facturacion/FormRetencion'));
 const ListaLiquidaciones = lazy(() => import('./components/Facturacion/ListaLiquidaciones'));
 const FormLiquidacion = lazy(() => import('./components/Facturacion/FormLiquidacion'));
@@ -236,6 +237,9 @@ function App() {
                 {/* Retenciones — solo Pro */}
                 <Route path="retenciones"       element={<ProRoute><ModuleRoute moduleKey="retenciones"><PermissionRoute permission="retenciones.gestionar"><ListaRetenciones /></PermissionRoute></ModuleRoute></ProRoute>} />
                 <Route path="retenciones/nueva" element={<ProRoute><ModuleRoute moduleKey="retenciones"><PermissionRoute permission="retenciones.gestionar"><FormRetencion /></PermissionRoute></ModuleRoute></ProRoute>} />
+
+                {/* Retenciones Recibidas — Medium y Pro */}
+                <Route path="retenciones-recibidas" element={<MediumRoute><PermissionRoute permission="compras.gestionar"><ListaRetencionesRecibidas /></PermissionRoute></MediumRoute>} />
 
                 {/* Liquidaciones — solo Pro */}
                 <Route path="liquidaciones"       element={<ProRoute><ModuleRoute moduleKey="liquidaciones"><PermissionRoute permission="liquidaciones.gestionar"><ListaLiquidaciones /></PermissionRoute></ModuleRoute></ProRoute>} />

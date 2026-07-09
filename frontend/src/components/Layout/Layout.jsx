@@ -146,8 +146,9 @@ const GRUPOS_MENU = [
     icon: '🏛️',
     label: 'Tributario',
     items: [
-      { to: '/retenciones',          icon: '📋', label: 'Retenciones',         planMin: 'pro', permiso: 'retenciones.gestionar',  modulo: 'retencionesHabilitadas' },
-      { to: '/ats',                  icon: '📁', label: 'ATS',                  planMin: 'pro', permiso: 'tributario.reportes',    modulo: 'atsHabilitado' },
+      { to: '/retenciones',           icon: '📋', label: 'Retenciones emitidas',  planMin: 'pro',    permiso: 'retenciones.gestionar', modulo: 'retencionesHabilitadas' },
+      { to: '/retenciones-recibidas', icon: '📥', label: 'Retenciones recibidas', planMin: 'medium', permiso: 'compras.gestionar' },
+      { to: '/ats',                   icon: '📁', label: 'ATS',                   planMin: 'pro',    permiso: 'tributario.reportes', modulo: 'atsHabilitado' },
       { to: '/declaraciones',        icon: '🏛️', label: 'Declaraciones',        planMin: 'pro', permiso: 'tributario.reportes' },
       { to: '/reportes-tributarios', icon: '📈', label: 'Reportes Tributarios', planMin: 'pro', permiso: 'tributario.reportes' },
     ],
