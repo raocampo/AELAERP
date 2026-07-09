@@ -81,7 +81,52 @@ function extraerFechaAutorizacion(xmlString) {
   try { return new Date(m[1]); } catch { return null; }
 }
 
-// ─── 3. Parsear Retención Recibida (tipo 07) ─────────────────
+// ─── 3. Extraer RUC/cédula del receptor desde el XML ────────
+/**
+ * Cada tipo de documento SRI identifica al receptor en un campo diferente.
+ * Devuelve solo dígitos para facilitar la comparación.
+ */
+function extraerIdentificacionReceptorXml(xmlString, tipoDoc) {
+  try {
+    const xmlPrincipal = extraerXmlPrincipal(xmlString);
+    const parser = new XMLParser(XML_OPTIONS);
+    const parsed = parser.parse(xmlPrincipal);
+    let idReceptor = '';
+
+    if (tipoDoc === '01' || tipoDoc === '03') {
+      const doc = parsed?.factura || parsed?.liquidacionCompra || parsed;
+      const info = doc?.infoFactura || doc?.infoLiquidacionCompra || {};
+      idReceptor = limpiar(info?.identificacionComprador || '');
+    } else if (tipoDoc === '07') {
+      const doc = parsed?.comprobanteRetencion || parsed;
+      const info = doc?.infoCompRetencion || doc?.infoRetencion || {};
+      idReceptor = limpiar(info?.identificacionSujetoRetenido || '');
+    } else if (tipoDoc === '04' || tipoDoc === '05') {
+      const doc = parsed?.notaCredito || parsed?.notaDebito || Object.values(parsed || {})[0] || {};
+      const info = doc?.infoNotaCredito || doc?.infoNotaDebito || {};
+      idReceptor = limpiar(info?.identificacionComprador || info?.identificacionProveedor || '');
+    }
+
+    return idReceptor.replace(/\D/g, '');
+  } catch {
+    return '';
+  }
+}
+
+// Compara RUC/cédula tolerando que el mismo contribuyente
+// puede aparecer como cédula (10 dígitos) o RUC (cédula + 001 = 13 dígitos)
+function rucCoincide(rucEmpresa, idReceptor) {
+  if (!rucEmpresa || !idReceptor) return true; // sin datos no bloqueamos
+  const e = rucEmpresa.replace(/\D/g, '');
+  const r = idReceptor.replace(/\D/g, '');
+  if (e === r) return true;
+  // cedula → RUC: '0912345678' vs '0912345678001'
+  if (e.length === 13 && r.length === 10 && e.startsWith(r)) return true;
+  if (r.length === 13 && e.length === 10 && r.startsWith(e)) return true;
+  return false;
+}
+
+// ─── 4. Parsear Retención Recibida (tipo 07) ─────────────────
 /**
  * Parsea el XML de un comprobante de retención emitido por un
  * cliente (agente de retención) dirigido a la empresa receptora.
@@ -177,6 +222,20 @@ async function importarDocumentoRecibido({
 }) {
   const modelo = TIPOS_DOCUMENTO[tipoDoc]?.destino;
   if (!modelo) throw new Error(`Tipo de documento no soportado: ${tipoDoc}`);
+
+  // ── Validar que el documento pertenece al RUC de la empresa ──
+  const xmlParaValidar = xmlAutorizado || xmlEnvuelto;
+  if (xmlParaValidar) {
+    const idReceptor = extraerIdentificacionReceptorXml(xmlParaValidar, tipoDoc);
+    if (idReceptor) {
+      const emp = await tx.empresas.findUnique({ where: { id: empresaId }, select: { ruc: true, razonSocial: true } });
+      if (emp && !rucCoincide(emp.ruc, idReceptor)) {
+        throw new Error(
+          `El documento está dirigido a ${idReceptor}, pero la empresa activa es ${emp.razonSocial} (RUC ${emp.ruc}). No se puede importar.`
+        );
+      }
+    }
+  }
 
   // ── Facturas y Liquidaciones ─────────────────────────────
   if (modelo === 'facturas_compra') {
