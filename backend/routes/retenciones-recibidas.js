@@ -15,7 +15,7 @@ router.use(autorizarPermiso('compras.gestionar'));
 router.get('/', async (req, res) => {
   try {
     const db = req.prisma || prisma;
-    const empresaId = req.usuario.empresaId;
+    const empresaId = req.empresa?.id ?? req.usuario?.empresaId ?? 1;
     const { page = 1, limit = 15, desde, hasta, agente, incluirAnuladas } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
 
@@ -71,8 +71,9 @@ router.get('/', async (req, res) => {
 router.get('/:id/xml', async (req, res) => {
   try {
     const db = req.prisma || prisma;
+    const empresaId = req.empresa?.id ?? req.usuario?.empresaId ?? 1;
     const doc = await db.retenciones_recibidas.findFirst({
-      where: { id: Number(req.params.id), empresaId: req.usuario.empresaId },
+      where: { id: Number(req.params.id), empresaId },
       select: { xmlAutorizado: true, claveAcceso: true },
     });
     if (!doc) return res.status(404).json({ error: 'No encontrado' });

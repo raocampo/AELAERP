@@ -9,7 +9,7 @@ import { formatFechaCorta } from '../../utils/fecha';
 import { IcXML } from '../../utils/icons';
 import './ListaRetenciones.css';
 
-const TIPO_LABEL = { '1': 'Renta', '2': 'IVA', '4': 'IVA', '6': 'IVA', '6': 'LRTI Art.97', '7': 'ISD' };
+const TIPO_LABEL = { '1': 'Renta', '2': 'IVA', '4': 'IVA', '6': 'LRTI Art.97', '7': 'ISD' };
 
 function extraerNumero(claveAcceso) {
   if (!claveAcceso || claveAcceso.length < 39) return '-';
