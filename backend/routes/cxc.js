@@ -291,6 +291,120 @@ router.get('/reporte/estado-cuenta', autorizarPermiso('cxc.ver'), async (req, re
   }
 });
 
+// ─── CHEQUES RECIBIDOS ────────────────────────────────────────────
+
+const ESTADOS_CHEQUE = ['PENDIENTE', 'DEPOSITADO', 'PROTESTADO', 'ANULADO'];
+
+// GET /api/cxc/cheques
+router.get('/cheques', autorizarPermiso('cxc.ver'), async (req, res) => {
+  try {
+    const { prisma: db } = req;
+    const empresaId = obtenerEmpresaId(req);
+    const { estado, desde, hasta, q } = req.query;
+
+    const rows = await db.$queryRaw`
+      SELECT cr.*, cl.identificacion AS cliente_ident
+      FROM "cheques_recibidos" cr
+      LEFT JOIN "clientes" cl ON cl.id = cr."clienteId" AND cl."empresaId" = ${empresaId}
+      WHERE cr."empresaId" = ${empresaId}
+        AND (${estado ?? null} IS NULL OR cr.estado = ${estado ?? ''})
+        AND (${desde  ?? null} IS NULL OR cr.fecha >= ${desde  ? new Date(desde)  : new Date(0)})
+        AND (${hasta  ?? null} IS NULL OR cr.fecha <= ${hasta  ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
+        AND (${q ?? null} IS NULL OR cr.numero ILIKE ${'%' + (q ?? '') + '%'} OR cr.banco ILIKE ${'%' + (q ?? '') + '%'} OR cr."clienteNombre" ILIKE ${'%' + (q ?? '') + '%'})
+      ORDER BY cr.fecha DESC, cr.id DESC
+      LIMIT 200
+    `;
+    const data = rows.map((r) => ({
+      id: Number(r.id),
+      numero: r.numero,
+      banco: r.banco,
+      monto: parseFloat(r.monto || 0),
+      fecha: r.fecha,
+      fechaRecepcion: r.fechaRecepcion,
+      fechaDeposito: r.fechaDeposito || null,
+      clienteId: r.clienteId ? Number(r.clienteId) : null,
+      clienteNombre: r.clienteNombre,
+      facturaId: r.facturaId ? Number(r.facturaId) : null,
+      estado: r.estado,
+      observaciones: r.observaciones || null,
+    }));
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /cxc/cheques:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo obtener los cheques' });
+  }
+});
+
+// POST /api/cxc/cheques
+router.post('/cheques', autorizarPermiso('cxc.gestionar'), async (req, res) => {
+  try {
+    const { prisma: db } = req;
+    const empresaId = obtenerEmpresaId(req);
+    const { numero, banco, monto, fecha, fechaRecepcion, fechaDeposito, clienteId, clienteNombre, facturaId, observaciones } = req.body || {};
+
+    if (!numero?.trim()) return res.status(400).json({ success: false, mensaje: 'El número de cheque es requerido' });
+    if (!banco?.trim())  return res.status(400).json({ success: false, mensaje: 'El banco es requerido' });
+    const montoNum = round2(monto);
+    if (!(montoNum > 0)) return res.status(400).json({ success: false, mensaje: 'El monto debe ser mayor a cero' });
+    if (!fecha) return res.status(400).json({ success: false, mensaje: 'La fecha del cheque es requerida' });
+
+    const fechaD     = new Date(fecha);
+    const recepcionD = fechaRecepcion ? new Date(fechaRecepcion) : new Date();
+    const depositoD  = fechaDeposito  ? new Date(fechaDeposito)  : null;
+    const cliId      = clienteId      ? parseIntSafe(clienteId)  : null;
+    const facId      = facturaId      ? parseIntSafe(facturaId)  : null;
+    const usuarioId  = req.usuario?.id || null;
+
+    const result = await db.$queryRaw`
+      INSERT INTO "cheques_recibidos"
+        ("empresaId", "numero", "banco", "monto", "fecha", "fechaRecepcion", "fechaDeposito",
+         "clienteId", "clienteNombre", "facturaId", "observaciones", "usuarioId", "createdAt", "updatedAt")
+      VALUES (
+        ${empresaId}, ${numero.trim()}, ${banco.trim()}, ${montoNum}, ${fechaD}, ${recepcionD},
+        ${depositoD}, ${cliId}, ${(clienteNombre || '').trim()}, ${facId},
+        ${observaciones || null}, ${usuarioId}, NOW(), NOW()
+      )
+      RETURNING id
+    `;
+    res.status(201).json({ success: true, data: { id: Number(result[0].id) } });
+  } catch (error) {
+    console.error('POST /cxc/cheques:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo registrar el cheque' });
+  }
+});
+
+// PATCH /api/cxc/cheques/:id/estado
+router.patch('/cheques/:id/estado', autorizarPermiso('cxc.gestionar'), async (req, res) => {
+  try {
+    const { prisma: db } = req;
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const { estado, fechaDeposito, observaciones } = req.body || {};
+    if (!ESTADOS_CHEQUE.includes(estado)) {
+      return res.status(400).json({ success: false, mensaje: `Estado inválido. Válidos: ${ESTADOS_CHEQUE.join(', ')}` });
+    }
+
+    const rows = await db.$queryRaw`SELECT id FROM "cheques_recibidos" WHERE id = ${id} AND "empresaId" = ${empresaId}`;
+    if (!rows.length) return res.status(404).json({ success: false, mensaje: 'Cheque no encontrado' });
+
+    const depositoD = fechaDeposito ? new Date(fechaDeposito) : null;
+    await db.$queryRaw`
+      UPDATE "cheques_recibidos"
+      SET estado = ${estado},
+          "fechaDeposito" = COALESCE(${depositoD}, "fechaDeposito"),
+          "observaciones" = COALESCE(${observaciones || null}, "observaciones"),
+          "updatedAt" = NOW()
+      WHERE id = ${id} AND "empresaId" = ${empresaId}
+    `;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('PATCH /cxc/cheques/:id/estado:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo actualizar el estado' });
+  }
+});
+
 // PATCH /api/cxc/cobros/:id/anular
 router.patch('/cobros/:id/anular', autorizarPermiso('cxc.gestionar'), async (req, res) => {
   try {

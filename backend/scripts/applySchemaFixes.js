@@ -268,6 +268,62 @@ const FIXES = [
   )`,
   `CREATE INDEX IF NOT EXISTS "cpb_empresa_tipo_idx" ON "comprobantes_bancarios"("empresaId", "tipo")`,
   `CREATE INDEX IF NOT EXISTS "cpb_empresa_fecha_idx" ON "comprobantes_bancarios"("empresaId", "fecha")`,
+  // Cheques recibidos (CxC) — 2026-07-09
+  `CREATE TABLE IF NOT EXISTS "cheques_recibidos" (
+    "id"              SERIAL PRIMARY KEY,
+    "empresaId"       INTEGER NOT NULL,
+    "numero"          VARCHAR(50) NOT NULL,
+    "banco"           VARCHAR(150) NOT NULL,
+    "monto"           DECIMAL(14,2) NOT NULL,
+    "fecha"           DATE NOT NULL,
+    "fechaRecepcion"  DATE NOT NULL DEFAULT CURRENT_DATE,
+    "fechaDeposito"   DATE,
+    "clienteId"       INTEGER,
+    "clienteNombre"   VARCHAR(300) NOT NULL DEFAULT '',
+    "facturaId"       INTEGER,
+    "estado"          VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    "observaciones"   TEXT,
+    "usuarioId"       INTEGER,
+    "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS "cheques_recibidos_empresaId_idx" ON "cheques_recibidos"("empresaId")`,
+  `CREATE INDEX IF NOT EXISTS "cheques_recibidos_estado_idx"    ON "cheques_recibidos"("empresaId", "estado")`,
+  // Tarjetas de crédito corporativas (CxP) — 2026-07-09
+  `CREATE TABLE IF NOT EXISTS "tarjetas_credito" (
+    "id"               SERIAL PRIMARY KEY,
+    "empresaId"        INTEGER NOT NULL,
+    "nombre"           VARCHAR(150) NOT NULL,
+    "numero"           VARCHAR(20) NOT NULL DEFAULT '****',
+    "banco"            VARCHAR(100) NOT NULL,
+    "limiteCredito"    DECIMAL(14,2) NOT NULL DEFAULT 0,
+    "corte"            INTEGER NOT NULL DEFAULT 20,
+    "vencimientoPago"  INTEGER NOT NULL DEFAULT 10,
+    "activa"           BOOLEAN NOT NULL DEFAULT true,
+    "createdAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS "tarjetas_credito_empresaId_idx" ON "tarjetas_credito"("empresaId")`,
+  `CREATE TABLE IF NOT EXISTS "movimientos_tarjeta" (
+    "id"          SERIAL PRIMARY KEY,
+    "empresaId"   INTEGER NOT NULL,
+    "tarjetaId"   INTEGER NOT NULL,
+    "fecha"       DATE NOT NULL,
+    "concepto"    VARCHAR(300) NOT NULL,
+    "monto"       DECIMAL(14,2) NOT NULL,
+    "tipo"        VARCHAR(20) NOT NULL DEFAULT 'CARGO',
+    "referencia"  VARCHAR(100),
+    "observaciones" TEXT,
+    "proveedorId" INTEGER,
+    "compraId"    INTEGER,
+    "estado"      VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    "usuarioId"   INTEGER,
+    "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS "movimientos_tarjeta_tarjetaId_idx" ON "movimientos_tarjeta"("tarjetaId")`,
+  `CREATE INDEX IF NOT EXISTS "movimientos_tarjeta_empresaId_idx" ON "movimientos_tarjeta"("empresaId")`,
+  `CREATE INDEX IF NOT EXISTS "movimientos_tarjeta_fecha_idx"     ON "movimientos_tarjeta"("fecha")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

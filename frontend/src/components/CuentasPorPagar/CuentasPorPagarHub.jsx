@@ -241,12 +241,377 @@ function TabHistorial() {
   );
 }
 
-function TabProximamente({ nombre }) {
+// ─── Tab Tarjetas de Crédito ────────────────────────────────────
+function ModalNuevaTarjeta({ onClose, onSaved }) {
+  const [form, setForm] = useState({ nombre: '', numero: '', banco: '', limiteCredito: '', corte: '20', vencimientoPago: '10' });
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+  const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setGuardando(true);
+    try {
+      await api.post('/cxp/tarjetas', form);
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.mensaje || 'Error al guardar');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   return (
-    <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted,#64748b)' }}>
-      <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🚧</div>
-      <h3 style={{ margin: '0 0 0.5rem', color: '#1e293b' }}>{nombre}</h3>
-      <p style={{ margin: 0 }}>Este módulo estará disponible próximamente.</p>
+    <div className="bancos-modal-overlay">
+      <div className="bancos-modal">
+        <h2>Nueva Tarjeta de Crédito</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="bancos-form-grid">
+            <div className="form-group full-col">
+              <label>Nombre / Descripción *</label>
+              <input name="nombre" value={form.nombre} onChange={handleChange} placeholder="Ej: Visa Corporativa Pichincha" required />
+            </div>
+            <div className="form-group">
+              <label>Banco emisor *</label>
+              <input name="banco" value={form.banco} onChange={handleChange} placeholder="Ej: Banco Pichincha" required />
+            </div>
+            <div className="form-group">
+              <label>Últimos 4 dígitos</label>
+              <input name="numero" value={form.numero} onChange={handleChange} placeholder="1234" maxLength={4} />
+            </div>
+            <div className="form-group">
+              <label>Límite de crédito</label>
+              <input type="number" step="0.01" name="limiteCredito" value={form.limiteCredito} onChange={handleChange} placeholder="0.00" />
+            </div>
+            <div className="form-group">
+              <label>Día de corte</label>
+              <input type="number" name="corte" value={form.corte} onChange={handleChange} min="1" max="31" />
+            </div>
+            <div className="form-group">
+              <label>Día de pago</label>
+              <input type="number" name="vencimientoPago" value={form.vencimientoPago} onChange={handleChange} min="1" max="31" />
+            </div>
+          </div>
+          {error && <p style={{ color: 'var(--color-danger,#dc2626)', fontSize: '0.85rem', marginTop: '0.75rem' }}>{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={guardando}>{guardando ? 'Guardando...' : 'Guardar tarjeta'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ModalMovimiento({ tarjeta, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    fecha: new Date().toISOString().slice(0, 10), concepto: '', monto: '', tipo: 'CARGO', referencia: '', observaciones: '',
+  });
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+  const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setGuardando(true);
+    try {
+      await api.post(`/cxp/tarjetas/${tarjeta.id}/movimientos`, { ...form, monto: parseFloat(form.monto) });
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.mensaje || 'Error al registrar');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="bancos-modal-overlay">
+      <div className="bancos-modal">
+        <h2>Registrar Movimiento</h2>
+        <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: 'var(--color-text-muted,#64748b)' }}>
+          {tarjeta.nombre} — {tarjeta.banco} {tarjeta.numero !== '****' ? `**** ${tarjeta.numero}` : ''}
+        </p>
+        <form onSubmit={handleSubmit}>
+          <div className="bancos-form-grid">
+            <div className="form-group">
+              <label>Tipo *</label>
+              <select name="tipo" value={form.tipo} onChange={handleChange}>
+                <option value="CARGO">CARGO (gasto)</option>
+                <option value="PAGO">PAGO (abono tarjeta)</option>
+                <option value="NOTA_CREDITO">NOTA DE CRÉDITO</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Fecha *</label>
+              <input type="date" name="fecha" value={form.fecha} onChange={handleChange} required />
+            </div>
+            <div className="form-group full-col">
+              <label>Concepto *</label>
+              <input name="concepto" value={form.concepto} onChange={handleChange} required placeholder="Descripción del movimiento" />
+            </div>
+            <div className="form-group">
+              <label>Monto *</label>
+              <input type="number" step="0.01" name="monto" value={form.monto} onChange={handleChange} required min="0.01" />
+            </div>
+            <div className="form-group">
+              <label>Referencia</label>
+              <input name="referencia" value={form.referencia} onChange={handleChange} placeholder="# comprobante" />
+            </div>
+            <div className="form-group full-col">
+              <label>Observaciones</label>
+              <input name="observaciones" value={form.observaciones} onChange={handleChange} />
+            </div>
+          </div>
+          {error && <p style={{ color: 'var(--color-danger,#dc2626)', fontSize: '0.85rem', marginTop: '0.75rem' }}>{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={guardando}>{guardando ? 'Registrando...' : 'Registrar'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function TabTarjetasCredito() {
+  const [tarjetas, setTarjetas] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [modalNueva, setModalNueva] = useState(false);
+  const [modalMov, setModalMov] = useState(null);
+  const [movimientos, setMovimientos] = useState({});
+  const [expandida, setExpandida] = useState(null);
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    try {
+      const r = await api.get('/cxp/tarjetas');
+      setTarjetas(r.data?.data || []);
+    } catch (e) { console.error(e); }
+    finally { setCargando(false); }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const verMovimientos = async (t) => {
+    if (expandida === t.id) { setExpandida(null); return; }
+    setExpandida(t.id);
+    if (!movimientos[t.id]) {
+      try {
+        const r = await api.get(`/cxp/tarjetas/${t.id}/movimientos`);
+        setMovimientos((prev) => ({ ...prev, [t.id]: r.data?.data || [] }));
+      } catch (e) { console.error(e); }
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'center' }}>
+        <button className="btn btn-primary" onClick={() => setModalNueva(true)}>+ Nueva Tarjeta</button>
+      </div>
+
+      {cargando ? (
+        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted,#64748b)' }}>Cargando...</p>
+      ) : tarjetas.length === 0 ? (
+        <div className="bancos-empty">
+          <div className="bancos-empty-icon">💳</div>
+          <p>No hay tarjetas de crédito registradas</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {tarjetas.map((t) => (
+            <div key={t.id} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.9rem 1.25rem', background: t.activa ? '#f8fafc' : '#f1f5f9', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.97rem', color: '#1e293b' }}>{t.nombre}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: 2 }}>
+                    {t.banco}{t.numero !== '****' ? ` — **** ${t.numero}` : ''} · Corte día {t.corte} · Pago día {t.vencimientoPago}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', minWidth: 120 }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Saldo pendiente</div>
+                  <div style={{ fontWeight: 800, color: t.saldo > 0 ? '#dc2626' : '#16a34a' }}>
+                    ${t.saldo.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  {t.limiteCredito > 0 && (
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                      Límite: ${t.limiteCredito.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-primary btn-sm" onClick={() => setModalMov(t)}>+ Movimiento</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => verMovimientos(t)}>
+                    {expandida === t.id ? 'Ocultar' : 'Ver movimientos'}
+                  </button>
+                </div>
+              </div>
+
+              {expandida === t.id && (
+                <div style={{ padding: '0.75rem 1.25rem 1rem', overflowX: 'auto' }}>
+                  {(movimientos[t.id] || []).length === 0 ? (
+                    <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>Sin movimientos registrados</p>
+                  ) : (
+                    <table className="movimientos-tabla">
+                      <thead>
+                        <tr>
+                          <th>Fecha</th><th>Concepto</th><th>Tipo</th>
+                          <th style={{ textAlign: 'right' }}>Monto</th>
+                          <th>Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(movimientos[t.id] || []).map((m) => (
+                          <tr key={m.id}>
+                            <td>{formatFechaCorta(m.fecha)}</td>
+                            <td>{m.concepto}</td>
+                            <td><span style={{ color: m.tipo === 'CARGO' ? '#dc2626' : '#16a34a', fontWeight: 600, fontSize: '0.8rem' }}>{m.tipo}</span></td>
+                            <td style={{ textAlign: 'right', fontWeight: 600, color: m.tipo === 'CARGO' ? '#dc2626' : '#16a34a' }}>
+                              {m.tipo === 'CARGO' ? '+' : '-'}${m.monto.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{m.estado}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modalNueva && (
+        <ModalNuevaTarjeta
+          onClose={() => setModalNueva(false)}
+          onSaved={() => { setModalNueva(false); cargar(); }}
+        />
+      )}
+      {modalMov && (
+        <ModalMovimiento
+          tarjeta={modalMov}
+          onClose={() => setModalMov(null)}
+          onSaved={() => {
+            setMovimientos((prev) => { const n = { ...prev }; delete n[modalMov.id]; return n; });
+            setModalMov(null);
+            cargar();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Tab Libro Tarjetas ─────────────────────────────────────────
+function TabLibroTarjetas() {
+  const [tarjetas, setTarjetas] = useState([]);
+  const [movimientos, setMovimientos] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [filtros, setFiltros] = useState({ tarjetaId: '', tipo: '', desde: '', hasta: '' });
+
+  useEffect(() => {
+    api.get('/cxp/tarjetas').then((r) => setTarjetas(r.data?.data || [])).catch(() => {});
+  }, []);
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    try {
+      const params = new URLSearchParams();
+      if (filtros.tarjetaId) params.set('tarjetaId', filtros.tarjetaId);
+      if (filtros.tipo)      params.set('tipo', filtros.tipo);
+      if (filtros.desde)     params.set('desde', filtros.desde);
+      if (filtros.hasta)     params.set('hasta', filtros.hasta);
+      const r = await api.get(`/cxp/libro-tarjetas?${params.toString()}`);
+      setMovimientos(r.data?.data || []);
+    } catch (e) { console.error(e); }
+    finally { setCargando(false); }
+  }, [filtros]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const totalCargos = movimientos.filter((m) => m.tipo === 'CARGO').reduce((s, m) => s + m.monto, 0);
+  const totalPagos  = movimientos.filter((m) => m.tipo !== 'CARGO').reduce((s, m) => s + m.monto, 0);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <select
+          value={filtros.tarjetaId}
+          onChange={(e) => setFiltros((f) => ({ ...f, tarjetaId: e.target.value }))}
+          style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.88rem' }}
+        >
+          <option value="">Todas las tarjetas</option>
+          {tarjetas.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+        </select>
+        <select
+          value={filtros.tipo}
+          onChange={(e) => setFiltros((f) => ({ ...f, tipo: e.target.value }))}
+          style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.88rem' }}
+        >
+          <option value="">Todos los tipos</option>
+          <option value="CARGO">CARGOS</option>
+          <option value="PAGO">PAGOS</option>
+          <option value="NOTA_CREDITO">NOTAS DE CRÉDITO</option>
+        </select>
+        <input type="date" value={filtros.desde} onChange={(e) => setFiltros((f) => ({ ...f, desde: e.target.value }))}
+          style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.88rem' }} />
+        <input type="date" value={filtros.hasta} onChange={(e) => setFiltros((f) => ({ ...f, hasta: e.target.value }))}
+          style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.88rem' }} />
+
+        {(totalCargos > 0 || totalPagos > 0) && (
+          <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: '#64748b' }}>
+            Cargos: <strong style={{ color: '#dc2626' }}>${totalCargos.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            {' · '}
+            Pagos: <strong style={{ color: '#16a34a' }}>${totalPagos.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            {' · '}
+            Saldo: <strong style={{ color: totalCargos - totalPagos > 0 ? '#dc2626' : '#16a34a' }}>
+              ${(totalCargos - totalPagos).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </strong>
+          </span>
+        )}
+      </div>
+
+      {cargando ? (
+        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted,#64748b)' }}>Cargando...</p>
+      ) : movimientos.length === 0 ? (
+        <div className="bancos-empty">
+          <div className="bancos-empty-icon">📋</div>
+          <p>No hay movimientos para el filtro seleccionado</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="movimientos-tabla">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Tarjeta</th>
+                <th>Concepto</th>
+                <th>Tipo</th>
+                <th style={{ textAlign: 'right' }}>Monto</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {movimientos.map((m) => (
+                <tr key={m.id}>
+                  <td>{formatFechaCorta(m.fecha)}</td>
+                  <td style={{ fontSize: '0.85rem' }}>{m.tarjetaNombre}</td>
+                  <td>{m.concepto}</td>
+                  <td>
+                    <span style={{ fontWeight: 700, fontSize: '0.8rem', color: m.tipo === 'CARGO' ? '#dc2626' : '#16a34a' }}>{m.tipo}</span>
+                  </td>
+                  <td style={{ textAlign: 'right', fontWeight: 600, color: m.tipo === 'CARGO' ? '#dc2626' : '#16a34a' }}>
+                    {m.tipo === 'CARGO' ? '+' : '-'}${m.monto.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{m.estado}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -495,8 +860,8 @@ export default function CuentasPorPagarHub() {
       {tabActivo === 'vigentes'       && <TabCompras estado="vigentes"   onPagar={setModalPago} key={`vig-${refresco}`} />}
       {tabActivo === 'canceladas'     && <TabCompras estado="canceladas" key={`can-${refresco}`} />}
       {tabActivo === 'historial'      && <TabHistorial key={`hist-${refresco}`} />}
-      {tabActivo === 'tarjetas'       && <TabProximamente nombre="Tarjetas de crédito" />}
-      {tabActivo === 'libro-tarjetas' && <TabProximamente nombre="Libro tarjetas de crédito" />}
+      {tabActivo === 'tarjetas'       && <TabTarjetasCredito />}
+      {tabActivo === 'libro-tarjetas' && <TabLibroTarjetas />}
       {tabActivo === 'reportes'       && <TabReportesCxP />}
 
       {modalPago && (

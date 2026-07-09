@@ -251,6 +251,246 @@ function TabProximamente({ nombre }) {
   );
 }
 
+// ─── Tab Cheques Recibidos ─────────────────────────────────────
+const ESTADOS_CHEQUE = ['PENDIENTE', 'DEPOSITADO', 'PROTESTADO', 'ANULADO'];
+const ESTADO_COLOR = {
+  PENDIENTE: '#2563eb',
+  DEPOSITADO: '#16a34a',
+  PROTESTADO: '#dc2626',
+  ANULADO: '#94a3b8',
+};
+
+function ModalCheque({ onClose, onSaved }) {
+  const [form, setForm] = useState({
+    numero: '', banco: '', monto: '', fecha: new Date().toISOString().slice(0, 10),
+    fechaRecepcion: new Date().toISOString().slice(0, 10), fechaDeposito: '',
+    clienteNombre: '', observaciones: '',
+  });
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+  const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setGuardando(true);
+    try {
+      await api.post('/cxc/cheques', { ...form, monto: parseFloat(form.monto) });
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.mensaje || 'Error al registrar el cheque');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="bancos-modal-overlay">
+      <div className="bancos-modal">
+        <h2>Registrar Cheque Recibido</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="bancos-form-grid">
+            <div className="form-group">
+              <label>N° Cheque *</label>
+              <input name="numero" value={form.numero} onChange={handleChange} placeholder="Ej: 00123456" required />
+            </div>
+            <div className="form-group">
+              <label>Banco emisor *</label>
+              <input name="banco" value={form.banco} onChange={handleChange} placeholder="Ej: Banco Pichincha" required />
+            </div>
+            <div className="form-group">
+              <label>Monto *</label>
+              <input type="number" step="0.01" name="monto" value={form.monto} onChange={handleChange} required min="0.01" />
+            </div>
+            <div className="form-group">
+              <label>Fecha del cheque *</label>
+              <input type="date" name="fecha" value={form.fecha} onChange={handleChange} required />
+            </div>
+            <div className="form-group">
+              <label>Fecha de recepción *</label>
+              <input type="date" name="fechaRecepcion" value={form.fechaRecepcion} onChange={handleChange} required />
+            </div>
+            <div className="form-group">
+              <label>Fecha de depósito prevista</label>
+              <input type="date" name="fechaDeposito" value={form.fechaDeposito} onChange={handleChange} />
+            </div>
+            <div className="form-group full-col">
+              <label>Cliente / Girador</label>
+              <input name="clienteNombre" value={form.clienteNombre} onChange={handleChange} placeholder="Nombre del cliente que emite el cheque" />
+            </div>
+            <div className="form-group full-col">
+              <label>Observaciones</label>
+              <input name="observaciones" value={form.observaciones} onChange={handleChange} />
+            </div>
+          </div>
+          {error && <p style={{ color: 'var(--color-danger,#dc2626)', fontSize: '0.85rem', marginTop: '0.75rem' }}>{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={guardando}>
+              {guardando ? 'Registrando...' : 'Registrar cheque'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function TabChequesRecibidos() {
+  const [cheques, setCheques] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [filtroEstado, setFiltroEstado] = useState('');
+  const [modalNuevo, setModalNuevo] = useState(false);
+  const [actualizando, setActualizando] = useState(null);
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    try {
+      const params = filtroEstado ? `?estado=${filtroEstado}` : '';
+      const r = await api.get(`/cxc/cheques${params}`);
+      setCheques(r.data?.data || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCargando(false);
+    }
+  }, [filtroEstado]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const cambiarEstado = async (cheque, nuevoEstado) => {
+    const confirmMsg = nuevoEstado === 'DEPOSITADO'
+      ? `¿Marcar cheque #${cheque.numero} como DEPOSITADO?`
+      : nuevoEstado === 'PROTESTADO'
+        ? `¿Marcar cheque #${cheque.numero} como PROTESTADO (rebotado)?`
+        : `¿Anular cheque #${cheque.numero}?`;
+    if (!window.confirm(confirmMsg)) return;
+    setActualizando(cheque.id);
+    try {
+      const extra = nuevoEstado === 'DEPOSITADO' ? { fechaDeposito: new Date().toISOString().slice(0, 10) } : {};
+      await api.patch(`/cxc/cheques/${cheque.id}/estado`, { estado: nuevoEstado, ...extra });
+      await cargar();
+    } catch (err) {
+      alert(err.response?.data?.mensaje || 'Error al actualizar estado');
+    } finally {
+      setActualizando(null);
+    }
+  };
+
+  const totalPendiente = cheques.filter((c) => c.estado === 'PENDIENTE').reduce((s, c) => s + c.monto, 0);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <select
+          value={filtroEstado}
+          onChange={(e) => setFiltroEstado(e.target.value)}
+          style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.88rem' }}
+        >
+          <option value="">Todos los estados</option>
+          {ESTADOS_CHEQUE.map((e) => <option key={e} value={e}>{e}</option>)}
+        </select>
+        <button className="btn btn-primary" onClick={() => setModalNuevo(true)}>+ Registrar Cheque</button>
+        {totalPendiente > 0 && (
+          <span style={{ marginLeft: 'auto', fontSize: '0.88rem', color: '#2563eb', fontWeight: 600 }}>
+            Pendiente total: ${totalPendiente.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        )}
+      </div>
+
+      {cargando ? (
+        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted,#64748b)' }}>Cargando...</p>
+      ) : cheques.length === 0 ? (
+        <div className="bancos-empty">
+          <div className="bancos-empty-icon">🏦</div>
+          <p>No hay cheques registrados{filtroEstado ? ` con estado "${filtroEstado}"` : ''}</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="movimientos-tabla">
+            <thead>
+              <tr>
+                <th>N° Cheque</th>
+                <th>Banco</th>
+                <th>Cliente / Girador</th>
+                <th>Fecha Cheque</th>
+                <th>Fecha Depósito</th>
+                <th style={{ textAlign: 'right' }}>Monto</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cheques.map((c) => (
+                <tr key={c.id} style={{ opacity: c.estado === 'ANULADO' ? 0.55 : 1 }}>
+                  <td style={{ fontWeight: 600 }}>{c.numero}</td>
+                  <td>{c.banco}</td>
+                  <td>{c.clienteNombre || '—'}</td>
+                  <td>{formatFechaCorta(c.fecha)}</td>
+                  <td>{c.fechaDeposito ? formatFechaCorta(c.fechaDeposito) : '—'}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                    ${c.monto.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: ESTADO_COLOR[c.estado] || '#64748b' }}>
+                      {c.estado}
+                    </span>
+                  </td>
+                  <td>
+                    {c.estado === 'PENDIENTE' && (
+                      <>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          style={{ marginRight: 4 }}
+                          disabled={actualizando === c.id}
+                          onClick={() => cambiarEstado(c, 'DEPOSITADO')}
+                        >
+                          Depositar
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          style={{ marginRight: 4 }}
+                          disabled={actualizando === c.id}
+                          onClick={() => cambiarEstado(c, 'PROTESTADO')}
+                        >
+                          Protestar
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          disabled={actualizando === c.id}
+                          onClick={() => cambiarEstado(c, 'ANULADO')}
+                        >
+                          Anular
+                        </button>
+                      </>
+                    )}
+                    {c.estado === 'DEPOSITADO' && (
+                      <button
+                        className="btn btn-danger btn-sm"
+                        disabled={actualizando === c.id}
+                        onClick={() => cambiarEstado(c, 'PROTESTADO')}
+                      >
+                        Marcar protestado
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modalNuevo && (
+        <ModalCheque
+          onClose={() => setModalNuevo(false)}
+          onSaved={() => { setModalNuevo(false); cargar(); }}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Tab Reportes CxC ──────────────────────────────────────────
 function TabReportesCxC() {
   const [vista, setVista] = useState('antiguedad');
@@ -497,7 +737,7 @@ export default function CuentasPorCobrarHub() {
       {tabActivo === 'vigentes'   && <TabFacturas estado="vigentes"   onCobrar={setModalCobro} key={`vig-${refresco}`} />}
       {tabActivo === 'canceladas' && <TabFacturas estado="canceladas" key={`can-${refresco}`} />}
       {tabActivo === 'historial'  && <TabHistorial key={`hist-${refresco}`} />}
-      {tabActivo === 'cheques'    && <TabProximamente nombre="Cheques recibidos" />}
+      {tabActivo === 'cheques'    && <TabChequesRecibidos key={`chq-${refresco}`} />}
       {tabActivo === 'ordenes'    && <TabProximamente nombre="Órdenes de pago" />}
       {tabActivo === 'recibos'    && <TabProximamente nombre="Recibos" />}
       {tabActivo === 'importar'   && <TabProximamente nombre="Importar cobros" />}
