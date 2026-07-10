@@ -728,7 +728,7 @@ function TabReportesCxP() {
       )}
 
       {vista === 'estado-cuenta' && (
-        <div style={{ display: 'grid', gridTemplateColumns: provSeleccionado ? '280px 1fr' : '1fr', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: provSeleccionado ? 'minmax(180px, 280px) 1fr' : '1fr', gap: '1rem', minWidth: 0 }}>
           <div>
             <h3 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 0.75rem' }}>Proveedores con saldo</h3>
             {cargandoProvs ? (

@@ -84,8 +84,10 @@
 
 .detalle-compra-row > strong,
 .detalle-compra-row > span:not(:first-child) {
+  flex: 1 1 0%;
   min-width: 0;
   word-break: break-word;
+  overflow-wrap: anywhere;
   text-align: right;
   color: #1e293b;
 }

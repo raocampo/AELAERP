@@ -603,7 +603,7 @@ function TabReportesCxC() {
       )}
 
       {vista === 'estado-cuenta' && (
-        <div style={{ display: 'grid', gridTemplateColumns: clienteSeleccionado ? '280px 1fr' : '1fr', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: clienteSeleccionado ? 'minmax(180px, 280px) 1fr' : '1fr', gap: '1rem', minWidth: 0 }}>
           <div>
             <h3 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 0.75rem' }}>Clientes con saldo</h3>
             {cargandoClientes ? (

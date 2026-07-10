@@ -342,7 +342,7 @@
   color: #EF4444;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1100px) {
   .conta-grid {
     grid-template-columns: 1fr;
   }

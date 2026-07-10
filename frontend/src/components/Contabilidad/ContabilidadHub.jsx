@@ -933,7 +933,7 @@ const ContabilidadHub = () => {
           <div className="conta-grid">
             <div className="conta-card">
               <h3>Asientos recientes</h3>
-              <table className="conta-table">
+              <div style={{ overflowX: 'auto' }}><table className="conta-table">
                 <thead>
                   <tr>
                     <th>Número</th>
@@ -955,7 +955,7 @@ const ContabilidadHub = () => {
                     <tr><td colSpan="4" className="conta-empty">Aún no hay asientos contables.</td></tr>
                   )}
                 </tbody>
-              </table>
+              </table></div>
             </div>
 
             <div className="conta-card">
@@ -1041,7 +1041,7 @@ const ContabilidadHub = () => {
               {diarioLoading ? (
                 <div className="conta-loading">Cargando libro diario...</div>
               ) : (
-                <table className="conta-table">
+                <div style={{ overflowX: 'auto' }}><table className="conta-table">
                   <thead>
                     <tr>
                       <th>#</th>
@@ -1093,7 +1093,7 @@ const ContabilidadHub = () => {
                       <tr><td colSpan="8" className="conta-empty">No hay asientos para el filtro aplicado.</td></tr>
                     )}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </div>
           )}
