@@ -20,9 +20,9 @@ const PLANES = {
   },
   pro: {
     label: 'Pro', sublabel: 'Empresarial', color: '#1976D2',
-    descripcion: 'Suite completa con contabilidad, tributario y multiempresa.',
+    descripcion: 'Suite completa con contabilidad, tributario y multiempresa opcional.',
     limites: 'Ilimitado · Usuarios ilimitados',
-    modulos: ['Todo lo de Medium', 'Retenciones', 'Liquidaciones de Compra', 'ATS', 'Reportes Tributarios', 'Contabilidad', 'Multiempresa'],
+    modulos: ['Todo lo de Medium', 'Retenciones', 'Liquidaciones de Compra', 'ATS', 'Reportes Tributarios', 'Contabilidad', 'Multiempresa (opcional)'],
   },
 };
 
@@ -162,17 +162,51 @@ export default function ConfiguracionSistema() {
           </div>
         </section>
 
-        {/* ── Modo de operación (solo lectura) ──────────────────────────── */}
+        {/* ── Modo de operación ─────────────────────────────────────────── */}
         <section className="syscfg-card">
           <h2>Modo de operación</h2>
-          <div className="syscfg-readonly-block">
-            <span className={`syscfg-badge syscfg-badge-modo`}>
-              {form.modoOperacion === 'multiempresa' ? '🏢 Multiempresa' : '🏪 Monoempresa'}
-            </span>
-            <p className="syscfg-note syscfg-readonly-nota">
-              🔒 Gestionado por el administrador del sistema.
-            </p>
-          </div>
+          {planActual === 'pro' ? (
+            <div>
+              <div className="syscfg-modo-opciones">
+                <label className={`syscfg-modo-opcion ${form.modoOperacion === 'monoempresa' ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="modoOperacion"
+                    value="monoempresa"
+                    checked={form.modoOperacion === 'monoempresa'}
+                    onChange={() => actualizar('modoOperacion', 'monoempresa')}
+                  />
+                  <span className="syscfg-modo-icon">🏪</span>
+                  <span className="syscfg-modo-label">Monoempresa</span>
+                  <span className="syscfg-modo-desc">Una sola empresa</span>
+                </label>
+                <label className={`syscfg-modo-opcion ${form.modoOperacion === 'multiempresa' ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="modoOperacion"
+                    value="multiempresa"
+                    checked={form.modoOperacion === 'multiempresa'}
+                    onChange={() => actualizar('modoOperacion', 'multiempresa')}
+                  />
+                  <span className="syscfg-modo-icon">🏢</span>
+                  <span className="syscfg-modo-label">Multiempresa</span>
+                  <span className="syscfg-modo-desc">Varias empresas desde una cuenta</span>
+                </label>
+              </div>
+              <p className="syscfg-note" style={{ marginTop: '0.6rem' }}>
+                Puedes cambiar el modo en cualquier momento. En multiempresa aparece el selector de empresa en el menú lateral.
+              </p>
+            </div>
+          ) : (
+            <div className="syscfg-readonly-block">
+              <span className="syscfg-badge syscfg-badge-modo">
+                {form.modoOperacion === 'multiempresa' ? '🏢 Multiempresa' : '🏪 Monoempresa'}
+              </span>
+              <p className="syscfg-note syscfg-readonly-nota">
+                🔒 El modo multiempresa requiere plan Pro.
+              </p>
+            </div>
+          )}
         </section>
 
         {/* ── Caja ──────────────────────────────────────────────────────── */}

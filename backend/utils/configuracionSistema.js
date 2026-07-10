@@ -78,9 +78,7 @@ function limitesPlan(plan) {
 // ─── Configuración base al crear empresa ─────────────────────────────────────
 function construirConfiguracionSistemaBase(empresa = {}) {
   const tipoSistema    = normalizarTipoSistema(empresa.plan || process.env.AELA_EDITION || 'pro');
-  const modoOperacion  = tipoSistema === 'pro'
-    ? 'multiempresa'
-    : normalizarModoOperacion(process.env.MODO_EMPRESA || 'monoempresa');
+  const modoOperacion  = normalizarModoOperacion(process.env.MODO_EMPRESA || 'monoempresa');
   const caps           = capacidadesPlan(tipoSistema);
 
   return {
@@ -139,9 +137,7 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
     ...config,
     empresaId:   empresa.id,
     tipoSistema,
-    modoOperacion: tipoSistema === 'pro'
-      ? 'multiempresa'
-      : normalizarModoOperacion(config?.modoOperacion || await obtenerModoOperacionGlobal(tx)),
+    modoOperacion: normalizarModoOperacion(config?.modoOperacion || await obtenerModoOperacionGlobal(tx)),
     impresionAutoReciboPos:  Boolean(config?.impresionAutoReciboPos ?? false),
     impresoraKiosko:         String(config?.impresoraKiosko || '').trim(),
     // Forzar a false los módulos que el plan no permite
@@ -180,9 +176,7 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
 
   return {
     tipoSistema,
-    modoOperacion:            tipoSistema === 'pro'
-                                ? 'multiempresa'
-                                : normalizarModoOperacion(reqBody.modoOperacion, actual.modoOperacion),
+    modoOperacion:            normalizarModoOperacion(reqBody.modoOperacion, actual.modoOperacion),
     cajaNombre:               reqBody.cajaNombre?.trim() || actual.cajaNombre || 'Caja General',
     cajaDiariaHabilitada:     flag('cajaDiariaHabilitada', true),
     cierreCajaObligatorio:    Boolean(reqBody.cierreCajaObligatorio !== undefined ? reqBody.cierreCajaObligatorio : actual.cierreCajaObligatorio),
