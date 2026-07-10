@@ -625,24 +625,22 @@ export default function DetalleCompra() {
       <section className="detalle-compra-grid">
         <article className="detalle-compra-card">
           <h2>Proveedor</h2>
-          <div className="detalle-compra-row"><span>Identificacion</span><strong>{compra.identificacionProveedor}</strong></div>
-          <div className="detalle-compra-row"><span>Razon social</span><strong>{compra.razonSocialProveedor}</strong></div>
+          <div className="detalle-compra-row"><span>Identificacion</span><strong>{compra.identificacionProveedor || '—'}</strong></div>
+          <div className="detalle-compra-row"><span>Razon social</span><strong>{compra.razonSocialProveedor || '—'}</strong></div>
           {compra.proveedor && (
             <div className="detalle-compra-row"><span>Proveedor maestro</span><strong>{compra.proveedor.razonSocial}</strong></div>
           )}
           {compra.nombreComercialProveedor && (
             <div className="detalle-compra-row"><span>Nombre comercial</span><strong>{compra.nombreComercialProveedor}</strong></div>
           )}
-          {compra.direccionProveedor && (
-            <div className="detalle-compra-row"><span>Direccion</span><span>{compra.direccionProveedor}</span></div>
-          )}
-          <div className="detalle-compra-row"><span>Tipo identificacion</span><span>{compra.tipoIdentificacionProveedor}</span></div>
+          <div className="detalle-compra-row"><span>Direccion</span><span>{compra.direccionProveedor || '—'}</span></div>
+          <div className="detalle-compra-row"><span>Tipo identificacion</span><span>{compra.tipoIdentificacionProveedor || '—'}</span></div>
         </article>
 
         <article className="detalle-compra-card">
           <h2>Comprobante</h2>
           <div className="detalle-compra-row"><span>Fecha emision</span><strong>{fmtFecha(compra.fechaEmision)}</strong></div>
-          <div className="detalle-compra-row"><span>Nro. factura</span><strong>{compra.numeroFactura}</strong></div>
+          <div className="detalle-compra-row"><span>Nro. factura</span><strong>{compra.numeroFactura || '—'}</strong></div>
           <div className="detalle-compra-row"><span>Autorizacion</span><span className="detalle-compra-wrap">{compra.numeroAutorizacion || 'Sin autorizacion'}</span></div>
           <div className="detalle-compra-row"><span>Clave acceso</span><span className="detalle-compra-wrap">{compra.claveAcceso || 'No registrada'}</span></div>
           <div className="detalle-compra-row"><span>Origen</span><span className="detalle-compra-badge">{compra.origenRegistro || 'MANUAL'}</span></div>

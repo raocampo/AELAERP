@@ -751,6 +751,57 @@
   padding-bottom: 20px;
 }
 
+/* ── Asiento — meta (lectura) ─────────────────────────────────── */
+.conta-asiento-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 16px;
+  padding: 12px 0 4px;
+}
+.conta-asiento-meta .full-width { grid-column: 1 / -1; }
+.conta-asiento-meta div { display: grid; gap: 2px; }
+.conta-asiento-meta span { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+.conta-asiento-meta strong { font-size: 13px; color: #1e293b; }
+
+/* ── Asiento — vista solo lectura ─────────────────────────────── */
+.conta-asiento-lectura td { padding: 8px 10px; font-size: 13px; }
+.conta-asiento-lectura th { padding: 8px 10px; font-size: 11px; }
+.conta-asiento-lectura .text-right { text-align: right; }
+
+.conta-cod {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6366f1;
+  background: #eef2ff;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-right: 4px;
+  font-family: monospace;
+}
+
+.conta-cc-badge {
+  display: inline-block;
+  font-size: 10px;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 6px;
+}
+
+.conta-monto-cell {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.conta-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 @media (prefers-color-scheme: dark) {
   .conta-subtab-nav { border-bottom-color: #334155; }
   .conta-subtab { color: #94a3b8; }

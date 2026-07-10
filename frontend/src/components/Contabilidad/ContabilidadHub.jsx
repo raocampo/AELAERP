@@ -1182,14 +1182,22 @@ const ContabilidadHub = () => {
                 )}
 
                 <form onSubmit={guardarAsiento}>
+                  {asientoSoloLectura ? (
+                    <div className="conta-asiento-meta">
+                      <div><span>Fecha</span><strong>{asientoForm.fecha}</strong></div>
+                      <div><span>Tipo</span><strong>{asientoForm.tipo}</strong></div>
+                      <div><span>Referencia</span><strong>{asientoForm.referencia || '—'}</strong></div>
+                      <div className="full-width"><span>Descripción</span><strong>{asientoForm.descripcion}</strong></div>
+                    </div>
+                  ) : (
                   <div className="conta-form-grid">
                     <div>
                       <label>Fecha</label>
-                      <input type="date" value={asientoForm.fecha} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, fecha: e.target.value }))} required />
+                      <input type="date" value={asientoForm.fecha} onChange={(e) => setAsientoForm((prev) => ({ ...prev, fecha: e.target.value }))} required />
                     </div>
                     <div>
                       <label>Tipo</label>
-                      <select value={asientoForm.tipo} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, tipo: e.target.value }))}>
+                      <select value={asientoForm.tipo} onChange={(e) => setAsientoForm((prev) => ({ ...prev, tipo: e.target.value }))}>
                         {TIPOS_ASIENTO_TODOS.map((t) => (
                           <option key={t} value={t}>{t}</option>
                         ))}
@@ -1197,63 +1205,101 @@ const ContabilidadHub = () => {
                     </div>
                     <div>
                       <label>Referencia</label>
-                      <input value={asientoForm.referencia} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, referencia: e.target.value }))} />
+                      <input value={asientoForm.referencia} onChange={(e) => setAsientoForm((prev) => ({ ...prev, referencia: e.target.value }))} />
                     </div>
                     <div className="full-width">
                       <label>Descripción</label>
-                      <input value={asientoForm.descripcion} disabled={asientoSoloLectura} onChange={(e) => setAsientoForm((prev) => ({ ...prev, descripcion: e.target.value }))} required />
+                      <input value={asientoForm.descripcion} onChange={(e) => setAsientoForm((prev) => ({ ...prev, descripcion: e.target.value }))} required />
                     </div>
                   </div>
+                  )}
 
                   <div className="conta-detail-box">
-                    <table className="conta-table">
-                      <thead>
-                        <tr>
-                          <th>Cuenta</th>
-                          <th>Centro de Costo</th>
-                          <th>Descripción</th>
-                          <th>Debe</th>
-                          <th>Haber</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {asientoForm.detalles.map((detalle, index) => (
-                          <tr key={`det-${index}`}>
-                            <td>
-                              <select value={detalle.cuentaId} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'cuentaId', e.target.value)} required>
-                                <option value="">Seleccione...</option>
-                                {cuentasMovimiento.map((c) => (
-                                  <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              <select value={detalle.centroCostoId} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'centroCostoId', e.target.value)}>
-                                <option value="">— Sin centro de costo —</option>
-                                {centrosCosto.filter((c) => c.activo).map((c) => (
-                                  <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              <input value={detalle.descripcion} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'descripcion', e.target.value)} />
-                            </td>
-                            <td>
-                              <input type="number" min="0" step="0.01" value={detalle.debe} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'debe', e.target.value)} />
-                            </td>
-                            <td>
-                              <input type="number" min="0" step="0.01" value={detalle.haber} disabled={asientoSoloLectura} onChange={(e) => cambiarDetalle(index, 'haber', e.target.value)} />
-                            </td>
-                            <td>
-                              {!asientoSoloLectura && (
-                                <button type="button" className="btn-link danger" onClick={() => eliminarLineaDetalle(index)}>Quitar</button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    {asientoSoloLectura ? (
+                      <div className="conta-table-scroll">
+                        <table className="conta-table conta-asiento-lectura">
+                          <thead>
+                            <tr>
+                              <th>Cuenta</th>
+                              <th>Descripción</th>
+                              <th className="text-right">Debe</th>
+                              <th className="text-right">Haber</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {asientoForm.detalles.map((detalle, index) => {
+                              const cta = cuentasMovimiento.find((c) => String(c.id) === String(detalle.cuentaId));
+                              const cc = centrosCosto.find((c) => String(c.id) === String(detalle.centroCostoId));
+                              return (
+                                <tr key={index}>
+                                  <td>
+                                    <span className="conta-cod">{cta?.codigo}</span>{' '}
+                                    <span>{cta?.nombre || '—'}</span>
+                                    {cc && <span className="conta-cc-badge">{cc.nombre}</span>}
+                                  </td>
+                                  <td>{detalle.descripcion || '—'}</td>
+                                  <td className="text-right conta-monto-cell">
+                                    {Number(detalle.debe || 0) > 0 ? Number(detalle.debe).toFixed(2) : ''}
+                                  </td>
+                                  <td className="text-right conta-monto-cell">
+                                    {Number(detalle.haber || 0) > 0 ? Number(detalle.haber).toFixed(2) : ''}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="conta-table-scroll">
+                        <table className="conta-table">
+                          <thead>
+                            <tr>
+                              <th>Cuenta</th>
+                              <th>Centro de Costo</th>
+                              <th>Descripción</th>
+                              <th>Debe</th>
+                              <th>Haber</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {asientoForm.detalles.map((detalle, index) => (
+                              <tr key={`det-${index}`}>
+                                <td>
+                                  <select value={detalle.cuentaId} onChange={(e) => cambiarDetalle(index, 'cuentaId', e.target.value)} required>
+                                    <option value="">Seleccione...</option>
+                                    {cuentasMovimiento.map((c) => (
+                                      <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td>
+                                  <select value={detalle.centroCostoId} onChange={(e) => cambiarDetalle(index, 'centroCostoId', e.target.value)}>
+                                    <option value="">— Sin centro de costo —</option>
+                                    {centrosCosto.filter((c) => c.activo).map((c) => (
+                                      <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td>
+                                  <input value={detalle.descripcion} onChange={(e) => cambiarDetalle(index, 'descripcion', e.target.value)} />
+                                </td>
+                                <td>
+                                  <input type="number" min="0" step="0.01" value={detalle.debe} onChange={(e) => cambiarDetalle(index, 'debe', e.target.value)} />
+                                </td>
+                                <td>
+                                  <input type="number" min="0" step="0.01" value={detalle.haber} onChange={(e) => cambiarDetalle(index, 'haber', e.target.value)} />
+                                </td>
+                                <td>
+                                  <button type="button" className="btn-link danger" onClick={() => eliminarLineaDetalle(index)}>Quitar</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                     <div className="conta-form-actions">
                       {!asientoSoloLectura && (
                         <button type="button" className="btn-secondary" onClick={agregarLineaDetalle}>+ Línea</button>
@@ -1878,6 +1924,7 @@ const ContabilidadHub = () => {
           </div>
           )}
 
+          {subTabPlan === 'nueva-cuenta' && (
           <div className="conta-card">
             <h3>Plan de cuentas</h3>
             {/* Banner orientativo según estado del plan */}
@@ -1991,6 +2038,7 @@ const ContabilidadHub = () => {
               </table>
             )}
           </div>
+          )}
         </div>
       )}
 

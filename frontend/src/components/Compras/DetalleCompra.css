@@ -89,7 +89,6 @@
   overflow-wrap: anywhere;
   text-align: right;
   color: #1e293b;
-  justify-self: end;
 }
 
 .detalle-compra-wrap {
@@ -286,7 +285,6 @@
   .detalle-compra-row > strong,
   .detalle-compra-row > span:not(:first-child) {
     text-align: left;
-    justify-self: start;
   }
   .detalle-compra-row span:first-child {
     max-width: 100%;
