@@ -26,6 +26,7 @@ const ContabilidadHub = () => {
 
   const [plan, setPlan] = useState([]);
   const [subTabRef, setSubTabRef] = useState('compras');
+  const [subTabPlan, setSubTabPlan] = useState('nueva-cuenta');
   const [asientos, setAsientos] = useState([]);
   const [balance, setBalance] = useState(null);
   const [estadoResultados, setEstadoResultados] = useState(null);
@@ -1497,6 +1498,14 @@ const ContabilidadHub = () => {
 
       {tab === 'plan' && (
         <div className="conta-tab-body">
+          <div className="conta-tabs">
+            <button className={subTabPlan === 'nueva-cuenta' ? 'active' : ''} onClick={() => setSubTabPlan('nueva-cuenta')}>Nueva cuenta</button>
+            <button className={subTabPlan === 'config-asientos' ? 'active' : ''} onClick={() => setSubTabPlan('config-asientos')}>Config. asientos</button>
+            <button className={subTabPlan === 'config-cuentas' ? 'active' : ''} onClick={() => setSubTabPlan('config-cuentas')}>Config. cuentas</button>
+            <button className={subTabPlan === 'importar' ? 'active' : ''} onClick={() => setSubTabPlan('importar')}>Importar Excel</button>
+          </div>
+
+          {subTabPlan === 'nueva-cuenta' && (
           <div className="conta-card">
             <h3>{cuentaForm.id ? 'Editar cuenta contable' : 'Nueva cuenta contable'}</h3>
             <form className="conta-form-grid" onSubmit={guardarCuenta}>
@@ -1550,8 +1559,9 @@ const ContabilidadHub = () => {
               </div>
             </form>
           </div>
+          )}
 
-          {/* ── Card: Configuración de asientos automáticos de compras/ventas ─── */}
+          {subTabPlan === 'config-asientos' && (
           <div className="conta-card">
             <h3>⚙️ Configuración de asientos automáticos — Compras y Ventas</h3>
             <p className="conta-import-sub">
@@ -1590,14 +1600,15 @@ const ContabilidadHub = () => {
               </div>
             </div>
           </div>
+          )}
 
-          {/* ── Card: Configuración de cuentas por referencia (retenciones, nómina, general) ─── */}
+          {subTabPlan === 'config-cuentas' && (
           <div className="conta-card">
-            <h3>⚙️ Configuración de cuentas contables por referencia</h3>
+            <h3>⚙️ Configuración de cuentas contables</h3>
             <p className="conta-import-sub">
               Relaciona cada referencia (código de retención SRI, concepto de nómina) con la cuenta
-              de tu Plan de Cuentas correspondiente. Si no configuras una referencia, se usa la
-              cuenta genérica por defecto del sistema.
+              de tu Plan de Cuentas correspondiente. Si dejas una referencia sin configurar, se usa
+              la cuenta genérica por defecto del sistema.
             </p>
             <div className="conta-tabs">
               <button className={subTabRef === 'compras' ? 'active' : ''} onClick={() => setSubTabRef('compras')}>Compras</button>
@@ -1610,8 +1621,9 @@ const ContabilidadHub = () => {
             {subTabRef === 'empleados' && <ConfiguracionCuentasReferencia categoria="NOMINA" titulo="Empleados — Nómina" plan={plan} />}
             {subTabRef === 'general' && <ConfiguracionCuentasReferencia categoria="GENERAL" titulo="General" plan={plan} />}
           </div>
+          )}
 
-          {/* ── Card: Importar plan de cuentas desde Excel ─────────────── */}
+          {subTabPlan === 'importar' && (
           <div className="conta-card">
             <div className="conta-import-header">
               <div>
@@ -1864,6 +1876,7 @@ const ContabilidadHub = () => {
               </div>
             )}
           </div>
+          )}
 
           <div className="conta-card">
             <h3>Plan de cuentas</h3>

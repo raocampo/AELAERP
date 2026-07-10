@@ -1319,7 +1319,7 @@ router.put('/configuracion-asientos', async (req, res) => {
 // GET /api/contabilidad/configuracion-referencias/:categoria
 router.get('/configuracion-referencias/:categoria', async (req, res) => {
   try {
-    const db = req.prisma;
+    const db = req.prisma || prisma;
     const empresaId = obtenerEmpresaId(req);
     const { categoria } = req.params;
     if (!CATEGORIAS_CONFIG_REFERENCIA.includes(categoria)) {
@@ -1358,7 +1358,7 @@ router.get('/configuracion-referencias/:categoria', async (req, res) => {
 // PUT /api/contabilidad/configuracion-referencias/:categoria
 router.put('/configuracion-referencias/:categoria', async (req, res) => {
   try {
-    const db = req.prisma;
+    const db = req.prisma || prisma;
     const empresaId = obtenerEmpresaId(req);
     const { categoria } = req.params;
     if (!CATEGORIAS_CONFIG_REFERENCIA.includes(categoria)) {
