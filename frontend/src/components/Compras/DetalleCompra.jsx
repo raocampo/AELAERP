@@ -128,6 +128,25 @@ export default function DetalleCompra() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const [reparandoProveedor, setReparandoProveedor] = useState(false);
+
+  const repararProveedor = async () => {
+    setReparandoProveedor(true);
+    try {
+      const res = await api.post(`/compras/${id}/reparar-proveedor`);
+      if (res.data?.reparado) {
+        toast.success('Datos del proveedor completados desde el XML original');
+        cargar();
+      } else {
+        toast.error(res.data?.mensaje || 'El XML original tampoco trae estos datos');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo reparar los datos del proveedor');
+    } finally {
+      setReparandoProveedor(false);
+    }
+  };
+
   const abrirEditar = () => {
     setEditObs(compra?.observaciones || '');
     setEditTipoGasto(compra?.tipoGasto || '');
@@ -635,6 +654,17 @@ export default function DetalleCompra() {
           )}
           <div className="detalle-compra-row"><span>Direccion</span><span>{compra.direccionProveedor || '—'}</span></div>
           <div className="detalle-compra-row"><span>Tipo identificacion</span><span>{compra.tipoIdentificacionProveedor || '—'}</span></div>
+          {(!compra.identificacionProveedor || !compra.razonSocialProveedor) && (
+            <button
+              className="btn-secondary"
+              style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}
+              onClick={repararProveedor}
+              disabled={reparandoProveedor}
+              title="Vuelve a leer el XML original de esta compra para completar los datos del proveedor que faltan"
+            >
+              {reparandoProveedor ? 'Reparando...' : '🔧 Reparar datos de proveedor'}
+            </button>
+          )}
         </article>
 
         <article className="detalle-compra-card">

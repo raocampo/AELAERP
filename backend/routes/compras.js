@@ -573,6 +573,49 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// ─── POST /:id/reparar-proveedor — rellena datos de proveedor vacíos desde el XML guardado ───
+// Para compras importadas (Buzón SRI / XML) cuyos campos de proveedor quedaron
+// vacíos (identificacion, razón social, dirección, tipo identificación) por
+// algún problema puntual de parseo. Re-lee el XML original (xmlOrigen) y solo
+// completa los campos que están vacíos — nunca sobrescribe datos ya presentes
+// (por si fueron editados manualmente).
+router.post('/:id/reparar-proveedor', async (req, res) => {
+  try {
+    const compra = await prisma.facturas_compra.findFirst({
+      where: { id: parseInt(req.params.id, 10), empresaId: req.empresa.id },
+      select: {
+        id: true, xmlOrigen: true,
+        identificacionProveedor: true, razonSocialProveedor: true,
+        direccionProveedor: true, tipoIdentificacionProveedor: true, nombreComercialProveedor: true,
+      },
+    });
+    if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
+    if (!compra.xmlOrigen) {
+      return res.status(400).json({ success: false, mensaje: 'Esta compra no tiene el XML original guardado — no se puede reparar automáticamente.' });
+    }
+
+    const datos = parsearFacturaCompraDesdeXml(compra.xmlOrigen);
+    const p = datos.proveedor;
+
+    const cambios = {};
+    if (!compra.identificacionProveedor && p.identificacionProveedor) cambios.identificacionProveedor = p.identificacionProveedor;
+    if (!compra.razonSocialProveedor && p.razonSocialProveedor) cambios.razonSocialProveedor = p.razonSocialProveedor;
+    if (!compra.direccionProveedor && p.direccionProveedor) cambios.direccionProveedor = p.direccionProveedor;
+    if (!compra.tipoIdentificacionProveedor && p.tipoIdentificacionProveedor) cambios.tipoIdentificacionProveedor = p.tipoIdentificacionProveedor;
+    if (!compra.nombreComercialProveedor && p.nombreComercialProveedor) cambios.nombreComercialProveedor = p.nombreComercialProveedor;
+
+    if (Object.keys(cambios).length === 0) {
+      return res.json({ success: true, reparado: false, mensaje: 'El XML original tampoco trae estos datos del proveedor — revisa el comprobante manualmente.' });
+    }
+
+    const actualizada = await prisma.facturas_compra.update({ where: { id: compra.id }, data: cambios });
+    res.json({ success: true, reparado: true, data: actualizada });
+  } catch (error) {
+    console.error('POST /compras/:id/reparar-proveedor:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo reparar los datos del proveedor' });
+  }
+});
+
 router.post('/importar/xml', upload.single('archivo'), async (req, res) => {
   try {
     if (!req.file?.buffer) {
