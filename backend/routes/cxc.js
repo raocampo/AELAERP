@@ -5,6 +5,10 @@
  * redundante. Requiere plan Medium o Pro.
  */
 const express = require('express');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const PDFDocument = require('pdfkit');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
 const {
@@ -13,6 +17,117 @@ const {
   siguienteNumeroGenerico,
   round2,
 } = require('../utils/contabilidad');
+
+// ─── Helper: resolver logo (mismo patrón que sri.js / proformas.js) ──────────
+function _resolverLogo(logoUrl) {
+  if (!logoUrl) return { logoData: null, tienelogo: false };
+  if (logoUrl.startsWith('data:')) {
+    try {
+      const b64 = logoUrl.replace(/^data:image\/\w+;base64,/, '');
+      return { logoData: Buffer.from(b64, 'base64'), tienelogo: true };
+    } catch { return { logoData: null, tienelogo: false }; }
+  }
+  const logoPath = path.join(__dirname, '..', logoUrl.replace(/^\//, ''));
+  const existe = fs.existsSync(logoPath);
+  return { logoData: existe ? logoPath : null, tienelogo: existe };
+}
+
+const METODO_LABEL = { efectivo: 'Efectivo', transferencia: 'Transferencia', cheque: 'Cheque', tarjeta: 'Tarjeta' };
+
+// ─── Genera el PDF del recibo de cobro (A4, una página) ───────────────────────
+function _generarReciboCobroPdf(cobro, saldoFactura, configSri, outputPath) {
+  return new Promise((resolve, reject) => {
+    const cfg = configSri || {};
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 40, bottom: 40, left: 48, right: 48 }, autoFirstPage: true });
+    const stream = fs.createWriteStream(outputPath);
+    doc.pipe(stream);
+
+    const ML = 48;
+    const W = doc.page.width - ML * 2;
+    const NEGRO = '#1e293b';
+    const GRIS = '#64748b';
+    const VERDE = '#22C55E';
+
+    const fmtFecha = (d) => (d ? new Date(d).toLocaleDateString('es-EC', { day: '2-digit', month: 'long', year: 'numeric' }) : '—');
+    const fmtMoney = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+    const { logoData, tienelogo } = _resolverLogo(cfg.logoUrl);
+    let y = 40;
+
+    if (tienelogo) {
+      try { doc.image(logoData, ML, y, { fit: [120, 55] }); } catch { /* logo inválido */ }
+    }
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(NEGRO)
+       .text((cfg.razonSocial || '').toUpperCase(), ML + (tienelogo ? 130 : 0), y, { width: W - (tienelogo ? 130 : 0) });
+    doc.fontSize(8).font('Helvetica').fillColor(GRIS)
+       .text(`RUC: ${cfg.ruc || ''}`, { width: W - (tienelogo ? 130 : 0) });
+    if (cfg.dirMatriz) doc.text(cfg.dirMatriz, { width: W - (tienelogo ? 130 : 0) });
+    if (cfg.telefono) doc.text(`Telf.: ${cfg.telefono}`, { width: W - (tienelogo ? 130 : 0) });
+    y = Math.max(doc.y, y + 55) + 16;
+
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(1).stroke('#e2e8f0');
+    y += 20;
+
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(NEGRO)
+       .text('RECIBO DE COBRO', ML, y, { width: W, align: 'center' });
+    y += 22;
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(VERDE)
+       .text(`No. ${cobro.numero}`, ML, y, { width: W, align: 'center' });
+    y += 24;
+
+    const cliente = cobro.factura?.razonSocialComprador || cobro.cliente?.razonSocial || 'Consumidor final';
+    const identificacion = cobro.factura?.identificacionComprador || cobro.cliente?.identificacion || '—';
+
+    const fila = (label, valor, bold = false) => {
+      doc.fontSize(9).font('Helvetica-Bold').fillColor(GRIS).text(label, ML, y, { width: 140, continued: false });
+      doc.fontSize(9).font(bold ? 'Helvetica-Bold' : 'Helvetica').fillColor(NEGRO).text(valor, ML + 140, y, { width: W - 140 });
+      y = Math.max(y + 16, doc.y + 4);
+    };
+
+    fila('Fecha:', fmtFecha(cobro.fecha));
+    fila('Recibí de:', cliente, true);
+    fila('Identificación:', identificacion);
+    fila('Factura Nº:', cobro.factura?.numeroFactura || '—');
+    fila('Concepto:', saldoFactura.esTotal ? 'Cancelación total de factura' : 'Abono a factura');
+
+    let formaPago = METODO_LABEL[cobro.metodoPago] || cobro.metodoPago;
+    if (cobro.metodoPago === 'transferencia' && cobro.banco?.nombre) formaPago += ` — ${cobro.banco.nombre}`;
+    if (cobro.metodoPago === 'cheque' && cobro.cheque?.numero) formaPago += ` Nº ${cobro.cheque.numero}`;
+    fila('Forma de pago:', formaPago);
+    if (cobro.referencia) fila('Referencia:', cobro.referencia);
+
+    y += 8;
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(1).stroke('#e2e8f0');
+    y += 16;
+
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(GRIS).text('Total factura:', ML, y, { width: 140 });
+    doc.fontSize(9).font('Helvetica').fillColor(NEGRO).text(fmtMoney(saldoFactura.importeTotal), ML + 140, y, { width: W - 140, align: 'left' });
+    y += 16;
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(GRIS).text('Saldo pendiente:', ML, y, { width: 140 });
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(saldoFactura.saldoPendiente > 0.009 ? '#EF4444' : VERDE)
+       .text(fmtMoney(saldoFactura.saldoPendiente), ML + 140, y, { width: W - 140 });
+    y += 26;
+
+    doc.roundedRect(ML, y, W, 44, 6).fillAndStroke('#f0fdf4', '#bbf7d0');
+    doc.fontSize(10).font('Helvetica-Bold').fillColor(GRIS).text('MONTO RECIBIDO', ML + 16, y + 10);
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(VERDE).text(fmtMoney(cobro.monto), ML, y + 8, { width: W - 16, align: 'right' });
+    y += 70;
+
+    if (cobro.observaciones) {
+      doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(`Observaciones: ${cobro.observaciones}`, ML, y, { width: W });
+      y = doc.y + 16;
+    }
+
+    y = Math.max(y, doc.page.height - 130);
+    doc.moveTo(ML + W * 0.15, y).lineTo(ML + W * 0.85, y).lineWidth(0.75).stroke('#94a3b8');
+    y += 6;
+    doc.fontSize(8).font('Helvetica').fillColor(GRIS).text('Recibí conforme', ML, y, { width: W, align: 'center' });
+
+    doc.end();
+    stream.on('finish', () => resolve(outputPath));
+    stream.on('error', reject);
+  });
+}
 
 const router = express.Router();
 
@@ -145,6 +260,49 @@ router.get('/cobros', autorizarPermiso('cxc.ver'), async (req, res) => {
   } catch (error) {
     console.error('GET /cxc/cobros:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo obtener el historial de cobros' });
+  }
+});
+
+// GET /api/cxc/cobros/:id/recibo — PDF imprimible del cobro
+router.get('/cobros/:id/recibo', autorizarPermiso('cxc.ver'), async (req, res) => {
+  let outPath = null;
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const cobro = await db.cobros_cliente.findFirst({
+      where: { id, empresaId },
+      include: {
+        factura: { select: { numeroFactura: true, razonSocialComprador: true, identificacionComprador: true, importeTotal: true } },
+        cliente: { select: { razonSocial: true, identificacion: true } },
+        banco: { select: { nombre: true } },
+        cheque: { select: { numero: true } },
+      },
+    });
+    if (!cobro) return res.status(404).json({ success: false, mensaje: 'Cobro no encontrado' });
+
+    const importeTotal = round2(cobro.factura?.importeTotal || 0);
+    const cobrado = await obtenerCobradoPorFactura(db, empresaId, [cobro.facturaId]);
+    const saldoPendiente = round2(importeTotal - (cobrado.get(cobro.facturaId) || 0));
+    const saldoFactura = { importeTotal, saldoPendiente, esTotal: saldoPendiente <= 0.009 };
+
+    const configSri = await db.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
+
+    outPath = path.join(os.tmpdir(), `cxc-recibo-${cobro.id}-${Date.now()}.pdf`);
+    await _generarReciboCobroPdf(cobro, saldoFactura, configSri, outPath);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Recibo-${cobro.numero}.pdf"`);
+    const stream = fs.createReadStream(outPath);
+    stream.pipe(res);
+    stream.on('end', () => { try { fs.unlinkSync(outPath); } catch { /* noop */ } });
+    stream.on('error', () => { if (!res.headersSent) res.status(500).end(); });
+  } catch (error) {
+    console.error('GET /cxc/cobros/:id/recibo:', error);
+    if (outPath) { try { fs.unlinkSync(outPath); } catch { /* noop */ } }
+    if (!res.headersSent) res.status(500).json({ success: false, mensaje: 'No se pudo generar el recibo' });
   }
 });
 

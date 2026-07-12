@@ -9,6 +9,30 @@ function formatMoney(v) {
   return parseFloat(v || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// ─── Abrir PDF (recibo) en nueva pestaña, con auth ────────────────────────────
+async function abrirRecibo(cobroId) {
+  try {
+    const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
+    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
+    const res = await fetch(`${base}/api/cxc/cobros/${cobroId}/recibo`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) { alert('No se pudo generar el recibo'); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch {
+    alert('No se pudo generar el recibo');
+  }
+}
+
 function useBancos() {
   const [bancos, setBancos] = useState([]);
   useEffect(() => {
@@ -36,8 +60,10 @@ function ModalCobro({ factura, onClose, onSaved }) {
     setError('');
     setGuardando(true);
     try {
-      await api.post('/cxc/cobros', { ...form, facturaId: factura.id });
+      const res = await api.post('/cxc/cobros', { ...form, facturaId: factura.id });
+      const cobroId = res.data?.data?.id;
       onSaved();
+      if (cobroId) abrirRecibo(cobroId);
     } catch (err) {
       setError(err.response?.data?.mensaje || 'Error al registrar el cobro');
     } finally {
@@ -229,6 +255,7 @@ function TabHistorial() {
                   <td style={{ textAlign: 'right', fontWeight: 600 }}>${formatMoney(c.monto)}</td>
                   <td>{c.anulado ? <span style={{ color: 'var(--color-danger)' }}>Anulado</span> : 'Activo'}</td>
                   <td>
+                    <button className="btn btn-secondary btn-sm" onClick={() => abrirRecibo(c.id)} style={{ marginRight: 6 }}>🧾 Recibo</button>
                     {!c.anulado && <button className="btn btn-danger btn-sm" onClick={() => anular(c.id)}>Anular</button>}
                   </td>
                 </tr>
@@ -715,7 +742,6 @@ export default function CuentasPorCobrarHub() {
     { id: 'historial',  label: 'Historial de cobros' },
     { id: 'cheques',    label: 'Cheques' },
     { id: 'ordenes',    label: 'Órdenes de pago' },
-    { id: 'recibos',    label: 'Recibos' },
     { id: 'importar',   label: 'Importar' },
     { id: 'reportes',   label: 'Reportes' },
   ];
@@ -739,7 +765,6 @@ export default function CuentasPorCobrarHub() {
       {tabActivo === 'historial'  && <TabHistorial key={`hist-${refresco}`} />}
       {tabActivo === 'cheques'    && <TabChequesRecibidos key={`chq-${refresco}`} />}
       {tabActivo === 'ordenes'    && <TabProximamente nombre="Órdenes de pago" />}
-      {tabActivo === 'recibos'    && <TabProximamente nombre="Recibos" />}
       {tabActivo === 'importar'   && <TabProximamente nombre="Importar cobros" />}
       {tabActivo === 'reportes'   && <TabReportesCxC />}
 
