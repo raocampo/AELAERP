@@ -324,6 +324,18 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "movimientos_tarjeta_tarjetaId_idx" ON "movimientos_tarjeta"("tarjetaId")`,
   `CREATE INDEX IF NOT EXISTS "movimientos_tarjeta_empresaId_idx" ON "movimientos_tarjeta"("empresaId")`,
   `CREATE INDEX IF NOT EXISTS "movimientos_tarjeta_fecha_idx"     ON "movimientos_tarjeta"("fecha")`,
+  // Crédito tributario de IVA arrastrado — Formulario 104 (2026-07-12)
+  `CREATE TABLE IF NOT EXISTS "declaraciones_credito_iva" (
+    "id"                        SERIAL PRIMARY KEY,
+    "empresaId"                 INTEGER NOT NULL,
+    "anio"                      INTEGER NOT NULL,
+    "mes"                       INTEGER NOT NULL,
+    "creditoTributarioAnterior" DECIMAL(14,2) NOT NULL DEFAULT 0,
+    "usuarioId"                 INTEGER,
+    "createdAt"                 TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"                 TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "declaraciones_credito_iva_empresaId_anio_mes_key" ON "declaraciones_credito_iva"("empresaId", "anio", "mes")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

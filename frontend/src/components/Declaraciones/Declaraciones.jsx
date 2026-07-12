@@ -122,7 +122,7 @@ export default function Declaraciones() {
 
       {loading && <div className="decl-loading">Calculando datos...</div>}
 
-      {data && tab === 'f104' && <ErrorBoundary key="f104"><F104View data={data} /></ErrorBoundary>}
+      {data && tab === 'f104' && <ErrorBoundary key="f104"><F104View data={data} onRecargar={cargar} /></ErrorBoundary>}
       {data && tab === 'f103' && <ErrorBoundary key="f103"><F103View data={data} /></ErrorBoundary>}
       {data && tab === 'f101' && <ErrorBoundary key="f101"><F101View data={data} /></ErrorBoundary>}
     </div>
@@ -130,7 +130,7 @@ export default function Declaraciones() {
 }
 
 // ─── F104 ────────────────────────────────────────────────────────────────────────
-function F104View({ data }) {
+function F104View({ data, onRecargar }) {
   if (!data?.ventas || !data?.resultado) return null;
   const { ventas, compras, retenciones, resultado, meta } = data;
   const esDebito  = resultado.ivaACobrarPagar > 0;
@@ -181,6 +181,14 @@ function F104View({ data }) {
           </section>
         )}
 
+        {/* CRÉDITO TRIBUTARIO ARRASTRADO */}
+        <CreditoAnteriorSection
+          anio={data.periodo.anio}
+          mes={data.periodo.mes}
+          resultado={resultado}
+          onRecargar={onRecargar}
+        />
+
         {/* RESULTADO */}
         <section className={`decl-resultado ${esDebito ? 'a-pagar' : esCredito ? 'credito' : 'cero'}`}>
           <div className="decl-resultado-label">
@@ -199,6 +207,66 @@ function F104View({ data }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Crédito tributario arrastrado del mes anterior ───────────────────────────────
+function CreditoAnteriorSection({ anio, mes, resultado, onRecargar }) {
+  const [valor, setValor] = useState(String(resultado.creditoTributarioAnterior ?? 0));
+  const [guardando, setGuardando] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    setValor(String(resultado.creditoTributarioAnterior ?? 0));
+    setMsg('');
+  }, [anio, mes, resultado.creditoTributarioAnterior]);
+
+  const guardar = async () => {
+    const monto = parseFloat(valor);
+    if (Number.isNaN(monto) || monto < 0) {
+      setMsg('Ingresa un monto válido (0 o mayor).');
+      return;
+    }
+    setGuardando(true);
+    setMsg('');
+    try {
+      await api.put('/declaraciones/f104/credito-anterior', { anio, mes, creditoTributarioAnterior: monto });
+      setMsg('Guardado.');
+      onRecargar?.();
+    } catch (err) {
+      setMsg(err.response?.data?.mensaje || 'No se pudo guardar');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <section className="decl-seccion">
+      <h3>Crédito tributario arrastrado del mes anterior</h3>
+      <p className="decl-seccion-hint">
+        Ingresa aquí el saldo a favor que arrastras de tu última declaración real ante el SRI (casillero 617/619
+        del F104). Este sistema no lo calcula encadenando meses automáticamente — se guarda una vez por período
+        y se resta del IVA a pagar de {MESES[mes - 1]} {anio}.
+      </p>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, color: '#64748b' }}>$</span>
+        <input
+          type="number" min="0" step="0.01" value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          style={{ width: 140, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}
+        />
+        <button className="btn-secondary" onClick={guardar} disabled={guardando}>
+          {guardando ? 'Guardando...' : 'Guardar'}
+        </button>
+        {msg && <span style={{ fontSize: 12, color: msg === 'Guardado.' ? '#22c55e' : '#ef4444' }}>{msg}</span>}
+        {!resultado.creditoTributarioGuardado && (
+          <span style={{ fontSize: 12, color: '#94a3b8' }}>(sin guardar para este período — usando $0.00)</span>
+        )}
+      </div>
+      {resultado.creditoTributarioAnterior > 0 && (
+        <FilaDecl label="(-) Crédito tributario mes anterior" valor={`-${fmtNum(resultado.creditoTributarioAnterior)}`} warn />
+      )}
+    </section>
   );
 }
 

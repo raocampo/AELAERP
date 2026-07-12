@@ -76,6 +76,7 @@ model empresas {
   movimientosInventario movimientos_inventario[]
   retencionesRecibidas  retenciones_recibidas[]
   docsRecibidosOtros    docs_recibidos_otros[]
+  declaracionesCreditoIva declaraciones_credito_iva[]
   guiasRemision         guias_remision[]
   puntosEmision         puntos_emision[]
   bancos                bancos[]
@@ -1151,6 +1152,30 @@ model docs_recibidos_otros {
   @@unique([empresaId, claveAcceso])
   @@index([empresaId])
   @@map("docs_recibidos_otros")
+}
+
+// ====================================
+// CRÉDITO TRIBUTARIO DE IVA ARRASTRADO — Formulario 104
+// Saldo a favor que el contribuyente arrastra del período anterior
+// (casillero 617/619 del F104 real). Se guarda manualmente por período
+// porque el saldo oficial ante el SRI puede no coincidir con lo que este
+// sistema calcularía solo (ej. si la empresa empezó a usar AELA a mitad
+// de año, o tiene ajustes de declaraciones sustitutivas).
+// ====================================
+model declaraciones_credito_iva {
+  id                          Int      @id @default(autoincrement())
+  empresaId                   Int
+  anio                        Int
+  mes                         Int
+  creditoTributarioAnterior   Decimal  @default(0) @db.Decimal(14, 2)
+  usuarioId                   Int?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  empresa  empresas @relation(fields: [empresaId], references: [id])
+
+  @@unique([empresaId, anio, mes])
+  @@map("declaraciones_credito_iva")
 }
 
 // ====================================

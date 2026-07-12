@@ -88,8 +88,10 @@ router.get('/:id/xml', async (req, res) => {
 });
 
 // ─── POST /recalcular — re-parsea el XML guardado y corrige totales ────
-// Repara registros importados antes del fix de parseo (tag <valorRetenido>
-// del SRI se leía como <valorRetener>, quedando totales en $0.00).
+// Repara registros importados antes del fix de parseo: tag <valorRetenido>
+// del SRI se leía como <valorRetener> (totales en $0.00), el schema v2.0.0
+// anidado (docsSustento) no se soportaba, y fechaEmision caía en la fecha
+// de importación en vez de la fecha real del comprobante.
 // Idempotente: si el XML ya se parseaba bien, no cambia nada.
 router.post('/recalcular', async (req, res) => {
   try {
@@ -114,6 +116,7 @@ router.post('/recalcular', async (req, res) => {
             totalRetencionRenta: datos.totalRetencionRenta,
             detalles: datos.detalles,
             numDocSustento: datos.numDocSustento,
+            fechaEmision: datos.fechaEmision,
           },
         });
         corregidos++;

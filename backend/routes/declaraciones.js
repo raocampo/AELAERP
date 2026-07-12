@@ -46,7 +46,9 @@ router.get('/f104', async (req, res) => {
     const filtroFecha = { gte: desde, lte: hasta };
 
     // ── VENTAS ──────────────────────────────────────────────────────────────────
-    const facturas = await prisma.facturas.findMany({
+    const db = req.prisma || prisma;
+
+    const facturas = await db.facturas.findMany({
       where: { empresaId, fechaEmision: filtroFecha, anulada: false },
       select: {
         subtotal0: true, subtotal15: true, subtotal5: true,
@@ -84,7 +86,7 @@ router.get('/f104', async (req, res) => {
     const ivaVentasNeto = parseFloat((ventasIva - ncIva).toFixed(2));
 
     // ── COMPRAS ─────────────────────────────────────────────────────────────────
-    const compras = await prisma.facturas_compra.findMany({
+    const compras = await db.facturas_compra.findMany({
       where: { empresaId, fechaEmision: filtroFecha, anulada: false },
       select: {
         subtotal0: true, subtotal15: true, subtotal5: true,
@@ -107,7 +109,7 @@ router.get('/f104', async (req, res) => {
     });
 
     // ── LIQUIDACIONES DE COMPRA ─────────────────────────────────────────────────
-    const liquidaciones = await prisma.liquidaciones_compra.findMany({
+    const liquidaciones = await db.liquidaciones_compra.findMany({
       where: { empresaId, fechaEmision: filtroFecha, anulada: false },
       select: { subtotal0: true, subtotal15: true, totalIva: true },
     });
@@ -127,7 +129,7 @@ router.get('/f104', async (req, res) => {
     // los CLIENTES (agentes de retención) le practican a la empresa al pagarle
     // sus ventas — eso vive en `retenciones_recibidas` (casillero 605/699 del
     // formulario real).
-    const retencionesRecibidas = await prisma.retenciones_recibidas.findMany({
+    const retencionesRecibidas = await db.retenciones_recibidas.findMany({
       where: { empresaId, fechaEmision: filtroFecha, anulada: false },
       select: { totalRetencionIva: true, detalles: true },
     });
@@ -147,11 +149,21 @@ router.get('/f104', async (req, res) => {
       });
     });
 
+    // ── CRÉDITO TRIBUTARIO ARRASTRADO DEL MES ANTERIOR ──────────────────────────
+    // No se calcula automáticamente encadenando meses (el saldo oficial ante el
+    // SRI puede no coincidir con lo que este sistema calcularía solo, p.ej. si
+    // la empresa empezó a usar AELA a mitad de año). El usuario lo ingresa una
+    // vez por período en PUT /f104/credito-anterior y queda guardado.
+    const creditoGuardado = await db.declaraciones_credito_iva.findUnique({
+      where: { empresaId_anio_mes: { empresaId, anio, mes } },
+    });
+    const creditoTributarioAnterior = creditoGuardado ? d(creditoGuardado.creditoTributarioAnterior) : 0;
+
     // ── CÁLCULO FINAL ────────────────────────────────────────────────────────────
     const ivaGenerado    = parseFloat(ivaVentasNeto.toFixed(2));
     const ivaCreditoFiscal = parseFloat((ivaCompras + liqIva).toFixed(2));
     const ivaRetenidoClientes = parseFloat((retencionIVA30 + retencionIVA70 + retencionIVA100 + retencionIVAOtro).toFixed(2));
-    const ivaACobrarPagar = parseFloat((ivaGenerado - ivaCreditoFiscal - ivaRetenidoClientes).toFixed(2));
+    const ivaACobrarPagar = parseFloat((ivaGenerado - ivaCreditoFiscal - ivaRetenidoClientes - creditoTributarioAnterior).toFixed(2));
 
     const f104 = {
       periodo: { anio, mes },
@@ -182,6 +194,8 @@ router.get('/f104', async (req, res) => {
         totalRetenido: ivaRetenidoClientes,
       },
       resultado: {
+        creditoTributarioAnterior,
+        creditoTributarioGuardado: !!creditoGuardado,
         ivaACobrarPagar,
         estado: ivaACobrarPagar > 0 ? 'A_PAGAR' : ivaACobrarPagar < 0 ? 'CREDITO_TRIBUTARIO' : 'CERO',
       },
@@ -200,6 +214,36 @@ router.get('/f104', async (req, res) => {
   }
 });
 
+// ─── PUT /f104/credito-anterior — guardar el crédito tributario arrastrado ─────
+// Body: { anio, mes, creditoTributarioAnterior }
+router.put('/f104/credito-anterior', async (req, res) => {
+  try {
+    const db = req.prisma || prisma;
+    const empresaId = req.empresa.id;
+    const anio = parseInt(req.body.anio);
+    const mes  = parseInt(req.body.mes);
+    const valor = d(req.body.creditoTributarioAnterior);
+
+    if (!anio || !mes || mes < 1 || mes > 12) {
+      return res.status(400).json({ ok: false, mensaje: 'Período inválido' });
+    }
+    if (valor < 0) {
+      return res.status(400).json({ ok: false, mensaje: 'El crédito tributario no puede ser negativo' });
+    }
+
+    await db.declaraciones_credito_iva.upsert({
+      where: { empresaId_anio_mes: { empresaId, anio, mes } },
+      update: { creditoTributarioAnterior: valor, usuarioId: req.usuario?.id || null },
+      create: { empresaId, anio, mes, creditoTributarioAnterior: valor, usuarioId: req.usuario?.id || null },
+    });
+
+    res.json({ ok: true, data: { anio, mes, creditoTributarioAnterior: valor } });
+  } catch (err) {
+    console.error('Error PUT /f104/credito-anterior:', err);
+    res.status(500).json({ ok: false, mensaje: err.message });
+  }
+});
+
 // ─── GET /f103 — Formulario 103 Retenciones en la Fuente mensual ───────────────
 // Query: ?anio=2025&mes=3
 router.get('/f103', async (req, res) => {
@@ -208,9 +252,10 @@ router.get('/f103', async (req, res) => {
     const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
     const { desde, hasta } = rangoMes(anio, mes);
     const empresaId = req.empresa.id;
+    const db = req.prisma || prisma;
     const filtroFecha = { gte: desde, lte: hasta };
 
-    const retenciones = await prisma.retenciones.findMany({
+    const retenciones = await db.retenciones.findMany({
       where: {
         empresaId,
         fechaEmision: filtroFecha,
@@ -304,20 +349,21 @@ router.get('/f101', async (req, res) => {
     const anio = parseInt(req.query.anio) || new Date().getFullYear();
     const { desde, hasta } = rangoAnio(anio);
     const empresaId = req.empresa.id;
+    const db = req.prisma || prisma;
     const filtroFecha = { gte: desde, lte: hasta };
 
     const [facturas, compras, retenciones] = await Promise.all([
-      prisma.facturas.aggregate({
+      db.facturas.aggregate({
         where: { empresaId, fechaEmision: filtroFecha, anulada: false },
         _sum:   { importeTotal: true, totalIva: true },
         _count: { id: true },
       }),
-      prisma.facturas_compra.aggregate({
+      db.facturas_compra.aggregate({
         where: { empresaId, fechaEmision: filtroFecha, anulada: false },
         _sum:   { importeTotal: true, totalIva: true },
         _count: { id: true },
       }),
-      prisma.retenciones.aggregate({
+      db.retenciones.aggregate({
         where: { empresaId, fechaEmision: filtroFecha, estadoSri: 'AUTORIZADO' },
         _count: { id: true },
       }),
@@ -353,9 +399,10 @@ router.get('/f101', async (req, res) => {
 router.get('/disponibles', async (req, res) => {
   try {
     const empresaId = req.empresa.id;
+    const db = req.prisma || prisma;
 
     // Obtener meses con facturas
-    const facturas = await prisma.facturas.groupBy({
+    const facturas = await db.facturas.groupBy({
       by: ['fechaEmision'],
       where: { empresaId, anulada: false },
       _count: { id: true },
