@@ -558,6 +558,137 @@ const SECCIONES = [
     ),
   },
   {
+    id: 'cxc-cxp',
+    icono: '💳',
+    titulo: 'Cuentas por Cobrar y por Pagar',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Llevan el control de qué facturas de venta y compras aún no se han cobrado/pagado, y de los abonos parciales o totales que vas registrando.</p>
+
+        <h4>¿Se alimenta solo, o hay que crear algo?</h4>
+        <p>La pestaña <strong>"Vigentes"</strong> se alimenta automáticamente: cualquier factura de venta autorizada (o compra no anulada) con saldo pendiente aparece ahí sola, sin que tengas que crear nada manualmente. El saldo se calcula al vuelo: <em>total de la factura/compra − suma de cobros/pagos registrados</em>.</p>
+        <p>Lo único que registras manualmente es el <strong>momento en que efectivamente te pagan (o pagas)</strong>:</p>
+        <ol>
+          <li>Ve a <strong>Contabilidad → Cuentas por Cobrar</strong> (o <strong>Cuentas por Pagar</strong>).</li>
+          <li>En la pestaña <strong>Vigentes</strong>, busca la factura/compra y haz clic en <strong>Registrar cobro</strong> (o <strong>Registrar pago</strong>).</li>
+          <li>Ingresa el monto (puede ser parcial), fecha, método de pago y banco si aplica.</li>
+          <li>Al guardar, el sistema genera el asiento contable automáticamente y recalcula el saldo. Si queda en $0, la factura pasa a la pestaña <strong>Canceladas</strong>.</li>
+        </ol>
+        <p>Si te equivocaste al registrar un cobro/pago, ve a <strong>Historial</strong> y usa <strong>Anular</strong> — la factura vuelve a Vigentes con su saldo correcto y se genera el asiento de reverso.</p>
+
+        <h4>Cheques recibidos y tarjetas de crédito</h4>
+        <p>Dentro de Cuentas por Cobrar hay una pestaña <strong>Cheques</strong> para darle seguimiento a cheques de clientes (número, banco, estado: Pendiente/Depositado/Protestado/Anulado). Dentro de Cuentas por Pagar hay una pestaña <strong>Tarjetas de crédito</strong> para registrar cargos y pagos de las tarjetas corporativas, con su propio libro de movimientos.</p>
+
+        <h4>Reportes</h4>
+        <p>La pestaña <strong>Reportes</strong> incluye <strong>antigüedad de saldos</strong> (0-30, 31-60, 61-90, 91+ días) y <strong>estado de cuenta</strong> por cliente/proveedor.</p>
+
+        <div className="ayuda-nota">
+          💡 Disponible en planes Medium y Pro. Requiere el permiso <code>cxc.ver</code>/<code>cxc.gestionar</code> (o <code>cxp.*</code>) asignado a tu rol o como permiso adicional.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'caja-chica',
+    icono: '🪙',
+    titulo: 'Caja Chica',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Distinta de la <strong>Caja Diaria</strong> (que registra las ventas del POS): la Caja Chica es un fondo fijo para gastos menores de oficina (papelería, taxis, cafetería, etc.), con su propio ciclo de reposición.</p>
+        <h4>Flujo</h4>
+        <ol>
+          <li>Crea la caja chica con un <strong>monto fijo inicial</strong> (ej. $100) y su cuenta contable asociada.</li>
+          <li>Registra <strong>vales de gasto</strong> a medida que se usa el efectivo, cada uno con su comprobante de respaldo.</li>
+          <li>Cuando el efectivo disponible baja, haz una <strong>reposición</strong>: el sistema calcula cuánto hay que reponer para volver al monto fijo, y genera el asiento contable de todos los gastos acumulados desde la última reposición.</li>
+          <li>Si necesitas aumentar o disminuir el fondo fijo permanentemente, usa <strong>Incrementar</strong>/<strong>Disminuir</strong> en vez de una reposición normal.</li>
+          <li>Al cerrar definitivamente una caja chica, usa <strong>Liquidar</strong>.</li>
+        </ol>
+        <div className="ayuda-nota">
+          💡 Cada vale de gasto se contabiliza individualmente al momento de la reposición — no antes — para reflejar el gasto real solo cuando se confirma.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'retenciones-recibidas',
+    icono: '📄',
+    titulo: 'Retenciones Recibidas — comprobantes que te emiten tus clientes',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Cuando un cliente que es <strong>agente de retención</strong> (contribuyente especial, entidad pública, sociedad obligada a llevar contabilidad, etc.) te paga una factura, está obligado a retenerte un porcentaje de Renta y/o IVA y entregarte un <strong>comprobante de retención</strong> en vez de pagarte ese monto en efectivo — porque ese dinero lo remite él directamente al SRI a tu nombre.</p>
+
+        <h4>Cómo llegan al sistema</h4>
+        <p>No se crean manualmente: se importan automáticamente junto con el resto de documentos desde <strong>Compras → Buzón SRI</strong> (el Buzón detecta que es un comprobante tipo 07 dirigido a tu RUC y lo guarda aquí). Revísalas en <strong>Tributario → Retenciones recibidas</strong>.</p>
+
+        <h4>¿Para qué sirven además de tenerlas archivadas?</h4>
+        <p>El monto de <strong>IVA</strong> retenido en estos comprobantes es un <strong>crédito a tu favor</strong> que reduce el IVA que debes pagar en tu declaración mensual (Formulario 104) — ver la sección <strong>"Declaraciones Tributarias"</strong> más abajo. El monto de <strong>Renta</strong> retenido es un anticipo de tu Impuesto a la Renta anual.</p>
+
+        <div className="ayuda-nota ayuda-nota-warning">
+          ⚠️ No confundir con <strong>Retenciones (emitidas)</strong> en el menú Compras: esas son las que TÚ le retienes a TUS proveedores, y se declaran aparte en el Formulario 103 — no reducen tu propio IVA a pagar.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'declaraciones',
+    icono: '🧮',
+    titulo: 'Declaraciones Tributarias — F104, F103, F101',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>En <strong>Tributario → Declaraciones</strong> el sistema arma, por período, un resumen de los datos que necesitas para llenar los formularios del SRI. <strong>No reemplaza el DIMM</strong> ni presenta la declaración — es una ayuda para no tener que sumar todo manualmente.</p>
+
+        <h4>F104 — IVA Mensual</h4>
+        <p>La lógica es: <code>IVA a pagar = IVA cobrado en ventas − IVA crédito fiscal en compras − IVA que tus clientes te retuvieron</code>.</p>
+        <ul>
+          <li><strong>IVA cobrado en ventas:</strong> suma del IVA de tus facturas del mes (netas de notas de crédito).</li>
+          <li><strong>IVA crédito fiscal:</strong> suma del IVA de tus compras y liquidaciones de compra del mes.</li>
+          <li><strong>IVA retenido por clientes:</strong> viene de <strong>Retenciones Recibidas</strong> (ver arriba) — solo cuenta lo que TUS clientes te retuvieron, no lo que tú le retienes a tus proveedores.</li>
+        </ul>
+        <p>Si el resultado es positivo, es <strong>IVA a pagar</strong>. Si es negativo, es <strong>crédito tributario</strong> a tu favor para el siguiente mes.</p>
+
+        <h4>F103 — Retenciones en la Fuente</h4>
+        <p>Muestra los comprobantes de retención que <strong>tú emitiste</strong> a tus proveedores durante el período (menú <strong>Compras → Retenciones</strong>), agrupados por código de retención. Esto es dinero que retuviste al pagarles y que debes remitir al SRI — es una obligación separada del IVA que declaras en el F104.</p>
+        <div className="ayuda-nota">
+          💡 Si el F103 aparece en cero, revisa que sí tengas comprobantes de retención <strong>emitidos y autorizados</strong> en ese mes (menú Compras → Retenciones) — no confundir con Retenciones Recibidas, que no aparecen aquí.
+        </div>
+
+        <h4>F101 — Resumen IR Anual</h4>
+        <p>Totales orientativos de ingresos y gastos del año para apoyar el llenado del Impuesto a la Renta anual. Consulta siempre con tu contador para la declaración oficial.</p>
+      </div>
+    ),
+  },
+  {
+    id: 'config-referencias',
+    icono: '🔗',
+    titulo: 'Cuentas contables por referencia (retenciones, nómina, general)',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Permite decirle al sistema, código por código, a qué cuenta de tu Plan de Cuentas debe contabilizar cada tipo de retención SRI, cada concepto de nómina, o cuentas generales — en vez de usar siempre las cuentas genéricas por defecto.</p>
+        <h4>Cómo usarlo</h4>
+        <ol>
+          <li>Ve a <strong>Contabilidad → Plan de Cuentas → Configuración de cuentas por referencia</strong>.</li>
+          <li>Elige la pestaña: <strong>Compras</strong> (retenciones a proveedores), <strong>Ventas</strong> (retenciones recibidas), <strong>Empleados</strong> (nómina) o <strong>General</strong>.</li>
+          <li>Para cada código de la lista (fija, viene del catálogo del SRI o de nómina), elige la cuenta contable que corresponda.</li>
+          <li>Guarda. Desde ese momento, los asientos automáticos de retenciones y nómina usan la cuenta que configuraste para ese código específico.</li>
+        </ol>
+        <div className="ayuda-nota">
+          💡 Es opcional código por código: si dejas uno sin configurar, ese código sigue usando la cuenta genérica de siempre.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'transportistas',
+    icono: '🚚',
+    titulo: 'Guías de remisión — Catálogo de transportistas',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Al emitir una guía de remisión, el campo de transportista tiene autocompletado: escribe el nombre y el sistema sugiere transportistas ya usados antes, completando RUC y placa automáticamente.</p>
+        <p>No necesitas crear el catálogo por separado — cada vez que guardas una guía con un transportista nuevo, se agrega solo al catálogo para la próxima vez.</p>
+      </div>
+    ),
+  },
+  {
     id: 'acceso',
     icono: '🔗',
     titulo: 'Acceso al sistema y marcadores',

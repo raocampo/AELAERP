@@ -119,31 +119,38 @@ router.get('/f104', async (req, res) => {
       liqIva        += d(l.totalIva);
     });
 
-    // ── RETENCIONES DE IVA RECIBIDAS (en compras) ───────────────────────────────
-    const retenciones = await prisma.retenciones.findMany({
-      where: {
-        empresaId,
-        fechaEmision: filtroFecha,
-        estadoSri:    { in: ['AUTORIZADO', 'FIRMADO_PENDIENTE_ENVIO'] },
-      },
-      select: { impuestos: true },
+    // ── RETENCIONES DE IVA QUE LE HAN SIDO EFECTUADAS (recibidas de clientes) ───
+    // Ojo: esto NO es lo mismo que las retenciones que la empresa EMITE a sus
+    // proveedores (tabla `retenciones`, se declaran en el F103 como una
+    // obligación aparte — dinero que hay que remitir al SRI, no un crédito
+    // propio). Lo que sí reduce el IVA a pagar en el F104 es la retención que
+    // los CLIENTES (agentes de retención) le practican a la empresa al pagarle
+    // sus ventas — eso vive en `retenciones_recibidas` (casillero 605/699 del
+    // formulario real).
+    const retencionesRecibidas = await prisma.retenciones_recibidas.findMany({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+      select: { totalRetencionIva: true, detalles: true },
     });
 
-    let retencionIVA30 = 0, retencionIVA70 = 0, retencionIVA100 = 0;
-    retenciones.forEach((ret) => {
-      const impuestos = typeof ret.impuestos === 'string'
-        ? JSON.parse(ret.impuestos) : (ret.impuestos || []);
-      impuestos.forEach((imp) => {
-        if (imp.codigoRetencion === '725') retencionIVA30  += d(imp.valorRetenido);
-        if (imp.codigoRetencion === '726') retencionIVA70  += d(imp.valorRetenido);
-        if (imp.codigoRetencion === '727') retencionIVA100 += d(imp.valorRetenido);
+    let retencionIVA30 = 0, retencionIVA70 = 0, retencionIVA100 = 0, retencionIVAOtro = 0;
+    retencionesRecibidas.forEach((ret) => {
+      const detalles = Array.isArray(ret.detalles) ? ret.detalles : [];
+      detalles.forEach((det) => {
+        // codigo: 1=Renta, 2/4/6=IVA (ver buzon.js parsearRetencionRecibida)
+        if (!['2', '4', '6'].includes(String(det.codigo))) return;
+        const valor = d(det.valorRetener);
+        const pct = Math.round(d(det.porcentajeRetener));
+        if (pct === 30) retencionIVA30 += valor;
+        else if (pct === 70) retencionIVA70 += valor;
+        else if (pct === 100) retencionIVA100 += valor;
+        else retencionIVAOtro += valor;
       });
     });
 
     // ── CÁLCULO FINAL ────────────────────────────────────────────────────────────
     const ivaGenerado    = parseFloat(ivaVentasNeto.toFixed(2));
     const ivaCreditoFiscal = parseFloat((ivaCompras + liqIva).toFixed(2));
-    const ivaRetenidoClientes = parseFloat((retencionIVA30 + retencionIVA70 + retencionIVA100).toFixed(2));
+    const ivaRetenidoClientes = parseFloat((retencionIVA30 + retencionIVA70 + retencionIVA100 + retencionIVAOtro).toFixed(2));
     const ivaACobrarPagar = parseFloat((ivaGenerado - ivaCreditoFiscal - ivaRetenidoClientes).toFixed(2));
 
     const f104 = {
@@ -171,6 +178,7 @@ router.get('/f104', async (req, res) => {
         iva30:   parseFloat(retencionIVA30.toFixed(2)),
         iva70:   parseFloat(retencionIVA70.toFixed(2)),
         iva100:  parseFloat(retencionIVA100.toFixed(2)),
+        otro:    parseFloat(retencionIVAOtro.toFixed(2)),
         totalRetenido: ivaRetenidoClientes,
       },
       resultado: {
@@ -181,7 +189,7 @@ router.get('/f104', async (req, res) => {
         cantidadFacturas:    facturas.length,
         cantidadCompras:     compras.length,
         cantidadLiquidaciones: liquidaciones.length,
-        cantidadRetenciones: retenciones.length,
+        cantidadRetencionesRecibidas: retencionesRecibidas.length,
       },
     };
 

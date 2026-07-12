@@ -169,12 +169,14 @@ function F104View({ data }) {
         </section>
 
         {/* RETENCIONES */}
-        {(retenciones.iva30 > 0 || retenciones.iva70 > 0 || retenciones.iva100 > 0) && (
+        {(retenciones.iva30 > 0 || retenciones.iva70 > 0 || retenciones.iva100 > 0 || retenciones.otro > 0) && (
           <section className="decl-seccion">
             <h3>Retenciones de IVA recibidas</h3>
-            {retenciones.iva30  > 0 && <FilaDecl label="Retención 30% IVA (cód. 725)" valor={fmtNum(retenciones.iva30)} />}
-            {retenciones.iva70  > 0 && <FilaDecl label="Retención 70% IVA (cód. 726)" valor={fmtNum(retenciones.iva70)} />}
-            {retenciones.iva100 > 0 && <FilaDecl label="Retención 100% IVA (cód. 727)" valor={fmtNum(retenciones.iva100)} />}
+            <p className="decl-seccion-hint">IVA que sus clientes (agentes de retención) le retuvieron al pagarle — reduce el IVA a pagar de este período.</p>
+            {retenciones.iva30  > 0 && <FilaDecl label="Retención 30% IVA" valor={fmtNum(retenciones.iva30)} />}
+            {retenciones.iva70  > 0 && <FilaDecl label="Retención 70% IVA" valor={fmtNum(retenciones.iva70)} />}
+            {retenciones.iva100 > 0 && <FilaDecl label="Retención 100% IVA" valor={fmtNum(retenciones.iva100)} />}
+            {retenciones.otro   > 0 && <FilaDecl label="Retención IVA (otro %)" valor={fmtNum(retenciones.otro)} />}
             <FilaDecl label="Total retenido por clientes" valor={fmtNum(retenciones.totalRetenido)} highlight />
           </section>
         )}
@@ -193,7 +195,7 @@ function F104View({ data }) {
           <span>{meta.cantidadFacturas} facturas</span>
           <span>{meta.cantidadCompras} compras</span>
           {meta.cantidadLiquidaciones > 0 && <span>{meta.cantidadLiquidaciones} liquidaciones</span>}
-          {meta.cantidadRetenciones > 0 && <span>{meta.cantidadRetenciones} retenciones</span>}
+          {meta.cantidadRetencionesRecibidas > 0 && <span>{meta.cantidadRetencionesRecibidas} retenciones recibidas</span>}
         </div>
       </div>
     </div>
