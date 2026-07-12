@@ -219,6 +219,7 @@ export default function ListaCompras() {
   const [quickEdit, setQuickEdit] = useState(null);
   const [guardandoGasto, setGuardandoGasto] = useState(false);
   const [autoClasificando, setAutoClasificando] = useState(false);
+  const [marcandoReceptor, setMarcandoReceptor] = useState(false);
   const [generandoAsientoId, setGenerandoAsientoId] = useState(null);
 
   // Cuenta contable
@@ -296,6 +297,20 @@ export default function ListaCompras() {
       toast.error('Error al auto-clasificar');
     } finally {
       setAutoClasificando(false);
+    }
+  };
+
+  const marcarReceptorRucCedula = async () => {
+    setMarcandoReceptor(true);
+    try {
+      const res = await api.post('/compras/backfill-receptor-ruc');
+      const { total, marcadas, sinDato } = res.data;
+      toast.success(`${marcadas} de ${total} compra(s) revisadas${sinDato ? ` (${sinDato} sin XML para determinar)` : ''}`);
+      cargarLista();
+    } catch {
+      toast.error('Error al revisar RUC/cédula de las compras');
+    } finally {
+      setMarcandoReceptor(false);
     }
   };
 
@@ -394,6 +409,10 @@ export default function ListaCompras() {
           <button className="btn-secondary" onClick={autoClasificar} disabled={autoClasificando}
             title="Analiza el nombre del proveedor y productos para asignar categoría SRI automáticamente">
             {autoClasificando ? 'Clasificando…' : '⚡ Auto-clasificar'}
+          </button>
+          <button className="btn-secondary" onClick={marcarReceptorRucCedula} disabled={marcandoReceptor}
+            title="Revisa el XML original de cada compra para saber si llegó dirigida al RUC (deducible) o a una cédula personal (no válida para declaraciones)">
+            {marcandoReceptor ? 'Revisando…' : '🪪 Marcar RUC/Cédula'}
           </button>
           <button className="btn-primary" onClick={() => navigate('/compras/nueva')}>Nueva compra</button>
         </div>
@@ -533,6 +552,12 @@ export default function ListaCompras() {
                           <span className={`compras-chip ${String(item.origenRegistro || 'manual').toLowerCase()}`}>
                             {item.origenRegistro || 'MANUAL'}
                           </span>
+                          {item.receptorEsRuc === false && (
+                            <span className="compras-chip" style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}
+                              title="Facturado a cédula personal, no al RUC de la empresa — no cuenta para declaraciones">
+                              ⚠️ A cédula
+                            </span>
+                          )}
                           {item.cuentaGastoId && (
                             <span className="compras-chip" style={{ background: '#ede9fe', borderColor: '#c4b5fd', color: '#6d28d9' }} title="Cuenta contable personalizada configurada">
                               📒

@@ -18,6 +18,7 @@ const {
   construirDetallesCompra,
   generarPlantillaCompras,
 } = require('../utils/importarComprasHistoricas');
+const { extraerIdentificacionReceptorXml } = require('../utils/buzon');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -35,10 +36,10 @@ async function getColsCompra() {
       return false;
     }
   };
-  const [tipoGasto, anulada, motivoAnulacion] = await Promise.all([
-    probar('tipoGasto'), probar('anulada'), probar('motivoAnulacion'),
+  const [tipoGasto, anulada, motivoAnulacion, receptorEsRuc] = await Promise.all([
+    probar('tipoGasto'), probar('anulada'), probar('motivoAnulacion'), probar('receptorEsRuc'),
   ]);
-  _colsCompra = { tipoGasto, anulada, motivoAnulacion };
+  _colsCompra = { tipoGasto, anulada, motivoAnulacion, receptorEsRuc };
   return _colsCompra;
 }
 
@@ -421,6 +422,7 @@ router.get('/', async (req, res) => {
       ...(cols.tipoGasto ? { tipoGasto: true } : {}),
       ...(cols.anulada ? { anulada: true } : {}),
       ...(cols.motivoAnulacion ? { motivoAnulacion: true } : {}),
+      ...(cols.receptorEsRuc ? { receptorEsRuc: true } : {}),
       createdAt: true,
     };
 
@@ -613,6 +615,42 @@ router.post('/:id/reparar-proveedor', async (req, res) => {
   } catch (error) {
     console.error('POST /compras/:id/reparar-proveedor:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo reparar los datos del proveedor' });
+  }
+});
+
+// ─── POST /backfill-receptor-ruc — marca compras como facturadas a RUC o a cédula ───
+// Columna nueva: para compras importadas antes de este cambio, receptorEsRuc
+// quedó en NULL. Re-lee el xmlOrigen guardado (si existe) y determina si el
+// comprobante llegó dirigido al RUC (13 dígitos, deducible) o a la cédula
+// (10 dígitos, no válida para declaraciones) de la empresa. Solo toca
+// registros con receptorEsRuc todavía NULL — no reprocesa los ya marcados.
+router.post('/backfill-receptor-ruc', async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const compras = await prisma.facturas_compra.findMany({
+      where: { empresaId, receptorEsRuc: null, xmlOrigen: { not: null } },
+      select: { id: true, xmlOrigen: true },
+    });
+
+    let marcadas = 0;
+    let sinDato = 0;
+
+    for (const c of compras) {
+      const idReceptor = extraerIdentificacionReceptorXml(c.xmlOrigen, '01');
+      let receptorEsRuc = null;
+      if (idReceptor.length === 13) receptorEsRuc = true;
+      else if (idReceptor.length === 10) receptorEsRuc = false;
+
+      if (receptorEsRuc === null) { sinDato++; continue; }
+
+      await prisma.facturas_compra.update({ where: { id: c.id }, data: { receptorEsRuc } });
+      marcadas++;
+    }
+
+    res.json({ success: true, total: compras.length, marcadas, sinDato });
+  } catch (error) {
+    console.error('POST /compras/backfill-receptor-ruc:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo procesar el backfill' });
   }
 });
 

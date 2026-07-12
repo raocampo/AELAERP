@@ -86,8 +86,12 @@ router.get('/f104', async (req, res) => {
     const ivaVentasNeto = parseFloat((ventasIva - ncIva).toFixed(2));
 
     // ── COMPRAS ─────────────────────────────────────────────────────────────────
+    // Se excluyen las compras facturadas a cédula (receptorEsRuc === false):
+    // no son deducibles ni generan crédito de IVA aunque estén registradas en
+    // el sistema. receptorEsRuc null (dato desconocido, ej. compras
+    // manuales/históricas) SÍ se incluye — no se excluye nada sin certeza.
     const compras = await db.facturas_compra.findMany({
-      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, receptorEsRuc: { not: false } },
       select: {
         subtotal0: true, subtotal15: true, subtotal5: true,
         totalIva: true, importeTotal: true, retencionIVA: true,
@@ -119,6 +123,10 @@ router.get('/f104', async (req, res) => {
       liqSubtotal0  += d(l.subtotal0);
       liqSubtotal15 += d(l.subtotal15);
       liqIva        += d(l.totalIva);
+    });
+
+    const comprasExcluidasCedula = await db.facturas_compra.count({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, receptorEsRuc: false },
     });
 
     // ── RETENCIONES DE IVA QUE LE HAN SIDO EFECTUADAS (recibidas de clientes) ───
@@ -204,6 +212,7 @@ router.get('/f104', async (req, res) => {
         cantidadCompras:     compras.length,
         cantidadLiquidaciones: liquidaciones.length,
         cantidadRetencionesRecibidas: retencionesRecibidas.length,
+        comprasExcluidasCedula,
       },
     };
 
@@ -359,7 +368,7 @@ router.get('/f101', async (req, res) => {
         _count: { id: true },
       }),
       db.facturas_compra.aggregate({
-        where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+        where: { empresaId, fechaEmision: filtroFecha, anulada: false, receptorEsRuc: { not: false } },
         _sum:   { importeTotal: true, totalIva: true },
         _count: { id: true },
       }),

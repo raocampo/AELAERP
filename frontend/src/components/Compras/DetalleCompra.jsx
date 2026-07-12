@@ -674,6 +674,14 @@ export default function DetalleCompra() {
           <div className="detalle-compra-row"><span>Autorizacion</span><span className="detalle-compra-wrap">{compra.numeroAutorizacion || 'Sin autorizacion'}</span></div>
           <div className="detalle-compra-row"><span>Clave acceso</span><span className="detalle-compra-wrap">{compra.claveAcceso || 'No registrada'}</span></div>
           <div className="detalle-compra-row"><span>Origen</span><span className="detalle-compra-badge">{compra.origenRegistro || 'MANUAL'}</span></div>
+          {compra.receptorEsRuc === false && (
+            <div className="detalle-compra-row">
+              <span>Declaraciones</span>
+              <span className="detalle-compra-badge detalle-compra-badge-alert" title="Este comprobante llegó dirigido a una cédula personal, no al RUC de la empresa — no cuenta para el F104/F101">
+                ⚠️ Facturado a cédula, no deducible
+              </span>
+            </div>
+          )}
         </article>
 
         <article className="detalle-compra-card">

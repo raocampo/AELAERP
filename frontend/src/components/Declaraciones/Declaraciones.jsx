@@ -205,6 +205,14 @@ function F104View({ data, onRecargar }) {
           {meta.cantidadLiquidaciones > 0 && <span>{meta.cantidadLiquidaciones} liquidaciones</span>}
           {meta.cantidadRetencionesRecibidas > 0 && <span>{meta.cantidadRetencionesRecibidas} retenciones recibidas</span>}
         </div>
+
+        {meta.comprasExcluidasCedula > 0 && (
+          <div className="alert-danger" style={{ marginTop: 8, fontSize: 12 }}>
+            ⚠️ {meta.comprasExcluidasCedula} compra(s) de este período están facturadas a una cédula personal, no al RUC
+            de la empresa — no se incluyeron en este cálculo porque no son válidas para la declaración. Revísalas en
+            Compras y pide al proveedor que reemita el comprobante a nombre del RUC si corresponde.
+          </div>
+        )}
       </div>
     </div>
   );

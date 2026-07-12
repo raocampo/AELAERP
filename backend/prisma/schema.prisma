@@ -563,6 +563,10 @@ model facturas_compra {
   observaciones                 String?
   tipoGasto                     String?   @db.VarChar(30)
   cuentaGastoId                 Int?
+  // Si el comprobante llegó dirigido al RUC de la empresa (deducible) o a
+  // la cédula de una persona (no válido para declaraciones). NULL = se
+  // desconoce (compras manuales/históricas sin XML de origen).
+  receptorEsRuc                 Boolean?
   createdAt                     DateTime  @default(now())
   updatedAt                     DateTime  @updatedAt
 

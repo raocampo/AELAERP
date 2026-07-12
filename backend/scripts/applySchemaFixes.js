@@ -336,6 +336,8 @@ const FIXES = [
     "updatedAt"                 TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "declaraciones_credito_iva_empresaId_anio_mes_key" ON "declaraciones_credito_iva"("empresaId", "anio", "mes")`,
+  // Compras facturadas a cédula vs RUC — no deducibles si NO es RUC (2026-07-12)
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "receptorEsRuc" BOOLEAN`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

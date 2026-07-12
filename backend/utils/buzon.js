@@ -250,7 +250,12 @@ async function importarDocumentoRecibido({
   if (!modelo) throw new Error(`Tipo de documento no soportado: ${tipoDoc}`);
 
   // ── Validar que el documento pertenece al RUC de la empresa ──
+  // De paso, se determina si llegó dirigido al RUC (13 dígitos) o a la
+  // cédula (10 dígitos) de la empresa/persona — para efectos tributarios
+  // solo lo dirigido al RUC es deducible/genera crédito de IVA, aunque el
+  // SRI trate ambos como el mismo contribuyente para persona natural.
   const xmlParaValidar = xmlAutorizado || xmlEnvuelto;
+  let receptorEsRuc = null;
   if (xmlParaValidar) {
     const idReceptor = extraerIdentificacionReceptorXml(xmlParaValidar, tipoDoc);
     if (idReceptor) {
@@ -260,6 +265,8 @@ async function importarDocumentoRecibido({
           `El documento está dirigido a ${idReceptor}, pero la empresa activa es ${emp.razonSocial} (RUC ${emp.ruc}). No se puede importar.`
         );
       }
+      if (idReceptor.length === 13) receptorEsRuc = true;
+      else if (idReceptor.length === 10) receptorEsRuc = false;
     }
   }
 
@@ -321,6 +328,7 @@ async function importarDocumentoRecibido({
         pagos: datos.pagos,
         origenRegistro: 'BUZON_SRI',
         xmlOrigen: datos.xmlOrigen || null,
+        receptorEsRuc,
       },
     });
 
@@ -475,5 +483,6 @@ module.exports = {
   parsearRetencionRecibida,
   parsearDocOtro,
   importarDocumentoRecibido,
+  extraerIdentificacionReceptorXml,
   TIPOS_DOCUMENTO,
 };
