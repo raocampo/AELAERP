@@ -152,7 +152,7 @@ async function resolverTenant(req, res, next) {
 
     // 5. Inyectar en el request
     req.tenant = tenant;
-    req.prisma = getTenantPrisma(tenant);
+    req.prisma = await getTenantPrisma(tenant);
 
     next();
   } catch (err) {

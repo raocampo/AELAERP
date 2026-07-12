@@ -201,7 +201,7 @@ async function provisionarTenant({
     // 6. Actualizar plan/trial en empresa dentro de la BD del tenant
     // (La empresa real se crea en bootstrap cuando el usuario configura su cuenta)
     try {
-      const prismaT = getTenantPrisma(tenantActivo);
+      const prismaT = await getTenantPrisma(tenantActivo);
       const empresasExistentes = await prismaT.empresas.count();
       if (empresasExistentes > 0) {
         await prismaT.empresas.updateMany({
@@ -293,7 +293,7 @@ async function actualizarPlanTenant(slug, nuevoPlan, datosSuscripcion = {}) {
 
   // Actualizar plan en la BD del tenant (tabla empresas)
   try {
-    const prismaT = getTenantPrisma(tenant);
+    const prismaT = await getTenantPrisma(tenant);
     await prismaT.empresas.updateMany({
       data: {
         plan:          nuevoPlan,

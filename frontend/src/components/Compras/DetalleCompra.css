@@ -277,7 +277,7 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .detalle-compra-row {
     grid-template-columns: 1fr;
     gap: 0.15rem;

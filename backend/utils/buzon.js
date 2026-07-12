@@ -139,35 +139,61 @@ function parsearRetencionRecibida(xmlAutorizado, xmlEnvuelto) {
   const infoTrib = doc?.infoTributaria || {};
   const infoRet = doc?.infoCompRetencion || doc?.infoRetencion || {};
 
-  const impuestos = ensureArray(doc?.impuestos?.impuesto);
   let totalRetencionIva = 0;
   let totalRetencionRenta = 0;
   const detalles = [];
+  let numDocSustento = null;
 
-  for (const imp of impuestos) {
-    const codigo = limpiar(imp.codigo);
-    const valorRetener = toNum(imp.valorRetener || imp.valor, 0);
+  function acumular(codigo, valorRetener, extra) {
     const detalle = {
       codigo,
-      codigoRetencion: limpiar(imp.codigoRetencion),
-      porcentajeRetener: toNum(imp.porcentajeRetener || imp.porcentaje, 0),
+      codigoRetencion: limpiar(extra.codigoRetencion),
+      porcentajeRetener: toNum(extra.porcentajeRetener || extra.porcentaje, 0),
       valorRetener,
-      baseImponible: toNum(imp.baseImponible, 0),
-      numDocSustento: limpiar(imp.numDocSustento || imp.numeroDocSustento || ''),
-      fechaEmisionDocSustento: limpiar(imp.fechaEmisionDocSustento || ''),
+      baseImponible: toNum(extra.baseImponible, 0),
+      numDocSustento: extra.numDocSustento || null,
+      fechaEmisionDocSustento: extra.fechaEmisionDocSustento || null,
     };
     detalles.push(detalle);
+    if (!numDocSustento) numDocSustento = detalle.numDocSustento;
     if (codigo === '1') totalRetencionRenta += valorRetener;
     else if (codigo === '2' || codigo === '4' || codigo === '6') totalRetencionIva += valorRetener;
     else totalRetencionRenta += valorRetener; // ISD u otro
   }
 
-  const numDocSustento = detalles[0]?.numDocSustento || null;
+  // El tag real del SRI para el monto es <valorRetenido> en ambas versiones
+  // del schema (mismo que usa este sistema al emitir, ver sri.js). valorRetener
+  // /valor quedan como fallback tolerante ante variaciones de algún emisor.
+  const valorDe = (o) => toNum(o.valorRetenido ?? o.valorRetener ?? o.valor, 0);
+
+  // Schema v2.0.0 (el más común en la práctica): las retenciones van
+  // anidadas por documento sustento — docsSustento.docSustento[].retenciones.retencion[]
+  const docsSustento = ensureArray(doc?.docsSustento?.docSustento);
+  if (docsSustento.length > 0) {
+    for (const ds of docsSustento) {
+      const numDoc = limpiar(ds.numDocSustento || '') || null;
+      const fechaDoc = limpiar(ds.fechaEmisionDocSustento || '') || null;
+      const retenciones = ensureArray(ds?.retenciones?.retencion);
+      for (const ret of retenciones) {
+        acumular(limpiar(ret.codigo), valorDe(ret), { ...ret, numDocSustento: numDoc, fechaEmisionDocSustento: fechaDoc });
+      }
+    }
+  } else {
+    // Schema v1.0.0 (formato plano, el mismo que genera sri.js): impuestos.impuesto[]
+    const impuestos = ensureArray(doc?.impuestos?.impuesto);
+    for (const imp of impuestos) {
+      acumular(limpiar(imp.codigo), valorDe(imp), {
+        ...imp,
+        numDocSustento: limpiar(imp.numDocSustento || imp.numeroDocSustento || '') || null,
+        fechaEmisionDocSustento: limpiar(imp.fechaEmisionDocSustento || '') || null,
+      });
+    }
+  }
 
   return {
     rucAgente: limpiar(infoTrib.ruc || ''),
     razonSocialAgente: limpiar(infoTrib.razonSocial || ''),
-    fechaEmision: parsearFecha(infoRet.fechaEmisionDocSustento || infoTrib.fechaEmision || ''),
+    fechaEmision: parsearFecha(infoRet.fechaEmision || infoTrib.fechaEmision || ''),
     numDocSustento,
     totalRetencionIva: Number(totalRetencionIva.toFixed(4)),
     totalRetencionRenta: Number(totalRetencionRenta.toFixed(4)),

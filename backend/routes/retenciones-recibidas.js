@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { parsearRetencionRecibida } = require('../utils/buzon');
 
 router.use(proteger);
 router.use(autorizarPermiso('compras.gestionar'));
@@ -82,6 +83,49 @@ router.get('/:id/xml', async (req, res) => {
     res.set('Content-Disposition', `attachment; filename="ret-rec-${doc.claveAcceso}.xml"`);
     res.send(doc.xmlAutorizado);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /recalcular — re-parsea el XML guardado y corrige totales ────
+// Repara registros importados antes del fix de parseo (tag <valorRetenido>
+// del SRI se leía como <valorRetener>, quedando totales en $0.00).
+// Idempotente: si el XML ya se parseaba bien, no cambia nada.
+router.post('/recalcular', async (req, res) => {
+  try {
+    const db = req.prisma || prisma;
+    const empresaId = req.empresa?.id ?? req.usuario?.empresaId ?? 1;
+
+    const registros = await db.retenciones_recibidas.findMany({
+      where: { empresaId, xmlAutorizado: { not: null } },
+      select: { id: true, xmlAutorizado: true },
+    });
+
+    let corregidos = 0;
+    let errores = 0;
+
+    for (const r of registros) {
+      try {
+        const datos = parsearRetencionRecibida(r.xmlAutorizado, r.xmlAutorizado);
+        await db.retenciones_recibidas.update({
+          where: { id: r.id },
+          data: {
+            totalRetencionIva: datos.totalRetencionIva,
+            totalRetencionRenta: datos.totalRetencionRenta,
+            detalles: datos.detalles,
+            numDocSustento: datos.numDocSustento,
+          },
+        });
+        corregidos++;
+      } catch (err) {
+        console.error(`[retenciones-recibidas recalcular] id=${r.id}:`, err.message);
+        errores++;
+      }
+    }
+
+    res.json({ success: true, total: registros.length, corregidos, errores });
+  } catch (err) {
+    console.error('[retenciones-recibidas POST /recalcular]', err);
     res.status(500).json({ error: err.message });
   }
 });

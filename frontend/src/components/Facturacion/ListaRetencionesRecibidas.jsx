@@ -82,6 +82,7 @@ export default function ListaRetencionesRecibidas() {
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState('');
   const [modalDetalle, setModalDetalle] = useState(null);
+  const [recalculando, setRecalculando] = useState(false);
 
   const [filtros, setFiltros] = useState({
     desde: '', hasta: '', agente: '', incluirAnuladas: false,
@@ -126,6 +127,20 @@ export default function ListaRetencionesRecibidas() {
     }
   };
 
+  const recalcularTotales = async () => {
+    if (!window.confirm('Esto vuelve a leer el XML de cada retención recibida y corrige los totales si estaban mal calculados. ¿Continuar?')) return;
+    setRecalculando(true);
+    try {
+      const { data } = await api.post('/retenciones-recibidas/recalcular');
+      alert(`Listo: ${data.corregidos} de ${data.total} retenciones recalculadas${data.errores ? ` (${data.errores} con error)` : ''}.`);
+      cargar(page);
+    } catch (err) {
+      alert('Error al recalcular: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setRecalculando(false);
+    }
+  };
+
   const sumaIva   = registros.reduce((s, r) => s + Number(r.totalRetencionIva || 0), 0);
   const sumaRenta = registros.reduce((s, r) => s + Number(r.totalRetencionRenta || 0), 0);
 
@@ -136,6 +151,9 @@ export default function ListaRetencionesRecibidas() {
           <h1 className="ret-title">Retenciones Recibidas</h1>
           <p className="ret-subtitle">Comprobantes de retención emitidos por clientes (agentes de retención)</p>
         </div>
+        <button className="btn-secondary" onClick={recalcularTotales} disabled={recalculando} title="Vuelve a leer el XML de cada retención y corrige los totales si estaban en $0.00">
+          {recalculando ? 'Recalculando...' : '🔄 Recalcular totales'}
+        </button>
       </div>
 
       {/* Filtros */}

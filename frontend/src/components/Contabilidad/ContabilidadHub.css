@@ -229,7 +229,7 @@
 .conta-form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
+  gap: 16px;
 }
 
 .conta-form-grid label {
@@ -244,7 +244,8 @@
   width: 100%;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
   background: #ffffff;
   color: #1e293b;
 }
@@ -704,34 +705,38 @@
   background: #ffffff;
   border-radius: 12px;
   width: 100%;
-  max-width: 900px;
+  max-width: 1180px;
+  max-height: calc(100vh - 64px);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .conta-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 20px 28px;
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
+  flex-shrink: 0;
 }
 
 .conta-modal-header h3 {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 700;
   color: #1e293b;
 }
 
 .conta-modal-close {
   background: none;
   border: none;
-  font-size: 1.1rem;
+  font-size: 1.4rem;
   color: #64748b;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 4px 10px;
   border-radius: 6px;
   line-height: 1;
 }
@@ -744,28 +749,45 @@
 .conta-modal > .conta-warning,
 .conta-modal > .conta-origen-doc,
 .conta-modal > form {
-  padding: 0 20px;
+  padding: 0 28px;
+}
+
+.conta-modal > .conta-warning,
+.conta-modal > .conta-origen-doc {
+  margin-top: 16px;
+  font-size: 14px;
 }
 
 .conta-modal > form {
-  padding-bottom: 20px;
+  padding-bottom: 24px;
+  overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+  .conta-modal-header,
+  .conta-modal > .conta-warning,
+  .conta-modal > .conta-origen-doc,
+  .conta-modal > form {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
 }
 
 /* ── Asiento — meta (lectura) ─────────────────────────────────── */
 .conta-asiento-meta {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 8px 16px;
-  padding: 12px 0 4px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px 20px;
+  padding: 18px 0 8px;
 }
 .conta-asiento-meta .full-width { grid-column: 1 / -1; }
-.conta-asiento-meta div { display: grid; gap: 2px; }
+.conta-asiento-meta div { display: grid; gap: 4px; }
 .conta-asiento-meta span { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
-.conta-asiento-meta strong { font-size: 13px; color: #1e293b; }
+.conta-asiento-meta strong { font-size: 15px; color: #1e293b; }
 
 /* ── Asiento — vista solo lectura ─────────────────────────────── */
-.conta-asiento-lectura td { padding: 8px 10px; font-size: 13px; }
-.conta-asiento-lectura th { padding: 8px 10px; font-size: 11px; }
+.conta-asiento-lectura td { padding: 12px 14px; font-size: 14px; }
+.conta-asiento-lectura th { padding: 10px 14px; font-size: 12px; }
 .conta-asiento-lectura .text-right { text-align: right; }
 
 .conta-cod {

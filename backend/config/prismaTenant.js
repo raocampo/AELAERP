@@ -14,39 +14,44 @@ const { applyFixesToDb } = require('../scripts/applySchemaFixes');
 
 // Pool de clientes Prisma — una instancia por BD de tenant
 // Se mantienen vivos durante el proceso para reutilizar conexiones
-const _pool = new Map(); // slug → PrismaClient
+const _pool  = new Map(); // slug → PrismaClient
+const _ready = new Map(); // slug → Promise (resuelve cuando applyFixesToDb terminó)
 
 /**
  * Retorna un PrismaClient conectado a la BD del tenant.
  * Si ya existe en el pool, lo reutiliza.
- * En la primera creación, aplica schema fixes en background para garantizar
- * que la BD del tenant tenga las últimas tablas/columnas aunque el script de
- * startup no haya podido contactarla (p.ej. aela_master.tenants no existe).
+ * En la primera creación, aplica schema fixes y espera a que terminen antes de
+ * devolver el cliente — evita que los primeros requests tras un cold start
+ * (deploy/restart) le peguen a tablas que el script de startup todavía no
+ * terminó de crear (p.ej. tarjetas_credito/movimientos_tarjeta), lo cual antes
+ * producía 500 intermitentes justo después de cada deploy. Una vez resuelta,
+ * la promesa queda cacheada y los siguientes requests no pagan el costo.
  * @param {object} tenant - Registro de la tabla tenants
- * @returns {PrismaClient}
+ * @returns {Promise<PrismaClient>}
  */
-function getTenantPrisma(tenant) {
+async function getTenantPrisma(tenant) {
   const key = tenant.slug;
 
-  if (_pool.has(key)) {
-    return _pool.get(key);
+  if (!_pool.has(key)) {
+    const url = buildConnectionUrl(tenant);
+
+    const client = new PrismaClient({
+      datasources: { db: { url } },
+      log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+    });
+
+    _pool.set(key, client);
+
+    // Garantía extra si el startup no cubrió esta BD específica.
+    _ready.set(
+      key,
+      applyFixesToDb(url, `tenant:${key}`)
+        .catch((err) => console.error(`[schema-fix] Tenant ${key}:`, err.message))
+    );
   }
 
-  const url = buildConnectionUrl(tenant);
-
-  const client = new PrismaClient({
-    datasources: { db: { url } },
-    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
-  });
-
-  _pool.set(key, client);
-
-  // Aplica schema fixes al DB del tenant (non-blocking, idempotente).
-  // Garantía extra si el startup no cubrió esta BD específica.
-  applyFixesToDb(url, `tenant:${key}`)
-    .catch((err) => console.error(`[schema-fix] Tenant ${key}:`, err.message));
-
-  return client;
+  await _ready.get(key);
+  return _pool.get(key);
 }
 
 /**

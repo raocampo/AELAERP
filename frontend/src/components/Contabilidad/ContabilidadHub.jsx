@@ -1158,8 +1158,8 @@ const ContabilidadHub = () => {
                   <div className="conta-origen-doc">
                     <div className="conta-origen-header">
                       <strong>{origenDoc.tipo === 'compra' ? '🛒 Compra relacionada' : '🧾 Factura relacionada'}</strong>
-                      <button type="button" className="btn-link" onClick={() => navigate(`/${origenDoc.tipo === 'compra' ? 'compras' : 'facturas'}/${origenDoc.id}`)}>
-                        → Ir al documento
+                      <button type="button" className="btn-link" onClick={() => window.open(`/${origenDoc.tipo === 'compra' ? 'compras' : 'facturas'}/${origenDoc.id}`, '_blank', 'noopener')}>
+                        → Ir al documento (nueva pestaña)
                       </button>
                     </div>
                     {origenDoc.tipo === 'compra' && (
