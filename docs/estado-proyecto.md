@@ -1,6 +1,6 @@
 # Estado del Proyecto AELA
 
-Fecha de referencia: `2026-07-08`
+Fecha de referencia: `2026-07-12`
 
 ## Resumen general
 
@@ -439,6 +439,37 @@ ya importadas antes del fix, idempotente. Botón "Generar asientos faltantes" en
 | 3 | POS + inventario permanente | ✅ Facturas (`c7adfd7`) + Notas de Venta (`5c429dd`) |
 | 4 | Centros de costo dimensionales | ✅ `cf16980` |
 | 5 | Provisiones RRHH automáticas | ✅ `c6a61da` |
+
+### 26. Sesión 2026-07-12 — Bug real en declaraciones (F104/retenciones recibidas), RUC vs Cédula, DetalleCompra responsiva, recibo de cobro
+
+Ver `docs/pendientes-2026-07-12.md` para el detalle exhaustivo. A diferencia de sesiones
+previas (features nuevas), esta fue debugging de **datos y cálculos reales** disparado por
+preguntas del cliente sobre su declaración tributaria — dos hallazgos llevaban semanas
+afectando silenciosamente los números que usa para declarar al SRI.
+
+- **Retenciones Recibidas en $0.00** (`0d7c903`): el parser (`buzon.js`) solo soportaba el
+  schema v1.0.0 del SRI; los agentes de retención reales usan v2.0.0 (anidado por documento
+  sustento) — confirmado con 3 XML reales. Además leía `valorRetener` en vez de
+  `valorRetenido`, y la fecha caía siempre en la de importación. Reparación retroactiva:
+  botón "Recalcular totales".
+- **F104 restaba las retenciones equivocadas** (`04b8af5`): usaba las que la empresa emite a
+  proveedores (obligación del F103) en vez de las que sus clientes le retienen a ella (crédito
+  real del F104) — el "IVA a pagar" mostrado estuvo sobreestimado. De paso, `declaraciones.js`
+  completo migrado a `req.prisma` (usaba el cliente global, bug potencial multi-tenant).
+- **Crédito tributario arrastrado** (`711aa0e`): campo nuevo en F104, no existía dónde
+  ingresarlo. No se encadena automático mes a mes a propósito.
+- **DetalleCompra no responsiva** (`9598db4`, `b0c9145`): dos bugs de CSS distintos — grid
+  frágil con `max-width` en porcentaje colapsaba valores a 0, y el contenedor de página sin
+  `minmax(0,1fr)` dejaba que la tabla de ítems ensanchara toda la página más allá del viewport
+  (recortada por `overflow-x:hidden` del layout raíz, no scrolleable).
+- **RUC vs Cédula** (`1f1c29c`): compras facturadas a cédula personal (no al RUC de la empresa)
+  ahora se excluyen automáticamente de F104/F101 — no son deducibles tributariamente. Columna
+  `receptorEsRuc`, calculada al importar del Buzón SRI, con backfill retroactivo.
+- **CxC — recibo de cobro PDF** (`71ce673`): benchmark vs "Sofía", cliente priorizó esto sobre
+  Importar cobros / cuentas manuales-préstamos / Órdenes de pago (los 3 quedan en backlog).
+- Fix de raíz de los 500 intermitentes en CxC/CxP tras cada deploy (race condition esperando
+  schema fixes en `prismaTenant.js`). Modal de asiento contable agrandado. Ayuda del sistema:
+  6 secciones nuevas para módulos que ya existían sin documentar.
 
 ### 25. Sesión 2026-07-07 — Benchmark vs "Sofía", Configuración de cuentas por referencia, CxC/CxP
 

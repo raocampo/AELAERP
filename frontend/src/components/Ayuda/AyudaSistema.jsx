@@ -253,6 +253,10 @@ const SECCIONES = [
         <div className="ayuda-nota">
           💡 Para la declaración del IVA (Form 104): usa la columna <strong>Base IVA</strong> como "Compras gravadas" y la columna <strong>IVA pagado</strong> como "IVA en compras".
         </div>
+
+        <h4>RUC vs. Cédula — cuáles compras cuentan para tus declaraciones</h4>
+        <p>Una compra solo es deducible y genera crédito de IVA si el comprobante fue emitido a nombre del <strong>RUC</strong> de tu empresa. Si un proveedor te facturó a una <strong>cédula personal</strong> en vez de tu RUC, esa compra no es válida para declaraciones — el sistema la excluye automáticamente del F104/F101 y la marca con el badge <strong>"⚠️ A cédula"</strong> en el listado y en el detalle.</p>
+        <p>Para compras importadas antes del 12 de julio de 2026, usa el botón <strong>"🪪 Marcar RUC/Cédula"</strong> (junto a "Auto-clasificar") una sola vez — revisa el XML original de cada compra y las clasifica retroactivamente.</p>
       </div>
     ),
   },
@@ -576,6 +580,9 @@ const SECCIONES = [
         </ol>
         <p>Si te equivocaste al registrar un cobro/pago, ve a <strong>Historial</strong> y usa <strong>Anular</strong> — la factura vuelve a Vigentes con su saldo correcto y se genera el asiento de reverso.</p>
 
+        <h4>Recibo de cobro imprimible</h4>
+        <p>Al registrar un cobro en Cuentas por Cobrar, el recibo en PDF se abre automáticamente en una pestaña nueva. También puedes volver a generarlo cuando quieras con el botón <strong>"🧾 Recibo"</strong> en cada fila de <strong>Historial de cobros</strong> — incluye los datos de tu empresa, el cliente, la factura, la forma de pago y el saldo pendiente actualizado.</p>
+
         <h4>Cheques recibidos y tarjetas de crédito</h4>
         <p>Dentro de Cuentas por Cobrar hay una pestaña <strong>Cheques</strong> para darle seguimiento a cheques de clientes (número, banco, estado: Pendiente/Depositado/Protestado/Anulado). Dentro de Cuentas por Pagar hay una pestaña <strong>Tarjetas de crédito</strong> para registrar cargos y pagos de las tarjetas corporativas, con su propio libro de movimientos.</p>
 
@@ -626,6 +633,9 @@ const SECCIONES = [
         <div className="ayuda-nota ayuda-nota-warning">
           ⚠️ No confundir con <strong>Retenciones (emitidas)</strong> en el menú Compras: esas son las que TÚ le retienes a TUS proveedores, y se declaran aparte en el Formulario 103 — no reducen tu propio IVA a pagar.
         </div>
+
+        <h4>Si ves montos en $0.00</h4>
+        <p>Los comprobantes de retención del SRI existen en dos formatos (schema v1.0.0 y v2.0.0) según el sistema que use cada agente de retención. Si importaste comprobantes antes del 12 de julio de 2026 y aparecen en $0.00, usa el botón <strong>"🔄 Recalcular totales"</strong> en la parte superior de la pantalla — vuelve a leer el XML ya guardado de cada uno y corrige los montos y la fecha sin necesidad de volver a descargarlos del Buzón SRI.</p>
       </div>
     ),
   },
@@ -638,11 +648,12 @@ const SECCIONES = [
         <p>En <strong>Tributario → Declaraciones</strong> el sistema arma, por período, un resumen de los datos que necesitas para llenar los formularios del SRI. <strong>No reemplaza el DIMM</strong> ni presenta la declaración — es una ayuda para no tener que sumar todo manualmente.</p>
 
         <h4>F104 — IVA Mensual</h4>
-        <p>La lógica es: <code>IVA a pagar = IVA cobrado en ventas − IVA crédito fiscal en compras − IVA que tus clientes te retuvieron</code>.</p>
+        <p>La lógica es: <code>IVA a pagar = IVA cobrado en ventas − IVA crédito fiscal en compras − IVA que tus clientes te retuvieron − crédito tributario arrastrado del mes anterior</code>.</p>
         <ul>
           <li><strong>IVA cobrado en ventas:</strong> suma del IVA de tus facturas del mes (netas de notas de crédito).</li>
-          <li><strong>IVA crédito fiscal:</strong> suma del IVA de tus compras y liquidaciones de compra del mes.</li>
+          <li><strong>IVA crédito fiscal:</strong> suma del IVA de tus compras y liquidaciones de compra del mes. Solo cuentan las compras facturadas a tu <strong>RUC</strong> — si una compra llegó dirigida a una cédula personal, no es deducible y el sistema la excluye automáticamente (te avisa cuántas excluyó).</li>
           <li><strong>IVA retenido por clientes:</strong> viene de <strong>Retenciones Recibidas</strong> (ver arriba) — solo cuenta lo que TUS clientes te retuvieron, no lo que tú le retienes a tus proveedores.</li>
+          <li><strong>Crédito tributario arrastrado:</strong> el saldo a favor de tu última declaración real ante el SRI. Ingresa el monto en el campo "Crédito tributario arrastrado del mes anterior" y guárdalo — el sistema no lo calcula solo encadenando meses, porque el saldo oficial puede no coincidir (por ejemplo si empezaste a usar AELA a mitad de año).</li>
         </ul>
         <p>Si el resultado es positivo, es <strong>IVA a pagar</strong>. Si es negativo, es <strong>crédito tributario</strong> a tu favor para el siguiente mes.</p>
 
