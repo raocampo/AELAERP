@@ -433,6 +433,9 @@ export default function ListaCompras() {
             title="Revisa el XML original de cada compra para saber si llegó dirigida al RUC (deducible) o a una cédula personal (no válida para declaraciones)">
             {marcandoReceptor ? 'Revisando…' : '🪪 Marcar RUC/Cédula'}
           </button>
+          <button className="btn-secondary" onClick={() => navigate('/compras/notas-credito')} title="Ver notas de crédito emitidas por proveedores (tipo 04 del SRI)">
+            📋 NC Proveedores
+          </button>
           <button className="btn-primary" onClick={() => navigate('/compras/nueva')}>Nueva compra</button>
         </div>
       </div>
