@@ -471,6 +471,21 @@ afectando silenciosamente los números que usa para declarar al SRI.
   schema fixes en `prismaTenant.js`). Modal de asiento contable agrandado. Ayuda del sistema:
   6 secciones nuevas para módulos que ya existían sin documentar.
 
+**Parte 2 — segunda ronda, bugs reproducidos en vivo por el cliente:**
+- **Asiento de compra descuadrado** (`5887d40`): `crearAsientoFacturaCompraRegistrada`
+  descartaba en silencio (`Math.max(...,0)`) un residuo de 1 centavo de drift de redondeo
+  entre el desglose por línea y los totales guardados de la compra, dejando el asiento
+  con debe > haber. El residuo ahora se absorbe en la línea de inventario.
+- **"Imprimir PDF" bloqueado por popup** (`5887d40`): `reportPrint.js` usaba
+  `window.open('', ...)` — reemplazado por un iframe oculto, inmune a bloqueadores de
+  popups (afecta ATS y Reportes Tributarios).
+- **Filtros de Contabilidad colapsaban mal** (`5887d40`): `.conta-filters` pasó de grid
+  fijo de 5 columnas a flexbox con wrap — se acomoda de forma continua en vez de saltar
+  a una sola columna por debajo de 1100px.
+- **Columna Operación en Compras simplificada** (`5887d40`): de 2 filas de badges
+  siempre visibles a 4 botones de acción + un popover "···" con la información de
+  estado (origen, asiento, aviso de cédula).
+
 ### 25. Sesión 2026-07-07 — Benchmark vs "Sofía", Configuración de cuentas por referencia, CxC/CxP
 
 Ver `docs/pendientes-2026-07-07.md` para el detalle exhaustivo (endpoints, modelos, scripts

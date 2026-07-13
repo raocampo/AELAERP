@@ -18,6 +18,8 @@ Commits de esta sesión (cronológico):
 b0c9145  fix: DetalleCompra — página se ensanchaba más allá de la pantalla
 1f1c29c  feat: excluir de declaraciones las compras facturadas a cédula (no a RUC)
 71ce673  feat(cxc): recibo de cobro imprimible (PDF)
+dc711ff  docs: sesión 2026-07-12 — bug real F104/retenciones recibidas, RUC vs Cédula, responsividad, recibo CxC
+5887d40  fix: asiento de compra descuadrado, impresión bloqueada por popup, UX de ListaCompras y filtros contables
 ```
 
 ---
@@ -197,6 +199,96 @@ estaban documentados en la Ayuda in-app.
 
 ---
 
+## Parte 2 — Segunda ronda: bugs reproducidos en vivo por el cliente
+
+Tras la primera ronda de fixes, el cliente probó en producción y compartió 5 capturas
+más con problemas concretos — dos eran bugs reales (uno de correctitud contable), tres
+eran UX a mejorar.
+
+## 8 — Asiento de compra descuadrado ("Partida descuadrada: debe=X.XX haber=X.XX")
+
+**Reproducido por el cliente**: al dar clic en "Generar asiento" sobre una compra
+específica (PC LAPTOP ECUADOR S.C.C., $878.25), el sistema rechazaba la operación con
+`Partida descuadrada: debe=878.26 haber=878.25` — un descuadre real de 1 centavo, no
+solo un mensaje de validación de más.
+
+**Causa raíz** (`backend/utils/contabilidad.js`, `crearAsientoFacturaCompraRegistrada`):
+el desglose por línea de la compra (suma de `detalle.subtotal` de los ítems
+inventariables) puede tener 1 centavo de drift de redondeo frente a los totales
+guardados a nivel de compra (`importeTotal`/`totalIva`) — perfectamente posible cuando
+esos totales se calcularon en otro punto del código sumando IVA por línea sin redondear
+hasta el final. El código calculaba `subtotalGasto = Math.max(total - iva -
+subtotalInventario, 0)`: cuando ese residuo daba negativo (el drift hacía que
+inventario+IVA ya superaran el total), el `Math.max(..., 0)` lo descartaba en silencio
+en vez de conciliarlo, y como además `subtotalGasto` quedaba en 0, ni siquiera se
+generaba la línea de "gasto" — el debe (inventario + IVA) quedaba $0.01 por encima del
+haber (el total real).
+
+**Fix**: el residuo negativo ahora se absorbe restándolo de `subtotalInventario` en vez
+de descartarse, garantizando por construcción que inventario + gasto + IVA siempre
+sumen exactamente el total de la compra. Verificado con varios escenarios de drift
+simulados (incluyendo el caso exacto reportado) — todos cuadran ahora.
+
+**Para la compra que falló**: el clic en "Generar asiento" no llegó a crear nada (el
+error se lanza antes de persistir) — el cliente solo necesita volver a intentar
+"Generar asiento" sobre esa misma compra, ahora debería funcionar.
+
+## 9 — "Imprimir PDF" bloqueado por el navegador (ATS, Reportes Tributarios)
+
+**Reproducido por el cliente**: clic en "Imprimir PDF" en el módulo ATS → alerta "No se
+pudo abrir la ventana de impresión. Habilita las ventanas emergentes." + una ventana
+externa en negro.
+
+**Causa**: `frontend/src/utils/reportPrint.js` usaba `window.open('', '_blank', ...)`
+para armar el HTML a imprimir y luego disparar `window.print()`. Los bloqueadores de
+popups (Firefox en particular, que es el navegador de las capturas) bloquean con más
+frecuencia una ventana abierta con URL vacía que una con URL real — y no hay forma de
+"habilitar" esto de antemano para el usuario, tiene que pasar por la configuración del
+navegador cada vez.
+
+**Fix**: se reemplazó la ventana nueva por un `<iframe>` oculto en la página actual — se
+escribe el mismo HTML ahí y se llama `iframe.contentWindow.print()`. Un iframe no abre
+ninguna ventana ni pestaña, así que un bloqueador de popups nunca lo detecta. Afecta
+tanto a ATS como a Reportes Tributarios (ambos comparten `printHtmlReport`).
+
+## 10 — Filtros de Libro Diario / Cierre y Estados colapsaban mal en pantallas medianas
+
+**Reproducido por el cliente**: en Contabilidad → Libro Diario (y Cierre y Estados), los
+filtros (hasta 9 controles: buscador, período, 2 fechas, 2 selects, 3 botones) se veían
+como una lista vertical larguísima de campos angostos en pantallas de ancho medio.
+
+**Causa**: `.conta-filters` era un grid con 5 columnas fijas (`1.5fr repeat(2,
+minmax(140px,1fr)) auto auto`) diseñado para paneles de ~5 campos — con 9 elementos, el
+grid ya se veía raro incluso en desktop (los ítems de más se envolvían a una segunda
+fila usando las mismas 5 columnas, sin relación con su tipo). Por debajo de 1100px, una
+regla forzaba `grid-template-columns: 1fr` — colapso total a una columna, sin ningún
+punto intermedio.
+
+**Fix**: `.conta-filters` pasó de grid fijo a flexbox con `flex-wrap: wrap` — cada campo
+tiene un ancho mínimo (140px) y crece para llenar el espacio disponible, reordenándose
+de forma continua según el ancho real en vez de saltar entre "5 columnas" y "1 columna".
+Los checkboxes anidados (ej. "Solo movimiento" en Plan de Cuentas) quedan excluidos de
+este estirado para no verse deformados.
+
+## 11 — Columna "Operación" en Compras — demasiados badges, poca claridad
+
+**Pedido del cliente**: la columna mostraba 2 filas de chips/badges siempre visibles
+(tipo de gasto, origen BUZON_SRI/MANUAL, aviso "A cédula", cuenta contable personalizada,
+Inventario/Caja/Solo registro, Con asiento/Generar asiento) más un menú "···" — mucha
+información compitiendo por atención. Pidió dejar solo botones de acción visibles
+(Clasificar, Ver, Cuenta contable, Generar asiento) y mover la información de estado
+(origen, aviso de cédula, si tiene asiento) al menú "···".
+
+**Implementación**: la columna ahora muestra un solo grupo de 4 controles compactos:
+✏️ Clasificar (tipo de gasto), 👁 Ver detalle, 📒 Cuenta contable, y ⚠ Generar asiento
+(solo si aún no tiene uno — si ya lo tiene, el botón desaparece en vez de mostrar un
+badge "✓ Con asiento" permanente). El botón "···" (renombrado internamente a
+`InfoOps`) ahora abre un popover de solo lectura con Origen, estado del asiento e
+Inventario/Caja — y si la compra está facturada a cédula, se pone en rojo para llamar
+la atención sin ocupar espacio en la fila.
+
+---
+
 ## 🔴 VERIFICAR EN PRODUCCIÓN
 
 1. **Retenciones Recibidas** — ir a Tributario → Retenciones recibidas, dar clic en
@@ -217,6 +309,19 @@ estaban documentados en la Ayuda in-app.
 6. **Recibo de cobro** — en Cuentas por Cobrar, registrar un cobro de prueba y
    confirmar que el PDF se abre automáticamente con los datos correctos; también
    probar el botón "🧾 Recibo" desde Historial de cobros sobre un cobro ya existente.
+7. **Asiento de compra descuadrado** — reintentar "Generar asiento" sobre la compra
+   PC LAPTOP ECUADOR S.C.C. (u otra que haya fallado con "Partida descuadrada"),
+   confirmar que ahora se genera sin error y que debe=haber en el Libro Diario.
+8. **Imprimir PDF (ATS)** — en Tributario → ATS, generar el ATS de un mes con datos y
+   dar clic en "Imprimir PDF"; confirmar que aparece el diálogo de impresión del
+   navegador sin ningún aviso de ventana emergente bloqueada.
+9. **Filtros de Libro Diario** — achicar la ventana del navegador a un ancho medio
+   (~800-1000px) y confirmar que los filtros se acomodan en 2-3 columnas en vez de
+   colapsar todos a una sola columna vertical.
+10. **Columna Operación en Compras** — confirmar que cada fila muestra solo 4 botones
+    (Clasificar, Ver, Cuenta contable, Generar asiento si aplica) y que el botón "···"
+    abre un popover con Origen / Asiento / Inventario-Caja (y el aviso de cédula si
+    corresponde, con el botón en rojo).
 
 ---
 
@@ -244,4 +349,8 @@ DB:       PostgreSQL Railway (railway + aela_lsac + aela_mprq)
 | `frontend/src/components/Compras/DetalleCompra.css` | 2 fixes de responsividad |
 | `frontend/src/components/Declaraciones/Declaraciones.jsx` | Crédito tributario arrastrado + aviso compras excluidas |
 | `frontend/src/components/CuentasPorCobrar/CuentasPorCobrarHub.jsx` | Botón/flujo de recibo de cobro |
-| `frontend/src/components/Ayuda/AyudaSistema.jsx` | 6 secciones nuevas |
+| `frontend/src/components/Ayuda/AyudaSistema.jsx` | 6 secciones nuevas + notas de esta ronda |
+| `backend/utils/contabilidad.js` | Fix descuadre en asiento de compra (residuo de redondeo) |
+| `frontend/src/utils/reportPrint.js` | Impresión vía iframe oculto en vez de `window.open` |
+| `frontend/src/components/Contabilidad/ContabilidadHub.css` | `.conta-filters` de grid fijo a flexbox |
+| `frontend/src/components/Compras/ListaCompras.jsx` / `.css` | Columna Operación simplificada (4 botones + popover de info) |
