@@ -95,6 +95,8 @@ model empresas {
   transportistas        transportistas[]
   cajasChicas           cajas_chicas[]
   movimientosCajaChica  movimientos_caja_chica[]
+  anticiposCliente      anticipos_cliente[]
+  anticiposProveedor    anticipos_proveedor[]
 
   @@map("empresas")
 }
@@ -180,6 +182,7 @@ model clientes {
   facturas             facturas[]
   notas_venta          notas_venta[]
   cobros               cobros_cliente[]
+  anticipos            anticipos_cliente[]
 
   @@unique([empresaId, identificacion])
   @@index([empresaId])
@@ -211,6 +214,7 @@ model proveedores {
   compras              facturas_compra[]
   cheques              cheques[]
   pagos                pagos_proveedor[]
+  anticipos            anticipos_proveedor[]
 
   @@unique([empresaId, identificacion])
   @@index([empresaId])
@@ -977,6 +981,8 @@ model asientos_contables {
   cobrosCliente        cobros_cliente[]
   pagosProveedor       pagos_proveedor[]
   movimientosCajaChica movimientos_caja_chica[]
+  anticiposCliente     anticipos_cliente[]
+  anticiposProveedor   anticipos_proveedor[]
 
   @@index([empresaId])
   @@index([fecha])
@@ -1700,4 +1706,74 @@ model tabla_utilidades {
 
   @@index([empresaId])
   @@map("tabla_utilidades")
+}
+
+// ====================================
+// ANTICIPOS DE CLIENTES
+// Dinero recibido del cliente antes de emitir la factura.
+// Asiento: DEBE Banco/Caja, HABER Anticipos Clientes (pasivo)
+// ====================================
+model anticipos_cliente {
+  id              Int       @id @default(autoincrement())
+  empresaId       Int
+  clienteId       Int?
+  nombreCliente   String    @db.VarChar(300)
+  numero          String    @db.VarChar(30)
+  fecha           DateTime  @default(now())
+  monto           Decimal   @db.Decimal(14, 2)
+  saldoPendiente  Decimal   @db.Decimal(14, 2)
+  metodoPago      String    @default("efectivo") @db.VarChar(20)
+  referencia      String?   @db.VarChar(100)
+  observaciones   String?
+  anulado         Boolean   @default(false)
+  motivoAnulacion String?   @db.VarChar(500)
+  asientoId       Int?
+  usuarioId       Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  empresa  empresas            @relation(fields: [empresaId], references: [id])
+  cliente  clientes?           @relation(fields: [clienteId], references: [id])
+  asiento  asientos_contables? @relation(fields: [asientoId], references: [id])
+
+  @@unique([empresaId, numero])
+  @@index([empresaId])
+  @@index([clienteId])
+  @@index([fecha])
+  @@map("anticipos_cliente")
+}
+
+// ====================================
+// ANTICIPOS A PROVEEDORES
+// Pago realizado al proveedor antes de recibir la factura.
+// Asiento: DEBE Anticipos Proveedores (activo), HABER Banco/Caja
+// ====================================
+model anticipos_proveedor {
+  id               Int       @id @default(autoincrement())
+  empresaId        Int
+  proveedorId      Int?
+  nombreProveedor  String    @db.VarChar(300)
+  numero           String    @db.VarChar(30)
+  fecha            DateTime  @default(now())
+  monto            Decimal   @db.Decimal(14, 2)
+  saldoPendiente   Decimal   @db.Decimal(14, 2)
+  metodoPago       String    @default("efectivo") @db.VarChar(20)
+  referencia       String?   @db.VarChar(100)
+  observaciones    String?
+  anulado          Boolean   @default(false)
+  motivoAnulacion  String?   @db.VarChar(500)
+  asientoId        Int?
+  usuarioId        Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  empresa   empresas            @relation(fields: [empresaId], references: [id])
+  proveedor proveedores?        @relation(fields: [proveedorId], references: [id])
+  asiento   asientos_contables? @relation(fields: [asientoId], references: [id])
+
+  @@unique([empresaId, numero])
+  @@index([empresaId])
+  @@index([proveedorId])
+  @@index([fecha])
+  @@map("anticipos_proveedor")
 }

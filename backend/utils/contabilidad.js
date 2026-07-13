@@ -965,6 +965,147 @@ async function crearAsientoReversoPagoProveedor({ pagoId, usuarioId, fecha = new
   return { asiento, creado: true };
 }
 
+async function crearAsientoAnticipoCliente({ anticipoId, usuarioId, fecha = new Date(), db = prisma }) {
+  const anticipo = await db.anticipos_cliente.findUnique({ where: { id: toInt(anticipoId) } });
+  if (!anticipo) throw new Error('Anticipo no encontrado');
+
+  const referencia = `ANT-CLI-${anticipo.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: anticipo.empresaId, tipo: 'ANTICIPO_CLIENTE', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const monto = round2(anticipo.monto);
+  const cuentaCobro = (anticipo.metodoPago || '').toLowerCase() === 'efectivo'
+    ? await ensureCuentaMovimiento({ empresaId: anticipo.empresaId, tx: db, codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO' })
+    : await ensureCuentaMovimiento({ empresaId: anticipo.empresaId, tx: db, codigo: '1.1.02.001', nombre: 'Bancos', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+  const cuentaAnticipo = await ensureCuentaMovimiento({
+    empresaId: anticipo.empresaId, tx: db,
+    codigo: '2.1.05.001', nombre: 'Anticipos de Clientes', tipo: 'PASIVO', naturaleza: 'CREDITO',
+  });
+
+  const asiento = await crearAsientoContable({
+    empresaId: anticipo.empresaId,
+    fecha,
+    descripcion: `Anticipo cliente ${anticipo.numero} — ${anticipo.nombreCliente} (${anticipo.metodoPago})`,
+    tipo: 'ANTICIPO_CLIENTE',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles: [
+      { cuentaId: cuentaCobro.id,    descripcion: 'Anticipo recibido',        debe: monto, haber: 0 },
+      { cuentaId: cuentaAnticipo.id, descripcion: 'Obligación anticipo cliente', debe: 0,  haber: monto },
+    ],
+  });
+
+  await db.anticipos_cliente.update({ where: { id: anticipo.id }, data: { asientoId: asiento.id } });
+  return { asiento, creado: true };
+}
+
+async function crearAsientoAnticipoProveedor({ anticipoId, usuarioId, fecha = new Date(), db = prisma }) {
+  const anticipo = await db.anticipos_proveedor.findUnique({ where: { id: toInt(anticipoId) } });
+  if (!anticipo) throw new Error('Anticipo proveedor no encontrado');
+
+  const referencia = `ANT-PRV-${anticipo.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: anticipo.empresaId, tipo: 'ANTICIPO_PROVEEDOR', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const config = await obtenerConfiguracionContable(anticipo.empresaId, db);
+  const monto = round2(anticipo.monto);
+  const cuentaAnticipo = await ensureCuentaMovimiento({
+    empresaId: anticipo.empresaId, tx: db,
+    codigo: '1.1.04.002', nombre: 'Anticipos a Proveedores', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+  });
+  const cuentaPago = (anticipo.metodoPago || '').toLowerCase() === 'efectivo'
+    ? await ensureCuentaMovimiento({ empresaId: anticipo.empresaId, tx: db, codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO' })
+    : await ensureCuentaMovimiento({ empresaId: anticipo.empresaId, tx: db, codigo: '1.1.02.001', nombre: 'Bancos', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+
+  const asiento = await crearAsientoContable({
+    empresaId: anticipo.empresaId,
+    fecha,
+    descripcion: `Anticipo proveedor ${anticipo.numero} — ${anticipo.nombreProveedor} (${anticipo.metodoPago})`,
+    tipo: 'ANTICIPO_PROVEEDOR',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles: [
+      { cuentaId: cuentaAnticipo.id, descripcion: 'Derecho por anticipo pagado', debe: monto, haber: 0 },
+      { cuentaId: cuentaPago.id,     descripcion: 'Pago de anticipo',           debe: 0,     haber: monto },
+    ],
+  });
+
+  await db.anticipos_proveedor.update({ where: { id: anticipo.id }, data: { asientoId: asiento.id } });
+  return { asiento, creado: true };
+}
+
+async function crearAsientoReversoAnticipoCliente({ anticipoId, usuarioId, fecha = new Date(), db = prisma }) {
+  const anticipo = await db.anticipos_cliente.findUnique({ where: { id: toInt(anticipoId) } });
+  if (!anticipo) throw new Error('Anticipo no encontrado');
+  if (!anticipo.asientoId) return { asiento: null, creado: false };
+
+  const referencia = `ANT-CLI-ANUL-${anticipo.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: anticipo.empresaId, tipo: 'REVERSO_ANTICIPO_CLIENTE', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const original = await db.asientos_contables.findUnique({ where: { id: anticipo.asientoId }, include: { detalles: true } });
+  if (!original) return { asiento: null, creado: false };
+
+  const asiento = await crearAsientoContable({
+    empresaId: anticipo.empresaId,
+    fecha,
+    descripcion: `Anulación anticipo cliente ${anticipo.numero}`,
+    tipo: 'REVERSO_ANTICIPO_CLIENTE',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles: original.detalles.map((d) => ({
+      cuentaId: d.cuentaId,
+      descripcion: `Reverso anticipo ${anticipo.numero}`,
+      debe: round2(d.haber),
+      haber: round2(d.debe),
+    })),
+  });
+
+  return { asiento, creado: true };
+}
+
+async function crearAsientoReversoAnticipoProveedor({ anticipoId, usuarioId, fecha = new Date(), db = prisma }) {
+  const anticipo = await db.anticipos_proveedor.findUnique({ where: { id: toInt(anticipoId) } });
+  if (!anticipo) throw new Error('Anticipo proveedor no encontrado');
+  if (!anticipo.asientoId) return { asiento: null, creado: false };
+
+  const referencia = `ANT-PRV-ANUL-${anticipo.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: anticipo.empresaId, tipo: 'REVERSO_ANTICIPO_PROVEEDOR', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const original = await db.asientos_contables.findUnique({ where: { id: anticipo.asientoId }, include: { detalles: true } });
+  if (!original) return { asiento: null, creado: false };
+
+  const asiento = await crearAsientoContable({
+    empresaId: anticipo.empresaId,
+    fecha,
+    descripcion: `Anulación anticipo proveedor ${anticipo.numero}`,
+    tipo: 'REVERSO_ANTICIPO_PROVEEDOR',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles: original.detalles.map((d) => ({
+      cuentaId: d.cuentaId,
+      descripcion: `Reverso anticipo ${anticipo.numero}`,
+      debe: round2(d.haber),
+      haber: round2(d.debe),
+    })),
+  });
+
+  return { asiento, creado: true };
+}
+
 async function crearAsientoCompraFarmacia({ empresaId, medicamentoId, cantidad, precioUnit, usuarioId, fecha = new Date(), metodoPago = null, referencia = null }) {
   const empresaIdNum = toInt(empresaId);
   if (!empresaIdNum) throw new Error('empresaId es requerido para registrar compra de farmacia');
@@ -2084,6 +2225,10 @@ module.exports = {
   crearAsientoPagoProveedor,
   crearAsientoReversoCobroCliente,
   crearAsientoReversoPagoProveedor,
+  crearAsientoAnticipoCliente,
+  crearAsientoAnticipoProveedor,
+  crearAsientoReversoAnticipoCliente,
+  crearAsientoReversoAnticipoProveedor,
   crearAsientoAperturaCajaChica,
   crearAsientoReposicionCajaChica,
   crearAsientoIncrementoCajaChica,

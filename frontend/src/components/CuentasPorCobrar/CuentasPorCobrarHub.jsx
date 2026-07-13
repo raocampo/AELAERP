@@ -894,6 +894,247 @@ function TabReportesCxC() {
   );
 }
 
+// ─── Tab Anticipos de Clientes ───────────────────────────────────
+function ModalAnticipo({ onClose, onSaved }) {
+  const [form, setForm] = useState({
+    nombreCliente: '', monto: '', fecha: new Date().toISOString().slice(0, 10),
+    metodoPago: 'efectivo', referencia: '', observaciones: '',
+  });
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+  const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setGuardando(true);
+    try {
+      await api.post('/anticipos/clientes', { ...form, monto: parseFloat(form.monto) });
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.mensaje || 'Error al registrar el anticipo');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="bancos-modal-overlay">
+      <div className="bancos-modal" style={{ maxWidth: 480 }}>
+        <div className="bancos-modal-header">
+          <h3>Registrar anticipo de cliente</h3>
+          <button className="bancos-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '.75rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '.82rem', marginBottom: '.2rem', fontWeight: 600 }}>Cliente *</label>
+            <input name="nombreCliente" value={form.nombreCliente} onChange={handleChange}
+              placeholder="Nombre o razón social" required
+              style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '.4rem', fontSize: '.9rem', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.6rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '.82rem', marginBottom: '.2rem', fontWeight: 600 }}>Monto *</label>
+              <input name="monto" type="number" min="0.01" step="0.01" value={form.monto} onChange={handleChange} required
+                placeholder="0.00"
+                style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '.4rem', fontSize: '.9rem', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '.82rem', marginBottom: '.2rem', fontWeight: 600 }}>Fecha *</label>
+              <input name="fecha" type="date" value={form.fecha} onChange={handleChange} required
+                style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '.4rem', fontSize: '.9rem', boxSizing: 'border-box' }} />
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '.82rem', marginBottom: '.2rem', fontWeight: 600 }}>Método de pago *</label>
+            <select name="metodoPago" value={form.metodoPago} onChange={handleChange} required
+              style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '.4rem', fontSize: '.9rem', boxSizing: 'border-box' }}>
+              {METODOS_PAGO.map((m) => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '.82rem', marginBottom: '.2rem', fontWeight: 600 }}>Referencia</label>
+            <input name="referencia" value={form.referencia} onChange={handleChange}
+              placeholder="N° transferencia, cheque…"
+              style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '.4rem', fontSize: '.9rem', boxSizing: 'border-box' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '.82rem', marginBottom: '.2rem', fontWeight: 600 }}>Observaciones</label>
+            <textarea name="observaciones" value={form.observaciones} onChange={handleChange} rows={2}
+              style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '.4rem', fontSize: '.9rem', resize: 'vertical', boxSizing: 'border-box' }} />
+          </div>
+          {error && <p style={{ margin: 0, color: '#dc2626', fontSize: '.85rem' }}>{error}</p>}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.5rem', marginTop: '.25rem' }}>
+            <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
+            <button type="submit" disabled={guardando} className="btn btn-primary">
+              {guardando ? 'Registrando…' : 'Registrar anticipo'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ModalAnularAnticipo({ anticipo, endpoint, onClose, onSaved }) {
+  const [motivo, setMotivo] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setGuardando(true);
+    try {
+      await api.patch(`${endpoint}/${anticipo.id}/anular`, { motivo });
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.mensaje || 'No se pudo anular');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="bancos-modal-overlay">
+      <div className="bancos-modal" style={{ maxWidth: 400 }}>
+        <div className="bancos-modal-header">
+          <h3>Anular anticipo {anticipo.numero}</h3>
+          <button className="bancos-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '.75rem' }}>
+          <p style={{ margin: 0, fontSize: '.9rem' }}>
+            Se anulará el anticipo de <strong>${formatMoney(anticipo.monto)}</strong> de <strong>{anticipo.nombreCliente || anticipo.nombreProveedor}</strong> y se revertirá el asiento contable.
+          </p>
+          <div>
+            <label style={{ display: 'block', fontSize: '.82rem', marginBottom: '.2rem', fontWeight: 600 }}>Motivo de anulación</label>
+            <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2}
+              style={{ width: '100%', padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '.4rem', fontSize: '.9rem', resize: 'vertical', boxSizing: 'border-box' }} />
+          </div>
+          {error && <p style={{ margin: 0, color: '#dc2626', fontSize: '.85rem' }}>{error}</p>}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.5rem' }}>
+            <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
+            <button type="submit" disabled={guardando} style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: '.4rem', padding: '.45rem 1rem', cursor: 'pointer', fontSize: '.9rem' }}>
+              {guardando ? 'Anulando…' : 'Anular anticipo'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function TabAnticiposCliente() {
+  const [anticipos, setAnticipos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [verTodos, setVerTodos] = useState(false);
+  const [modalRegistrar, setModalRegistrar] = useState(false);
+  const [modalAnular, setModalAnular] = useState(null);
+  const [refresco, setRefresco] = useState(0);
+
+  useEffect(() => {
+    setCargando(true);
+    api.get(`/anticipos/clientes${verTodos ? '/historial' : ''}`)
+      .then((r) => setAnticipos(r.data?.data || []))
+      .catch(() => setAnticipos([]))
+      .finally(() => setCargando(false));
+  }, [verTodos, refresco]);
+
+  const totalSaldo = anticipos.reduce((s, a) => s + parseFloat(a.saldoPendiente || 0), 0);
+
+  return (
+    <div style={{ marginTop: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '.5rem' }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Anticipos de clientes</h3>
+          {!verTodos && anticipos.length > 0 && (
+            <p style={{ margin: '.2rem 0 0', fontSize: '.82rem', color: '#64748b' }}>
+              {anticipos.length} anticipo{anticipos.length !== 1 ? 's' : ''} con saldo — Total: <strong>${formatMoney(totalSaldo)}</strong>
+            </p>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" style={{ fontSize: '.82rem' }} onClick={() => setVerTodos((v) => !v)}>
+            {verTodos ? 'Solo pendientes' : 'Ver historial'}
+          </button>
+          <button className="btn btn-primary" onClick={() => setModalRegistrar(true)}>+ Nuevo anticipo</button>
+        </div>
+      </div>
+
+      {cargando ? (
+        <p style={{ color: '#94a3b8', fontSize: '.9rem' }}>Cargando…</p>
+      ) : anticipos.length === 0 ? (
+        <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '.6rem' }}>
+          <p style={{ margin: 0, color: '#94a3b8', fontSize: '.9rem' }}>
+            {verTodos ? 'No hay anticipos registrados' : 'No hay anticipos con saldo pendiente'}
+          </p>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="movimientos-tabla">
+            <thead>
+              <tr>
+                <th>N° Anticipo</th>
+                <th>Cliente</th>
+                <th>Fecha</th>
+                <th>Método</th>
+                <th style={{ textAlign: 'right' }}>Monto</th>
+                <th style={{ textAlign: 'right' }}>Saldo</th>
+                <th>Estado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {anticipos.map((a) => (
+                <tr key={a.id} style={{ opacity: a.anulado ? 0.5 : 1 }}>
+                  <td style={{ fontWeight: 600, fontFamily: 'monospace' }}>{a.numero}</td>
+                  <td>{a.nombreCliente}</td>
+                  <td>{formatFechaCorta(a.fecha)}</td>
+                  <td style={{ textTransform: 'capitalize' }}>{a.metodoPago}</td>
+                  <td style={{ textAlign: 'right' }}>${formatMoney(a.monto)}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600, color: parseFloat(a.saldoPendiente) > 0 ? '#16a34a' : '#94a3b8' }}>
+                    ${formatMoney(a.saldoPendiente)}
+                  </td>
+                  <td>
+                    {a.anulado
+                      ? <span style={{ background: '#fef2f2', color: '#991b1b', borderRadius: '999px', padding: '.1rem .6rem', fontSize: '.78rem', fontWeight: 600 }}>Anulado</span>
+                      : parseFloat(a.saldoPendiente) <= 0
+                        ? <span style={{ background: '#f0fdf4', color: '#166534', borderRadius: '999px', padding: '.1rem .6rem', fontSize: '.78rem', fontWeight: 600 }}>Aplicado</span>
+                        : <span style={{ background: '#eff6ff', color: '#1d4ed8', borderRadius: '999px', padding: '.1rem .6rem', fontSize: '.78rem', fontWeight: 600 }}>Pendiente</span>
+                    }
+                  </td>
+                  <td>
+                    {!a.anulado && (
+                      <button onClick={() => setModalAnular(a)}
+                        style={{ background: 'none', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: '.35rem', padding: '.2rem .6rem', fontSize: '.78rem', cursor: 'pointer' }}>
+                        Anular
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modalRegistrar && (
+        <ModalAnticipo
+          onClose={() => setModalRegistrar(false)}
+          onSaved={() => { setModalRegistrar(false); setRefresco((n) => n + 1); }}
+        />
+      )}
+      {modalAnular && (
+        <ModalAnularAnticipo
+          anticipo={modalAnular}
+          endpoint="/anticipos/clientes"
+          onClose={() => setModalAnular(null)}
+          onSaved={() => { setModalAnular(null); setRefresco((n) => n + 1); }}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── CuentasPorCobrarHub — componente principal ─────────────────
 export default function CuentasPorCobrarHub() {
   const [tabActivo, setTabActivo] = useState('vigentes');
@@ -904,6 +1145,7 @@ export default function CuentasPorCobrarHub() {
     { id: 'vigentes',   label: 'Cuentas vigentes' },
     { id: 'canceladas', label: 'Cuentas canceladas' },
     { id: 'historial',  label: 'Historial de cobros' },
+    { id: 'anticipos',  label: 'Anticipos' },
     { id: 'cheques',    label: 'Cheques' },
     { id: 'ordenes',    label: 'Órdenes de pago' },
     { id: 'importar',   label: 'Importar' },
@@ -927,6 +1169,7 @@ export default function CuentasPorCobrarHub() {
       {tabActivo === 'vigentes'   && <TabFacturas estado="vigentes"   onCobrar={setModalCobro} key={`vig-${refresco}`} />}
       {tabActivo === 'canceladas' && <TabFacturas estado="canceladas" key={`can-${refresco}`} />}
       {tabActivo === 'historial'  && <TabHistorial key={`hist-${refresco}`} />}
+      {tabActivo === 'anticipos'  && <TabAnticiposCliente key={`ant-${refresco}`} />}
       {tabActivo === 'cheques'    && <TabChequesRecibidos key={`chq-${refresco}`} />}
       {tabActivo === 'ordenes'    && <TabProximamente nombre="Órdenes de pago" />}
       {tabActivo === 'importar'   && <TabImportarCobros key={`imp-${refresco}`} />}

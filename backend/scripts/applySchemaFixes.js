@@ -338,6 +338,53 @@ const FIXES = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "declaraciones_credito_iva_empresaId_anio_mes_key" ON "declaraciones_credito_iva"("empresaId", "anio", "mes")`,
   // Compras facturadas a cédula vs RUC — no deducibles si NO es RUC (2026-07-12)
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "receptorEsRuc" BOOLEAN`,
+  // Anticipos de clientes y proveedores (2026-07-13)
+  `CREATE TABLE IF NOT EXISTS "anticipos_cliente" (
+    "id"              SERIAL PRIMARY KEY,
+    "empresaId"       INTEGER NOT NULL,
+    "clienteId"       INTEGER,
+    "nombreCliente"   VARCHAR(300) NOT NULL,
+    "numero"          VARCHAR(30) NOT NULL,
+    "fecha"           TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "monto"           DECIMAL(14,2) NOT NULL,
+    "saldoPendiente"  DECIMAL(14,2) NOT NULL,
+    "metodoPago"      VARCHAR(20) NOT NULL DEFAULT 'efectivo',
+    "referencia"      VARCHAR(100),
+    "observaciones"   TEXT,
+    "anulado"         BOOLEAN NOT NULL DEFAULT false,
+    "motivoAnulacion" VARCHAR(500),
+    "asientoId"       INTEGER,
+    "usuarioId"       INTEGER,
+    "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "anticipos_cliente_empresaId_numero_key" ON "anticipos_cliente"("empresaId", "numero")`,
+  `CREATE INDEX IF NOT EXISTS "anticipos_cliente_empresaId_idx" ON "anticipos_cliente"("empresaId")`,
+  `CREATE INDEX IF NOT EXISTS "anticipos_cliente_clienteId_idx" ON "anticipos_cliente"("clienteId")`,
+  `CREATE INDEX IF NOT EXISTS "anticipos_cliente_fecha_idx"     ON "anticipos_cliente"("fecha")`,
+  `CREATE TABLE IF NOT EXISTS "anticipos_proveedor" (
+    "id"              SERIAL PRIMARY KEY,
+    "empresaId"       INTEGER NOT NULL,
+    "proveedorId"     INTEGER,
+    "nombreProveedor" VARCHAR(300) NOT NULL,
+    "numero"          VARCHAR(30) NOT NULL,
+    "fecha"           TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "monto"           DECIMAL(14,2) NOT NULL,
+    "saldoPendiente"  DECIMAL(14,2) NOT NULL,
+    "metodoPago"      VARCHAR(20) NOT NULL DEFAULT 'efectivo',
+    "referencia"      VARCHAR(100),
+    "observaciones"   TEXT,
+    "anulado"         BOOLEAN NOT NULL DEFAULT false,
+    "motivoAnulacion" VARCHAR(500),
+    "asientoId"       INTEGER,
+    "usuarioId"       INTEGER,
+    "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "anticipos_proveedor_empresaId_numero_key" ON "anticipos_proveedor"("empresaId", "numero")`,
+  `CREATE INDEX IF NOT EXISTS "anticipos_proveedor_empresaId_idx"   ON "anticipos_proveedor"("empresaId")`,
+  `CREATE INDEX IF NOT EXISTS "anticipos_proveedor_proveedorId_idx" ON "anticipos_proveedor"("proveedorId")`,
+  `CREATE INDEX IF NOT EXISTS "anticipos_proveedor_fecha_idx"       ON "anticipos_proveedor"("fecha")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {
