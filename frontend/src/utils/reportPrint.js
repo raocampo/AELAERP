@@ -71,13 +71,6 @@ function buildLetterhead(empresa) {
 }
 
 export const printHtmlReport = ({ title = 'Reporte', subtitle = '', sections = [], empresa = null } = {}) => {
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1100,height=800');
-
-  if (!printWindow) {
-    window.alert('No se pudo abrir la ventana de impresion. Habilita las ventanas emergentes.');
-    return;
-  }
-
   const renderedSections = sections.map(({ title: sectionTitle = '', html = '' }) => `
     <section class="report-section">
       <h2>${escapeHtml(sectionTitle)}</h2>
@@ -241,7 +234,33 @@ export const printHtmlReport = ({ title = 'Reporte', subtitle = '', sections = [
     </html>
   `;
 
-  printWindow.document.open();
-  printWindow.document.write(doc);
-  printWindow.document.close();
+  // Se imprime desde un iframe oculto en vez de una ventana nueva (window.open):
+  // los bloqueadores de ventanas emergentes (Firefox en particular) bloquean
+  // window.open('', ...) con más frecuencia que uno con URL real, y no hay
+  // forma de "habilitar" esto de antemano para el usuario. Un iframe no abre
+  // ninguna ventana/pestaña, así que nunca lo bloquea un popup blocker.
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  iframe.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(iframe);
+
+  let limpiado = false;
+  const limpiar = () => {
+    if (limpiado) return;
+    limpiado = true;
+    iframe.remove();
+  };
+
+  const iframeWindow = iframe.contentWindow;
+  iframeWindow.document.open();
+  iframeWindow.document.write(doc);
+  iframeWindow.document.close();
+  iframeWindow.addEventListener('afterprint', limpiar);
+  // Respaldo por si 'afterprint' no dispara en algún navegador.
+  setTimeout(limpiar, 60000);
 };

@@ -290,8 +290,9 @@
 }
 
 .conta-filters {
-  display: grid;
-  grid-template-columns: 1.5fr repeat(2, minmax(140px, 1fr)) auto auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -303,6 +304,20 @@
   padding: 8px;
   background: #ffffff;
   color: #1e293b;
+}
+
+/* Solo los campos de filtro (hijos directos) crecen/encogen — los
+   checkboxes anidados dentro de <label class="conta-check-inline"> quedan
+   fuera para no estirarse a 140px+ de ancho. */
+.conta-filters > input,
+.conta-filters > select {
+  flex: 1 1 170px;
+  min-width: 140px;
+}
+
+.conta-filters > button,
+.conta-filters > label {
+  flex: 0 0 auto;
 }
 
 .conta-check-inline {
@@ -347,9 +362,13 @@
   .conta-grid {
     grid-template-columns: 1fr;
   }
+}
 
-  .conta-filters {
-    grid-template-columns: 1fr;
+@media (max-width: 480px) {
+  .conta-filters > input,
+  .conta-filters > select,
+  .conta-filters > button {
+    flex-basis: 100%;
   }
 }
 

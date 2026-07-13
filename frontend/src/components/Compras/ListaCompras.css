@@ -215,6 +215,8 @@
   flex-shrink: 0;
 }
 .compras-btn-dots:hover { background: #e2e8f0; color: #1e293b; }
+.compras-btn-dots.con-aviso { border-color: #fca5a5; background: #fef2f2; color: #b91c1c; }
+.compras-btn-dots.con-aviso:hover { background: #fee2e2; }
 
 /* Dropdown rendered via portal to body — uses position:fixed from JS */
 .compras-dropdown {
@@ -242,6 +244,29 @@
 }
 .compras-dropdown button:hover { background: #f1f5f9; }
 .compras-dropdown button + button { border-top: 1px solid #f1f5f9; }
+
+/* ── Popover de información (···) ──────────────────────────────── */
+.compras-dropdown-info { padding: .6rem .8rem; min-width: 210px; }
+.compras-info-fila {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .75rem;
+  padding: .3rem 0;
+  font-size: .78rem;
+  color: #64748b;
+}
+.compras-info-fila + .compras-info-fila { border-top: 1px solid #f1f5f9; }
+.compras-info-fila strong { color: #1e293b; font-weight: 700; white-space: nowrap; }
+.compras-info-fila strong.ok   { color: #16a34a; }
+.compras-info-fila strong.warn { color: #b45309; }
+.compras-info-aviso {
+  display: block;
+  color: #b91c1c;
+  font-weight: 600;
+  white-space: normal;
+  line-height: 1.4;
+}
 
 /* ── Selector de cuenta contable ────────────────────────────────── */
 .cuenta-opcion {

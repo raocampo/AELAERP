@@ -1167,12 +1167,24 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
   if (existente) return { asiento: existente, creado: false };
 
   const detallesCompra = Array.isArray(compra.detalles) ? compra.detalles : [];
-  const subtotalInventario = round2(detallesCompra
+  let subtotalInventario = round2(detallesCompra
     .filter((detalle) => Boolean(detalle?.inventariable))
     .reduce((acc, detalle) => acc + Number(detalle.subtotal || ((Number(detalle.cantidad || 0) * Number(detalle.precioUnitario || 0)) - Number(detalle.descuento || 0)) || 0), 0));
   const iva = round2(compra.totalIva || 0);
   const total = round2(compra.importeTotal || 0);
-  const subtotalGasto = round2(Math.max(total - iva - subtotalInventario, 0));
+  // subtotalGasto es la cifra de cuadre (lo que no es inventario, dentro del
+  // subtotal sin IVA). El desglose por línea puede tener 1 centavo de drift
+  // de redondeo frente a los totales guardados de la compra — si eso deja
+  // subtotalGasto negativo, ese centavo se absorbe en inventario en vez de
+  // descartarse con Math.max(...,0), que dejaba el asiento descuadrado
+  // (debe > haber) al omitir la línea de gasto por completo.
+  const baseSinIva = round2(total - iva);
+  let subtotalGasto = round2(baseSinIva - subtotalInventario);
+  if (subtotalGasto < 0) {
+    subtotalInventario = round2(subtotalInventario + subtotalGasto);
+    subtotalGasto = 0;
+  }
+  if (subtotalInventario < 0) subtotalInventario = 0;
 
   const config = await obtenerConfiguracionContable(compra.empresaId, db);
 

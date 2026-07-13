@@ -56,8 +56,8 @@ function fmtMoneda(valor) {
   }).format(Number(valor || 0));
 }
 
-// ─── Dropdown ⋯ — portal a body para evitar clipping de scroll ───
-function DropdownOps({ item, onVer, onCuenta }) {
+// ─── Info ⋯ — detalles de origen/estado en un popover, portal a body ───
+function InfoOps({ item }) {
   const [abierto, setAbierto] = useState(false);
   const [pos, setPos] = useState({ top: 0, right: 0 });
   const btnRef = useRef(null);
@@ -83,20 +83,38 @@ function DropdownOps({ item, onVer, onCuenta }) {
     setAbierto((v) => !v);
   };
 
+  const tieneAviso = item.receptorEsRuc === false;
+
   return (
     <>
-      <button ref={btnRef} className="compras-btn-dots" onClick={handleOpen} title="Más acciones">
+      <button ref={btnRef} className={`compras-btn-dots${tieneAviso ? ' con-aviso' : ''}`} onClick={handleOpen} title="Más información">
         ···
       </button>
       {abierto && createPortal(
-        <div ref={dropRef} className="compras-dropdown" style={{ position: 'fixed', top: pos.top, right: pos.right }}>
-          <button onClick={() => { setAbierto(false); onVer(); }}>
-            <IcVer /> Ver detalle
-          </button>
-          {!item.anulada && (
-            <button onClick={() => { setAbierto(false); onCuenta(); }}>
-              📒 Cuenta contable
-            </button>
+        <div ref={dropRef} className="compras-dropdown compras-dropdown-info" style={{ position: 'fixed', top: pos.top, right: pos.right }}>
+          <div className="compras-info-fila">
+            <span>Origen</span>
+            <strong>{item.origenRegistro || 'MANUAL'}</strong>
+          </div>
+          <div className="compras-info-fila">
+            <span>Asiento contable</span>
+            <strong className={item.tieneAsientoContable ? 'ok' : 'warn'}>
+              {item.tieneAsientoContable ? '✓ Generado' : 'Sin generar'}
+            </strong>
+          </div>
+          <div className="compras-info-fila">
+            <span>Inventario / Caja</span>
+            <strong>
+              {item.movimientosInventario > 0 && 'Inventario'}
+              {item.movimientosInventario > 0 && item.egresoCajaRegistrado && ' + '}
+              {item.egresoCajaRegistrado && 'Caja'}
+              {!item.movimientosInventario && !item.egresoCajaRegistrado && 'Solo registro'}
+            </strong>
+          </div>
+          {tieneAviso && (
+            <div className="compras-info-fila compras-info-aviso">
+              ⚠️ Facturado a cédula personal, no al RUC de la empresa — no cuenta para declaraciones.
+            </div>
           )}
         </div>,
         document.body,
@@ -540,7 +558,6 @@ export default function ListaCompras() {
                     <td data-label="Total"><strong>{fmtMoneda(item.importeTotal)}</strong></td>
                     <td data-label="Operación">
                       <div className="compras-op-wrap">
-                        {/* Fila 1: tipo gasto + origen */}
                         <div className="compras-op-row">
                           <span className={`compras-chip${item.tipoGasto ? ` tipo-gasto-${item.tipoGasto.toLowerCase()}` : ' sin-clasificar'}`}>
                             {item.tipoGasto || '—'}
@@ -549,31 +566,15 @@ export default function ListaCompras() {
                             onClick={() => setQuickEdit({ id: item.id, tipoGasto: item.tipoGasto || '' })}>
                             <IcEditar />
                           </button>
-                          <span className={`compras-chip ${String(item.origenRegistro || 'manual').toLowerCase()}`}>
-                            {item.origenRegistro || 'MANUAL'}
-                          </span>
-                          {item.receptorEsRuc === false && (
-                            <span className="compras-chip" style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}
-                              title="Facturado a cédula personal, no al RUC de la empresa — no cuenta para declaraciones">
-                              ⚠️ A cédula
-                            </span>
-                          )}
-                          {item.cuentaGastoId && (
-                            <span className="compras-chip" style={{ background: '#ede9fe', borderColor: '#c4b5fd', color: '#6d28d9' }} title="Cuenta contable personalizada configurada">
+                          <button className="btn-icon ic-ver" title="Ver detalle" onClick={() => navigate(`/compras/${item.id}`)}>
+                            <IcVer />
+                          </button>
+                          {!item.anulada && (
+                            <button className="btn-icon" title="Cuenta contable" onClick={() => abrirModalCuenta(item)}>
                               📒
-                            </span>
+                            </button>
                           )}
-                        </div>
-                        {/* Fila 2: estado + asiento + dropdown */}
-                        <div className="compras-op-row">
-                          {item.movimientosInventario > 0 && <span className="compras-flag ok">Inventario</span>}
-                          {item.egresoCajaRegistrado && <span className="compras-flag warn">Caja</span>}
-                          {!item.egresoCajaRegistrado && item.movimientosInventario === 0 && (
-                            <span className="compras-flag">Solo registro</span>
-                          )}
-                          {item.tieneAsientoContable ? (
-                            <span className="compras-flag ok" title="Ya tiene asiento en el Libro Diario">✓ Con asiento</span>
-                          ) : (
+                          {!item.tieneAsientoContable && (
                             <button
                               className="compras-btn-asiento"
                               disabled={generandoAsientoId === item.id}
@@ -583,11 +584,7 @@ export default function ListaCompras() {
                               {generandoAsientoId === item.id ? 'Generando…' : '⚠ Generar asiento'}
                             </button>
                           )}
-                          <DropdownOps
-                            item={item}
-                            onVer={() => navigate(`/compras/${item.id}`)}
-                            onCuenta={() => abrirModalCuenta(item)}
-                          />
+                          <InfoOps item={item} />
                         </div>
                       </div>
                     </td>
