@@ -122,3 +122,92 @@ Frontend: Vercel  → aela.corpsimtelec.com
 - Pasarela de pagos
 - Impuesto a la Renta en nómina (tabla LORTI)
 - Panel Super Admin
+
+---
+
+## Sesión tarde 2026-07-13 — 7 bugs + 2 features
+
+Commits: `17bfa00` · `11cddb9` · `5744de2` · `8a8780d` · `03aca34`
+
+### 4 — Bug: Rol contadora no puede emitir facturas de venta
+
+`backend/utils/roles.js` y `frontend/src/utils/roles.js` — agregado `facturacion.emitir` al
+rol `contador`.
+
+---
+
+### 5 — Bug: Declaración IVA — compras 0% por $13.50 "invisibles"
+
+Las **liquidaciones de compra** (tipoDocumento `03`) con tarifa 0% se sumaban al F104 pero no
+aparecían en la lista de compras (que solo mostraba `01` facturas). Se agregó **desglose visual**
+en la UI de Declaraciones: número de facturas vs. liquidaciones y sus subtotales.
+
+---
+
+### 6 — Bug: Gastos personales excluidos de declaración IVA F104
+
+- Campos `esGastoPersonal` (Boolean) y `categoriaGastoPersonal` (String?) en `facturas_compra`.
+- POST y PUT `/compras/:id` los aceptan.
+- Declaración IVA filtra `esGastoPersonal = false`.
+- DetalleCompra: checkbox en modal Editar + badge ámbar; aviso en Declaraciones.
+
+---
+
+### 7 — Bug: Libro de bancos no contabiliza
+
+- POST movimiento/cheque: devuelve `advertenciaContable` si no hay contrapartida (no bloquea).
+- Nuevo: `POST /bancos/movimientos/:movId/contabilizar` (individual).
+- Nuevo: `POST /bancos/:id/contabilizar-pendientes` (batch por cuenta).
+- LibroBancos: columna 📒/⚠ + botón "Contabilizar N pendientes" + modal cuenta contrapartida.
+- BancosHub: banner ámbar si la cuenta no tiene cuenta contable asignada.
+
+---
+
+### 8 — Bug: Regenerar asiento ignora cuentaGastoId cuando hay ítems inventariables
+
+`contabilidad.js` — `subtotalInventario = compra.cuentaGastoId ? 0 : round2(inventariables...)`.
+Cuando hay cuenta explícita, todo el importe va a esa cuenta; el split solo ocurre sin cuenta.
+
+---
+
+### 9 — Vista notas de crédito recibidas de proveedores
+
+- Backend: `GET /api/compras/notas-credito` (filtra `docs_recibidos_otros` con `tipoDocumento='04'`).
+- Frontend: `NotasCreditoRecibidas.jsx` (nuevo), ruta `/compras/notas-credito`, botón en ListaCompras.
+
+---
+
+### 10 — Utilidad% y PVP variable por ítem en facturas de compra
+
+**Al cargar (FormCompra.jsx)**: dos inputs por fila — Utilidad% y PVP — con cálculo cruzado
+automático. Al guardar, actualiza PVP del producto en catálogo.
+
+**En facturas ya registradas (DetalleCompra.jsx)**:
+- Backend: `PATCH /compras/:id/item-utilidad` — actualiza el JSON del ítem y el PVP en catálogo.
+- Frontend: columnas Utilidad% (verde) y PVP (azul) en la tabla de detalle; botón ✏️ por fila
+  abre modal con cálculo cruzado igual que en FormCompra.
+
+---
+
+### 11 — 4 decimales en precios de facturas y proformas de venta
+
+- `sri.js`: acumular subtotales con precisión completa antes de redondear (evita drift).
+- `FormFactura.jsx`: `step="0.0001"`, totales de línea en 4 dec, acumulación sin redondeo intermedio.
+- `FormProforma.jsx`: totales de línea en 4 dec.
+
+---
+
+## 🔴 VERIFICAR EN PRODUCCIÓN (sesión tarde)
+
+1. **Rol contadora** — usuario con rol `contador` puede crear facturas de venta.
+2. **Gastos personales** — marcar compra como gasto personal, confirmar exclusión en F104.
+3. **Declaración IVA desglose** — revisar que el $13.50 del 0% aparece explicado como
+   liquidaciones de compra.
+4. **Libro bancos** — registrar depósito con contrapartida → aparece 📒; usar "Contabilizar
+   pendientes" para lote histórico.
+5. **Regenerar asiento** — compra con cuenta explícita → asiento usa esa cuenta, no Inventario.
+6. **NC Proveedores** — Compras → "📋 NC Proveedores" muestra lista del buzón SRI.
+7. **Utilidad ítem nuevo** — importar factura XML, asignar utilidad por ítem.
+8. **Utilidad ítem existente** — en compra `001-010-000523799`, editar ✏️ del ítem VIA320
+   (costo $1.32), ingresar 30% → PVP=$1.72, guardar, verificar catálogo.
+9. **4 decimales** — factura con precio 1.2575 × 3 → total $3.7725.
