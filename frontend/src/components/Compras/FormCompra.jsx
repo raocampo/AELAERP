@@ -27,6 +27,7 @@ const detalleVacio = () => ({
   cantidad: '',
   precioUnitario: '',
   precioVentaReferencial: '',
+  utilidadPct: '',
   porcentajeIva: 15,
   descuento: '0',
   inventariable: true,
@@ -226,7 +227,37 @@ export default function FormCompra() {
   };
 
   const actualizarDetalle = (index, campo, valor) => {
-    setDetalles((prev) => prev.map((item, idx) => (idx === index ? { ...item, [campo]: valor } : item)));
+    setDetalles((prev) => prev.map((item, idx) => {
+      if (idx !== index) return item;
+      const next = { ...item, [campo]: valor };
+      const costo = parseFloat(campo === 'precioUnitario' ? valor : next.precioUnitario) || 0;
+
+      if (campo === 'utilidadPct') {
+        // Utilidad% → calcular PVP
+        const pct = parseFloat(valor);
+        if (costo > 0 && !Number.isNaN(pct)) {
+          next.precioVentaReferencial = (costo * (1 + pct / 100)).toFixed(4);
+        }
+      } else if (campo === 'precioVentaReferencial') {
+        // PVP → calcular utilidad%
+        const pvp = parseFloat(valor);
+        if (costo > 0 && pvp > 0) {
+          next.utilidadPct = (((pvp / costo) - 1) * 100).toFixed(2);
+        } else {
+          next.utilidadPct = '';
+        }
+      } else if (campo === 'precioUnitario') {
+        // Costo cambió — recalcular PVP según utilidad vigente, o utilidad según PVP vigente
+        const pct = parseFloat(next.utilidadPct);
+        const pvp = parseFloat(next.precioVentaReferencial);
+        if (costo > 0 && !Number.isNaN(pct) && pct !== 0) {
+          next.precioVentaReferencial = (costo * (1 + pct / 100)).toFixed(4);
+        } else if (costo > 0 && pvp > 0) {
+          next.utilidadPct = (((pvp / costo) - 1) * 100).toFixed(2);
+        }
+      }
+      return next;
+    }));
   };
 
   const agregarLinea = () => setDetalles((prev) => [...prev, detalleVacio()]);
@@ -266,7 +297,8 @@ export default function FormCompra() {
         descripcion: detalle.descripcion || '',
         cantidad: String(detalle.cantidad || ''),
         precioUnitario: String(detalle.precioUnitario || ''),
-        precioVentaReferencial: String(detalle.precioUnitario || ''),
+        precioVentaReferencial: String(detalle.precioVentaReferencial || detalle.precioUnitario || ''),
+        utilidadPct: detalle.utilidadPct != null ? String(detalle.utilidadPct) : '',
         porcentajeIva: Number(detalle.porcentajeIva ?? 15),
         descuento: String(detalle.descuento || 0),
         inventariable: detalle.inventariable !== false,
@@ -377,6 +409,7 @@ export default function FormCompra() {
           cantidad: detalle.cantidad,
           precioUnitario: detalle.precioUnitario,
           precioVentaReferencial: detalle.precioVentaReferencial || detalle.precioUnitario,
+          utilidadPct: detalle.utilidadPct !== '' ? parseFloat(detalle.utilidadPct) : null,
           porcentajeIva: detalle.porcentajeIva,
           descuento: detalle.descuento,
           inventariable: detalle.inventariable,
@@ -636,7 +669,8 @@ export default function FormCompra() {
                   <th>Descripción</th>
                   <th>Cant.</th>
                   <th>Costo</th>
-                  <th>P. venta ref.</th>
+                  <th title="Utilidad sobre el costo (%)">Utilidad %</th>
+                  <th title="Precio de venta al público">PVP</th>
                   <th>IVA</th>
                   <th>Desc.</th>
                   <th>Invent.</th>
@@ -654,7 +688,25 @@ export default function FormCompra() {
                       <td><input value={detalle.descripcion} onChange={(e) => actualizarDetalle(index, 'descripcion', e.target.value)} /></td>
                       <td><input type="number" step="0.001" min="0" value={detalle.cantidad} onChange={(e) => actualizarDetalle(index, 'cantidad', e.target.value)} /></td>
                       <td><input type="number" step="0.0001" min="0" value={detalle.precioUnitario} onChange={(e) => actualizarDetalle(index, 'precioUnitario', e.target.value)} /></td>
-                      <td><input type="number" step="0.0001" min="0" value={detalle.precioVentaReferencial} onChange={(e) => actualizarDetalle(index, 'precioVentaReferencial', e.target.value)} /></td>
+                      <td>
+                        <input
+                          type="number" step="0.01" min="0"
+                          value={detalle.utilidadPct}
+                          onChange={(e) => actualizarDetalle(index, 'utilidadPct', e.target.value)}
+                          placeholder="0.00"
+                          style={{ width: 70 }}
+                          title="Utilidad sobre el costo. Cambia el PVP automáticamente."
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number" step="0.0001" min="0"
+                          value={detalle.precioVentaReferencial}
+                          onChange={(e) => actualizarDetalle(index, 'precioVentaReferencial', e.target.value)}
+                          placeholder="0.0000"
+                          title="Precio de venta. Cambia la Utilidad% automáticamente."
+                        />
+                      </td>
                       <td>
                         <select value={detalle.porcentajeIva} onChange={(e) => actualizarDetalle(index, 'porcentajeIva', Number(e.target.value))}>
                           <option value={0}>0%</option>

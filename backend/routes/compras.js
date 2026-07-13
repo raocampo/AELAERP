@@ -193,6 +193,7 @@ function normalizarDetalle(detalle, index = 0) {
     total,
     inventariable: toBoolean(detalle?.inventariable, true),
     precioVentaReferencial: Number(toNumber(detalle?.precioVentaReferencial, precioUnitario).toFixed(4)),
+    utilidadPct: detalle?.utilidadPct != null ? Number(toNumber(detalle.utilidadPct, 0).toFixed(2)) : null,
   };
 }
 
@@ -264,7 +265,11 @@ async function resolverProductoCompra({
       costoUnitario: detalle.precioUnitario,
       tarifaIva: detalle.porcentajeIva,
       inventariable: producto.inventariable || Boolean(detalle.inventariable),
-      ...(Number(producto.precioUnitario || 0) <= 0 ? { precioUnitario: detalle.precioVentaReferencial } : {}),
+      // Si se especificó utilidad explícitamente en la importación, actualizar PVP siempre.
+      // Si no, solo actualizar cuando el PVP actual es 0.
+      ...(detalle.utilidadPct != null || Number(producto.precioUnitario || 0) <= 0
+        ? { precioUnitario: detalle.precioVentaReferencial }
+        : {}),
     },
   });
 
