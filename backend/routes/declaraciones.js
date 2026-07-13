@@ -86,12 +86,12 @@ router.get('/f104', async (req, res) => {
     const ivaVentasNeto = parseFloat((ventasIva - ncIva).toFixed(2));
 
     // ── COMPRAS ─────────────────────────────────────────────────────────────────
-    // Se excluyen las compras facturadas a cédula (receptorEsRuc === false):
-    // no son deducibles ni generan crédito de IVA aunque estén registradas en
-    // el sistema. receptorEsRuc null (dato desconocido, ej. compras
-    // manuales/históricas) SÍ se incluye — no se excluye nada sin certeza.
+    // Se excluyen las compras facturadas a cédula (receptorEsRuc === false).
+    // receptorEsRuc null (compras manuales/históricas) SÍ se incluye.
+    // NOTA: { not: false } en Prisma/PostgreSQL excluye NULLs por SQL three-valued
+    // logic (NULL != false → NULL → falsy). Se usa OR explícito para incluirlos.
     const compras = await db.facturas_compra.findMany({
-      where: { empresaId, fechaEmision: filtroFecha, anulada: false, receptorEsRuc: { not: false } },
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }] },
       select: {
         subtotal0: true, subtotal15: true, subtotal5: true,
         totalIva: true, importeTotal: true, retencionIVA: true,
@@ -368,7 +368,7 @@ router.get('/f101', async (req, res) => {
         _count: { id: true },
       }),
       db.facturas_compra.aggregate({
-        where: { empresaId, fechaEmision: filtroFecha, anulada: false, receptorEsRuc: { not: false } },
+        where: { empresaId, fechaEmision: filtroFecha, anulada: false, OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }] },
         _sum:   { importeTotal: true, totalIva: true },
         _count: { id: true },
       }),

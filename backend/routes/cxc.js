@@ -9,8 +9,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const multer = require('multer');
+const XLSX = require('xlsx');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
+
+const _upload = multer({ storage: multer.memoryStorage() });
 const {
   crearAsientoCobroCliente,
   crearAsientoReversoCobroCliente,
@@ -592,6 +596,113 @@ router.patch('/cobros/:id/anular', autorizarPermiso('cxc.gestionar'), async (req
   } catch (error) {
     console.error('PATCH /cxc/cobros/:id/anular:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo anular el cobro' });
+  }
+});
+
+// GET /api/cxc/cobros/importar/plantilla — descarga Excel vacío con encabezados
+router.get('/cobros/importar/plantilla', autorizarPermiso('cxc.ver'), (req, res) => {
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Número Factura', 'Monto', 'Fecha', 'Método de Pago', 'Referencia', 'Observaciones'],
+    ['001-001-000000001', 100.00, '2026-07-13', 'efectivo', '', ''],
+    ['001-001-000000002', 250.50, '2026-07-13', 'transferencia', 'TRF-12345', 'Abono parcial'],
+  ]);
+  ws['!cols'] = [{ wch: 22 }, { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 20 }, { wch: 25 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cobros');
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.set({
+    'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'Content-Disposition': 'attachment; filename="plantilla-cobros.xlsx"',
+  });
+  res.send(buf);
+});
+
+// POST /api/cxc/cobros/importar — importar cobros masivos desde Excel
+router.post('/cobros/importar', autorizarPermiso('cxc.gestionar'), _upload.single('archivo'), async (req, res) => {
+  try {
+    if (!req.file?.buffer) {
+      return res.status(400).json({ success: false, mensaje: 'Adjunta un archivo Excel (.xlsx / .xls / .csv)' });
+    }
+
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const filas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', cellDates: true });
+
+    if (filas.length < 2) {
+      return res.status(400).json({ success: false, mensaje: 'El archivo no tiene filas de datos (fila 1 es encabezado)' });
+    }
+
+    const exitosas = [];
+    const errores  = [];
+
+    for (let i = 1; i < filas.length; i++) {
+      const fila         = filas[i];
+      const numeroFact   = String(fila[0] || '').trim();
+      const montoRaw     = fila[1];
+      const fechaRaw     = fila[2];
+      const metodoPago   = String(fila[3] || '').trim().toLowerCase();
+      const referencia   = String(fila[4] || '').trim() || null;
+      const observaciones = String(fila[5] || '').trim() || null;
+      const filaNum      = i + 1;
+
+      if (!numeroFact && !montoRaw) continue; // fila vacía
+
+      if (!numeroFact)                    { errores.push({ fila: filaNum, numeroFactura: '—', error: 'Número de factura requerido' }); continue; }
+      const montoNum = round2(montoRaw);
+      if (!(montoNum > 0))                { errores.push({ fila: filaNum, numeroFactura: numeroFact, error: 'Monto inválido o cero' }); continue; }
+      if (!METODOS_VALIDOS.includes(metodoPago)) { errores.push({ fila: filaNum, numeroFactura: numeroFact, error: `Método de pago inválido: "${metodoPago || '?'}"` }); continue; }
+
+      let fechaObj;
+      if (fechaRaw instanceof Date && !isNaN(fechaRaw.getTime())) {
+        fechaObj = fechaRaw;
+      } else if (fechaRaw && String(fechaRaw).trim()) {
+        fechaObj = new Date(String(fechaRaw).trim());
+      } else {
+        fechaObj = new Date();
+      }
+      if (isNaN(fechaObj.getTime())) { errores.push({ fila: filaNum, numeroFactura: numeroFact, error: 'Fecha inválida' }); continue; }
+
+      try {
+        const cobro = await db.$transaction(async (tx) => {
+          const factura = await tx.facturas.findFirst({ where: { empresaId, numeroFactura: numeroFact } });
+          if (!factura) throw new Error('Factura no encontrada');
+          if (factura.anulada) throw new Error('La factura está anulada');
+          if (factura.estadoSri !== 'AUTORIZADA') throw new Error('Factura no autorizada por el SRI');
+
+          await tx.$queryRaw`SELECT id FROM facturas WHERE id = ${factura.id} FOR UPDATE`;
+
+          const agg = await tx.cobros_cliente.aggregate({
+            where: { empresaId, facturaId: factura.id, anulado: false },
+            _sum: { monto: true },
+          });
+          const saldo = round2(factura.importeTotal - (agg._sum.monto || 0));
+          if (montoNum > saldo + 0.01) throw new Error(`Monto excede el saldo pendiente ($${saldo.toFixed(2)})`);
+
+          const numero = await siguienteNumeroGenerico({ modelo: 'cobros_cliente', prefijo: 'REC', empresaId, fecha: fechaObj, tx });
+          const nuevo = await tx.cobros_cliente.create({
+            data: {
+              empresaId, facturaId: factura.id, clienteId: factura.clienteId || null,
+              numero, fecha: fechaObj, monto: montoNum, metodoPago,
+              referencia, observaciones,
+              usuarioId: req.usuario?.id || null,
+            },
+          });
+          await crearAsientoCobroCliente({ cobroId: nuevo.id, usuarioId: req.usuario?.id, fecha: fechaObj, db: tx });
+          return nuevo;
+        });
+        exitosas.push({ fila: filaNum, numeroFactura: numeroFact, monto: montoNum, numero: cobro.numero });
+      } catch (err) {
+        errores.push({ fila: filaNum, numeroFactura: numeroFact, monto: montoNum, error: err.message });
+      }
+    }
+
+    res.json({ ok: true, data: { exitosas, errores, totalExitosas: exitosas.length, totalErrores: errores.length } });
+  } catch (error) {
+    console.error('POST /cxc/cobros/importar:', error);
+    res.status(500).json({ success: false, mensaje: error.message || 'Error al procesar el archivo' });
   }
 });
 

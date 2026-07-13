@@ -152,7 +152,7 @@ function ModalCuenta({ modalCuenta, cuentasContables, editCuentaId, setEditCuent
 
         {puedeRegenerary && (
           <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '.6rem', padding: '.65rem .85rem', marginBottom: '.85rem', fontSize: '.82rem', color: '#92400e' }}>
-            ⚠ Esta compra ya tiene asiento contable generado. Al cambiar la cuenta, el asiento no se actualiza automáticamente — usa "Guardar y regenerar" para actualizarlo.
+            ↺ Esta compra ya tiene asiento contable. Al guardar la cuenta, el asiento se regenerará automáticamente.
           </div>
         )}
         {modalCuenta.tieneAsientoContable && modalCuenta.asientoCerrado && (
@@ -201,20 +201,21 @@ function ModalCuenta({ modalCuenta, cuentasContables, editCuentaId, setEditCuent
           >
             Cancelar
           </button>
-          <button
-            style={{ padding: '.45rem 1rem', borderRadius: '.5rem', border: 'none', background: '#6366f1', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '.88rem' }}
-            onClick={() => onGuardar(false)}
-            disabled={guardando}
-          >
-            {guardando ? 'Guardando…' : 'Guardar'}
-          </button>
-          {puedeRegenerary && (
+          {puedeRegenerary ? (
             <button
               style={{ padding: '.45rem 1rem', borderRadius: '.5rem', border: 'none', background: '#0f172a', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '.88rem' }}
               onClick={() => onGuardar(true)}
               disabled={guardando}
             >
               {guardando ? 'Procesando…' : '↺ Guardar y regenerar asiento'}
+            </button>
+          ) : (
+            <button
+              style={{ padding: '.45rem 1rem', borderRadius: '.5rem', border: 'none', background: '#6366f1', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '.88rem' }}
+              onClick={() => onGuardar(false)}
+              disabled={guardando}
+            >
+              {guardando ? 'Guardando…' : 'Guardar'}
             </button>
           )}
         </div>

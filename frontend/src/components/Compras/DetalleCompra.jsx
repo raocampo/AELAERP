@@ -279,7 +279,13 @@ export default function DetalleCompra() {
   const guardarCuentaGasto = async () => {
     try {
       await api.put(`/compras/${id}`, { cuentaGastoId: editCuentaId || null });
-      toast.success(editCuentaId ? 'Cuenta contable configurada' : 'Cuenta contable restablecida al default');
+      const debeRegenerary = compra?.tieneAsientoContable && !compra?.asientoCerrado;
+      if (debeRegenerary) {
+        await api.post(`/compras/${id}/regenerar-asiento`);
+        toast.success(editCuentaId ? 'Cuenta actualizada y asiento regenerado' : 'Cuenta restablecida y asiento regenerado');
+      } else {
+        toast.success(editCuentaId ? 'Cuenta contable configurada' : 'Cuenta contable restablecida al default');
+      }
       setModalCuenta(false);
       cargar();
     } catch (err) {

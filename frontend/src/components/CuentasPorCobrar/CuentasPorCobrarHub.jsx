@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import '../Bancos/Bancos.css';
@@ -274,6 +274,170 @@ function TabProximamente({ nombre }) {
       <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🚧</div>
       <h3 style={{ margin: '0 0 0.5rem', color: '#1e293b' }}>{nombre}</h3>
       <p style={{ margin: 0 }}>Este módulo estará disponible próximamente.</p>
+    </div>
+  );
+}
+
+// ─── Tab Importar Cobros ────────────────────────────────────────
+async function _descargarPlantillaCobros() {
+  try {
+    const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
+    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
+    const res = await fetch(`${base}/api/cxc/cobros/importar/plantilla`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) { alert('No se pudo descargar la plantilla'); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'plantilla-cobros.xlsx';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch { alert('No se pudo descargar la plantilla'); }
+}
+
+function TabImportarCobros() {
+  const [archivo, setArchivo] = useState(null);
+  const [procesando, setProcesando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [error, setError] = useState('');
+  const fileRef = useRef(null);
+
+  const importar = async () => {
+    if (!archivo) return;
+    setProcesando(true); setError(''); setResultado(null);
+    try {
+      const fd = new FormData();
+      fd.append('archivo', archivo);
+      const res = await api.post('/cxc/cobros/importar', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setResultado(res.data?.data);
+    } catch (err) {
+      setError(err.response?.data?.mensaje || 'Error al importar');
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  return (
+    <div className="movimientos-section">
+      <div style={{ maxWidth: 640 }}>
+        <h3 style={{ margin: '0 0 .35rem' }}>Importar cobros desde Excel</h3>
+        <p style={{ margin: '0 0 1.25rem', fontSize: '.88rem', color: 'var(--color-text-muted,#64748b)' }}>
+          Registra múltiples cobros a la vez subiendo un archivo Excel. Descarga la plantilla, completa las filas y súbela.
+        </p>
+
+        <div style={{ display: 'flex', gap: '.75rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={_descargarPlantillaCobros}>
+            ⬇ Descargar plantilla
+          </button>
+          <span style={{ fontSize: '.82rem', color: 'var(--color-text-muted,#64748b)' }}>
+            Columnas: Número Factura, Monto, Fecha, Método de Pago, Referencia, Observaciones
+          </span>
+        </div>
+
+        <div
+          style={{
+            border: `2px dashed ${archivo ? '#86efac' : 'var(--color-border,#e2e8f0)'}`,
+            borderRadius: '.75rem', padding: '2rem', textAlign: 'center', marginBottom: '1rem',
+            cursor: 'pointer', background: archivo ? '#f0fdf4' : 'var(--color-bg-alt,#f8fafc)',
+            transition: 'border-color .2s, background .2s',
+          }}
+          onClick={() => fileRef.current?.click()}
+        >
+          <input
+            ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
+            onChange={(e) => { setArchivo(e.target.files[0] || null); setResultado(null); setError(''); }}
+          />
+          {archivo ? (
+            <>
+              <div style={{ fontSize: '2rem', marginBottom: '.35rem' }}>📄</div>
+              <div style={{ fontWeight: 600 }}>{archivo.name}</div>
+              <div style={{ fontSize: '.82rem', color: 'var(--color-text-muted,#64748b)' }}>
+                {(archivo.size / 1024).toFixed(1)} KB — Clic para cambiar
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: '2rem', marginBottom: '.35rem' }}>📁</div>
+              <div style={{ fontWeight: 600 }}>Seleccionar archivo</div>
+              <div style={{ fontSize: '.82rem', color: 'var(--color-text-muted,#64748b)' }}>.xlsx, .xls, .csv</div>
+            </>
+          )}
+        </div>
+
+        {error && (
+          <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '.5rem', padding: '.65rem .85rem', marginBottom: '.75rem', color: '#991b1b', fontSize: '.88rem' }}>
+            {error}
+          </div>
+        )}
+
+        <button
+          className="btn btn-primary" style={{ width: '100%' }}
+          disabled={!archivo || procesando}
+          onClick={importar}
+        >
+          {procesando ? 'Procesando…' : '⬆ Importar cobros'}
+        </button>
+
+        {resultado && (
+          <div style={{ marginTop: '1.5rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 130, padding: '1rem', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '.6rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#16a34a' }}>{resultado.totalExitosas}</div>
+                <div style={{ fontSize: '.82rem', color: '#166534' }}>Cobros registrados</div>
+              </div>
+              {resultado.totalErrores > 0 && (
+                <div style={{ flex: 1, minWidth: 130, padding: '1rem', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '.6rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#dc2626' }}>{resultado.totalErrores}</div>
+                  <div style={{ fontSize: '.82rem', color: '#991b1b' }}>Filas con error</div>
+                </div>
+              )}
+            </div>
+
+            {resultado.exitosas?.length > 0 && (
+              <>
+                <h4 style={{ margin: '0 0 .5rem', color: '#16a34a', fontSize: '.95rem' }}>✅ Cobros registrados</h4>
+                <div style={{ overflowX: 'auto', marginBottom: '1.25rem' }}>
+                  <table className="movimientos-tabla">
+                    <thead><tr><th>Fila</th><th>Factura</th><th>N° Recibo</th><th style={{ textAlign: 'right' }}>Monto</th></tr></thead>
+                    <tbody>
+                      {resultado.exitosas.map((e) => (
+                        <tr key={e.fila}>
+                          <td>{e.fila}</td>
+                          <td>{e.numeroFactura}</td>
+                          <td style={{ fontWeight: 600 }}>{e.numero}</td>
+                          <td style={{ textAlign: 'right' }}>${formatMoney(e.monto)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {resultado.errores?.length > 0 && (
+              <>
+                <h4 style={{ margin: '0 0 .5rem', color: '#dc2626', fontSize: '.95rem' }}>❌ Filas con error</h4>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="movimientos-tabla">
+                    <thead><tr><th>Fila</th><th>Factura</th><th>Monto</th><th>Error</th></tr></thead>
+                    <tbody>
+                      {resultado.errores.map((e) => (
+                        <tr key={e.fila}>
+                          <td>{e.fila}</td>
+                          <td>{e.numeroFactura}</td>
+                          <td style={{ textAlign: 'right' }}>{e.monto ? `$${formatMoney(e.monto)}` : '—'}</td>
+                          <td style={{ color: '#dc2626', fontSize: '.85rem' }}>{e.error}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -765,7 +929,7 @@ export default function CuentasPorCobrarHub() {
       {tabActivo === 'historial'  && <TabHistorial key={`hist-${refresco}`} />}
       {tabActivo === 'cheques'    && <TabChequesRecibidos key={`chq-${refresco}`} />}
       {tabActivo === 'ordenes'    && <TabProximamente nombre="Órdenes de pago" />}
-      {tabActivo === 'importar'   && <TabProximamente nombre="Importar cobros" />}
+      {tabActivo === 'importar'   && <TabImportarCobros key={`imp-${refresco}`} />}
       {tabActivo === 'reportes'   && <TabReportesCxC />}
 
       {modalCobro && (
