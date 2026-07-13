@@ -185,6 +185,7 @@ const GRUPOS_MENU = [
       { to: '/configuracion-sri',          icon: '⚙️', label: 'Config SRI',    permiso: 'sri.configurar' },
       { to: '/configuracion-sistema',      icon: '🛠️', label: 'Config Sistema', permiso: 'sistema.configurar' },
       { to: '/configuracion/utilidades',   icon: '📊', label: 'Utilidades',     permiso: 'sistema.configurar' },
+      { to: '/suscripcion',               icon: '💳', label: 'Mi Suscripción',  permiso: 'sistema.configurar' },
     ],
   },
   {
@@ -234,6 +235,7 @@ export default function Layout() {
   const [offline, setOffline]       = useState(!navigator.onLine);
   const [swUpdate, setSwUpdate]     = useState(false);
   const [trialExpirado, setTrialExpirado] = useState(false);
+  const [planVencido, setPlanVencido]     = useState(null);
   const [clienteLogo, setClienteLogo] = useState(null);
   const pendientesSRI = usePendientesSRI();
 
@@ -293,19 +295,22 @@ export default function Layout() {
     setGruposAbiertos((prev) => ({ ...prev, [id]: !prev[id] }));
 
   useEffect(() => {
-    const onOnline   = () => setOffline(false);
-    const onOffline  = () => setOffline(true);
-    const onSwUpdate = () => setSwUpdate(true);
-    const onTrialExp = () => setTrialExpirado(true);
-    window.addEventListener('online',             onOnline);
-    window.addEventListener('offline',            onOffline);
-    window.addEventListener('aela:sw-update',     onSwUpdate);
+    const onOnline    = () => setOffline(false);
+    const onOffline   = () => setOffline(true);
+    const onSwUpdate  = () => setSwUpdate(true);
+    const onTrialExp  = () => setTrialExpirado(true);
+    const onPlanVenc  = (e) => setPlanVencido({ mensaje: e.detail?.mensaje });
+    window.addEventListener('online',              onOnline);
+    window.addEventListener('offline',             onOffline);
+    window.addEventListener('aela:sw-update',      onSwUpdate);
     window.addEventListener('aela:trial-expirado', onTrialExp);
+    window.addEventListener('aela:plan-vencido',   onPlanVenc);
     return () => {
       window.removeEventListener('online',              onOnline);
       window.removeEventListener('offline',             onOffline);
       window.removeEventListener('aela:sw-update',      onSwUpdate);
       window.removeEventListener('aela:trial-expirado', onTrialExp);
+      window.removeEventListener('aela:plan-vencido',   onPlanVenc);
     };
   }, []);
 
@@ -598,6 +603,26 @@ export default function Layout() {
               className="btn-primary"
             >
               Contactar soporte
+            </a>
+            <button className="btn-secondary" onClick={handleLogout}>Cerrar sesión</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL PLAN VENCIDO ── */}
+      {planVencido && (
+        <div className="modal-trial-expirado-overlay">
+          <div className="modal-trial-expirado">
+            <div className="modal-trial-icon">📅</div>
+            <h2>Tu suscripción ha vencido</h2>
+            <p>
+              {planVencido.mensaje || 'Tu plan ha vencido. Por favor renueva tu suscripción para continuar usando AELA.'}
+            </p>
+            <a
+              href="mailto:soporte@aela.ec?subject=Renovar suscripción AELA"
+              className="btn-primary"
+            >
+              Renovar suscripción
             </a>
             <button className="btn-secondary" onClick={handleLogout}>Cerrar sesión</button>
           </div>

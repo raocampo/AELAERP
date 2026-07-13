@@ -73,9 +73,15 @@ export function manejarErrorApi(err, {
     limpiarSesion(storage);
     redirigirALogin(location, storage); // slug aún está (no se limpia)
   }
-  if (err.response?.status === 402 && err.response?.data?.codigo === 'TRIAL_EXPIRADO') {
-    // Mostrar modal de trial expirado vía evento global
-    window.dispatchEvent(new CustomEvent('aela:trial-expirado'));
+  if (err.response?.status === 402) {
+    const codigo = err.response?.data?.codigo;
+    if (codigo === 'TRIAL_EXPIRADO') {
+      window.dispatchEvent(new CustomEvent('aela:trial-expirado'));
+    } else if (codigo === 'PLAN_VENCIDO' || codigo === 'TENANT_VENCIDO') {
+      window.dispatchEvent(new CustomEvent('aela:plan-vencido', {
+        detail: { mensaje: err.response?.data?.mensaje },
+      }));
+    }
   }
   return Promise.reject(err);
 }

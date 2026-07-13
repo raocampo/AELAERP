@@ -115,7 +115,8 @@ router.put('/tenants/:id', verificarSuperAdmin, async (req, res) => {
   try {
     const campos = ['plan', 'estado', 'fechaVencimiento', 'fechaActivacion',
                     'nombreContacto', 'emailContacto', 'telefonoContacto',
-                    'esTrial', 'trialExpiresAt', 'autoRenovar', 'periodoFacturacion'];
+                    'esTrial', 'trialExpiresAt', 'autoRenovar', 'periodoFacturacion',
+                    'tipoInstancia'];
     const data = {};
     for (const c of campos) {
       if (req.body[c] === undefined) continue;
@@ -193,6 +194,107 @@ router.post('/tenants/:id/suscripciones', verificarSuperAdmin, async (req, res) 
   } catch (err) {
     console.error('superAdmin crear suscripcion:', err);
     res.status(500).json({ success: false, mensaje: 'Error al crear suscripción' });
+  }
+});
+
+// ─── Listar solicitudes de pago pendientes ────────────────────────────────────
+// GET /api/super-admin/pagos-pendientes
+router.get('/pagos-pendientes', verificarSuperAdmin, async (req, res) => {
+  const master = getMaster(res);
+  if (!master) return;
+  try {
+    const solicitudes = await master.solicitudes_pago.findMany({
+      where:   { estado: { in: ['pendiente', 'revision'] } },
+      include: { tenant: { select: { slug: true, emailContacto: true, nombreContacto: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ success: true, data: solicitudes });
+  } catch (err) {
+    res.status(500).json({ success: false, mensaje: err.message });
+  }
+});
+
+// ─── Aprobar pago de suscripción ──────────────────────────────────────────────
+// POST /api/super-admin/pagos/:id/aprobar
+router.post('/pagos/:id/aprobar', verificarSuperAdmin, async (req, res) => {
+  const master = getMaster(res);
+  if (!master) return;
+  try {
+    const { invalidarCacheTenant } = require('../middleware/tenant');
+    const solicitud = await master.solicitudes_pago.findUnique({
+      where:   { id: parseInt(req.params.id, 10) },
+      include: { tenant: true },
+    });
+    if (!solicitud) return res.status(404).json({ success: false, mensaje: 'Solicitud no encontrada' });
+
+    await master.solicitudes_pago.update({ where: { id: solicitud.id }, data: { estado: 'pagado' } });
+
+    const meses = solicitud.periodo === 'anual' ? 12 : 1;
+    const fechaFin = new Date();
+    fechaFin.setMonth(fechaFin.getMonth() + meses);
+
+    await master.suscripciones.updateMany({ where: { tenantId: solicitud.tenantId, estado: 'activo' }, data: { estado: 'vencido' } });
+    await master.suscripciones.create({
+      data: { tenantId: solicitud.tenantId, plan: solicitud.plan, periodo: solicitud.periodo, monto: solicitud.monto, fechaFin, proveedor: solicitud.proveedor, pagoReferencia: solicitud.referencia || null, estado: 'activo', fechaInicio: new Date() },
+    });
+    await master.tenants.update({
+      where: { id: solicitud.tenantId },
+      data:  { plan: solicitud.plan, estado: 'activo', esTrial: false, fechaVencimiento: fechaFin, fechaActivacion: new Date() },
+    });
+    invalidarCacheTenant(solicitud.tenant.slug);
+
+    res.json({ success: true, mensaje: 'Suscripción activada' });
+  } catch (err) {
+    res.status(500).json({ success: false, mensaje: err.message });
+  }
+});
+
+// ─── Generar API key para un tenant (WebServices) ────────────────────────────
+// POST /api/super-admin/tenants/:id/apikey
+router.post('/tenants/:id/apikey', verificarSuperAdmin, async (req, res) => {
+  const master = getMaster(res);
+  if (!master) return;
+  try {
+    const tenantId = parseInt(req.params.id, 10);
+    const tenant = await master.tenants.findUnique({ where: { id: tenantId } });
+    if (!tenant) return res.status(404).json({ success: false, mensaje: 'Tenant no encontrado' });
+
+    const { randomBytes } = require('crypto');
+    const apiKey = `aela_${randomBytes(24).toString('hex')}`;
+
+    const bcActual = (tenant.brandConfig && typeof tenant.brandConfig === 'object') ? tenant.brandConfig : {};
+    await master.tenants.update({
+      where: { id: tenantId },
+      data:  { brandConfig: { ...bcActual, apiKey } },
+    });
+
+    res.json({ success: true, data: { apiKey } });
+  } catch (err) {
+    console.error('superAdmin generar apikey:', err);
+    res.status(500).json({ success: false, mensaje: 'Error al generar API key' });
+  }
+});
+
+// ─── Revocar API key de un tenant ────────────────────────────────────────────
+// DELETE /api/super-admin/tenants/:id/apikey
+router.delete('/tenants/:id/apikey', verificarSuperAdmin, async (req, res) => {
+  const master = getMaster(res);
+  if (!master) return;
+  try {
+    const tenantId = parseInt(req.params.id, 10);
+    const tenant = await master.tenants.findUnique({ where: { id: tenantId } });
+    if (!tenant) return res.status(404).json({ success: false, mensaje: 'Tenant no encontrado' });
+
+    const bcActual = (tenant.brandConfig && typeof tenant.brandConfig === 'object') ? tenant.brandConfig : {};
+    const { apiKey: _removed, ...bcSinKey } = bcActual;
+    await master.tenants.update({
+      where: { id: tenantId },
+      data:  { brandConfig: bcSinKey },
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, mensaje: 'Error al revocar API key' });
   }
 });
 

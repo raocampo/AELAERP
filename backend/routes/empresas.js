@@ -331,6 +331,19 @@ router.post('/', proteger, soloAdmin, async (req, res) => {
       return res.status(400).json({ success: false, mensaje: 'El RUC debe tener 13 dígitos' });
     }
 
+    // Enforcement mono/multiempresa para plan PRO
+    const tenant = req.tenant;
+    if (tenant && tenant.plan === 'pro' && (tenant.tipoInstancia || 'monoempresa') === 'monoempresa') {
+      const conteo = await req.prisma.empresas.count();
+      if (conteo >= 1) {
+        return res.status(403).json({
+          success: false,
+          mensaje: 'Tu plan PRO está configurado como monoempresa. Solo puedes tener una empresa. Contacta a soporte para habilitar multiempresa.',
+          codigo: 'LIMITE_MONOEMPRESA',
+        });
+      }
+    }
+
     const planFinal = plan === 'lite' ? 'lite' : 'full';
     const empresaSri = await obtenerEmpresaSri(rucLimpio);
 

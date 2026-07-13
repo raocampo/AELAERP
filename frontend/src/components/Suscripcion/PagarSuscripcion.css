@@ -1,0 +1,276 @@
+/* ============================================================
+   PagarSuscripcion.css — Módulo de pagos de suscripción AELA
+   ============================================================ */
+
+.suscr-wrapper {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+
+.suscr-header {
+  margin-bottom: 28px;
+}
+.suscr-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+.suscr-header p {
+  color: var(--text-secondary, #64748b);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Estado actual */
+.suscr-estado-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 28px;
+}
+.suscr-estado-row {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.suscr-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #94a3b8);
+  margin-bottom: 4px;
+}
+.suscr-plan-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.suscr-plan--lite   { background: #f1f5f9; color: #475569; }
+.suscr-plan--medium { background: #dbeafe; color: #1d4ed8; }
+.suscr-plan--pro    { background: #ede9fe; color: #7c3aed; }
+.suscr-trial-tag    { background: #fef3c7; color: #92400e; font-size: 11px; padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+
+.suscr-estado-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.suscr-estado--activo      { background: #dcfce7; color: #166534; }
+.suscr-estado--trial       { background: #fef3c7; color: #92400e; }
+.suscr-estado--vencido     { background: #fee2e2; color: #991b1b; }
+.suscr-estado--suspendido  { background: #f1f5f9; color: #64748b; }
+.suscr-estado--pendiente   { background: #fef9c3; color: #854d0e; }
+.suscr-estado--revision    { background: #dbeafe; color: #1e40af; }
+.suscr-estado--pagado      { background: #dcfce7; color: #166534; }
+.suscr-estado--rechazado   { background: #fee2e2; color: #991b1b; }
+.suscr-estado--provisioning { background: #e0f2fe; color: #0369a1; }
+
+/* Secciones */
+.suscr-section { margin-bottom: 28px; }
+.suscr-section h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 14px;
+  color: var(--text-primary, #1e293b);
+}
+.suscr-section h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+/* Planes */
+.suscr-planes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+.suscr-plan-card {
+  border: 2px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  padding: 18px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.suscr-plan-card:hover { border-color: #6d28d9; }
+.suscr-plan-card--selected {
+  border-color: #6d28d9;
+  box-shadow: 0 0 0 3px #ede9fe;
+}
+.suscr-plan-nombre { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.suscr-plan-precio { font-size: 1.4rem; font-weight: 800; color: #6d28d9; }
+.suscr-plan-precio span { font-size: 14px; font-weight: 400; color: var(--text-secondary, #64748b); }
+.suscr-plan-desc   { font-size: 12px; color: var(--text-secondary, #64748b); margin-top: 6px; }
+
+/* Período */
+.suscr-periodo-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.suscr-periodo-toggle button {
+  padding: 8px 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: var(--text-secondary, #64748b);
+  transition: background 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.suscr-periodo-toggle button.active {
+  background: #6d28d9;
+  color: #fff;
+  font-weight: 600;
+}
+.suscr-descuento-tag {
+  background: #dcfce7;
+  color: #166534;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.suscr-precio-total {
+  margin-top: 14px;
+  font-size: 1.1rem;
+  color: var(--text-primary, #1e293b);
+}
+.suscr-precio-hint { font-size: 0.85rem; color: var(--text-secondary, #64748b); }
+
+.suscr-btn-siguiente { width: 100%; padding: 14px; font-size: 1rem; }
+.suscr-hint { text-align: center; color: var(--text-muted, #94a3b8); font-size: 0.85rem; margin-top: 10px; }
+
+/* Formas de pago */
+.suscr-resumen-pago {
+  background: #f8fafc;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.suscr-cambiar-plan {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #6d28d9;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-decoration: underline;
+}
+.suscr-formas { display: flex; flex-direction: column; gap: 10px; }
+.suscr-forma-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 2px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+.suscr-forma-card:hover { border-color: #6d28d9; }
+.suscr-forma-card--selected { border-color: #6d28d9; background: #faf5ff; }
+.suscr-forma-icono { font-size: 1.6rem; flex-shrink: 0; }
+.suscr-forma-label { font-weight: 600; font-size: 0.9rem; }
+.suscr-forma-desc  { font-size: 0.8rem; color: var(--text-secondary, #64748b); margin-top: 2px; }
+
+/* Transferencia */
+.suscr-transferencia-info {
+  background: #f8fafc;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  padding: 18px;
+}
+.suscr-cuenta-bancaria {
+  background: #fff;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  font-size: 0.88rem;
+}
+.suscr-cuenta-bancaria div { margin-bottom: 4px; }
+.suscr-cuenta-bancaria span { color: var(--text-muted, #94a3b8); margin-right: 6px; }
+.suscr-instr { margin: 12px 0 8px; font-size: 0.88rem; }
+.suscr-input {
+  width: 100%;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+.suscr-footer-btns {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+.suscr-footer-btns .btn-primary  { flex: 1; padding: 12px; font-size: 0.95rem; }
+.suscr-footer-btns .btn-secondary { padding: 12px 20px; }
+
+/* Confirmado */
+.suscr-confirmado {
+  text-align: center;
+  padding: 40px 20px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  margin-bottom: 28px;
+}
+.suscr-ok-icon { font-size: 3rem; margin-bottom: 16px; }
+.suscr-confirmado h2 { margin: 0 0 10px; }
+.suscr-confirmado p  { color: var(--text-secondary, #64748b); margin-bottom: 20px; }
+
+/* Historial */
+.suscr-historial h2 { font-size: 1rem; }
+.suscr-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.suscr-tabla th {
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--table-header, #f8fafc);
+  border-bottom: 2px solid var(--border, #e2e8f0);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.suscr-tabla td {
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  vertical-align: middle;
+}
+
+/* Misc */
+.suscr-loading { padding: 40px; text-align: center; color: var(--text-secondary, #64748b); }
+.suscr-error   { padding: 20px; color: #dc2626; background: #fee2e2; border-radius: 8px; }
+
+@media (prefers-color-scheme: dark) {
+  .suscr-plan-card,
+  .suscr-forma-card,
+  .suscr-forma-card--selected,
+  .suscr-transferencia-info { background: var(--surface, #1e293b); }
+  .suscr-tabla th { background: #1e293b; }
+}

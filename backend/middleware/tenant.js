@@ -130,7 +130,27 @@ async function resolverTenant(req, res, next) {
       return res.status(402).json({
         success: false,
         mensaje: 'Tu plan ha vencido. Por favor renueva tu suscripción.',
-        codigo: 'TENANT_VENCIDO',
+        codigo: 'PLAN_VENCIDO',
+      });
+    }
+
+    // Auto-detección de vencimiento: trial expirado
+    if (tenant.esTrial && tenant.trialExpiresAt && new Date() > new Date(tenant.trialExpiresAt)) {
+      _actualizarEstadoVencido(tenant, slug, 'vencido');
+      return res.status(402).json({
+        success: false,
+        mensaje: 'Tu período de prueba ha vencido. Contacta a soporte para activar tu plan.',
+        codigo: 'TRIAL_EXPIRADO',
+      });
+    }
+
+    // Auto-detección de vencimiento: plan pagado expirado
+    if (!tenant.esTrial && tenant.estado === 'activo' && tenant.fechaVencimiento && new Date() > new Date(tenant.fechaVencimiento)) {
+      _actualizarEstadoVencido(tenant, slug, 'vencido');
+      return res.status(402).json({
+        success: false,
+        mensaje: 'Tu suscripción ha vencido. Por favor renueva tu plan.',
+        codigo: 'PLAN_VENCIDO',
       });
     }
 
@@ -159,6 +179,15 @@ async function resolverTenant(req, res, next) {
     console.error('Error resolviendo tenant:', err?.message);
     res.status(500).json({ success: false, mensaje: 'Error interno al resolver tenant.' });
   }
+}
+
+// ─── Actualizar estado en BD master (fire-and-forget) ────────────────────────
+function _actualizarEstadoVencido(tenant, slug, nuevoEstado) {
+  const master = getPrismaMaster();
+  if (!master) return;
+  master.tenants.update({ where: { id: tenant.id }, data: { estado: nuevoEstado } })
+    .then(() => invalidarCacheTenant(slug))
+    .catch(() => {});
 }
 
 // ─── Invalidar cache de un tenant (llamar tras actualizar plan/estado) ────────

@@ -19,6 +19,7 @@ const ESTADO_LABELS = {
 };
 
 const PLAN_LABELS = { lite: 'Lite', medium: 'Medium', pro: 'Pro' };
+const TIPO_LABELS = { monoempresa: '1 empresa', multiempresa: 'Multi' };
 
 function Badge({ estado }) {
   const cfg = ESTADO_LABELS[estado] || { label: estado, cls: '' };
@@ -53,9 +54,10 @@ function useSaApi(clave) {
   // useMemo estabiliza la referencia del objeto — sin esto se crea uno nuevo en
   // cada render, lo que dispara cargarDatos en loop infinito (ERR_INSUFFICIENT_RESOURCES).
   return useMemo(() => ({
-    get:  (path)       => call('GET',  path),
-    put:  (path, body) => call('PUT',  path, body),
-    post: (path, body) => call('POST', path, body),
+    get:    (path)       => call('GET',    path),
+    put:    (path, body) => call('PUT',    path, body),
+    post:   (path, body) => call('POST',   path, body),
+    delete: (path)       => call('DELETE', path),
   }), [call]);
 }
 
@@ -63,6 +65,7 @@ function useSaApi(clave) {
 function ModalEditar({ tenant, onGuardar, onCerrar }) {
   const [form, setForm] = useState({
     plan:                tenant.plan            || 'lite',
+    tipoInstancia:       tenant.tipoInstancia   || 'monoempresa',
     estado:              tenant.estado          || 'activo',
     nombreContacto:      tenant.nombreContacto  || '',
     emailContacto:       tenant.emailContacto   || '',
@@ -94,6 +97,19 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
               <option value="pro">Pro</option>
             </select>
           </div>
+
+          {form.plan === 'pro' && (
+            <div className="sa-form-row">
+              <label>Tipo de instancia <span className="sa-hint">(solo PRO)</span></label>
+              <select value={form.tipoInstancia} onChange={e => set('tipoInstancia', e.target.value)}>
+                <option value="monoempresa">Monoempresa (1 empresa)</option>
+                <option value="multiempresa">Multiempresa (N empresas)</option>
+              </select>
+              <small className="sa-hint-block">
+                Monoempresa: el cliente gestiona una sola empresa. Multiempresa: puede crear múltiples empresas dentro del mismo tenant.
+              </small>
+            </div>
+          )}
 
           <div className="sa-form-row">
             <label>Estado</label>
@@ -254,9 +270,11 @@ export default function PanelSuperAdmin() {
   const [busqueda, setBusqueda]   = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroPlan, setFiltroPlan]     = useState('');
+  const [pagosPendientes, setPagosPendientes] = useState([]);
 
   const [modalEditar, setModalEditar]   = useState(null);
   const [modalSus, setModalSus]         = useState(null);
+  const [modalApiKey, setModalApiKey]   = useState(null); // { tenant, key }
   const [guardando, setGuardando]       = useState(false);
   const [msg, setMsg]                   = useState('');
 
@@ -299,12 +317,14 @@ export default function PanelSuperAdmin() {
     setCargando(true);
     setError('');
     try {
-      const [s, t] = await Promise.all([
+      const [s, t, pp] = await Promise.all([
         api.get('/stats'),
         api.get('/tenants'),
+        api.get('/pagos-pendientes').catch(() => []),
       ]);
       setStats(s);
       setTenants(t);
+      setPagosPendientes(Array.isArray(pp) ? pp : []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -346,6 +366,39 @@ export default function PanelSuperAdmin() {
       alert(err.message);
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const aprobarPago = async (pago) => {
+    if (!window.confirm(`¿Aprobar pago de ${pago.tenant?.slug} — ${pago.plan}/${pago.periodo} $${pago.monto}?`)) return;
+    try {
+      await api.post(`/pagos/${pago.id}/aprobar`);
+      flash('Suscripción activada');
+      cargarDatos();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const generarApiKey = async (t) => {
+    try {
+      const data = await api.post(`/tenants/${t.id}/apikey`);
+      setModalApiKey({ tenant: t, key: data.apiKey });
+      flash('API key generada');
+      cargarDatos();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const revocarApiKey = async (t) => {
+    if (!window.confirm(`¿Revocar la API key de ${t.slug}? Esto desconectará integraciones activas.`)) return;
+    try {
+      await api.delete(`/tenants/${t.id}/apikey`);
+      flash('API key revocada');
+      cargarDatos();
+    } catch (err) {
+      alert(err.message);
     }
   };
 
@@ -455,6 +508,46 @@ export default function PanelSuperAdmin() {
           </div>
         )}
 
+        {/* Pagos pendientes de aprobación */}
+        {pagosPendientes.length > 0 && (
+          <div className="sa-pagos-pendientes">
+            <h3>💳 Pagos pendientes de aprobación ({pagosPendientes.length})</h3>
+            <table className="sa-table">
+              <thead>
+                <tr>
+                  <th>Tenant</th>
+                  <th>Plan / Período</th>
+                  <th>Monto</th>
+                  <th>Forma</th>
+                  <th>Referencia</th>
+                  <th>Fecha</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagosPendientes.map(p => (
+                  <tr key={p.id}>
+                    <td>
+                      <div className="sa-slug">{p.tenant?.slug}</div>
+                      <div className="sa-email">{p.tenant?.emailContacto}</div>
+                    </td>
+                    <td>{p.plan} / {p.periodo}</td>
+                    <td>${p.monto}</td>
+                    <td>{p.proveedor}</td>
+                    <td>{p.referencia || <span className="sa-empty-val">—</span>}</td>
+                    <td>{new Date(p.createdAt).toLocaleDateString('es-EC')}</td>
+                    <td>
+                      <button className="btn-primary sa-btn-xs" onClick={() => aprobarPago(p)}>
+                        ✓ Aprobar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* Filtros */}
         <div className="sa-filters">
           <input
@@ -490,7 +583,7 @@ export default function PanelSuperAdmin() {
                 <tr>
                   <th>Slug / Acceso</th>
                   <th>Contacto</th>
-                  <th>Plan</th>
+                  <th>Plan / Tipo</th>
                   <th>Estado</th>
                   <th>Vencimiento</th>
                   <th>Registro</th>
@@ -517,6 +610,14 @@ export default function PanelSuperAdmin() {
                         {PLAN_LABELS[t.plan] || t.plan}
                       </span>
                       {t.esTrial && <span className="sa-trial-tag">Trial</span>}
+                      {t.plan === 'pro' && (
+                        <div className="sa-tipo-instancia">
+                          {TIPO_LABELS[t.tipoInstancia] || t.tipoInstancia || '1 empresa'}
+                        </div>
+                      )}
+                      {t.brandConfig?.apiKey && (
+                        <div className="sa-api-badge" title={t.brandConfig.apiKey}>🔑 API activa</div>
+                      )}
                     </td>
                     <td><Badge estado={t.estado} /></td>
                     <td>
@@ -546,6 +647,19 @@ export default function PanelSuperAdmin() {
                         >
                           {t.estado === 'suspendido' ? '▶ Activar' : '⏸ Suspender'}
                         </button>
+                        {t.brandConfig?.apiKey ? (
+                          <button
+                            className="btn-danger sa-btn-xs"
+                            onClick={() => revocarApiKey(t)}
+                            title="Revocar API key"
+                          >🔑 Revocar key</button>
+                        ) : (
+                          <button
+                            className="btn-secondary sa-btn-xs"
+                            onClick={() => generarApiKey(t)}
+                            title="Generar API key para WebService"
+                          >🔑 Generar key</button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -570,6 +684,37 @@ export default function PanelSuperAdmin() {
           onGuardar={handleGuardarSuscripcion}
           onCerrar={() => setModalSus(null)}
         />
+      )}
+
+      {/* Modal API key generada */}
+      {modalApiKey && (
+        <div className="sa-modal-overlay" onClick={() => setModalApiKey(null)}>
+          <div className="sa-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="sa-modal-header">
+              <h3>API key generada — <strong>{modalApiKey.tenant.slug}</strong></h3>
+              <button className="sa-modal-close" onClick={() => setModalApiKey(null)}>✕</button>
+            </div>
+            <div className="sa-modal-body">
+              <p style={{ marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                Guarda esta key en un lugar seguro. No se mostrará de nuevo con el valor completo.
+                El cliente debe enviarla en el header <code>X-API-Key</code> de cada request.
+              </p>
+              <div className="sa-apikey-display">
+                <code style={{ wordBreak: 'break-all', fontSize: 13 }}>{modalApiKey.key}</code>
+              </div>
+              <p style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
+                Endpoint base: <code>{window.location.origin}/api/ext/v1/</code>
+              </p>
+            </div>
+            <div className="sa-modal-footer">
+              <button className="btn-primary" onClick={() => {
+                navigator.clipboard?.writeText(modalApiKey.key);
+                flash('Copiado al portapapeles');
+              }}>📋 Copiar</button>
+              <button className="btn-secondary" onClick={() => setModalApiKey(null)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {guardando && (

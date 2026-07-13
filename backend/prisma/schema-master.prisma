@@ -42,13 +42,18 @@ model tenants {
   esTrial           Boolean  @default(false)
   trialExpiresAt    DateTime?
 
+  // Tipo de instancia — solo aplica cuando plan = 'pro'
+  tipoInstancia    String?   @default("monoempresa") @db.VarChar(20)
+  // monoempresa → máx 1 empresa | multiempresa → N empresas ilimitadas
+
   // Branding (white-label)
-  brandConfig      Json?    // { dominio, logo, colores, ... }
+  brandConfig      Json?    // { dominio, logo, apiKey, ... }
 
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   suscripciones    suscripciones[]
+  solicitudesPago  solicitudes_pago[]
 }
 
 // ── Historial de suscripciones y pagos ───────────────────────────────────────
@@ -62,8 +67,28 @@ model suscripciones {
   fechaInicio    DateTime @default(now())
   fechaFin       DateTime?
   pagoReferencia String?  @db.VarChar(200)
-  proveedor      String?  @db.VarChar(50)   // stripe | paypal | manual
+  proveedor      String?  @db.VarChar(50)   // stripe | paypal | payphone | manual
 
   tenant         tenants  @relation(fields: [tenantId], references: [id])
   createdAt      DateTime @default(now())
+}
+
+// ── Solicitudes de pago (checkout) ───────────────────────────────────────────
+model solicitudes_pago {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int
+  plan            String   @db.VarChar(20)   // lite | medium | pro
+  periodo         String   @db.VarChar(20)   // mensual | anual
+  monto           Decimal  @db.Decimal(10,2)
+  proveedor       String   @db.VarChar(30)   // transferencia | payphone | stripe | paypal
+  estado          String   @default("pendiente") @db.VarChar(20)
+  // pendiente | pagado | rechazado | expirado | revision
+  referencia      String?  @db.VarChar(300)  // comprobante transferencia o txId externo
+  checkoutUrl     String?  @db.VarChar(500)  // URL de PayPhone/Stripe
+  transactionId   String?  @db.VarChar(200)  // ID en el proveedor externo
+  metadatos       Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          tenants  @relation(fields: [tenantId], references: [id])
 }

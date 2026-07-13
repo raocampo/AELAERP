@@ -114,6 +114,7 @@ const FormProforma       = lazy(() => import('./components/Proformas/FormProform
 const DetalleProforma    = lazy(() => import('./components/Proformas/DetalleProforma'));
 const AccesoTenant       = lazy(() => import('./components/Tenant/AccesoTenant'));
 const PanelSuperAdmin    = lazy(() => import('./components/SuperAdmin/PanelSuperAdmin'));
+const PagarSuscripcion   = lazy(() => import('./components/Suscripcion/PagarSuscripcion'));
 
 function RouteLoading() {
   return <div style={{ padding: 40 }}>Cargando módulo...</div>;
@@ -275,6 +276,7 @@ function App() {
                 <Route path="configuracion-sri" element={<PermissionRoute permission="sri.configurar"><ConfiguracionSRI /></PermissionRoute>} />
                 <Route path="configuracion-sistema" element={<PermissionRoute permission="sistema.configurar"><ConfiguracionSistema /></PermissionRoute>} />
                 <Route path="configuracion/utilidades" element={<PermissionRoute permission="sistema.configurar"><TablaUtilidades /></PermissionRoute>} />
+                <Route path="suscripcion" element={<PagarSuscripcion />} />
 
                 {/* Hub financiero — Medium y Pro */}
                 <Route path="finanzas" element={<MediumRoute><PermissionRoute permission="facturacion.ver"><FinanzasHub /></PermissionRoute></MediumRoute>} />

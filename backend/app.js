@@ -66,6 +66,8 @@ const impresoraRoutes     = require('./routes/impresora');
 const utilidadesRoutes    = require('./routes/utilidades');
 const proformasRoutes             = require('./routes/proformas');
 const retencionesRecibidasRoutes  = require('./routes/retenciones-recibidas');
+const externalRoutes              = require('./routes/external');
+const suscripcionPagoRoutes       = require('./routes/suscripcionPago');
 const { soloMediumOPro, soloPro } = require('./middleware/edition');
 const { contarPendientes } = require('./utils/colaSRI');
 const { proteger } = require('./middleware/auth');
@@ -121,6 +123,8 @@ app.use('/api/anticipos', anticiposRoutes);
 app.use('/api/talento-humano', soloMediumOPro, talentoHumanoRoutes);
 app.use('/api/puntos-emision', puntosEmisionRoutes);
 app.use('/api/super-admin',   superAdminRoutes);
+app.use('/api/ext/v1',        externalRoutes);        // WebService externo — autenticación por API key
+app.use('/api/suscripcion-pago', suscripcionPagoRoutes); // Pagos de suscripción (PayPhone, transferencia, etc.)
 app.use('/api/utilidades',    utilidadesRoutes);
 app.use('/api/proformas',     proformasRoutes);
 
