@@ -1,6 +1,6 @@
 # Estado del Proyecto AELA
 
-Fecha de referencia: `2026-07-12`
+Fecha de referencia: `2026-07-13`
 
 ## Resumen general
 
@@ -440,6 +440,42 @@ ya importadas antes del fix, idempotente. Botón "Generar asientos faltantes" en
 | 4 | Centros de costo dimensionales | ✅ `cf16980` |
 | 5 | Provisiones RRHH automáticas | ✅ `c6a61da` |
 
+### 27. Sesión 2026-07-13 — 7 bugs + utilidad por ítem en compras + 4 decimales en facturas
+
+Ver `docs/pendientes-2026-07-13.md` para el detalle exhaustivo (5 commits, lista de
+verificación y backlog completo).
+
+**Bugs corregidos:**
+- Rol `contador` no podía emitir facturas de venta — faltaba `facturacion.emitir` en el rol.
+- Compras 0% por $13.50 "invisibles" en declaración F104 — eran liquidaciones de compra (tipo
+  SRI `03`), no facturas; el desglose visual ahora explica la composición del total.
+- Gastos personales (alimentación, salud, vivienda, vestimenta, educación) se sumaban al F104 —
+  nuevo campo `esGastoPersonal` en `facturas_compra`; la declaración los filtra y avisa cuántos
+  excluyó. UI en DetalleCompra: checkbox + categoría en modal Editar, badge ámbar en vista.
+- Libro de bancos no generaba asientos — nuevos endpoints de contabilización individual y por
+  lote (`POST /bancos/:id/contabilizar-pendientes`); LibroBancos muestra columna 📒/⚠ y botón
+  para contabilizar pendientes; BancosHub avisa si la cuenta no tiene cuenta contable asignada.
+- Regenerar asiento de compra ignoraba `cuentaGastoId` cuando había ítems inventariables —
+  `subtotalInventario` ahora vale 0 cuando hay cuenta explícita, de modo que todo el importe
+  va a la cuenta de gasto configurada y no al Inventario Mercaderías.
+- No había vista de notas de crédito recibidas de proveedores — nuevo componente
+  `NotasCreditoRecibidas.jsx`, endpoint `GET /compras/notas-credito`, botón en ListaCompras.
+
+**Bugs corregidos (sesión anterior, mismo día, commit `b1be14a`):**
+- Compras manuales excluidas del F104 — filtro `receptorEsRuc: { not: false }` en Prisma
+  excluía NULLs; corregido a `OR: [{null}, {true}]`.
+- Cambiar cuenta contable no regeneraba el asiento automáticamente.
+- Tab "Importar" en Cuentas por Cobrar — importar cobros masivos desde Excel.
+
+**Features:**
+- Utilidad% y PVP variable por ítem al cargar facturas de compra (FormCompra) — cálculo
+  cruzado automático; al guardar actualiza el PVP del producto en catálogo.
+- Editar utilidad% y PVP en facturas ya registradas (DetalleCompra) — nuevas columnas Utilidad%
+  y PVP en la tabla de ítems; botón ✏️ por fila → modal con cálculo cruzado; backend
+  `PATCH /compras/:id/item-utilidad` sincroniza el catálogo.
+- Facturas y proformas de venta aceptan hasta 4 decimales en precio unitario (`sri.js` acumula
+  con precisión completa antes de redondear; totales SRI siguen siendo 2 dec, obligatorio).
+
 ### 26. Sesión 2026-07-12 — Bug real en declaraciones (F104/retenciones recibidas), RUC vs Cédula, DetalleCompra responsiva, recibo de cobro
 
 Ver `docs/pendientes-2026-07-12.md` para el detalle exhaustivo. A diferencia de sesiones
@@ -724,6 +760,20 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
    - Ver todos los tenants, planes, estado
    - Activar/suspender tenants
    - Ver logs de provisioning fallidos
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-13)
+
+Ver `docs/pendientes-2026-07-13.md` sección "VERIFICAR EN PRODUCCIÓN" para la lista detallada.
+Los más críticos (todos requieren navegador):
+
+1. **Rol contadora** — usuario con rol `contador` puede crear facturas desde `/facturacion/nueva`.
+2. **Gastos personales** — marcar compra como gasto personal → F104 baja ese importe + aviso.
+3. **Libro bancos** — depósito con contrapartida → columna 📒; "Contabilizar pendientes" en lote.
+4. **Regenerar asiento** — compra con cuenta contable asignada → asiento usa esa cuenta, no Inventario.
+5. **NC Proveedores** — Compras → "📋 NC Proveedores" muestra notas de crédito del buzón SRI.
+6. **Utilidad ítem ya registrado** — compra `001-010-000523799`, botón ✏️ en ítem VIA320 ($1.32),
+   ingresar 30% → PVP = $1.72, guardar, verificar en catálogo.
+7. **4 decimales en facturas** — precio 1.2575 × 3 → total $3.7725 en línea; XML generado ok.
 
 ### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-04/05)
 
