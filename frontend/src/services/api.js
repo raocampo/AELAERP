@@ -17,12 +17,35 @@ export const SESSION_STORAGE_KEYS = [
   // automáticamente al login de su tenant tras expiración de sesión.
 ];
 
+// Extrae el tenantSlug desde el payload JWT (sin verificar firma — solo lectura).
+// El backend valida la firma; aquí solo necesitamos enrutar al tenant correcto.
+function _slugDesdeJwt(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload?.tenantSlug ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function inyectarTokenEnConfig(config, storage = globalThis.localStorage) {
   if (!config.headers) config.headers = {};
   const token = storage?.getItem('aela_token') || storage?.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  const tenantSlug = storage?.getItem('aela_tenant_slug');
-  if (tenantSlug) config.headers['X-Tenant-Slug'] = tenantSlug;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+    // Derivar el slug DESDE el JWT para que siempre coincida con el tenant
+    // con el que el usuario inició sesión, independientemente de lo que tenga
+    // localStorage. Esto evita que un slug residual de otro tenant provoque
+    // que las requests lleguen a la BD equivocada (TENANT_MISMATCH / data leak).
+    const slugDelJwt = _slugDesdeJwt(token);
+    const slugFallback = storage?.getItem('aela_tenant_slug');
+    const slugEfectivo = slugDelJwt ?? slugFallback;
+    if (slugEfectivo) config.headers['X-Tenant-Slug'] = slugEfectivo;
+  } else {
+    // Sin token (login, registro) → usar slug de localStorage para resolver tenant
+    const tenantSlug = storage?.getItem('aela_tenant_slug');
+    if (tenantSlug) config.headers['X-Tenant-Slug'] = tenantSlug;
+  }
   return config;
 }
 

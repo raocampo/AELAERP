@@ -7,7 +7,7 @@ const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { crearAsientoContable, crearAsientoNominaPeriodo, round2 } = require('../utils/contabilidad');
 const { CATEGORIAS: CATEGORIAS_CONFIG_REFERENCIA, obtenerCatalogoReferencias } = require('../utils/catalogosCuentasReferencia');
-const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
+const { sembrarPlanCuentasBase, PLAN_CUENTAS_BASE } = require('../utils/planCuentasBase');
 const { sembrarPlanSupercias }  = require('../utils/planCuentasSupercias');
 const { parsearBuffer, parsearPlanCuentas, generarPlantillaPlanCuentas } = require('../utils/importarPlanCuentas');
 
@@ -1176,6 +1176,60 @@ router.post('/plan-cuentas/semilla', async (req, res) => {
   } catch (error) {
     console.error('POST /contabilidad/plan-cuentas/semilla:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo instalar el plan de cuentas base' });
+  }
+});
+
+// POST /api/contabilidad/plan-cuentas/restaurar-base
+// Restaura el plan AELA: elimina cuentas sin movimientos que no están en el plan base,
+// luego hace upsert del plan base completo. Deja intactas las cuentas con movimientos.
+router.post('/plan-cuentas/restaurar-base', autorizarPermiso('contabilidad.gestionar'), async (req, res) => {
+  try {
+    const db        = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const codigosBase = new Set(PLAN_CUENTAS_BASE.map((c) => c.codigo));
+
+    // 1. Obtener cuentas fuera del plan base
+    const cuentasActuales = await db.plan_cuentas.findMany({
+      where: { empresaId },
+      select: { id: true, codigo: true, nombre: true },
+    });
+    const aEliminar = cuentasActuales
+      .filter((c) => !codigosBase.has(c.codigo))
+      .sort((a, b) => b.codigo.localeCompare(a.codigo)); // hijos antes que padres
+
+    let eliminadas = 0;
+    const noEliminadas = [];
+
+    for (const cuenta of aEliminar) {
+      const tieneMovimientos = await db.asientos_contables_detalle.count({
+        where: { cuentaId: cuenta.id },
+      });
+      if (tieneMovimientos > 0) {
+        noEliminadas.push({ codigo: cuenta.codigo, nombre: cuenta.nombre, razon: 'tiene movimientos contables' });
+        continue;
+      }
+      // Verificar otras referencias (bancos, configuración, anticipos...)
+      try {
+        await db.plan_cuentas.delete({ where: { id: cuenta.id } });
+        eliminadas++;
+      } catch {
+        noEliminadas.push({ codigo: cuenta.codigo, nombre: cuenta.nombre, razon: 'referenciada por otros registros' });
+      }
+    }
+
+    // 2. Sembrar / actualizar plan base
+    const resultado = await db.$transaction(async (tx) =>
+      sembrarPlanCuentasBase(tx, empresaId, { overwriteExisting: true })
+    );
+
+    res.json({
+      success: true,
+      mensaje: `Plan base AELA restaurado: ${resultado.creadas} creadas, ${resultado.actualizadas} actualizadas, ${eliminadas} cuentas extra eliminadas${noEliminadas.length ? `, ${noEliminadas.length} no eliminadas (tienen movimientos)` : ''}`,
+      data: { ...resultado, eliminadas, noEliminadas },
+    });
+  } catch (error) {
+    console.error('POST /contabilidad/plan-cuentas/restaurar-base:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo restaurar el plan base' });
   }
 });
 

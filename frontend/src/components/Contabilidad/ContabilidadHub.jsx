@@ -46,6 +46,7 @@ const ContabilidadHub = () => {
   const [planLoading, setPlanLoading] = useState(false);
   const [instalandoPlanBase, setInstalandoPlanBase] = useState(false);
   const [instalandoSupercias, setInstalandoSupercias] = useState(false);
+  const [restaurandoPlanBase, setRestaurandoPlanBase] = useState(false);
   const [planFiltros, setPlanFiltros] = useState({ q: '', tipo: '', activo: 'todos', soloMovimiento: false });
 
   const [importPC, setImportPC] = useState({ abierto: false, archivo: null, preview: null, loading: false, resultado: null, reemplazar: false, dragging: false });
@@ -584,6 +585,31 @@ const ContabilidadHub = () => {
       toast.error(error.response?.data?.mensaje || 'No se pudo instalar el plan de cuentas base');
     } finally {
       setInstalandoPlanBase(false);
+    }
+  };
+
+  const restaurarPlanBase = async () => {
+    if (!window.confirm(
+      'Esta acción elimina las cuentas que NO forman parte del plan base AELA y que no tienen movimientos contables, ' +
+      'luego restaura el plan base completo.\n\n' +
+      'Las cuentas con movimientos contables NO se eliminan.\n\n' +
+      '¿Desea continuar?'
+    )) return;
+    setRestaurandoPlanBase(true);
+    try {
+      const res = await api.post('/contabilidad/plan-cuentas/restaurar-base');
+      const info = res.data?.data || {};
+      toast.success(res.data?.mensaje || 'Plan base AELA restaurado');
+      if (info.noEliminadas?.length > 0) {
+        toast.info(`${info.noEliminadas.length} cuentas con movimientos no se eliminaron (se conservan)`);
+      }
+      await cargarPlan();
+      await cargarEstadoPlan();
+      await cargar();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo restaurar el plan base');
+    } finally {
+      setRestaurandoPlanBase(false);
     }
   };
 
@@ -1990,6 +2016,14 @@ const ContabilidadHub = () => {
                   </button>
                   <button className="btn-secondary" onClick={() => instalarPlanBase(true)} disabled={instalandoPlanBase} title="Actualiza nombres y estructura AELA base">
                     Sincronizar AELA
+                  </button>
+                  <button
+                    onClick={restaurarPlanBase}
+                    disabled={restaurandoPlanBase}
+                    title="Elimina cuentas sin movimientos que no son del plan AELA y restaura el plan base completo"
+                    style={{ background: '#b45309', color: '#fff', border: 'none', borderRadius: '.4rem', padding: '.35rem .75rem', cursor: 'pointer', fontSize: '.82rem', fontWeight: 600 }}
+                  >
+                    {restaurandoPlanBase ? 'Restaurando...' : '↩ Restaurar plan AELA'}
                   </button>
                   <button className="btn-secondary" onClick={() => instalarPlanSupercias(false)} disabled={instalandoSupercias} title="Agrega cuentas NIIF Supercias faltantes">
                     {instalandoSupercias ? 'Procesando...' : 'Cargar plan NIIF'}
