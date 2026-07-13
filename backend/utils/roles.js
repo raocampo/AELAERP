@@ -44,8 +44,8 @@ const ROLE_ALIASES = {
 const PERMISSIONS = {
   'usuarios.gestionar': ['admin'],
   'empresas.gestionar': ['admin'],
-  'sri.configurar': ['admin'],
-  'sistema.configurar': ['admin'],
+  'sri.configurar':     ['admin', 'contador'],
+  'sistema.configurar': ['admin', 'contador'],
 
   'facturacion.ver':    ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],
   'facturacion.emitir': ['admin', 'supervisor', 'facturador', 'secretaria'],
