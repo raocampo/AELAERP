@@ -48,6 +48,7 @@ const DETALLE_VACIO = {
 // ─── Cálculo de totales ───────────────────────────────────────────────────────
 
 function calcularTotales(detalles) {
+  // Acumular con precisión completa (precios hasta 4 dec), redondear solo al final
   let sub0 = 0, sub5 = 0, sub15 = 0, totalDesc = 0, totalIva = 0;
   detalles.forEach(d => {
     const cant   = parseFloat(d.cantidad)       || 0;
@@ -433,7 +434,7 @@ export default function FormProforma() {
                         </select>
                       </td>
                       <td className="prf-td-total">
-                        ${total.toFixed(2)}
+                        ${total.toFixed(4)}
                       </td>
                       <td>
                         <button type="button" className="prf-btn-del" onClick={() => eliminarLinea(i)}>✕</button>

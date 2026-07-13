@@ -63,6 +63,8 @@ const mapearIva = (tarifaIva) => {
 };
 
 // ─── Cálculo de totales ───────────────────────────────────────────────────────
+// Acumulamos con precisión completa (precios hasta 4 dec) y solo redondeamos al final.
+// El SRI exige totales en 2 dec; los precios unitarios admiten hasta 6 dec en el XML.
 const calcularTotales = (detalles) => {
   let sub0 = 0, sub5 = 0, sub15 = 0, subNoObj = 0, subExento = 0, totalDesc = 0, totalIva = 0;
   detalles.forEach(d => {
@@ -70,15 +72,16 @@ const calcularTotales = (detalles) => {
     const precio = parseFloat(d.precioUnitario) || 0;
     const desc   = parseFloat(d.descuento)      || 0;
     const ivaPct = parseInt(d.ivaPorcentaje)    || 0;
-    const sub    = cant * precio - desc;
+    const sub    = cant * precio - desc; // precisión completa, no redondear aquí
     totalDesc += desc;
     if (ivaPct === 0)  sub0      += sub;
     if (ivaPct === 5)  sub5      += sub;
     if (ivaPct === 15) sub15     += sub;
-    if (ivaPct === 6)  subNoObj  += sub; // No Objeto
-    if (ivaPct === 7)  subExento += sub; // Exento
-    if (ivaPct <= 15)  totalIva  += sub * (ivaPct / 100); // 6/7 tienen 0% efectivo
+    if (ivaPct === 6)  subNoObj  += sub;
+    if (ivaPct === 7)  subExento += sub;
+    if (ivaPct <= 15)  totalIva  += sub * (ivaPct / 100);
   });
+  // Redondear solo al final para respetar el SRI (2 dec en totales)
   const importeTotal = sub0 + sub5 + sub15 + subNoObj + subExento + totalIva;
   return {
     subSinImpuestos: parseFloat((sub0 + sub5 + sub15 + subNoObj + subExento).toFixed(2)),
@@ -728,7 +731,7 @@ const FormFactura = () => {
                 const cant   = parseFloat(det.cantidad)       || 0;
                 const precio = parseFloat(det.precioUnitario) || 0;
                 const desc   = parseFloat(det.descuento)      || 0;
-                const sub    = (cant * precio - desc).toFixed(2);
+                const sub    = (cant * precio - desc).toFixed(4);
                 return (
                   <div key={idx} className="fact-det-row">
                     <input style={{ flex: '0 0 66px' }} value={det.codigoPrincipal}
@@ -745,11 +748,11 @@ const FormFactura = () => {
                       value={det.descripcion}
                       onChange={e => actualizarDetalle(idx, 'descripcion', e.target.value)}
                       placeholder="Descripción" required />
-                    <input type="number" min="0" step="0.01"
-                      style={{ flex: '0 0 62px', textAlign: 'right' }}
+                    <input type="number" min="0" step="0.0001"
+                      style={{ flex: '0 0 72px', textAlign: 'right' }}
                       value={det.precioUnitario}
                       onChange={e => actualizarDetalle(idx, 'precioUnitario', e.target.value)}
-                      placeholder="0.00" required />
+                      placeholder="0.0000" required />
                     <select style={{ flex: '0 0 46px' }} value={det.ivaPorcentaje}
                       onChange={e => actualizarDetalle(idx, 'ivaPorcentaje', parseInt(e.target.value))}>
                       {IVA_OPCIONES.map(o => <option key={o.valor} value={o.valor}>{o.label}</option>)}

@@ -203,15 +203,18 @@ function generarXMLFactura(data, config) {
     const desc    = parseFloat(det.descuento) || 0;
     const ivaPct  = parseInt(det.ivaPorcentaje) || 0; // 0, 5, 12, 15, 6 (NoObjeto), 7 (Exento)
 
-    const subtotalLinea = parseFloat(((cant * precio) - desc).toFixed(2));
-    const ivaLinea      = parseFloat((subtotalLinea * (IVA_TARIFA[ivaPct] ?? 0)).toFixed(2));
+    // Calcular con precisión completa para evitar drift al acumular con precios de 4+ decimales.
+    // El XML del SRI pide precioTotalSinImpuesto e ivaValor en 2 decimales por línea,
+    // pero la acumulación debe hacerse en alta precisión y redondear solo al final.
+    const subtotalLineaFull = (cant * precio) - desc;
+    const ivaLineaFull      = subtotalLineaFull * (IVA_TARIFA[ivaPct] ?? 0);
 
     totalDesc += desc;
-    if (ivaPct === 0)                subtotal0    += subtotalLinea;
-    if (ivaPct === 5)                subtotal5    += subtotalLinea;
-    if (ivaPct === 15)               subtotal15   += subtotalLinea;
-    if (ivaPct === 6 || ivaPct === 7) subtotalNOIva += subtotalLinea;
-    totalIva  += ivaLinea;
+    if (ivaPct === 0)                subtotal0    += subtotalLineaFull;
+    if (ivaPct === 5)                subtotal5    += subtotalLineaFull;
+    if (ivaPct === 15)               subtotal15   += subtotalLineaFull;
+    if (ivaPct === 6 || ivaPct === 7) subtotalNOIva += subtotalLineaFull;
+    totalIva  += ivaLineaFull;
 
     // No Objeto (6) y Exento (7) tienen tarifa display 0.00
     const tarifaDisplay = (ivaPct === 6 || ivaPct === 7) ? '0.00' : ivaPct.toFixed(2);
@@ -222,12 +225,12 @@ function generarXMLFactura(data, config) {
       cantidad:        cant.toFixed(2),
       precioUnitario:  precio.toFixed(6),
       descuento:       desc.toFixed(2),
-      precioTotalSinImpuesto: subtotalLinea.toFixed(2),
+      precioTotalSinImpuesto: subtotalLineaFull.toFixed(2),
       ivaCodigo:       '2',  // 2 = IVA
       ivaCodPct:       IVA_CODIGO[ivaPct] || '0',
       ivaTarifa:       tarifaDisplay,
-      ivaBaseImponible: subtotalLinea.toFixed(2),
-      ivaValor:        ivaLinea.toFixed(2),
+      ivaBaseImponible: subtotalLineaFull.toFixed(2),
+      ivaValor:        ivaLineaFull.toFixed(2),
     };
   });
 
