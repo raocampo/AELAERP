@@ -89,6 +89,13 @@ export default function DetalleCompra() {
   const [modalEliminar, setModalEliminar] = useState(false);
   const [eliminando, setEliminando] = useState(false);
 
+  // Modal editar utilidad/PVP por ítem
+  const [modalItemPvp, setModalItemPvp] = useState(false);
+  const [itemPvpIndex, setItemPvpIndex] = useState(null);
+  const [itemPvpUtilidad, setItemPvpUtilidad] = useState('');
+  const [itemPvpPvp, setItemPvpPvp] = useState('');
+  const [guardandoItemPvp, setGuardandoItemPvp] = useState(false);
+
   // Modal cuenta contable de gasto
   const [modalCuenta, setModalCuenta] = useState(false);
   const [cuentas, setCuentas] = useState([]);
@@ -263,6 +270,52 @@ export default function DetalleCompra() {
       setModalEliminar(false);
     } finally {
       setEliminando(false);
+    }
+  };
+
+  const abrirItemPvp = (index) => {
+    const detalle = parseJsonField(compra.detalles, [])[index];
+    setItemPvpIndex(index);
+    setItemPvpUtilidad(detalle?.utilidadPct != null ? String(detalle.utilidadPct) : '');
+    setItemPvpPvp(detalle?.precioVentaReferencial != null ? String(detalle.precioVentaReferencial) : '');
+    setModalItemPvp(true);
+  };
+
+  const handleItemPvpChange = (campo, valor) => {
+    if (campo === 'utilidad') {
+      setItemPvpUtilidad(valor);
+      const detalles = parseJsonField(compra.detalles, []);
+      const costo = Number(detalles[itemPvpIndex]?.precioUnitario || 0);
+      const pct = parseFloat(valor);
+      if (costo > 0 && !Number.isNaN(pct)) {
+        setItemPvpPvp((costo * (1 + pct / 100)).toFixed(4));
+      }
+    } else {
+      setItemPvpPvp(valor);
+      const detalles = parseJsonField(compra.detalles, []);
+      const costo = Number(detalles[itemPvpIndex]?.precioUnitario || 0);
+      const pvp = parseFloat(valor);
+      if (costo > 0 && pvp > 0) {
+        setItemPvpUtilidad((((pvp / costo) - 1) * 100).toFixed(2));
+      }
+    }
+  };
+
+  const guardarItemPvp = async () => {
+    setGuardandoItemPvp(true);
+    try {
+      await api.patch(`/compras/${id}/item-utilidad`, {
+        itemIndex: itemPvpIndex,
+        utilidadPct: itemPvpUtilidad !== '' ? parseFloat(itemPvpUtilidad) : null,
+        precioVentaReferencial: itemPvpPvp !== '' ? parseFloat(itemPvpPvp) : null,
+      });
+      toast.success('Utilidad/PVP actualizado');
+      setModalItemPvp(false);
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo guardar');
+    } finally {
+      setGuardandoItemPvp(false);
     }
   };
 
@@ -575,6 +628,59 @@ export default function DetalleCompra() {
         </div>
       )}
 
+      {/* MODAL EDITAR UTILIDAD / PVP POR ÍTEM */}
+      {modalItemPvp && itemPvpIndex !== null && (() => {
+        const detalles = parseJsonField(compra.detalles, []);
+        const item = detalles[itemPvpIndex] || {};
+        const costo = Number(item.precioUnitario || 0);
+        return (
+          <div className="dc-modal-overlay" onClick={() => setModalItemPvp(false)}>
+            <div className="dc-modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+              <h3>Utilidad / PVP — ítem {itemPvpIndex + 1}</h3>
+              <p style={{ fontSize: '.85rem', color: '#64748b', marginBottom: '.75rem' }}>
+                <strong>{item.descripcion || item.codigoPrincipal}</strong><br />
+                Costo unitario: <strong>{fmtMoneda(costo)}</strong>
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem', marginBottom: '1rem' }}>
+                <label className="dc-modal-label" style={{ margin: 0 }}>
+                  Utilidad %
+                  <input
+                    className="dc-modal-input"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={itemPvpUtilidad}
+                    onChange={(e) => handleItemPvpChange('utilidad', e.target.value)}
+                    placeholder="Ej: 30"
+                  />
+                </label>
+                <label className="dc-modal-label" style={{ margin: 0 }}>
+                  PVP (precio venta)
+                  <input
+                    className="dc-modal-input"
+                    type="number"
+                    step="0.0001"
+                    min="0"
+                    value={itemPvpPvp}
+                    onChange={(e) => handleItemPvpChange('pvp', e.target.value)}
+                    placeholder="0.0000"
+                  />
+                </label>
+              </div>
+              <p style={{ fontSize: '.78rem', color: '#64748b', marginBottom: '.75rem' }}>
+                Cambia uno y el otro se calcula automáticamente. Al guardar se actualiza el catálogo de productos.
+              </p>
+              <div className="dc-modal-actions">
+                <button className="btn-secondary" onClick={() => setModalItemPvp(false)} disabled={guardandoItemPvp}>Cancelar</button>
+                <button className="btn-primary" onClick={guardarItemPvp} disabled={guardandoItemPvp}>
+                  {guardandoItemPvp ? 'Guardando…' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* MODAL CUENTA CONTABLE DE GASTO */}
       {modalCuenta && (() => {
         const filtradas = cuentas.filter((c) => {
@@ -764,8 +870,11 @@ export default function DetalleCompra() {
                 <th className="text-right">Desc.</th>
                 <th>IVA</th>
                 <th>Invent.</th>
+                <th className="text-right">Utilidad %</th>
+                <th className="text-right">PVP</th>
                 <th className="text-right">Subtotal</th>
                 <th className="text-right">Total</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -779,8 +888,25 @@ export default function DetalleCompra() {
                   <td className="text-right">{fmtMoneda(detalle.descuento)}</td>
                   <td><span className="detalle-compra-mini-badge">{Number(detalle.porcentajeIva || 0)}%</span></td>
                   <td>{detalle.inventariable ? 'Si' : 'No'}</td>
+                  <td className="text-right" style={{ color: detalle.utilidadPct != null ? '#059669' : '#94a3b8' }}>
+                    {detalle.utilidadPct != null ? `${Number(detalle.utilidadPct).toFixed(2)}%` : '—'}
+                  </td>
+                  <td className="text-right" style={{ color: detalle.precioVentaReferencial != null ? '#0284c7' : '#94a3b8' }}>
+                    {detalle.precioVentaReferencial != null ? fmtMoneda(detalle.precioVentaReferencial) : '—'}
+                  </td>
                   <td className="text-right">{fmtMoneda(detalle.subtotal)}</td>
                   <td className="text-right"><strong>{fmtMoneda(detalle.total)}</strong></td>
+                  <td>
+                    {!compra.anulada && (
+                      <button
+                        title="Editar utilidad y PVP"
+                        onClick={() => abrirItemPvp(index)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', padding: '0 .25rem', color: '#64748b' }}
+                      >
+                        ✏️
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

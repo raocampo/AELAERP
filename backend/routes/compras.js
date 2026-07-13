@@ -1641,6 +1641,66 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/compras/:id/item-utilidad — edita utilidadPct y precioVentaReferencial de un ítem del detalle
+router.patch('/:id/item-utilidad', autorizarPermiso('compras.gestionar'), async (req, res) => {
+  try {
+    const compraId  = parseInt(req.params.id, 10);
+    const empresaId = req.empresa.id;
+    const { itemIndex, utilidadPct, precioVentaReferencial } = req.body || {};
+
+    if (typeof itemIndex !== 'number' || itemIndex < 0) {
+      return res.status(400).json({ success: false, mensaje: 'itemIndex inválido' });
+    }
+
+    const compra = await prisma.facturas_compra.findFirst({ where: { id: compraId, empresaId } });
+    if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
+    if (compra.anulada) return res.status(400).json({ success: false, mensaje: 'La compra está anulada' });
+
+    const detalles = Array.isArray(compra.detalles)
+      ? [...compra.detalles]
+      : JSON.parse(compra.detalles || '[]');
+
+    if (itemIndex >= detalles.length) {
+      return res.status(400).json({ success: false, mensaje: `No existe ítem en posición ${itemIndex}` });
+    }
+
+    const item = { ...detalles[itemIndex] };
+    if (utilidadPct !== undefined) item.utilidadPct = utilidadPct !== null ? Number(parseFloat(utilidadPct).toFixed(4)) : null;
+    if (precioVentaReferencial !== undefined) item.precioVentaReferencial = precioVentaReferencial !== null ? Number(parseFloat(precioVentaReferencial).toFixed(4)) : null;
+    detalles[itemIndex] = item;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.facturas_compra.update({ where: { id: compraId }, data: { detalles } });
+
+      // Actualizar PVP del producto en catálogo si existe
+      if (item.precioVentaReferencial != null && Number(item.precioVentaReferencial) > 0) {
+        const prodId = item.productoId
+          ? parseInt(item.productoId, 10)
+          : null;
+        const prod = prodId
+          ? await tx.productos_servicios.findFirst({ where: { id: prodId, empresaId } })
+          : (item.codigoPrincipal
+              ? await tx.productos_servicios.findFirst({ where: { codigoPrincipal: item.codigoPrincipal, empresaId } })
+              : null);
+        if (prod) {
+          await tx.productos_servicios.update({
+            where: { id: prod.id },
+            data: {
+              precioUnitario: Number(parseFloat(item.precioVentaReferencial).toFixed(4)),
+              ...(item.precioUnitario != null ? { costoUnitario: Number(item.precioUnitario) } : {}),
+            },
+          });
+        }
+      }
+    });
+
+    res.json({ success: true, mensaje: 'Utilidad/PVP actualizado', detalles });
+  } catch (error) {
+    console.error('PATCH /compras/:id/item-utilidad:', error);
+    res.status(500).json({ success: false, mensaje: error.message || 'Error al actualizar ítem' });
+  }
+});
+
 // GET /api/compras/notas-credito — notas de crédito recibidas de proveedores (tipoDocumento '04')
 // Provienen del buzón SRI / docs_recibidos_otros
 router.get('/notas-credito', autorizarPermiso('compras.gestionar'), async (req, res) => {
