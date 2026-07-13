@@ -377,6 +377,12 @@ function TabMovimientos({ cuenta, initialTipo = '' }) {
 
   return (
     <div>
+      {!cuenta.cuentaContableId && (
+        <div style={{ padding: '8px 12px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 6, marginBottom: '0.75rem', fontSize: '0.84rem', color: '#92400e' }}>
+          ⚠️ Esta cuenta bancaria no tiene una cuenta contable vinculada — los movimientos no generarán asientos contables.
+          Edita la cuenta bancaria y asigna su <strong>Cuenta Contable</strong>.
+        </div>
+      )}
       {saldo && (
         <div className="saldo-resumen">
           <div className="saldo-item">

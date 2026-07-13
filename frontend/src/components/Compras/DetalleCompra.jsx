@@ -62,6 +62,8 @@ export default function DetalleCompra() {
   const [editSubtotal0, setEditSubtotal0] = useState('');
   const [editSubtotal15, setEditSubtotal15] = useState('');
   const [editTotalIva, setEditTotalIva] = useState('');
+  const [editEsGastoPersonal, setEditEsGastoPersonal] = useState(false);
+  const [editCategoriaGastoPersonal, setEditCategoriaGastoPersonal] = useState('');
   const [guardando, setGuardando] = useState(false);
 
   // Modal anular
@@ -153,6 +155,8 @@ export default function DetalleCompra() {
     setEditSubtotal0(String(compra?.subtotal0 ?? ''));
     setEditSubtotal15(String(compra?.subtotal15 ?? ''));
     setEditTotalIva(String(compra?.totalIva ?? ''));
+    setEditEsGastoPersonal(!!compra?.esGastoPersonal);
+    setEditCategoriaGastoPersonal(compra?.categoriaGastoPersonal || '');
     setModalEditar(true);
   };
 
@@ -162,6 +166,8 @@ export default function DetalleCompra() {
       const body = {
         observaciones: editObs,
         tipoGasto: editTipoGasto || null,
+        esGastoPersonal: editEsGastoPersonal,
+        categoriaGastoPersonal: editEsGastoPersonal ? (editCategoriaGastoPersonal || null) : null,
       };
       // Solo enviar subtotales si el usuario los modificó (no vacíos)
       if (editSubtotal0 !== '') body.subtotal0  = parseFloat(editSubtotal0)  || 0;
@@ -312,6 +318,36 @@ export default function DetalleCompra() {
         <div className="dc-modal-overlay">
           <div className="dc-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Editar compra {compra.numeroFactura}</h3>
+            {/* Gasto personal — excluye esta factura de la declaración IVA */}
+            <label className="dc-modal-label" style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={editEsGastoPersonal}
+                onChange={(e) => {
+                  setEditEsGastoPersonal(e.target.checked);
+                  if (!e.target.checked) setEditCategoriaGastoPersonal('');
+                }}
+                style={{ width: 16, height: 16, accentColor: '#f59e0b' }}
+              />
+              <span>Es gasto personal (excluir de declaración IVA F104)</span>
+            </label>
+            {editEsGastoPersonal && (
+              <label className="dc-modal-label" style={{ marginBottom: '.75rem' }}>
+                Categoría de gasto personal
+                <select
+                  style={{ width: '100%', padding: '.45rem .6rem', borderRadius: '.45rem', border: '1.5px solid #f59e0b', fontSize: '.9rem', marginTop: '.25rem' }}
+                  value={editCategoriaGastoPersonal}
+                  onChange={(e) => setEditCategoriaGastoPersonal(e.target.value)}
+                >
+                  <option value="">— Seleccione categoría —</option>
+                  <option value="alimentacion">Alimentación</option>
+                  <option value="salud">Salud</option>
+                  <option value="vivienda">Vivienda</option>
+                  <option value="vestimenta">Vestimenta</option>
+                  <option value="educacion">Educación y arte</option>
+                </select>
+              </label>
+            )}
             <label className="dc-modal-label">
               Tipo de gasto SRI
               <select
@@ -788,6 +824,15 @@ export default function DetalleCompra() {
             </div>
           )}
 
+          {compra.esGastoPersonal && (
+            <div className="detalle-compra-note" style={{ borderLeft: '4px solid #f59e0b', background: '#fffbeb' }}>
+              <span style={{ color: '#b45309' }}>Gasto personal — excluido de declaración IVA</span>
+              <p style={{ color: '#92400e' }}>
+                <strong>No se incluye en F104.</strong>
+                {compra.categoriaGastoPersonal && <> Categoría: <em>{compra.categoriaGastoPersonal}</em></>}
+              </p>
+            </div>
+          )}
           {compra.tipoGasto && (
             <div className="detalle-compra-note">
               <span>Tipo de gasto SRI</span>

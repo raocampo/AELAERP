@@ -887,6 +887,8 @@ router.post('/', async (req, res) => {
       crearProductosFaltantes = false,
       actualizarProductosExistentes = true,
       registrarEgresoCaja = false,
+      esGastoPersonal = false,
+      categoriaGastoPersonal,
     } = req.body || {};
 
     if (!limpiarTexto(tipoIdentificacionProveedor) || !limpiarTexto(identificacionProveedor) || !limpiarTexto(razonSocialProveedor)) {
@@ -991,6 +993,8 @@ router.post('/', async (req, res) => {
           xmlOrigen: limpiarTexto(xmlOrigen) || null,
           observaciones: limpiarTexto(observaciones) || null,
           tipoGasto: limpiarTexto(tipoGasto) || null,
+          esGastoPersonal: toBoolean(esGastoPersonal, false),
+          categoriaGastoPersonal: limpiarTexto(categoriaGastoPersonal) || null,
         },
       });
 
@@ -1206,12 +1210,15 @@ router.put('/:id', async (req, res) => {
     if (compra.anulada) return res.status(400).json({ success: false, mensaje: 'No se puede editar una compra anulada' });
 
     const { observaciones, proveedorId, fechaEmision, tipoGasto,
-            subtotal0, subtotal15, totalIva, cuentaGastoId } = req.body || {};
+            subtotal0, subtotal15, totalIva, cuentaGastoId,
+            esGastoPersonal, categoriaGastoPersonal } = req.body || {};
 
     const data = {};
     if (observaciones !== undefined) data.observaciones = limpiarTexto(observaciones) || null;
     if (proveedorId !== undefined) data.proveedorId = proveedorId ? parseInt(proveedorId, 10) : null;
     if (tipoGasto !== undefined) data.tipoGasto = limpiarTexto(tipoGasto) || null;
+    if (esGastoPersonal !== undefined) data.esGastoPersonal = toBoolean(esGastoPersonal, false);
+    if (categoriaGastoPersonal !== undefined) data.categoriaGastoPersonal = limpiarTexto(categoriaGastoPersonal) || null;
 
     if (cuentaGastoId !== undefined) {
       if (!cuentaGastoId) {

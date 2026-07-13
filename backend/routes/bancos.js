@@ -288,6 +288,7 @@ router.post('/:id/movimientos', autorizarPermiso('bancos.gestionar'), async (req
       },
     });
 
+    let advertenciaContable = null;
     if (cuentaContrapartidaId) {
       try {
         await crearAsientoMovimientoBancario({
@@ -299,13 +300,104 @@ router.post('/:id/movimientos', autorizarPermiso('bancos.gestionar'), async (req
         });
       } catch (contErr) {
         console.error('Error creando asiento de movimiento bancario:', contErr.message);
+        advertenciaContable = contErr.message;
       }
+    } else {
+      advertenciaContable = 'No se seleccionó cuenta contrapartida: el movimiento fue registrado sin asiento contable. Puede contabilizarlo después desde el detalle del movimiento.';
     }
 
-    res.status(201).json({ success: true, data: nuevo });
+    res.status(201).json({ success: true, data: nuevo, advertenciaContable });
   } catch (error) {
     console.error('POST /bancos/:id/movimientos:', error);
     res.status(500).json({ success: false, mensaje: 'Error al registrar movimiento' });
+  }
+});
+
+// POST /api/bancos/movimientos/:movId/contabilizar — crear asiento para un movimiento sin asiento
+router.post('/movimientos/:movId/contabilizar', autorizarPermiso('bancos.gestionar'), async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const movId = parseIntSafe(req.params.movId);
+    if (!movId) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const { cuentaContrapartidaId } = req.body;
+    if (!cuentaContrapartidaId) {
+      return res.status(400).json({ success: false, mensaje: 'Se requiere cuentaContrapartidaId para crear el asiento' });
+    }
+
+    const mov = await prisma.movimientos_bancarios.findFirst({ where: { id: movId, empresaId } });
+    if (!mov) return res.status(404).json({ success: false, mensaje: 'Movimiento no encontrado' });
+    if (mov.asientoId) return res.status(409).json({ success: false, mensaje: 'El movimiento ya tiene un asiento contable' });
+
+    const resultado = await crearAsientoMovimientoBancario({
+      movimientoId: mov.id,
+      cuentaContrapartidaId: parseIntSafe(cuentaContrapartidaId),
+      usuarioId: req.usuario?.id || null,
+      fecha: mov.fecha,
+      db: req.prisma,
+    });
+
+    res.json({ success: true, data: resultado, mensaje: 'Asiento contable creado correctamente' });
+  } catch (error) {
+    console.error('POST /bancos/movimientos/:movId/contabilizar:', error);
+    res.status(500).json({ success: false, mensaje: error.message || 'Error al contabilizar movimiento' });
+  }
+});
+
+// POST /api/bancos/:id/contabilizar-pendientes — contabilizar en lote todos los movimientos sin asiento
+router.post('/:id/contabilizar-pendientes', autorizarPermiso('bancos.gestionar'), async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const bancoId = parseIntSafe(req.params.id);
+    if (!bancoId) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const { cuentaContrapartidaId } = req.body;
+    if (!cuentaContrapartidaId) {
+      return res.status(400).json({ success: false, mensaje: 'Se requiere cuentaContrapartidaId' });
+    }
+
+    const cuenta = await prisma.bancos.findFirst({ where: { id: bancoId, empresaId } });
+    if (!cuenta) return res.status(404).json({ success: false, mensaje: 'Cuenta bancaria no encontrada' });
+    if (!cuenta.cuentaContableId) {
+      return res.status(400).json({
+        success: false,
+        mensaje: 'La cuenta bancaria no tiene cuenta contable vinculada. Vé a Bancos → Editar cuenta → asigna una Cuenta Contable primero.',
+      });
+    }
+
+    const pendientes = await prisma.movimientos_bancarios.findMany({
+      where: { bancoId, empresaId, asientoId: null },
+      orderBy: { fecha: 'asc' },
+    });
+
+    let contabilizados = 0;
+    const errores = [];
+
+    for (const mov of pendientes) {
+      try {
+        await crearAsientoMovimientoBancario({
+          movimientoId: mov.id,
+          cuentaContrapartidaId: parseIntSafe(cuentaContrapartidaId),
+          usuarioId: req.usuario?.id || null,
+          fecha: mov.fecha,
+          db: req.prisma,
+        });
+        contabilizados += 1;
+      } catch (e) {
+        errores.push({ movimientoId: mov.id, error: e.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      mensaje: `${contabilizados} de ${pendientes.length} movimientos contabilizados`,
+      contabilizados,
+      total: pendientes.length,
+      errores: errores.length > 0 ? errores : undefined,
+    });
+  } catch (error) {
+    console.error('POST /bancos/:id/contabilizar-pendientes:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al contabilizar movimientos pendientes' });
   }
 });
 
@@ -525,6 +617,7 @@ router.post('/:id/cheques', autorizarPermiso('cheques.gestionar'), async (req, r
       return nuevoCheque;
     });
 
+    let advertenciaContableCheque = null;
     if (cuentaContrapartidaId) {
       try {
         await crearAsientoMovimientoBancario({
@@ -536,10 +629,13 @@ router.post('/:id/cheques', autorizarPermiso('cheques.gestionar'), async (req, r
         });
       } catch (contErr) {
         console.error('Error creando asiento de cheque:', contErr.message);
+        advertenciaContableCheque = contErr.message;
       }
+    } else {
+      advertenciaContableCheque = 'Cheque registrado sin asiento contable. Puede contabilizarlo después desde Libro de Bancos.';
     }
 
-    res.status(201).json({ success: true, data: cheque });
+    res.status(201).json({ success: true, data: cheque, advertenciaContable: advertenciaContableCheque });
   } catch (error) {
     if (error.code === 'P2002') {
       return res.status(409).json({ success: false, mensaje: 'Ya existe un cheque con ese número en esta cuenta' });

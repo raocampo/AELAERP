@@ -385,6 +385,9 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "anticipos_proveedor_empresaId_idx"   ON "anticipos_proveedor"("empresaId")`,
   `CREATE INDEX IF NOT EXISTS "anticipos_proveedor_proveedorId_idx" ON "anticipos_proveedor"("proveedorId")`,
   `CREATE INDEX IF NOT EXISTS "anticipos_proveedor_fecha_idx"       ON "anticipos_proveedor"("fecha")`,
+  // Gastos personales en facturas de compra — excluir de declaración IVA F104 (2026-07-13)
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "esGastoPersonal"        BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "categoriaGastoPersonal" VARCHAR(30)`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

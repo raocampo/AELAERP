@@ -213,6 +213,24 @@ function F104View({ data, onRecargar }) {
             Compras y pide al proveedor que reemita el comprobante a nombre del RUC si corresponde.
           </div>
         )}
+        {meta.gastosPersonalesExcluidos > 0 && (
+          <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 6, background: '#fffbeb', border: '1px solid #f59e0b', fontSize: 12, color: '#92400e' }}>
+            ℹ️ {meta.gastosPersonalesExcluidos} compra(s) marcada(s) como <strong>gasto personal</strong> fueron excluidas
+            de esta declaración. Los gastos personales (alimentación, salud, vivienda, vestimenta, educación) no generan
+            crédito de IVA — son deducibles del Impuesto a la Renta (F102).
+          </div>
+        )}
+        {meta.desglose && (meta.desglose.liquidaciones0 > 0 || meta.desglose.liquidaciones15 > 0) && (
+          <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 6, background: '#f0f9ff', border: '1px solid #7dd3fc', fontSize: 12, color: '#075985' }}>
+            📊 Desglose de compras: facturas 0%: ${meta.desglose.facturasCompra0.toFixed(2)},
+            facturas 15%: ${meta.desglose.facturasCompra15.toFixed(2)};
+            liquidaciones 0%: ${meta.desglose.liquidaciones0.toFixed(2)},
+            liquidaciones 15%: ${meta.desglose.liquidaciones15.toFixed(2)}.
+            {(meta.desglose.liquidaciones0 > 0 || meta.desglose.liquidaciones15 > 0) && (
+              <> Las liquidaciones de compra son documentos separados (no aparecen en Facturas de Compra).</>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

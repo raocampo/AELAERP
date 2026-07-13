@@ -29,8 +29,8 @@ const PERMISSIONS = {
   'sistema.configurar': ['admin', 'contador'],
 
   'facturacion.ver':    ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],
-  'facturacion.emitir': ['admin', 'supervisor', 'facturador', 'secretaria'],
-  'facturacion.anular': ['admin', 'supervisor'],
+  'facturacion.emitir': ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],
+  'facturacion.anular': ['admin', 'supervisor', 'contador'],
 
   'compras.gestionar':        ['admin', 'supervisor', 'contador'],
   'retenciones.gestionar':    ['admin', 'supervisor', 'contador'],

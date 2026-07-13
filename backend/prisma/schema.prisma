@@ -571,6 +571,10 @@ model facturas_compra {
   // la cédula de una persona (no válido para declaraciones). NULL = se
   // desconoce (compras manuales/históricas sin XML de origen).
   receptorEsRuc                 Boolean?
+  // Gasto personal (persona natural): se excluye de la declaración F104 y del crédito tributario.
+  esGastoPersonal               Boolean   @default(false)
+  categoriaGastoPersonal        String?   @db.VarChar(30)
+  // alimentacion | salud | vivienda | vestimenta | educacion
   createdAt                     DateTime  @default(now())
   updatedAt                     DateTime  @updatedAt
 

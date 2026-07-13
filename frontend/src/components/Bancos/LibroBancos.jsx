@@ -7,6 +7,16 @@ function formatMoney(v) {
   return parseFloat(v || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function useCuentasContables() {
+  const [cuentas, setCuentas] = useState([]);
+  useEffect(() => {
+    api.get('/contabilidad/plan-cuentas', { params: { activo: true, soloMovimiento: true } })
+      .then((r) => setCuentas(r.data?.data?.flat || []))
+      .catch(() => {});
+  }, []);
+  return cuentas;
+}
+
 export default function LibroBancos() {
   const [cuentas, setCuentas] = useState([]);
   const [cuentaId, setCuentaId] = useState('');
@@ -19,6 +29,12 @@ export default function LibroBancos() {
   const [cargando, setCargando] = useState(false);
   const [seleccionados, setSeleccionados] = useState(new Set());
   const [guardando, setGuardando] = useState(false);
+
+  // Contabilización en lote
+  const [modalContabilizar, setModalContabilizar] = useState(false);
+  const [contabilizandoCuentaId, setContabilizandoCuentaId] = useState('');
+  const [contabilizando, setContabilizando] = useState(false);
+  const cuentasContables = useCuentasContables();
 
   useEffect(() => {
     api.get('/bancos').then((r) => {
@@ -95,6 +111,24 @@ export default function LibroBancos() {
     }
   };
 
+  const contabilizarPendientes = async () => {
+    if (!contabilizandoCuentaId) { alert('Selecciona la cuenta contrapartida'); return; }
+    setContabilizando(true);
+    try {
+      const r = await api.post(`/bancos/${cuentaId}/contabilizar-pendientes`, { cuentaContrapartidaId: contabilizandoCuentaId });
+      const { mensaje, errores } = r.data;
+      alert(mensaje + (errores?.length ? `\nErrores: ${errores.map((e) => `#${e.movimientoId}: ${e.error}`).join('\n')}` : ''));
+      setModalContabilizar(false);
+      await cargar();
+    } catch (e) {
+      alert(e.response?.data?.mensaje || 'Error al contabilizar');
+    } finally {
+      setContabilizando(false);
+    }
+  };
+
+  const pendientesSinAsiento = movimientos.filter((m) => !m.asientoId).length;
+
   const totalDebe = movimientos.reduce((s, m) => s + parseFloat(m.debe), 0);
   const totalHaber = movimientos.reduce((s, m) => s + parseFloat(m.haber), 0);
   const saldoFinal = saldoAnterior !== null ? saldoAnterior + totalDebe - totalHaber : null;
@@ -102,6 +136,38 @@ export default function LibroBancos() {
 
   return (
     <div>
+      {/* Modal contabilizar pendientes */}
+      {modalContabilizar && (
+        <div className="bancos-modal-overlay">
+          <div className="bancos-modal" style={{ maxWidth: 480 }}>
+            <h2>Contabilizar movimientos pendientes</h2>
+            <p style={{ fontSize: '0.88rem', color: 'var(--color-text-muted, #64748b)', marginBottom: '1rem' }}>
+              Se crearán asientos contables para los <strong>{pendientesSinAsiento}</strong> movimientos del período
+              que aún no tienen asiento. Selecciona la cuenta contrapartida (gastos, ingresos, cuentas por pagar, etc.).
+            </p>
+            <div className="form-group">
+              <label>Cuenta contrapartida *</label>
+              <select value={contabilizandoCuentaId} onChange={(e) => setContabilizandoCuentaId(e.target.value)}>
+                <option value="">— Seleccionar —</option>
+                {cuentasContables.map((c) => (
+                  <option key={c.id} value={c.id}>{c.codigo} — {c.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#b45309', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 6, padding: '8px 12px', marginBottom: '1rem' }}>
+              Nota: si los movimientos corresponden a distintos tipos de gastos/ingresos, es mejor contabilizarlos
+              individualmente. Esta operación aplica la misma contrapartida a todos.
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-ghost" onClick={() => setModalContabilizar(false)} disabled={contabilizando}>Cancelar</button>
+              <button className="btn btn-primary" onClick={contabilizarPendientes} disabled={contabilizando || !contabilizandoCuentaId}>
+                {contabilizando ? 'Contabilizando…' : 'Crear asientos'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filtros */}
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '1.25rem', padding: '1rem', background: 'var(--color-surface, #f8fafc)', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
         <div className="form-group" style={{ margin: 0 }}>
@@ -174,7 +240,7 @@ export default function LibroBancos() {
         </div>
       )}
 
-      {/* Acciones de conciliación */}
+      {/* Acciones de conciliación y contabilización */}
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem', alignItems: 'center' }}>
         <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted, #64748b)' }}>
           {seleccionados.size > 0 ? `${seleccionados.size} seleccionado${seleccionados.size > 1 ? 's' : ''}` : 'Seleccione movimientos'}
@@ -209,6 +275,15 @@ export default function LibroBancos() {
             Desconciliar todo
           </button>
         )}
+        {pendientesSinAsiento > 0 && (
+          <button
+            className="btn btn-sm"
+            style={{ background: '#f59e0b', color: '#fff', border: 'none' }}
+            onClick={() => setModalContabilizar(true)}
+          >
+            📒 Contabilizar ({pendientesSinAsiento} sin asiento)
+          </button>
+        )}
       </div>
 
       {/* Tabla de movimientos */}
@@ -231,7 +306,8 @@ export default function LibroBancos() {
                     onChange={(e) => setSeleccionados(e.target.checked ? new Set(movimientos.map((m) => m.id)) : new Set())}
                   />
                 </th>
-                <th style={{ width: '60px' }}>Conc.</th>
+                <th style={{ width: '50px' }}>Conc.</th>
+                <th style={{ width: '50px' }} title="Asiento contable">Cont.</th>
                 <th>N° Comprobante</th>
                 <th>Fecha</th>
                 <th>Tipo</th>
@@ -252,6 +328,11 @@ export default function LibroBancos() {
                     {m.conciliado
                       ? <span style={{ color: '#16a34a', fontWeight: 700, fontSize: '1rem' }}>✓</span>
                       : <span style={{ color: '#cbd5e1' }}>—</span>}
+                  </td>
+                  <td style={{ textAlign: 'center' }} title={m.asientoId ? `Asiento #${m.asientoId}` : 'Sin asiento contable'}>
+                    {m.asientoId
+                      ? <span style={{ color: '#16a34a', fontSize: '0.9rem' }}>📒</span>
+                      : <span style={{ color: '#f59e0b', fontSize: '0.9rem' }} title="Sin asiento — usa Contabilizar">⚠</span>}
                   </td>
                   <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{m.numero || '—'}</td>
                   <td>{formatFechaCorta(m.fecha)}</td>
@@ -276,7 +357,7 @@ export default function LibroBancos() {
             </tbody>
             <tfoot>
               <tr style={{ fontWeight: 700, borderTop: '2px solid #e2e8f0', background: 'var(--color-surface, #f8fafc)' }}>
-                <td colSpan="7" style={{ textAlign: 'right', padding: '0.5rem 0.75rem' }}>TOTALES DEL PERÍODO</td>
+                <td colSpan="8" style={{ textAlign: 'right', padding: '0.5rem 0.75rem' }}>TOTALES DEL PERÍODO</td>
                 <td style={{ textAlign: 'right', padding: '0.5rem 0.75rem' }} className="monto-debe">${formatMoney(totalDebe)}</td>
                 <td style={{ textAlign: 'right', padding: '0.5rem 0.75rem' }} className="monto-haber">${formatMoney(totalHaber)}</td>
                 <td style={{ textAlign: 'right', padding: '0.5rem 0.75rem' }} className={saldoFinal !== null && saldoFinal < 0 ? 'saldo-negativo' : 'saldo-positivo'}>

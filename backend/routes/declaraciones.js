@@ -86,16 +86,27 @@ router.get('/f104', async (req, res) => {
     const ivaVentasNeto = parseFloat((ventasIva - ncIva).toFixed(2));
 
     // ── COMPRAS ─────────────────────────────────────────────────────────────────
-    // Se excluyen las compras facturadas a cédula (receptorEsRuc === false).
-    // receptorEsRuc null (compras manuales/históricas) SÍ se incluye.
-    // NOTA: { not: false } en Prisma/PostgreSQL excluye NULLs por SQL three-valued
-    // logic (NULL != false → NULL → falsy). Se usa OR explícito para incluirlos.
+    // Reglas de inclusión en el F104:
+    //   1. Excluir si receptorEsRuc === false (facturadas a cédula personal, no al RUC)
+    //   2. Excluir si esGastoPersonal === true (alimentación, salud, etc. — persona natural)
+    //   3. receptorEsRuc null (compras manuales/históricas sin XML) SÍ se incluye.
     const compras = await db.facturas_compra.findMany({
-      where: { empresaId, fechaEmision: filtroFecha, anulada: false, OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }] },
+      where: {
+        empresaId,
+        fechaEmision:    filtroFecha,
+        anulada:         false,
+        esGastoPersonal: { not: true },
+        OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }],
+      },
       select: {
         subtotal0: true, subtotal15: true, subtotal5: true,
         totalIva: true, importeTotal: true, retencionIVA: true,
       },
+    });
+
+    // Contar cuántas facturas de gastos personales fueron excluidas (para info al usuario)
+    const gastosPersonalesExcluidos = await db.facturas_compra.count({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, esGastoPersonal: true },
     });
 
     let comprasSubtotal0  = 0;
@@ -213,6 +224,14 @@ router.get('/f104', async (req, res) => {
         cantidadLiquidaciones: liquidaciones.length,
         cantidadRetencionesRecibidas: retencionesRecibidas.length,
         comprasExcluidasCedula,
+        gastosPersonalesExcluidos,
+        // Desglose para mostrar al usuario de dónde viene cada valor
+        desglose: {
+          facturasCompra0:    parseFloat(comprasSubtotal0.toFixed(2)),
+          facturasCompra15:   parseFloat(comprasSubtotal15.toFixed(2)),
+          liquidaciones0:     parseFloat(liqSubtotal0.toFixed(2)),
+          liquidaciones15:    parseFloat(liqSubtotal15.toFixed(2)),
+        },
       },
     };
 
