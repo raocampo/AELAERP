@@ -1336,14 +1336,18 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
       req,
     });
 
-    try {
-      await crearAsientoReversoFacturaAnulada({
-        facturaId: factura.id,
-        usuarioId: req.usuario.id,
-        fecha: new Date(),
-      });
-    } catch (contErr) {
-      console.error('Error creando asiento reverso por anulación:', contErr.message);
+    // El reverso solo aplica si NO se emitió NC — cuando hay NC, el asiento de
+    // la NC ya es el reverso contable correcto (doble reverso = doble contabilización).
+    if (!ncCreada) {
+      try {
+        await crearAsientoReversoFacturaAnulada({
+          facturaId: factura.id,
+          usuarioId: req.usuario.id,
+          fecha: new Date(),
+        });
+      } catch (contErr) {
+        console.error('Error creando asiento reverso por anulación:', contErr.message);
+      }
     }
 
     const mensaje = ncCreada

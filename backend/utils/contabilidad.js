@@ -1663,49 +1663,31 @@ async function crearAsientoNotaCreditoEmitida({ notaCreditoId, usuarioId, fecha 
 
   const referencia = `NC-${notaCredito.id}`;
   const existente = await prisma.asientos_contables.findFirst({
-    where: {
-      empresaId: notaCredito.empresaId,
-      tipo: 'NC',
-      referencia,
-    },
+    where: { empresaId: notaCredito.empresaId, tipo: 'NC', referencia },
   });
   if (existente) return { asiento: existente, creado: false };
 
-  const total = round2(notaCredito.importeTotal);
-  const iva = round2(notaCredito.totalIva || 0);
+  const total    = round2(notaCredito.importeTotal);
+  const iva      = round2(notaCredito.totalIva || 0);
   const subtotal = round2(notaCredito.totalSinImpuestos || (total - iva));
 
-  const cuentaCxC = await ensureCuentaMovimiento({
-    empresaId: notaCredito.empresaId,
-    codigo: '1.1.03.001',
-    nombre: 'Cuentas por Cobrar',
-    tipo: 'ACTIVO',
-    naturaleza: 'DEBITO',
+  const mapaVentas = await obtenerCuentasReferenciaConfiguradas({
+    empresaId: notaCredito.empresaId, categoria: 'VENTAS',
   });
+  const resolver = (ref, codDef, nomDef, tipoDef, natDef) =>
+    _resolverCuentaPorCodigo({ empresaId: notaCredito.empresaId, mapaConfig: mapaVentas, codigoReferencia: ref, codigoDefault: codDef, nombreDefault: nomDef, tipoDefault: tipoDef, naturalezaDefault: natDef });
 
-  const cuentaVentas = await ensureCuentaMovimiento({
-    empresaId: notaCredito.empresaId,
-    codigo: '4.1.01.001',
-    nombre: 'Ventas Servicios',
-    tipo: 'INGRESO',
-    naturaleza: 'CREDITO',
-  });
+  const cuentaCxC       = await resolver('CXC_CLIENTES',    '1.1.03.001', 'Cuentas por Cobrar Clientes', 'ACTIVO',  'DEBITO');
+  const cuentaVentas    = await resolver('VENTAS_GRAVADAS',  '4.1.01.001', 'Ventas Netas Gravadas',       'INGRESO', 'CREDITO');
+  const cuentaIvaVentas = await resolver('IVA_VENTAS',       '2.1.01.001', 'IVA Ventas por Pagar',        'PASIVO',  'CREDITO');
 
-  const cuentaIvaVentas = await ensureCuentaMovimiento({
-    empresaId: notaCredito.empresaId,
-    codigo: '2.1.01.001',
-    nombre: 'IVA Ventas por Pagar',
-    tipo: 'PASIVO',
-    naturaleza: 'CREDITO',
-  });
-
+  const nn = notaCredito.numeroNC;
   const detalles = [
-    { cuentaId: cuentaVentas.id, descripcion: `Reverso ventas nota de crédito ${notaCredito.numeroNC}`, debe: subtotal, haber: 0 },
-    { cuentaId: cuentaCxC.id, descripcion: `Disminución CxC por nota de crédito ${notaCredito.numeroNC}`, debe: 0, haber: total },
+    { cuentaId: cuentaVentas.id,    descripcion: `Reverso ventas NC ${nn}`,       debe: subtotal, haber: 0     },
+    { cuentaId: cuentaCxC.id,       descripcion: `Disminución CxC por NC ${nn}`,  debe: 0,        haber: total },
   ];
-
   if (iva > 0) {
-    detalles.splice(1, 0, { cuentaId: cuentaIvaVentas.id, descripcion: `Reverso IVA nota de crédito ${notaCredito.numeroNC}`, debe: iva, haber: 0 });
+    detalles.splice(1, 0, { cuentaId: cuentaIvaVentas.id, descripcion: `Reverso IVA NC ${nn}`, debe: iva, haber: 0 });
   }
 
   const asiento = await crearAsientoContable({
