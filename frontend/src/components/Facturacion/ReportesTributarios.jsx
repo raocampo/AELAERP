@@ -75,13 +75,19 @@ export default function ReportesTributarios() {
 
     const resumenRows = [
       ['Período', data.periodo.label],
-      ['Facturas', data.resumen.ventas.cantidadFacturas],
-      ['Total facturado', fmt(data.resumen.ventas.importeTotal)],
-      ['Notas de crédito', data.resumen.notasCredito.cantidad],
-      ['Total NC', fmt(data.resumen.notasCredito.importeTotal)],
-      ['Retenciones', data.resumen.retenciones.cantidad],
-      ['Retención renta', fmt(data.resumen.retenciones.retencionRentaCobrada)],
-      ['Retención IVA', fmt(data.resumen.retenciones.retencionIvaCobrada)],
+      ['Facturas emitidas', data.resumen.ventas.cantidadFacturas],
+      ['Total facturado (ventas)', fmt(data.resumen.ventas.importeTotal)],
+      ['Notas de crédito emitidas', data.resumen.notasCredito.cantidad],
+      ['Total NC emitidas', fmt(data.resumen.notasCredito.importeTotal)],
+      ['Compras registradas', data.resumen.compras.cantidad],
+      ['Total facturado (compras)', fmt(data.resumen.compras.importeTotal)],
+      ['Notas de crédito recibidas', data.resumen.notasCreditoRecibidas.cantidad],
+      ['Total NC recibidas', fmt(data.resumen.notasCreditoRecibidas.importeTotal)],
+      ['Retenciones emitidas (F103)', data.resumen.retenciones.cantidad],
+      ['Retención renta emitida', fmt(data.resumen.retenciones.retencionRentaCobrada)],
+      ['Retención IVA emitida', fmt(data.resumen.retenciones.retencionIvaCobrada)],
+      ['Retención IVA recibida de clientes (crédito F104)', fmt(data.resumen.retencionesRecibidas.retencionIva)],
+      ['Crédito fiscal de compras (IVA)', fmt(data.resumen.ivaCreditoFiscal)],
       ['IVA neto', fmt(data.resumen.ivaNeto)],
     ];
 
@@ -126,6 +132,24 @@ export default function ReportesTributarios() {
       ];
     });
 
+    const comprasRows = (data.compras || []).map((c) => ([
+      c.numeroFactura,
+      fmtFecha(c.fechaEmision),
+      c.razonSocialProveedor,
+      c.identificacionProveedor,
+      fmt(c.subtotal0),
+      fmt(c.subtotal15),
+      fmt(c.totalIva),
+      fmt(c.importeTotal),
+    ]));
+
+    const ncRecibidasRows = (data.notasCreditoRecibidas || []).map((nc) => ([
+      fmtFecha(nc.fechaEmision),
+      nc.razonSocialEmisor,
+      nc.rucEmisor,
+      fmt(nc.importeTotal),
+    ]));
+
     printHtmlReport({
       title: 'Reporte Tributario SRI',
       subtitle: data.periodo.label,
@@ -140,14 +164,28 @@ export default function ReportesTributarios() {
           ),
         },
         {
-          title: 'Notas de Crédito',
+          title: 'Notas de Crédito Emitidas',
           html: buildDataTable(
             ['Número NC', 'Fecha', 'Comprador', 'Identificación', 'Base', 'IVA', 'Total NC', 'Estado'],
             notasRows,
           ),
         },
         {
-          title: 'Retenciones',
+          title: 'Compras',
+          html: buildDataTable(
+            ['Número', 'Fecha', 'Proveedor', 'Identificación', 'Base 0%', 'Base 15%', 'IVA', 'Total'],
+            comprasRows,
+          ),
+        },
+        {
+          title: 'Notas de Crédito Recibidas',
+          html: buildDataTable(
+            ['Fecha', 'Proveedor', 'RUC', 'Total'],
+            ncRecibidasRows,
+          ),
+        },
+        {
+          title: 'Retenciones Emitidas',
           html: buildDataTable(
             ['Número', 'Fecha', 'Proveedor', 'Identificación', 'Ret. Renta', 'Ret. IVA', 'Total', 'Estado'],
             retRows,
@@ -224,9 +262,9 @@ export default function ReportesTributarios() {
               </div>
             </div>
 
-            {/* Notas de Crédito */}
+            {/* Notas de Crédito Emitidas */}
             <div className="rep-card rep-card-nc">
-              <div className="rep-card-titulo">Notas de Crédito</div>
+              <div className="rep-card-titulo">Notas de Crédito Emitidas</div>
               <div className="rep-card-periodo">{data.periodo.label}</div>
               <div className="rep-card-rows">
                 <div className="rep-card-row">
@@ -247,10 +285,58 @@ export default function ReportesTributarios() {
               </div>
             </div>
 
-            {/* Retenciones */}
+            {/* Compras */}
+            <div className="rep-card rep-card-compras">
+              <div className="rep-card-titulo">Compras</div>
+              <div className="rep-card-periodo">{data.periodo.label}</div>
+              <div className="rep-card-rows">
+                <div className="rep-card-row">
+                  <span>Base 0%</span>
+                  <strong>{fmt(data.resumen.compras.subtotal0)}</strong>
+                </div>
+                <div className="rep-card-row">
+                  <span>Base 15%</span>
+                  <strong>{fmt(data.resumen.compras.subtotal15)}</strong>
+                </div>
+                <div className="rep-card-row rep-card-row-total">
+                  <span>IVA en compras</span>
+                  <strong>{fmt(data.resumen.compras.totalIva)}</strong>
+                </div>
+                <div className="rep-card-row rep-card-row-subtotal">
+                  <span>Total facturado</span>
+                  <strong>{fmt(data.resumen.compras.importeTotal)}</strong>
+                </div>
+                {data.resumen.compras.liquidaciones.cantidad > 0 && (
+                  <div className="rep-card-row">
+                    <span>+ {data.resumen.compras.liquidaciones.cantidad} liquidación(es) de compra</span>
+                    <strong>{fmt(data.resumen.compras.liquidaciones.totalIva)} IVA</strong>
+                  </div>
+                )}
+                <div className="rep-card-badge">
+                  {data.resumen.compras.cantidad} facturas de compra
+                </div>
+              </div>
+            </div>
+
+            {/* Notas de Crédito Recibidas */}
+            <div className="rep-card rep-card-ncr">
+              <div className="rep-card-titulo">Notas de Crédito Recibidas</div>
+              <div className="rep-card-periodo">{data.periodo.label}</div>
+              <div className="rep-card-rows">
+                <div className="rep-card-row rep-card-row-subtotal">
+                  <span>Total NC de proveedores</span>
+                  <strong>{fmt(data.resumen.notasCreditoRecibidas.importeTotal)}</strong>
+                </div>
+                <div className="rep-card-badge">
+                  {data.resumen.notasCreditoRecibidas.cantidad} notas de crédito
+                </div>
+              </div>
+            </div>
+
+            {/* Retenciones emitidas — obligación F103, no forman parte del IVA neto */}
             <div className="rep-card rep-card-ret">
               <div className="rep-card-titulo">Retenciones Emitidas</div>
-              <div className="rep-card-periodo">{data.periodo.label}</div>
+              <div className="rep-card-periodo">{data.periodo.label} — obligación F103</div>
               <div className="rep-card-rows">
                 <div className="rep-card-row">
                   <span>Ret. de Renta (IR)</span>
@@ -280,8 +366,12 @@ export default function ReportesTributarios() {
                   <span>- {fmt(data.resumen.notasCredito.totalIva)}</span>
                 </div>
                 <div className="rep-formula-row rep-formula-menos">
-                  <span>(-) Ret. de IVA emitidas</span>
-                  <span>- {fmt(data.resumen.retenciones.retencionIvaCobrada)}</span>
+                  <span>(-) Crédito fiscal de compras{data.resumen.compras.liquidaciones.cantidad > 0 ? ' + liquidaciones' : ''}</span>
+                  <span>- {fmt(data.resumen.ivaCreditoFiscal)}</span>
+                </div>
+                <div className="rep-formula-row rep-formula-menos">
+                  <span>(-) Ret. IVA que le hicieron sus clientes</span>
+                  <span>- {fmt(data.resumen.retencionesRecibidas.retencionIva)}</span>
                 </div>
                 <div className="rep-formula-total">
                   <span>IVA NETO</span>
@@ -291,7 +381,8 @@ export default function ReportesTributarios() {
                 </div>
               </div>
               <p className="rep-iva-nota">
-                * Este resumen es referencial. Consulte a su contador para la declaración oficial.
+                * Referencial y sin crédito tributario arrastrado de meses anteriores.
+                Consulte Declaraciones → F104 para la declaración oficial.
               </p>
             </div>
           </div>
@@ -354,11 +445,11 @@ export default function ReportesTributarios() {
             )}
           </div>
 
-          {/* ── TABLA: NOTAS DE CRÉDITO ──────────────────────────────────────── */}
+          {/* ── TABLA: NOTAS DE CRÉDITO EMITIDAS ─────────────────────────────── */}
           {data.notasCredito.length > 0 && (
             <div className="rep-seccion">
               <h3 className="rep-seccion-titulo">
-                Notas de Crédito — {data.periodo.label}
+                Notas de Crédito Emitidas — {data.periodo.label}
                 <span className="rep-sec-count">{data.notasCredito.length}</span>
               </h3>
               <div className="rep-tabla-wrap">
@@ -393,6 +484,95 @@ export default function ReportesTributarios() {
                       </tr>
                     ))}
                   </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── TABLA: COMPRAS ────────────────────────────────────────────────── */}
+          <div className="rep-seccion">
+            <h3 className="rep-seccion-titulo">
+              Compras registradas — {data.periodo.label}
+              <span className="rep-sec-count">{data.compras.length}</span>
+            </h3>
+            {data.compras.length === 0 ? (
+              <p className="rep-empty">No hay compras deducibles en este período.</p>
+            ) : (
+              <div className="rep-tabla-wrap">
+                <table className="rep-tabla">
+                  <thead>
+                    <tr>
+                      <th>Número</th>
+                      <th>Fecha</th>
+                      <th>Proveedor</th>
+                      <th>Identificación</th>
+                      <th>Base 0%</th>
+                      <th>Base 15%</th>
+                      <th>IVA</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.compras.map(c => (
+                      <tr key={c.id}>
+                        <td className="rep-num">{c.numeroFactura}</td>
+                        <td>{fmtFecha(c.fechaEmision)}</td>
+                        <td>{c.razonSocialProveedor}</td>
+                        <td>{c.identificacionProveedor}</td>
+                        <td className="rep-money">{fmt(c.subtotal0)}</td>
+                        <td className="rep-money">{fmt(c.subtotal15)}</td>
+                        <td className="rep-money">{fmt(c.totalIva)}</td>
+                        <td className="rep-money rep-money-total">{fmt(c.importeTotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="rep-tfoot">
+                      <td colSpan={4}><strong>TOTALES</strong></td>
+                      <td className="rep-money"><strong>{fmt(data.resumen.compras.subtotal0)}</strong></td>
+                      <td className="rep-money"><strong>{fmt(data.resumen.compras.subtotal15)}</strong></td>
+                      <td className="rep-money"><strong>{fmt(data.resumen.compras.totalIva)}</strong></td>
+                      <td className="rep-money rep-money-total"><strong>{fmt(data.resumen.compras.importeTotal)}</strong></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* ── TABLA: NOTAS DE CRÉDITO RECIBIDAS ────────────────────────────── */}
+          {data.notasCreditoRecibidas.length > 0 && (
+            <div className="rep-seccion">
+              <h3 className="rep-seccion-titulo">
+                Notas de Crédito Recibidas — {data.periodo.label}
+                <span className="rep-sec-count">{data.notasCreditoRecibidas.length}</span>
+              </h3>
+              <div className="rep-tabla-wrap">
+                <table className="rep-tabla">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Proveedor</th>
+                      <th>RUC Emisor</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.notasCreditoRecibidas.map(nc => (
+                      <tr key={nc.id}>
+                        <td>{fmtFecha(nc.fechaEmision)}</td>
+                        <td>{nc.razonSocialEmisor}</td>
+                        <td>{nc.rucEmisor}</td>
+                        <td className="rep-money rep-money-total">{fmt(nc.importeTotal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="rep-tfoot">
+                      <td colSpan={3}><strong>TOTAL</strong></td>
+                      <td className="rep-money rep-money-total"><strong>{fmt(data.resumen.notasCreditoRecibidas.importeTotal)}</strong></td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>

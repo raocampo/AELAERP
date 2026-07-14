@@ -1395,19 +1395,18 @@ router.post('/notas-credito/:id/reenviar', permitirEmitirFacturacion, async (req
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/reportes/tributario', permitirReportesTributarios, async (req, res) => {
   try {
+    const db = req.prisma || prisma;
     const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
     const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const empresaId = req.empresa.id;
 
     const desde = new Date(anio, mes - 1, 1);
     const hasta = new Date(anio, mes, 0, 23, 59, 59, 999); // último día del mes
+    const filtroFecha = { gte: desde, lte: hasta };
 
-    // ── Facturas del período ──────────────────────────────────────────────────
-    const facturas = await prisma.facturas.findMany({
-      where: {
-        empresaId: req.empresa.id,
-        fechaEmision: { gte: desde, lte: hasta },
-        anulada: false,
-      },
+    // ── Facturas del período (ventas) ─────────────────────────────────────────
+    const facturas = await db.facturas.findMany({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
       select: {
         id: true, numeroFactura: true, fechaEmision: true,
         razonSocialComprador: true, identificacionComprador: true,
@@ -1417,9 +1416,9 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
       orderBy: { fechaEmision: 'asc' },
     });
 
-    // ── Notas de crédito del período ─────────────────────────────────────────
-    const notasCredito = await prisma.notas_credito.findMany({
-      where: { empresaId: req.empresa.id, fechaEmision: { gte: desde, lte: hasta } },
+    // ── Notas de crédito emitidas del período ─────────────────────────────────
+    const notasCredito = await db.notas_credito.findMany({
+      where: { empresaId, fechaEmision: filtroFecha },
       select: {
         id: true, numeroNC: true, fechaEmision: true,
         razonSocialComprador: true, identificacionComprador: true,
@@ -1429,13 +1428,9 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
       orderBy: { fechaEmision: 'asc' },
     });
 
-    // ── Retenciones del período ───────────────────────────────────────────────
-    const retenciones = await prisma.retenciones.findMany({
-      where: {
-        empresaId: req.empresa.id,
-        fechaEmision: { gte: desde, lte: hasta },
-        anulada: false,
-      },
+    // ── Retenciones emitidas del período (a proveedores — obligación F103) ────
+    const retenciones = await db.retenciones.findMany({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
       select: {
         id: true, numeroRetencion: true, fechaEmision: true,
         razonSocialProveedor: true, identificacionProveedor: true,
@@ -1444,33 +1439,103 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
       orderBy: { fechaEmision: 'asc' },
     });
 
-    // ── Calcular totales de IVA (Formulario 104) ──────────────────────────────
+    // ── Compras del período — mismos filtros que el F104 real ─────────────────
+    // Excluye receptorEsRuc===false (facturado a cédula personal) y
+    // esGastoPersonal===true; receptorEsRuc null (compras manuales/históricas
+    // sin XML) sí se incluye. Ver declaraciones.js /f104 para el detalle.
+    const compras = await db.facturas_compra.findMany({
+      where: {
+        empresaId, fechaEmision: filtroFecha, anulada: false,
+        esGastoPersonal: { not: true },
+        OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }],
+      },
+      select: {
+        id: true, numeroFactura: true, fechaEmision: true,
+        razonSocialProveedor: true, identificacionProveedor: true,
+        subtotal0: true, subtotal15: true, totalIva: true, importeTotal: true,
+      },
+      orderBy: { fechaEmision: 'asc' },
+    });
+
+    // ── Liquidaciones de compra del período (crédito fiscal adicional) ────────
+    const liquidaciones = await db.liquidaciones_compra.findMany({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+      select: { subtotal0: true, subtotal15: true, totalIva: true },
+    });
+
+    // ── Notas de crédito recibidas de proveedores del período (tipo SRI 04) ───
+    const notasCreditoRecibidas = await db.docs_recibidos_otros.findMany({
+      where: { empresaId, tipoDocumento: '04', fechaEmision: filtroFecha },
+      select: {
+        id: true, fechaEmision: true, razonSocialEmisor: true, rucEmisor: true,
+        claveAcceso: true, importeTotal: true,
+      },
+      orderBy: { fechaEmision: 'asc' },
+    });
+
+    // ── Retenciones que los clientes le practican a la empresa (crédito real
+    //    del F104 — no confundir con `retenciones`, que la empresa emite a
+    //    sus proveedores y es obligación del F103) ─────────────────────────
+    const retencionesRecibidas = await db.retenciones_recibidas.findMany({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+      select: { totalRetencionIva: true, totalRetencionRenta: true },
+    });
+
+    const d = (v) => parseFloat(v || 0);
+
+    // ── Totales ────────────────────────────────────────────────────────────
     const totVentas = facturas.reduce((acc, f) => ({
-      subtotal0:    acc.subtotal0    + parseFloat(f.subtotal0  || 0),
-      subtotal15:   acc.subtotal15   + parseFloat(f.subtotal15 || 0),
-      totalIva:     acc.totalIva     + parseFloat(f.totalIva   || 0),
-      importeTotal: acc.importeTotal + parseFloat(f.importeTotal),
+      subtotal0:    acc.subtotal0    + d(f.subtotal0),
+      subtotal15:   acc.subtotal15   + d(f.subtotal15),
+      totalIva:     acc.totalIva     + d(f.totalIva),
+      importeTotal: acc.importeTotal + d(f.importeTotal),
     }), { subtotal0: 0, subtotal15: 0, totalIva: 0, importeTotal: 0 });
 
     const totNC = notasCredito.reduce((acc, nc) => ({
-      totalSinImpuestos: acc.totalSinImpuestos + parseFloat(nc.totalSinImpuestos || 0),
-      totalIva:          acc.totalIva          + parseFloat(nc.totalIva          || 0),
-      importeTotal:      acc.importeTotal      + parseFloat(nc.importeTotal),
+      totalSinImpuestos: acc.totalSinImpuestos + d(nc.totalSinImpuestos),
+      totalIva:          acc.totalIva          + d(nc.totalIva),
+      importeTotal:      acc.importeTotal      + d(nc.importeTotal),
     }), { totalSinImpuestos: 0, totalIva: 0, importeTotal: 0 });
 
-    // Retención IVA cobrada (código 2)
-    let retencionIvaCobrada = 0;
-    let retencionRentaCobrada = 0;
+    const totCompras = compras.reduce((acc, c) => ({
+      subtotal0:    acc.subtotal0    + d(c.subtotal0),
+      subtotal15:   acc.subtotal15   + d(c.subtotal15),
+      totalIva:     acc.totalIva     + d(c.totalIva),
+      importeTotal: acc.importeTotal + d(c.importeTotal),
+    }), { subtotal0: 0, subtotal15: 0, totalIva: 0, importeTotal: 0 });
+
+    const totLiq = liquidaciones.reduce((acc, l) => ({
+      subtotal0:  acc.subtotal0  + d(l.subtotal0),
+      subtotal15: acc.subtotal15 + d(l.subtotal15),
+      totalIva:   acc.totalIva   + d(l.totalIva),
+    }), { subtotal0: 0, subtotal15: 0, totalIva: 0 });
+
+    const totNCRecibidas = notasCreditoRecibidas.reduce((acc, nc) => ({
+      importeTotal: acc.importeTotal + d(nc.importeTotal),
+    }), { importeTotal: 0 });
+
+    // Retención IVA/Renta emitida a proveedores (impuestos: [{codigo, valorRetenido}])
+    let retencionIvaEmitida = 0;
+    let retencionRentaEmitida = 0;
     retenciones.forEach(ret => {
       const imps = typeof ret.impuestos === 'string' ? JSON.parse(ret.impuestos) : (ret.impuestos || []);
       imps.forEach(imp => {
-        if (String(imp.codigo) === '2') retencionIvaCobrada += parseFloat(imp.valorRetenido || 0);
-        if (String(imp.codigo) === '1') retencionRentaCobrada += parseFloat(imp.valorRetenido || 0);
+        if (String(imp.codigo) === '2') retencionIvaEmitida += d(imp.valorRetenido);
+        if (String(imp.codigo) === '1') retencionRentaEmitida += d(imp.valorRetenido);
       });
     });
 
-    // IVA a pagar = IVA cobrado en facturas - NC - Retenciones de IVA recibidas
-    const ivaNeto = parseFloat((totVentas.totalIva - totNC.totalIva - retencionIvaCobrada).toFixed(2));
+    const retencionIvaRecibida = retencionesRecibidas.reduce((s, r) => s + d(r.totalRetencionIva), 0);
+    const retencionRentaRecibida = retencionesRecibidas.reduce((s, r) => s + d(r.totalRetencionRenta), 0);
+
+    // ── IVA a pagar/crédito, igual fórmula que Declaraciones → F104:
+    //    IVA en ventas (neto de NC emitidas) - crédito fiscal de compras
+    //    (compras + liquidaciones) - retenciones de IVA que los CLIENTES le
+    //    practicaron a la empresa. Las retenciones EMITIDAS a proveedores son
+    //    obligación del F103, no reducen este cálculo.
+    const ivaVentasNeto     = parseFloat((totVentas.totalIva - totNC.totalIva).toFixed(2));
+    const ivaCreditoFiscal  = parseFloat((totCompras.totalIva + totLiq.totalIva).toFixed(2));
+    const ivaNeto = parseFloat((ivaVentasNeto - ivaCreditoFiscal - retencionIvaRecibida).toFixed(2));
 
     res.json({
       ok: true,
@@ -1479,6 +1544,9 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
         facturas,
         notasCredito,
         retenciones,
+        compras,
+        liquidaciones,
+        notasCreditoRecibidas,
         resumen: {
           ventas: {
             subtotal0:    parseFloat(totVentas.subtotal0.toFixed(2)),
@@ -1493,12 +1561,37 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
             importeTotal:      parseFloat(totNC.importeTotal.toFixed(2)),
             cantidad:          notasCredito.length,
           },
+          compras: {
+            subtotal0:    parseFloat(totCompras.subtotal0.toFixed(2)),
+            subtotal15:   parseFloat(totCompras.subtotal15.toFixed(2)),
+            totalIva:     parseFloat(totCompras.totalIva.toFixed(2)),
+            importeTotal: parseFloat(totCompras.importeTotal.toFixed(2)),
+            cantidad:     compras.length,
+            liquidaciones: {
+              subtotal0: parseFloat(totLiq.subtotal0.toFixed(2)),
+              subtotal15: parseFloat(totLiq.subtotal15.toFixed(2)),
+              totalIva:  parseFloat(totLiq.totalIva.toFixed(2)),
+              cantidad:  liquidaciones.length,
+            },
+            ivaCreditoFiscal,
+          },
+          notasCreditoRecibidas: {
+            importeTotal: parseFloat(totNCRecibidas.importeTotal.toFixed(2)),
+            cantidad:     notasCreditoRecibidas.length,
+          },
           retenciones: {
-            retencionIvaCobrada:    parseFloat(retencionIvaCobrada.toFixed(2)),
-            retencionRentaCobrada:  parseFloat(retencionRentaCobrada.toFixed(2)),
+            retencionIvaCobrada:    parseFloat(retencionIvaEmitida.toFixed(2)),
+            retencionRentaCobrada:  parseFloat(retencionRentaEmitida.toFixed(2)),
             cantidad:               retenciones.length,
           },
-          ivaNeto, // IVA resultante a declarar
+          retencionesRecibidas: {
+            retencionIva:   parseFloat(retencionIvaRecibida.toFixed(2)),
+            retencionRenta: parseFloat(retencionRentaRecibida.toFixed(2)),
+            cantidad:       retencionesRecibidas.length,
+          },
+          ivaVentasNeto,
+          ivaCreditoFiscal,
+          ivaNeto, // IVA resultante a declarar (misma fórmula que F104, sin crédito tributario arrastrado)
         },
       },
     });

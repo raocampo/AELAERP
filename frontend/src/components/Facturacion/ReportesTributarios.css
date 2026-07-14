@@ -101,9 +101,11 @@
   flex-direction: column;
   gap: 10px;
 }
-.rep-card-ventas { border-top: 3px solid #192C4A; }
-.rep-card-nc     { border-top: 3px solid #F9A825; }
-.rep-card-ret    { border-top: 3px solid #8b5cf6; }
+.rep-card-ventas   { border-top: 3px solid #192C4A; }
+.rep-card-nc       { border-top: 3px solid #F9A825; }
+.rep-card-compras  { border-top: 3px solid #0891b2; }
+.rep-card-ncr      { border-top: 3px solid #e11d48; }
+.rep-card-ret      { border-top: 3px solid #8b5cf6; }
 .rep-card-iva.positivo { border-top: 3px solid #dc2626; }
 .rep-card-iva.negativo { border-top: 3px solid #2E7D32; }
 
