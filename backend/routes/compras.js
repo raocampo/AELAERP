@@ -372,6 +372,100 @@ router.get('/exportar/csv', async (req, res) => {
   }
 });
 
+// GET /api/compras/exportar/xlsx — Excel con los mismos filtros que el listado
+router.get('/exportar/xlsx', async (req, res) => {
+  try {
+    const XLSX = require('xlsx');
+    const { fechaDesde, fechaHasta, busqueda, proveedor, tipoGasto, origenRegistro } = req.query;
+    const where = { empresaId: req.empresa.id };
+
+    if (fechaDesde || fechaHasta) {
+      where.fechaEmision = {};
+      if (fechaDesde) where.fechaEmision.gte = new Date(fechaDesde);
+      if (fechaHasta) {
+        const hasta = new Date(fechaHasta);
+        hasta.setHours(23, 59, 59, 999);
+        where.fechaEmision.lte = hasta;
+      }
+    }
+
+    const termino = limpiarTexto(proveedor || busqueda);
+    if (termino) {
+      where.OR = [
+        { razonSocialProveedor: { contains: termino, mode: 'insensitive' } },
+        { identificacionProveedor: { contains: termino, mode: 'insensitive' } },
+        { numeroFactura: { contains: termino, mode: 'insensitive' } },
+      ];
+    }
+
+    if (origenRegistro) where.origenRegistro = origenRegistro;
+
+    const cols = await getColsCompra();
+    if (cols.tipoGasto && tipoGasto) {
+      where.tipoGasto = tipoGasto === 'SIN_CLASIFICAR' ? null : tipoGasto;
+    }
+
+    const items = await prisma.facturas_compra.findMany({
+      where,
+      orderBy: { fechaEmision: 'desc' },
+      take: 5000,
+      select: {
+        id: true, fechaEmision: true, numeroFactura: true, numeroAutorizacion: true,
+        razonSocialProveedor: true, identificacionProveedor: true,
+        subtotal0: true, subtotal5: true, subtotal15: true,
+        totalDescuento: true, totalIva: true, importeTotal: true,
+        retencionIVA: true, retencionRenta: true,
+        origenRegistro: true,
+        ...(cols.tipoGasto ? { tipoGasto: true } : {}),
+        ...(cols.anulada ? { anulada: true } : {}),
+        observaciones: true,
+        createdAt: true,
+      },
+    });
+
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
+    const fmtNum  = (v) => Number(v || 0).toFixed(2);
+
+    const headers = [
+      'ID', 'Fecha Emisión', 'Nro Factura', 'Nro Autorización',
+      'Proveedor', 'RUC/CI Proveedor',
+      'Subtotal 0%', 'Subtotal 5%', 'Subtotal 15%', 'Descuento', 'IVA', 'Total',
+      'Retención IVA', 'Retención Renta',
+      'Origen', 'Tipo Gasto', 'Anulada', 'Observaciones', 'Fecha Registro',
+    ];
+
+    const rows = items.map((r) => [
+      r.id, fmtDate(r.fechaEmision), r.numeroFactura, r.numeroAutorizacion || '',
+      r.razonSocialProveedor, r.identificacionProveedor,
+      fmtNum(r.subtotal0), fmtNum(r.subtotal5), fmtNum(r.subtotal15),
+      fmtNum(r.totalDescuento), fmtNum(r.totalIva), fmtNum(r.importeTotal),
+      fmtNum(r.retencionIVA), fmtNum(r.retencionRenta),
+      r.origenRegistro || 'MANUAL', r.tipoGasto || '',
+      r.anulada ? 'Si' : 'No', r.observaciones || '', fmtDate(r.createdAt),
+    ]);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = [
+      { wch: 6 }, { wch: 12 }, { wch: 22 }, { wch: 30 },
+      { wch: 36 }, { wch: 14 },
+      { wch: 11 }, { wch: 10 }, { wch: 11 }, { wch: 10 }, { wch: 10 }, { wch: 12 },
+      { wch: 13 }, { wch: 14 },
+      { wch: 14 }, { wch: 20 }, { wch: 8 }, { wch: 30 }, { wch: 12 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'Compras');
+
+    const buf   = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="compras-${fecha}.xlsx"`);
+    res.send(buf);
+  } catch (error) {
+    console.error('GET /compras/exportar/xlsx:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo exportar el Excel de compras' });
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
     const {

@@ -72,6 +72,13 @@
 .fact-filtros {
   display: flex;
   gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.fact-export-bar {
+  display: flex;
+  gap: 10px;
   margin-bottom: 16px;
   flex-wrap: wrap;
 }

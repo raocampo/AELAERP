@@ -9,6 +9,8 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaCorta } from '../../utils/fecha';
 import { IcVer, IcPDF, IcDescargar, IcReenviar, IcAnular } from '../../utils/icons';
+import { descargarExcel } from '../../utils/exportCsv';
+import { printHtmlReport, buildDataTable } from '../../utils/reportPrint';
 import './ListaFacturas.css';
 
 // Base URL del servidor sin /api al final (para fetch directo con Authorization header)
@@ -39,6 +41,8 @@ const TabFacturas = ({ navigate, onIrNC }) => {
   const [motivoAnul,  setMotivoAnul]    = useState('');
   const [anulandoId,  setAnulandoId]    = useState(null);
   const [ncResultado, setNcResultado]   = useState(null);
+  const [exportando,      setExportando]      = useState(false);
+  const [imprimiendoPdf,  setImprimiendoPdf]  = useState(false);
 
   const cargar = useCallback(async ({ termino = busqueda, estado = filtroEstado } = {}) => {
     setLoading(true);
@@ -120,6 +124,77 @@ const TabFacturas = ({ navigate, onIrNC }) => {
     }
   };
 
+  const exportarExcel = async () => {
+    setExportando(true);
+    try {
+      const params = {};
+      if (filtroEstado) params.estado = filtroEstado;
+      if (busqueda)     params.busqueda = busqueda;
+      await descargarExcel(api, '/facturas/exportar/xlsx', params, `ventas-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success('Excel exportado correctamente');
+    } catch {
+      toast.error('No se pudo exportar el Excel');
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const imprimirPdf = async () => {
+    setImprimiendoPdf(true);
+    try {
+      const cfg    = await api.get('/facturas/configuracion').catch(() => ({ data: { data: {} } }));
+      const stored = JSON.parse(localStorage.getItem('aela_empresa') || '{}');
+      const d      = cfg.data?.data || {};
+      const empresa = {
+        razonSocial: d.razonSocial || stored.razonSocial || '',
+        ruc:         d.ruc         || stored.ruc         || '',
+        direccion:   d.dirMatriz   || stored.direccion   || '',
+        telefono:    d.telefono    || stored.telefono    || '',
+        email:       d.emailNotificaciones || stored.email || '',
+        logoUrl:     d.logoUrl     || null,
+      };
+
+      const estadoLabel = {
+        PENDIENTE_FIRMA: 'Pendiente firma', LISTO_ENVIAR: 'Listo enviar',
+        ENVIADO: 'Enviado', AUTORIZADO: 'Autorizado',
+        RECHAZADO: 'Rechazado', ANULADO: 'Anulado', HISTORICO: 'Histórica',
+      };
+
+      const filas = facturas.map((f) => [
+        f.numeroFactura || '',
+        formatFechaCorta(f.fechaEmision),
+        f.razonSocialComprador || '',
+        f.identificacionComprador || '',
+        `$${Number(f.importeTotal || 0).toFixed(2)}`,
+        estadoLabel[f.estadoSri] || f.estadoSri || '',
+        f.anulada ? 'Sí' : 'No',
+      ]);
+
+      const totalGeneral = facturas.reduce((s, f) => s + Number(f.importeTotal || 0), 0);
+      filas.push(['', 'TOTAL', '', '', `$${totalGeneral.toFixed(2)}`, '', '']);
+
+      const tabla = buildDataTable(
+        ['Nro Factura', 'Fecha', 'Cliente', 'CI/RUC', 'Total', 'Estado SRI', 'Anulada'],
+        filas,
+      );
+
+      let subtitulo = `${facturas.length} registro(s)`;
+      if (filtroEstado) subtitulo += ` | Estado: ${estadoLabel[filtroEstado] || filtroEstado}`;
+      if (busqueda)     subtitulo += ` | Búsqueda: "${busqueda}"`;
+
+      printHtmlReport({
+        title: 'Libro de Ventas',
+        subtitle: subtitulo,
+        sections: [{ title: 'Detalle de Facturas', html: tabla }],
+        empresa,
+      });
+    } catch {
+      toast.error('No se pudo generar el PDF');
+    } finally {
+      setImprimiendoPdf(false);
+    }
+  };
+
   const confirmarAnular = async () => {
     if (!motivoAnul.trim()) return toast.error('Escribe el motivo de anulación');
     setAnulandoId(modalAnular.id);
@@ -158,6 +233,16 @@ const TabFacturas = ({ navigate, onIrNC }) => {
           <option value="ANULADO">Anulado</option>
           <option value="HISTORICO">Histórica</option>
         </select>
+      </div>
+
+      {/* Exportar */}
+      <div className="fact-export-bar">
+        <button className="btn-secondary" onClick={exportarExcel} disabled={exportando || facturas.length === 0}>
+          {exportando ? 'Exportando…' : '⬇ Excel'}
+        </button>
+        <button className="btn-secondary" onClick={imprimirPdf} disabled={imprimiendoPdf || facturas.length === 0}>
+          {imprimiendoPdf ? 'Generando…' : '🖨 PDF'}
+        </button>
       </div>
 
       {/* Tabla */}

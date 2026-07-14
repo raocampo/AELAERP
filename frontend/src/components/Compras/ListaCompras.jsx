@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
-import { descargarCsv } from '../../utils/exportCsv';
+import { descargarCsv, descargarExcel } from '../../utils/exportCsv';
+import { printHtmlReport, buildDataTable } from '../../utils/reportPrint';
 import { parseFechaLocal } from '../../utils/fecha';
 import { IcVer, IcEditar } from '../../utils/icons';
 import './ListaCompras.css';
@@ -235,6 +236,7 @@ export default function ListaCompras() {
   const [resumenGrupos, setResumenGrupos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exportando, setExportando] = useState(false);
+  const [imprimiendoPdf, setImprimiendoPdf] = useState(false);
   const [quickEdit, setQuickEdit] = useState(null);
   const [guardandoGasto, setGuardandoGasto] = useState(false);
   const [autoClasificando, setAutoClasificando] = useState(false);
@@ -345,6 +347,77 @@ export default function ListaCompras() {
     }
   };
 
+  const exportarExcel = async () => {
+    setExportando(true);
+    try {
+      await descargarExcel(api, '/compras/exportar/xlsx', filtros, `compras-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success('Excel exportado correctamente');
+    } catch {
+      toast.error('No se pudo exportar el Excel');
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const imprimirPdf = async () => {
+    setImprimiendoPdf(true);
+    try {
+      const [resItems, resEmp] = await Promise.all([
+        api.get('/compras', { params: { ...filtros, page: 1, limit: 5000 } }),
+        api.get('/facturas/configuracion').catch(() => ({ data: { data: null } })),
+      ]);
+      const todos = resItems.data?.data || [];
+      const cfg   = resEmp.data?.data || {};
+      const stored = JSON.parse(localStorage.getItem('aela_empresa') || '{}');
+      const empresa = {
+        razonSocial: cfg.razonSocial || stored.razonSocial || '',
+        ruc:         cfg.ruc         || stored.ruc         || '',
+        direccion:   cfg.dirMatriz   || stored.direccion   || '',
+        telefono:    cfg.telefono    || stored.telefono    || '',
+        email:       cfg.emailNotificaciones || stored.email || '',
+        logoUrl:     cfg.logoUrl     || null,
+      };
+
+      const filas = todos.map((r) => [
+        r.fechaEmision ? new Date(r.fechaEmision).toLocaleDateString('es-EC') : '',
+        r.numeroFactura || '',
+        r.razonSocialProveedor || '',
+        r.identificacionProveedor || '',
+        `$${Number(r.subtotal0 || 0).toFixed(2)}`,
+        `$${Number(r.subtotal15 || 0).toFixed(2)}`,
+        `$${Number(r.totalIva || 0).toFixed(2)}`,
+        `$${Number(r.importeTotal || 0).toFixed(2)}`,
+        r.anulada ? 'Anulada' : 'Vigente',
+      ]);
+
+      const totalGeneral = todos.reduce((s, r) => s + Number(r.importeTotal || 0), 0);
+      const totalIvaSuma = todos.reduce((s, r) => s + Number(r.totalIva || 0), 0);
+      filas.push(['', '', '', 'TOTALES', '', '', `$${totalIvaSuma.toFixed(2)}`, `$${totalGeneral.toFixed(2)}`, '']);
+
+      const tabla = buildDataTable(
+        ['Fecha', 'Nro Factura', 'Proveedor', 'RUC/CI', 'Base 0%', 'Base IVA', 'IVA', 'Total', 'Estado'],
+        filas,
+      );
+
+      let subtitulo = `${todos.length} registro(s)`;
+      if (filtros.fechaDesde || filtros.fechaHasta) {
+        subtitulo += ` | Del ${filtros.fechaDesde || '—'} al ${filtros.fechaHasta || '—'}`;
+      }
+      if (filtros.busqueda) subtitulo += ` | Búsqueda: "${filtros.busqueda}"`;
+
+      printHtmlReport({
+        title: 'Libro de Compras',
+        subtitle: subtitulo,
+        sections: [{ title: 'Detalle de Compras', html: tabla }],
+        empresa,
+      });
+    } catch {
+      toast.error('No se pudo generar el PDF');
+    } finally {
+      setImprimiendoPdf(false);
+    }
+  };
+
   // ── Cuenta contable ──────────────────────────────────────────
   const abrirModalCuenta = async (item) => {
     let lista = cuentasContables;
@@ -422,8 +495,11 @@ export default function ListaCompras() {
         </div>
         <div className="compras-header-actions">
           <button className="btn-secondary" onClick={() => navigate('/dashboard')}>Volver</button>
-          <button className="btn-secondary" onClick={exportarCsv} disabled={exportando || items.length === 0}>
-            {exportando ? 'Exportando…' : '⬇ CSV'}
+          <button className="btn-secondary" onClick={exportarExcel} disabled={exportando || items.length === 0}>
+            {exportando ? 'Exportando…' : '⬇ Excel'}
+          </button>
+          <button className="btn-secondary" onClick={imprimirPdf} disabled={imprimiendoPdf || items.length === 0}>
+            {imprimiendoPdf ? 'Generando…' : '🖨 PDF'}
           </button>
           <button className="btn-secondary" onClick={autoClasificar} disabled={autoClasificando}
             title="Analiza el nombre del proveedor y productos para asignar categoría SRI automáticamente">

@@ -703,6 +703,83 @@ router.delete('/configuracion/certificado', permitirConfigurarSri, async (req, r
 // ────────────────────────────────────────────────────────────────────────────
 
 // GET /api/facturas  — lista con filtros opcionales
+// GET /api/facturas/exportar/xlsx — Excel de ventas con los mismos filtros que el listado
+router.get('/exportar/xlsx', permitirVerFacturacion, async (req, res) => {
+  try {
+    const XLSX = require('xlsx');
+    const { estado, fechaDesde, fechaHasta, busqueda } = req.query;
+    const where = { empresaId: req.empresa.id };
+
+    if (estado)    where.estadoSri = estado;
+    if (fechaDesde || fechaHasta) {
+      where.fechaEmision = {};
+      if (fechaDesde) where.fechaEmision.gte = new Date(fechaDesde);
+      if (fechaHasta) {
+        const hasta = new Date(fechaHasta);
+        hasta.setHours(23, 59, 59, 999);
+        where.fechaEmision.lte = hasta;
+      }
+    }
+    if (busqueda) {
+      where.OR = [
+        { numeroFactura:         { contains: busqueda, mode: 'insensitive' } },
+        { razonSocialComprador:  { contains: busqueda, mode: 'insensitive' } },
+        { identificacionComprador: { contains: busqueda, mode: 'insensitive' } },
+      ];
+    }
+
+    const facturas = await prisma.facturas.findMany({
+      where,
+      orderBy: { fechaEmision: 'desc' },
+      take: 5000,
+      select: {
+        id: true, numeroFactura: true, fechaEmision: true,
+        razonSocialComprador: true, identificacionComprador: true, tipoIdentificacionComprador: true,
+        subtotal0: true, subtotal5: true, subtotal15: true, totalIva: true, importeTotal: true,
+        estadoSri: true, anulada: true, numeroAutorizacion: true,
+        origenRegistro: true, createdAt: true,
+      },
+    });
+
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
+    const fmtNum  = (v) => Number(v || 0).toFixed(2);
+
+    const headers = [
+      'ID', 'Nro Factura', 'Fecha Emisión', 'Nro Autorización',
+      'Cliente', 'CI/RUC', 'Tipo ID',
+      'Subtotal 0%', 'Subtotal 5%', 'Subtotal 15%', 'IVA', 'Total',
+      'Estado SRI', 'Anulada', 'Origen', 'Fecha Registro',
+    ];
+
+    const rows = facturas.map((f) => [
+      f.id, f.numeroFactura, fmtDate(f.fechaEmision), f.numeroAutorizacion || '',
+      f.razonSocialComprador, f.identificacionComprador, f.tipoIdentificacionComprador || '',
+      fmtNum(f.subtotal0), fmtNum(f.subtotal5), fmtNum(f.subtotal15), fmtNum(f.totalIva), fmtNum(f.importeTotal),
+      f.estadoSri || '', f.anulada ? 'Si' : 'No',
+      f.origenRegistro || 'MANUAL', fmtDate(f.createdAt),
+    ]);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = [
+      { wch: 6 }, { wch: 22 }, { wch: 12 }, { wch: 30 },
+      { wch: 36 }, { wch: 14 }, { wch: 8 },
+      { wch: 11 }, { wch: 10 }, { wch: 11 }, { wch: 10 }, { wch: 12 },
+      { wch: 16 }, { wch: 8 }, { wch: 14 }, { wch: 12 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'Ventas');
+
+    const buf   = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="ventas-${fecha}.xlsx"`);
+    res.send(buf);
+  } catch (error) {
+    console.error('GET /facturas/exportar/xlsx:', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 router.get('/', permitirVerFacturacion, async (req, res) => {
   try {
     const { estado, clienteId, fechaDesde, fechaHasta, busqueda } = req.query;
