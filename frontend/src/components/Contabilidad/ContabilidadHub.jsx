@@ -418,6 +418,16 @@ const ContabilidadHub = () => {
     }
   };
 
+  const autoCrearPeriodos = async () => {
+    try {
+      const res = await api.post('/contabilidad/periodos/auto-crear');
+      toast.success(res.data?.data?.mensaje || 'Períodos creados');
+      await cargarPeriodos();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al auto-crear períodos');
+    }
+  };
+
   const editarPeriodo = (item) => {
     setPeriodoForm({
       id: item.id,
@@ -1398,6 +1408,7 @@ const ContabilidadHub = () => {
                   Limpiar
                 </button>
                 <button type="button" className="btn-secondary" onClick={cargarPeriodos}>Recargar</button>
+                <button type="button" className="btn-secondary" onClick={autoCrearPeriodos} title="Crea automáticamente los períodos anuales detectados en los asientos">Crear períodos sugeridos</button>
               </div>
             </form>
           </div>
@@ -2221,21 +2232,35 @@ const ContabilidadHub = () => {
 
           <div className="conta-card">
             <h3>Estados financieros y consultas</h3>
+            <div className="conta-filters-labeled">
+              <div className="conta-filter-field">
+                <label>Período (MM/YYYY)</label>
+                <input
+                  placeholder="01/2025"
+                  value={estadosFiltros.periodo}
+                  onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, periodo: e.target.value }))}
+                  onBlur={() => {
+                    const normalizado = normalizarPeriodoMMYYYY(estadosFiltros.periodo);
+                    if (normalizado) {
+                      setEstadosFiltros((prev) => ({ ...prev, periodo: normalizado }));
+                    }
+                  }}
+                />
+              </div>
+              <div className="conta-filter-field">
+                <label>Desde (Estado Resultados)</label>
+                <input type="date" value={estadosFiltros.desde} onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, desde: e.target.value }))} />
+              </div>
+              <div className="conta-filter-field">
+                <label>Hasta (Estado Resultados)</label>
+                <input type="date" value={estadosFiltros.hasta} onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, hasta: e.target.value }))} />
+              </div>
+              <div className="conta-filter-field">
+                <label>Corte Balance General</label>
+                <input type="date" value={estadosFiltros.fechaBalance} onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, fechaBalance: e.target.value }))} />
+              </div>
+            </div>
             <div className="conta-filters">
-              <input
-                placeholder="Período MM/YYYY"
-                value={estadosFiltros.periodo}
-                onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, periodo: e.target.value }))}
-                onBlur={() => {
-                  const normalizado = normalizarPeriodoMMYYYY(estadosFiltros.periodo);
-                  if (normalizado) {
-                    setEstadosFiltros((prev) => ({ ...prev, periodo: normalizado }));
-                  }
-                }}
-              />
-              <input type="date" value={estadosFiltros.desde} onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, desde: e.target.value }))} />
-              <input type="date" value={estadosFiltros.hasta} onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, hasta: e.target.value }))} />
-              <input type="date" value={estadosFiltros.fechaBalance} onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, fechaBalance: e.target.value }))} />
               <button className="btn-secondary" onClick={cargarEstadosFinancieros}>Actualizar estados</button>
               <button
                 className="btn-secondary"
@@ -2258,10 +2283,10 @@ const ContabilidadHub = () => {
                 <div className="conta-kpis conta-kpis-compact">
                   <div className="conta-kpi"><span>Balance Debe</span><strong>{toMoney(balance?.resumen?.totalDebe)}</strong></div>
                   <div className="conta-kpi"><span>Balance Haber</span><strong>{toMoney(balance?.resumen?.totalHaber)}</strong></div>
-                  <div className="conta-kpi"><span>Utilidad</span><strong>{toMoney(estadoResultados?.utilidad)}</strong></div>
+                  <div className="conta-kpi"><span>Utilidad período</span><strong>{toMoney(balanceGeneral?.resultadoEjercicio ?? estadoResultados?.utilidad)}</strong></div>
                   <div className="conta-kpi"><span>Activos</span><strong>{toMoney(balanceGeneral?.totalActivos)}</strong></div>
-                  <div className="conta-kpi"><span>Pasivos + Patrimonio</span><strong>{toMoney((balanceGeneral?.totalPasivos || 0) + (balanceGeneral?.totalPatrimonio || 0))}</strong></div>
-                  <div className="conta-kpi"><span>Balanceado</span><strong>{balanceGeneral?.balanceado ? 'Sí' : 'No'}</strong></div>
+                  <div className="conta-kpi"><span>Pasivos + Patrimonio</span><strong>{toMoney((balanceGeneral?.totalPasivos || 0) + (balanceGeneral?.totalPatrimonioNeto ?? balanceGeneral?.totalPatrimonio || 0))}</strong></div>
+                  <div className={`conta-kpi ${balanceGeneral?.balanceado ? '' : 'conta-kpi-warn'}`}><span>Balanceado</span><strong>{balanceGeneral?.balanceado ? 'Sí' : 'No'}</strong></div>
                 </div>
 
                 <table className="conta-table">

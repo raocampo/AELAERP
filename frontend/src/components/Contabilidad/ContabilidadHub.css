@@ -327,6 +327,48 @@
   font-size: 14px;
 }
 
+/* Filtros con etiqueta arriba — para Cierre y Estados */
+.conta-filters-labeled {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.conta-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 170px;
+  min-width: 150px;
+}
+
+.conta-filter-field label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.conta-filter-field input {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+  color: #1e293b;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* KPI en estado de advertencia */
+.conta-kpi-warn {
+  border-color: #fca5a5;
+  background: #fff5f5;
+}
+
+.conta-kpi-warn strong {
+  color: #dc2626;
+}
+
 .conta-badge {
   border-radius: 999px;
   padding: 2px 8px;

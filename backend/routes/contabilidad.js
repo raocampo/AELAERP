@@ -509,7 +509,7 @@ async function obtenerBalanceGeneral(empresaId, fechaCorte = new Date()) {
       cuenta: {
         is: {
           empresaId,
-          tipo: { in: ['ACTIVO', 'PASIVO', 'PATRIMONIO'] },
+          tipo: { in: ['ACTIVO', 'PASIVO', 'PATRIMONIO', 'INGRESO', 'GASTO', 'COSTO'] },
         },
       },
     },
@@ -542,23 +542,35 @@ async function obtenerBalanceGeneral(empresaId, fechaCorte = new Date()) {
     }))
     .sort((a, b) => a.codigo.localeCompare(b.codigo));
 
-  const activos = tabla.filter((item) => item.tipo === 'ACTIVO');
-  const pasivos = tabla.filter((item) => item.tipo === 'PASIVO');
+  const activos    = tabla.filter((item) => item.tipo === 'ACTIVO');
+  const pasivos    = tabla.filter((item) => item.tipo === 'PASIVO');
   const patrimonio = tabla.filter((item) => item.tipo === 'PATRIMONIO');
 
-  const totalActivos = round2(activos.reduce((acc, item) => acc + item.saldo, 0));
-  const totalPasivos = round2(pasivos.reduce((acc, item) => acc + item.saldo, 0));
+  const totalActivos    = round2(activos.reduce((acc, item) => acc + item.saldo, 0));
+  const totalPasivos    = round2(pasivos.reduce((acc, item) => acc + item.saldo, 0));
   const totalPatrimonio = round2(patrimonio.reduce((acc, item) => acc + item.saldo, 0));
+
+  // El resultado del ejercicio (ingresos - gastos - costos) forma parte del
+  // Patrimonio hasta que se registre el asiento de cierre. Sin incluirlo,
+  // el balance nunca cuadra mientras haya utilidad no cerrada.
+  const totalIngresos = round2(tabla.filter((x) => x.tipo === 'INGRESO').reduce((a, i) => a + i.saldo, 0));
+  const totalGastos   = round2(tabla.filter((x) => x.tipo === 'GASTO').reduce((a, i) => a + i.saldo, 0));
+  const totalCostos   = round2(tabla.filter((x) => x.tipo === 'COSTO').reduce((a, i) => a + i.saldo, 0));
+  const resultadoEjercicio = round2(totalIngresos - totalGastos - totalCostos);
+
+  const totalPatrimonioNeto = round2(totalPatrimonio + resultadoEjercicio);
 
   return {
     fecha,
     activos,
     pasivos,
     patrimonio,
+    resultadoEjercicio,
     totalActivos,
     totalPasivos,
     totalPatrimonio,
-    balanceado: round2(totalActivos - (totalPasivos + totalPatrimonio)) === 0,
+    totalPatrimonioNeto,
+    balanceado: round2(totalActivos - (totalPasivos + totalPatrimonioNeto)) === 0,
   };
 }
 
@@ -644,6 +656,73 @@ router.get('/periodos', async (req, res) => {
   } catch (error) {
     console.error('GET /contabilidad/periodos:', error);
     res.status(500).json({ success: false, mensaje: 'Error al listar períodos contables' });
+  }
+});
+
+// POST /api/contabilidad/periodos/auto-crear
+// Detecta años con asientos pero sin período y los crea automáticamente.
+router.post('/periodos/auto-crear', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+
+    // Años distintos presentes en asientos
+    const asientos = await prisma.asientos_contables.findMany({
+      where: { empresaId },
+      select: { fecha: true },
+    });
+    const añosConDatos = [...new Set(asientos.map((a) => new Date(a.fecha).getFullYear()))].sort();
+
+    if (añosConDatos.length === 0) {
+      return res.json({ success: true, data: { creados: [], mensaje: 'No hay asientos registrados.' } });
+    }
+
+    // Períodos ya existentes
+    const periodosExistentes = await prisma.periodos_contables.findMany({ where: { empresaId }, select: { codigo: true } });
+    const codigosExistentes = new Set(periodosExistentes.map((p) => p.codigo));
+
+    const añoActual = new Date().getFullYear();
+    const creados = [];
+
+    for (const año of añosConDatos) {
+      const codigo = `01/${año}`;
+      if (codigosExistentes.has(codigo)) continue;
+
+      const esPasado = año < añoActual;
+      const estado = esPasado ? 'CERRADO' : 'ABIERTO';
+
+      // Si vamos a crear ABIERTO, cerrar los anteriores
+      if (estado === 'ABIERTO') {
+        await prisma.periodos_contables.updateMany({
+          where: { empresaId, estado: 'ABIERTO' },
+          data: { estado: 'CERRADO' },
+        });
+      }
+
+      const nuevo = await prisma.periodos_contables.create({
+        data: {
+          empresaId,
+          codigo,
+          nombre: `Período ${año}`,
+          fechaInicio: new Date(`${año}-01-01T00:00:00.000Z`),
+          fechaFin:    new Date(`${año}-12-31T23:59:59.000Z`),
+          estado,
+        },
+      });
+      creados.push(nuevo);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        creados,
+        mensaje: creados.length > 0
+          ? `Se crearon ${creados.length} período(s): ${creados.map((p) => p.codigo).join(', ')}`
+          : 'Todos los períodos ya existían.',
+      },
+    });
+  } catch (error) {
+    console.error('POST /contabilidad/periodos/auto-crear:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al auto-crear períodos' });
   }
 });
 
