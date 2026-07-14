@@ -284,4 +284,4 @@ function generarPlantilla() {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-module.exports = { leerExcel, validarFila, construirDetalles, generarPlantilla };
+module.exports = { leerExcel, validarFila, construirDetalles, generarPlantilla, parsearNumeroFactura };
