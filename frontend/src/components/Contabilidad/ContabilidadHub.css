@@ -359,7 +359,77 @@
   box-sizing: border-box;
 }
 
-/* KPI en estado de advertencia */
+/* ── Tablas de estados financieros jerárquicos ── */
+.conta-table-estados {
+  font-size: 13px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.conta-table-estados th {
+  background: #f1f5f9;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 12px;
+  color: #475569;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.conta-table-estados .text-right {
+  text-align: right;
+}
+
+.conta-table-estados td {
+  padding: 4px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+/* Indentación por nivel usando CSS custom property --nivel */
+.cuenta-indent {
+  display: block;
+  padding-left: calc((var(--nivel, 1) - 1) * 18px);
+}
+
+/* Filas de grupo (cuentas no hoja): negrita y fondo suave */
+.fila-grupo td {
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+.fila-grupo .saldo-col {
+  color: #0f172a;
+}
+
+/* Filas de hoja (cuentas con movimiento) */
+.fila-hoja td {
+  font-weight: 400;
+  color: #334155;
+}
+
+/* Fila del resultado del ejercicio */
+.fila-resultado-ejercicio td {
+  font-weight: 700;
+  background: #fefce8;
+  border-top: 2px solid #fde047;
+  color: #713f12;
+}
+
+/* Fila total final (PASIVO + PATRIMONIO) */
+.fila-total-final td {
+  font-weight: 700;
+  background: #f0fdf4;
+  border-top: 2px solid #22c55e;
+  font-size: 14px;
+}
+
+/* Columna cuenta ocupa el espacio restante */
+.col-cuenta {
+  width: 60%;
+}
+
+/* ── KPI en estado de advertencia ── */
 .conta-kpi-warn {
   border-color: #fca5a5;
   background: #fff5f5;

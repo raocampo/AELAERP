@@ -100,8 +100,8 @@ const ContabilidadHub = () => {
   const [mayorizacionLote, setMayorizacionLote] = useState(null);
 
   const [cierreLoading, setCierreLoading] = useState(false);
+  const [cierreSubTab, setCierreSubTab] = useState('situacion'); // 'situacion' | 'resultados' | 'comprobacion'
   const [estadosFiltros, setEstadosFiltros] = useState({ periodo: '', desde: '', hasta: '', fechaBalance: '' });
-  const [consultasResumen, setConsultasResumen] = useState(null);
   const [asientoInicialForm, setAsientoInicialForm] = useState({
     periodo: '',
     fecha: new Date().toISOString().slice(0, 10),
@@ -260,17 +260,15 @@ const ContabilidadHub = () => {
         hasta: estadosFiltros.hasta || undefined,
       };
 
-      const [balanceRes, resultadosRes, bgRes, consultasRes] = await Promise.all([
+      const [balanceRes, resultadosRes, bgRes] = await Promise.all([
         api.get('/contabilidad/balance-comprobacion', { params: paramsBase }),
         api.get('/contabilidad/estado-resultados', { params: paramsBase }),
         api.get('/contabilidad/balance-general', { params: { fecha: estadosFiltros.fechaBalance || undefined } }),
-        api.get('/contabilidad/consultas/resumen', { params: paramsBase }),
       ]);
 
       setBalance(balanceRes.data?.data || null);
       setEstadoResultados(resultadosRes.data?.data || null);
       setBalanceGeneral(bgRes.data?.data || null);
-      setConsultasResumen(consultasRes.data?.data || null);
       if (periodo && periodo !== estadosFiltros.periodo) {
         setEstadosFiltros((prev) => ({ ...prev, periodo }));
       }
@@ -2232,6 +2230,8 @@ const ContabilidadHub = () => {
 
           <div className="conta-card">
             <h3>Estados financieros y consultas</h3>
+
+            {/* Filtros */}
             <div className="conta-filters-labeled">
               <div className="conta-filter-field">
                 <label>Período (MM/YYYY)</label>
@@ -2241,77 +2241,152 @@ const ContabilidadHub = () => {
                   onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, periodo: e.target.value }))}
                   onBlur={() => {
                     const normalizado = normalizarPeriodoMMYYYY(estadosFiltros.periodo);
-                    if (normalizado) {
-                      setEstadosFiltros((prev) => ({ ...prev, periodo: normalizado }));
-                    }
+                    if (normalizado) setEstadosFiltros((prev) => ({ ...prev, periodo: normalizado }));
                   }}
                 />
               </div>
               <div className="conta-filter-field">
-                <label>Desde (Estado Resultados)</label>
+                <label>Desde</label>
                 <input type="date" value={estadosFiltros.desde} onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, desde: e.target.value }))} />
               </div>
               <div className="conta-filter-field">
-                <label>Hasta (Estado Resultados)</label>
+                <label>Hasta</label>
                 <input type="date" value={estadosFiltros.hasta} onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, hasta: e.target.value }))} />
               </div>
               <div className="conta-filter-field">
-                <label>Corte Balance General</label>
+                <label>Corte Balance</label>
                 <input type="date" value={estadosFiltros.fechaBalance} onChange={(e) => setEstadosFiltros((prev) => ({ ...prev, fechaBalance: e.target.value }))} />
               </div>
             </div>
-            <div className="conta-filters">
+            <div className="conta-filters" style={{ marginBottom: 12 }}>
               <button className="btn-secondary" onClick={cargarEstadosFinancieros}>Actualizar estados</button>
-              <button
-                className="btn-secondary"
-                onClick={() => descargarReporteContable('estados', 'csv', estadosFiltros)}
-              >
-                Exportar Excel (CSV)
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => descargarReporteContable('estados', 'pdf', estadosFiltros)}
-              >
-                PDF Servidor
-              </button>
+              <button className="btn-secondary" onClick={() => descargarReporteContable('estados', 'csv', estadosFiltros)}>Exportar CSV</button>
+              <button className="btn-secondary" onClick={() => descargarReporteContable('estados', 'pdf', estadosFiltros)}>PDF</button>
+            </div>
+
+            {/* KPIs rápidos */}
+            <div className="conta-kpis conta-kpis-compact" style={{ marginBottom: 12 }}>
+              <div className="conta-kpi"><span>Total Activos</span><strong>{toMoney(balanceGeneral?.totalActivos)}</strong></div>
+              <div className="conta-kpi"><span>Total Pasivos</span><strong>{toMoney(balanceGeneral?.totalPasivos)}</strong></div>
+              <div className="conta-kpi"><span>Patrimonio Neto</span><strong>{toMoney(balanceGeneral?.totalPatrimonioNeto)}</strong></div>
+              <div className="conta-kpi"><span>Resultado Ejercicio</span><strong>{toMoney(balanceGeneral?.resultadoEjercicio ?? estadoResultados?.utilidad)}</strong></div>
+              <div className={`conta-kpi ${balanceGeneral?.balanceado ? '' : 'conta-kpi-warn'}`}><span>Balanceado</span><strong>{balanceGeneral?.balanceado ? 'Sí' : 'No'}</strong></div>
+            </div>
+
+            {/* Sub-tabs de estados */}
+            <div className="conta-subtabs" style={{ marginBottom: 12 }}>
+              <button className={cierreSubTab === 'situacion'    ? 'active' : ''} onClick={() => setCierreSubTab('situacion')}>Estado de Situación Financiera</button>
+              <button className={cierreSubTab === 'resultados'   ? 'active' : ''} onClick={() => setCierreSubTab('resultados')}>Estado de Resultados</button>
+              <button className={cierreSubTab === 'comprobacion' ? 'active' : ''} onClick={() => setCierreSubTab('comprobacion')}>Balance de Comprobación</button>
             </div>
 
             {cierreLoading ? (
               <div className="conta-loading">Procesando estados...</div>
             ) : (
               <>
-                <div className="conta-kpis conta-kpis-compact">
-                  <div className="conta-kpi"><span>Balance Debe</span><strong>{toMoney(balance?.resumen?.totalDebe)}</strong></div>
-                  <div className="conta-kpi"><span>Balance Haber</span><strong>{toMoney(balance?.resumen?.totalHaber)}</strong></div>
-                  <div className="conta-kpi"><span>Utilidad período</span><strong>{toMoney(balanceGeneral?.resultadoEjercicio ?? estadoResultados?.utilidad)}</strong></div>
-                  <div className="conta-kpi"><span>Activos</span><strong>{toMoney(balanceGeneral?.totalActivos)}</strong></div>
-                  <div className="conta-kpi"><span>Pasivos + Patrimonio</span><strong>{toMoney((balanceGeneral?.totalPasivos || 0) + ((balanceGeneral?.totalPatrimonioNeto ?? balanceGeneral?.totalPatrimonio) || 0))}</strong></div>
-                  <div className={`conta-kpi ${balanceGeneral?.balanceado ? '' : 'conta-kpi-warn'}`}><span>Balanceado</span><strong>{balanceGeneral?.balanceado ? 'Sí' : 'No'}</strong></div>
-                </div>
-
-                <table className="conta-table">
-                  <thead>
-                    <tr>
-                      <th>Tipo asiento</th>
-                      <th>Cantidad</th>
-                      <th>Total Debe</th>
-                      <th>Total Haber</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(consultasResumen?.tipos || []).map((t) => (
-                      <tr key={t.tipo}>
-                        <td>{t.tipo}</td>
-                        <td>{t.cantidad}</td>
-                        <td>{toMoney(t.totalDebe)}</td>
-                        <td>{toMoney(t.totalHaber)}</td>
+                {/* ── Estado de Situación Financiera ── */}
+                {cierreSubTab === 'situacion' && (
+                  <table className="conta-table conta-table-estados">
+                    <thead>
+                      <tr><th>Cuenta</th><th className="text-right">Débito</th><th className="text-right">Crédito</th><th className="text-right">Saldo</th></tr>
+                    </thead>
+                    <tbody>
+                      {/* ACTIVO */}
+                      {(balanceGeneral?.activos || []).map((f) => (
+                        <tr key={f.id} className={f.esGrupo ? 'fila-grupo' : 'fila-hoja'} style={{ '--nivel': f.nivel }}>
+                          <td className="col-cuenta"><span className="cuenta-indent">{f.codigo} {f.nombre}</span></td>
+                          <td className="text-right">{f.totalDebe ? toMoney(f.totalDebe) : ''}</td>
+                          <td className="text-right">{f.totalHaber ? toMoney(f.totalHaber) : ''}</td>
+                          <td className="text-right saldo-col">{toMoney(f.saldo)}</td>
+                        </tr>
+                      ))}
+                      {/* PASIVO */}
+                      {(balanceGeneral?.pasivos || []).map((f) => (
+                        <tr key={f.id} className={f.esGrupo ? 'fila-grupo' : 'fila-hoja'} style={{ '--nivel': f.nivel }}>
+                          <td className="col-cuenta"><span className="cuenta-indent">{f.codigo} {f.nombre}</span></td>
+                          <td className="text-right">{f.totalDebe ? toMoney(f.totalDebe) : ''}</td>
+                          <td className="text-right">{f.totalHaber ? toMoney(f.totalHaber) : ''}</td>
+                          <td className="text-right saldo-col">{toMoney(f.saldo)}</td>
+                        </tr>
+                      ))}
+                      {/* PATRIMONIO */}
+                      {(balanceGeneral?.patrimonio || []).map((f) => (
+                        <tr key={f.id} className={f.esGrupo ? 'fila-grupo' : 'fila-hoja'} style={{ '--nivel': f.nivel }}>
+                          <td className="col-cuenta"><span className="cuenta-indent">{f.codigo} {f.nombre}</span></td>
+                          <td className="text-right">{f.totalDebe ? toMoney(f.totalDebe) : ''}</td>
+                          <td className="text-right">{f.totalHaber ? toMoney(f.totalHaber) : ''}</td>
+                          <td className="text-right saldo-col">{toMoney(f.saldo)}</td>
+                        </tr>
+                      ))}
+                      {/* Resultado del Ejercicio (virtual) */}
+                      {balanceGeneral?.resultadoEjercicio !== undefined && (
+                        <tr className="fila-resultado-ejercicio">
+                          <td className="col-cuenta"><span className="cuenta-indent" style={{ '--nivel': 2 }}>Ganancia/Pérdida Neta del Período</span></td>
+                          <td className="text-right"></td>
+                          <td className="text-right"></td>
+                          <td className="text-right saldo-col">{toMoney(balanceGeneral.resultadoEjercicio)}</td>
+                        </tr>
+                      )}
+                      {/* Total PASIVO + PATRIMONIO */}
+                      <tr className="fila-total-final">
+                        <td><strong>PASIVO + PATRIMONIO NETO</strong></td>
+                        <td></td><td></td>
+                        <td className="text-right"><strong>{toMoney((balanceGeneral?.totalPasivos || 0) + ((balanceGeneral?.totalPatrimonioNeto ?? balanceGeneral?.totalPatrimonio) || 0))}</strong></td>
                       </tr>
-                    ))}
-                    {(consultasResumen?.tipos || []).length === 0 && (
-                      <tr><td colSpan="4" className="conta-empty">Sin datos de consultas para el rango seleccionado.</td></tr>
-                    )}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                )}
+
+                {/* ── Estado de Resultados ── */}
+                {cierreSubTab === 'resultados' && (
+                  <table className="conta-table conta-table-estados">
+                    <thead>
+                      <tr><th>Cuenta</th><th className="text-right">Débito</th><th className="text-right">Crédito</th><th className="text-right">Saldo</th></tr>
+                    </thead>
+                    <tbody>
+                      {(estadoResultados?.filas || estadoResultados?.tabla || []).map((f) => (
+                        <tr key={f.id} className={f.esGrupo ? 'fila-grupo' : 'fila-hoja'} style={{ '--nivel': f.nivel }}>
+                          <td className="col-cuenta"><span className="cuenta-indent">{f.codigo} {f.nombre}</span></td>
+                          <td className="text-right">{f.totalDebe ? toMoney(f.totalDebe) : ''}</td>
+                          <td className="text-right">{f.totalHaber ? toMoney(f.totalHaber) : ''}</td>
+                          <td className="text-right saldo-col">{toMoney(f.saldo)}</td>
+                        </tr>
+                      ))}
+                      {/* Ganancia Neta del Período */}
+                      <tr className="fila-resultado-ejercicio">
+                        <td className="col-cuenta"><strong>GANANCIA NETA DEL PERÍODO</strong></td>
+                        <td className="text-right"></td>
+                        <td className="text-right"></td>
+                        <td className="text-right saldo-col"><strong>{toMoney(estadoResultados?.gananciaNetaPeriodo ?? estadoResultados?.utilidad)}</strong></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+
+                {/* ── Balance de Comprobación ── */}
+                {cierreSubTab === 'comprobacion' && (
+                  <>
+                    <div className="conta-kpis conta-kpis-compact" style={{ marginBottom: 8 }}>
+                      <div className="conta-kpi"><span>Total Débito</span><strong>{toMoney(balance?.resumen?.totalDebe)}</strong></div>
+                      <div className="conta-kpi"><span>Total Crédito</span><strong>{toMoney(balance?.resumen?.totalHaber)}</strong></div>
+                    </div>
+                    <table className="conta-table conta-table-estados">
+                      <thead>
+                        <tr><th>Cuenta</th><th className="text-right">Débito</th><th className="text-right">Crédito</th><th className="text-right">Saldo</th></tr>
+                      </thead>
+                      <tbody>
+                        {(balance?.filas || balance?.tabla || []).map((f) => (
+                          <tr key={f.id} className={f.esGrupo ? 'fila-grupo' : 'fila-hoja'} style={{ '--nivel': f.nivel }}>
+                            <td className="col-cuenta"><span className="cuenta-indent">{f.codigo} {f.nombre}</span></td>
+                            <td className="text-right">{f.totalDebe ? toMoney(f.totalDebe) : ''}</td>
+                            <td className="text-right">{f.totalHaber ? toMoney(f.totalHaber) : ''}</td>
+                            <td className="text-right saldo-col">{toMoney(f.saldo)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
+                )}
               </>
             )}
           </div>

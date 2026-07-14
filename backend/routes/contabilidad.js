@@ -386,177 +386,145 @@ async function obtenerMayorizacion(empresaId, filtros = {}) {
   };
 }
 
-async function obtenerBalanceComprobacion(empresaId, filtros = {}) {
+// Construye lista jerárquica con sumas acumuladas de hijo a padre.
+// Devuelve filas ordenadas por código con nivel e indicador esGrupo.
+async function construirJerarquiaContable(empresaId, tipos, filtros = {}) {
   const fechaWhere = whereFechaDesdeFiltros(filtros);
-  const detalles = await prisma.asientos_contables_detalle.findMany({
-    where: {
-      asiento: {
-        is: {
-          empresaId,
-          ...(fechaWhere ? { fecha: fechaWhere } : {}),
-        },
+  const [cuentas, detalles] = await Promise.all([
+    prisma.plan_cuentas.findMany({
+      where: { empresaId, activo: true, ...(tipos ? { tipo: { in: tipos } } : {}) },
+      orderBy: { codigo: 'asc' },
+    }),
+    prisma.asientos_contables_detalle.findMany({
+      where: {
+        asiento: { is: { empresaId, ...(fechaWhere ? { fecha: fechaWhere } : {}) } },
+        cuenta: { is: { empresaId, ...(tipos ? { tipo: { in: tipos } } : {}) } },
       },
-    },
-    include: { cuenta: true },
-  });
+      select: { cuentaId: true, debe: true, haber: true },
+    }),
+  ]);
 
-  const mapa = new Map();
-  detalles.forEach((detalle) => {
-    if (!mapa.has(detalle.cuentaId)) {
-      mapa.set(detalle.cuentaId, {
-        cuentaId: detalle.cuentaId,
-        codigo: detalle.cuenta.codigo,
-        nombre: detalle.cuenta.nombre,
-        tipo: detalle.cuenta.tipo,
-        naturaleza: detalle.cuenta.naturaleza,
-        totalDebe: 0,
-        totalHaber: 0,
-      });
+  // Mapa de movimientos por cuentaId
+  const mapaMovs = new Map();
+  for (const d of detalles) {
+    if (!mapaMovs.has(d.cuentaId)) mapaMovs.set(d.cuentaId, { totalDebe: 0, totalHaber: 0 });
+    const m = mapaMovs.get(d.cuentaId);
+    m.totalDebe = round2(m.totalDebe + Number(d.debe || 0));
+    m.totalHaber = round2(m.totalHaber + Number(d.haber || 0));
+  }
+
+  // Inicializar nodos con sus movimientos directos
+  const mapaCodigo = new Map();
+  for (const c of cuentas) {
+    const mv = mapaMovs.get(c.id) || { totalDebe: 0, totalHaber: 0 };
+    mapaCodigo.set(c.codigo, {
+      id: c.id,
+      codigo: c.codigo,
+      nombre: c.nombre,
+      tipo: c.tipo,
+      naturaleza: c.naturaleza,
+      codigoPadre: c.codigoPadre || null,
+      aceptaMovimiento: c.aceptaMovimiento,
+      totalDebe: mv.totalDebe,
+      totalHaber: mv.totalHaber,
+      saldo: 0,
+    });
+  }
+
+  // Burbujear de hijos a padres (orden descendente = hijos antes que padres)
+  const porCodigo = [...cuentas].sort((a, b) => b.codigo.localeCompare(a.codigo));
+  for (const c of porCodigo) {
+    if (c.codigoPadre && mapaCodigo.has(c.codigoPadre)) {
+      const hijo = mapaCodigo.get(c.codigo);
+      const padre = mapaCodigo.get(c.codigoPadre);
+      padre.totalDebe = round2(padre.totalDebe + hijo.totalDebe);
+      padre.totalHaber = round2(padre.totalHaber + hijo.totalHaber);
     }
+  }
 
-    const item = mapa.get(detalle.cuentaId);
-    item.totalDebe = round2(item.totalDebe + Number(detalle.debe || 0));
-    item.totalHaber = round2(item.totalHaber + Number(detalle.haber || 0));
-  });
+  // Calcular saldo final para cada nodo
+  for (const entry of mapaCodigo.values()) {
+    entry.saldo = calcularSaldo(entry.naturaleza, entry.totalDebe, entry.totalHaber);
+  }
 
-  const tabla = [...mapa.values()]
-    .map((item) => ({
-      ...item,
-      saldo: calcularSaldo(item.naturaleza, item.totalDebe, item.totalHaber),
-    }))
-    .sort((a, b) => a.codigo.localeCompare(b.codigo));
+  // Lista ordenada con nivel e indicador de grupo
+  return [...mapaCodigo.values()]
+    .sort((a, b) => a.codigo.localeCompare(b.codigo))
+    .map((e) => ({
+      ...e,
+      nivel: e.codigo.split('.').length,
+      esGrupo: !e.aceptaMovimiento,
+    }));
+}
 
+async function obtenerBalanceComprobacion(empresaId, filtros = {}) {
+  const filas = await construirJerarquiaContable(empresaId, null, filtros);
+  // Solo cuentas raíz (nivel 1) para los totales del resumen
+  const raices = filas.filter((f) => !f.codigoPadre);
   return {
     resumen: {
-      totalCuentas: tabla.length,
-      totalDebe: round2(tabla.reduce((acc, item) => acc + item.totalDebe, 0)),
-      totalHaber: round2(tabla.reduce((acc, item) => acc + item.totalHaber, 0)),
-      saldoNeto: round2(tabla.reduce((acc, item) => acc + item.saldo, 0)),
+      totalCuentas: filas.length,
+      totalDebe:  round2(raices.reduce((a, f) => a + f.totalDebe, 0)),
+      totalHaber: round2(raices.reduce((a, f) => a + f.totalHaber, 0)),
+      saldoNeto:  round2(raices.reduce((a, f) => a + f.saldo, 0)),
     },
-    tabla,
+    filas,
+    // Compatibilidad con frontend antiguo
+    tabla: filas,
   };
 }
 
 async function obtenerEstadoResultados(empresaId, filtros = {}) {
-  const fechaWhere = whereFechaDesdeFiltros(filtros);
-  const detalles = await prisma.asientos_contables_detalle.findMany({
-    where: {
-      asiento: {
-        is: {
-          empresaId,
-          ...(fechaWhere ? { fecha: fechaWhere } : {}),
-        },
-      },
-      cuenta: {
-        is: {
-          empresaId,
-          tipo: { in: ['INGRESO', 'GASTO', 'COSTO'] },
-        },
-      },
-    },
-    include: { cuenta: true },
-  });
+  const filas = await construirJerarquiaContable(empresaId, ['INGRESO', 'GASTO', 'COSTO'], filtros);
 
-  const mapa = new Map();
-  detalles.forEach((detalle) => {
-    if (!mapa.has(detalle.cuentaId)) {
-      mapa.set(detalle.cuentaId, {
-        cuentaId: detalle.cuentaId,
-        codigo: detalle.cuenta.codigo,
-        nombre: detalle.cuenta.nombre,
-        tipo: detalle.cuenta.tipo,
-        naturaleza: detalle.cuenta.naturaleza,
-        totalDebe: 0,
-        totalHaber: 0,
-      });
-    }
+  // Raíces por tipo para los totales
+  const raicesIngreso = filas.filter((f) => !f.codigoPadre && f.tipo === 'INGRESO');
+  const raicesEgreso  = filas.filter((f) => !f.codigoPadre && (f.tipo === 'GASTO' || f.tipo === 'COSTO'));
 
-    const item = mapa.get(detalle.cuentaId);
-    item.totalDebe = round2(item.totalDebe + Number(detalle.debe || 0));
-    item.totalHaber = round2(item.totalHaber + Number(detalle.haber || 0));
-  });
+  const totalIngresos = round2(raicesIngreso.reduce((a, f) => a + f.saldo, 0));
+  const totalEgresos  = round2(raicesEgreso.reduce((a, f) => a + f.saldo, 0));
+  const gananciaNetaPeriodo = round2(totalIngresos - totalEgresos);
 
-  const tabla = [...mapa.values()]
-    .map((item) => ({
-      ...item,
-      saldo: calcularSaldo(item.naturaleza, item.totalDebe, item.totalHaber),
-    }))
-    .sort((a, b) => a.codigo.localeCompare(b.codigo));
-
-  const totalIngresos = round2(tabla.filter((x) => x.tipo === 'INGRESO').reduce((acc, item) => acc + item.saldo, 0));
-  const totalGastos = round2(tabla.filter((x) => x.tipo === 'GASTO').reduce((acc, item) => acc + item.saldo, 0));
-  const totalCostos = round2(tabla.filter((x) => x.tipo === 'COSTO').reduce((acc, item) => acc + item.saldo, 0));
+  // Para compatibilidad con frontend antiguo
+  const totalGastos = round2(filas.filter((f) => !f.codigoPadre && f.tipo === 'GASTO').reduce((a, f) => a + f.saldo, 0));
+  const totalCostos = round2(filas.filter((f) => !f.codigoPadre && f.tipo === 'COSTO').reduce((a, f) => a + f.saldo, 0));
 
   return {
     totalIngresos,
+    totalEgresos,
     totalGastos,
     totalCostos,
-    utilidad: round2(totalIngresos - totalGastos - totalCostos),
-    tabla,
+    gananciaNetaPeriodo,
+    utilidad: gananciaNetaPeriodo,
+    filas,
+    tabla: filas,
   };
 }
 
 async function obtenerBalanceGeneral(empresaId, fechaCorte = new Date()) {
   const fecha = endOfDay(fechaCorte) || endOfDay(new Date());
-  const detalles = await prisma.asientos_contables_detalle.findMany({
-    where: {
-      asiento: {
-        is: {
-          empresaId,
-          fecha: { lte: fecha },
-        },
-      },
-      cuenta: {
-        is: {
-          empresaId,
-          tipo: { in: ['ACTIVO', 'PASIVO', 'PATRIMONIO', 'INGRESO', 'GASTO', 'COSTO'] },
-        },
-      },
-    },
-    include: { cuenta: true },
-  });
+  const filtrosFecha = { hasta: fecha instanceof Date ? fecha.toISOString() : fecha };
 
-  const mapa = new Map();
-  detalles.forEach((detalle) => {
-    if (!mapa.has(detalle.cuentaId)) {
-      mapa.set(detalle.cuentaId, {
-        cuentaId: detalle.cuentaId,
-        codigo: detalle.cuenta.codigo,
-        nombre: detalle.cuenta.nombre,
-        tipo: detalle.cuenta.tipo,
-        naturaleza: detalle.cuenta.naturaleza,
-        totalDebe: 0,
-        totalHaber: 0,
-      });
-    }
+  // Jerarquías por sección
+  const [filasBalance, filasResultados] = await Promise.all([
+    construirJerarquiaContable(empresaId, ['ACTIVO', 'PASIVO', 'PATRIMONIO'], filtrosFecha),
+    construirJerarquiaContable(empresaId, ['INGRESO', 'GASTO', 'COSTO'], filtrosFecha),
+  ]);
 
-    const item = mapa.get(detalle.cuentaId);
-    item.totalDebe = round2(item.totalDebe + Number(detalle.debe || 0));
-    item.totalHaber = round2(item.totalHaber + Number(detalle.haber || 0));
-  });
+  const activos    = filasBalance.filter((f) => f.tipo === 'ACTIVO');
+  const pasivos    = filasBalance.filter((f) => f.tipo === 'PASIVO');
+  const patrimonio = filasBalance.filter((f) => f.tipo === 'PATRIMONIO');
 
-  const tabla = [...mapa.values()]
-    .map((item) => ({
-      ...item,
-      saldo: calcularSaldo(item.naturaleza, item.totalDebe, item.totalHaber),
-    }))
-    .sort((a, b) => a.codigo.localeCompare(b.codigo));
+  const totalActivos    = round2(activos.filter((f) => !f.codigoPadre).reduce((a, f) => a + f.saldo, 0));
+  const totalPasivos    = round2(pasivos.filter((f) => !f.codigoPadre).reduce((a, f) => a + f.saldo, 0));
+  const totalPatrimonio = round2(patrimonio.filter((f) => !f.codigoPadre).reduce((a, f) => a + f.saldo, 0));
 
-  const activos    = tabla.filter((item) => item.tipo === 'ACTIVO');
-  const pasivos    = tabla.filter((item) => item.tipo === 'PASIVO');
-  const patrimonio = tabla.filter((item) => item.tipo === 'PATRIMONIO');
-
-  const totalActivos    = round2(activos.reduce((acc, item) => acc + item.saldo, 0));
-  const totalPasivos    = round2(pasivos.reduce((acc, item) => acc + item.saldo, 0));
-  const totalPatrimonio = round2(patrimonio.reduce((acc, item) => acc + item.saldo, 0));
-
-  // El resultado del ejercicio (ingresos - gastos - costos) forma parte del
-  // Patrimonio hasta que se registre el asiento de cierre. Sin incluirlo,
-  // el balance nunca cuadra mientras haya utilidad no cerrada.
-  const totalIngresos = round2(tabla.filter((x) => x.tipo === 'INGRESO').reduce((a, i) => a + i.saldo, 0));
-  const totalGastos   = round2(tabla.filter((x) => x.tipo === 'GASTO').reduce((a, i) => a + i.saldo, 0));
-  const totalCostos   = round2(tabla.filter((x) => x.tipo === 'COSTO').reduce((a, i) => a + i.saldo, 0));
-  const resultadoEjercicio = round2(totalIngresos - totalGastos - totalCostos);
+  // Resultado del ejercicio = Ingresos - (Gastos + Costos)
+  const raicesIngreso = filasResultados.filter((f) => !f.codigoPadre && f.tipo === 'INGRESO');
+  const raicesEgreso  = filasResultados.filter((f) => !f.codigoPadre && (f.tipo === 'GASTO' || f.tipo === 'COSTO'));
+  const totalIngresos = round2(raicesIngreso.reduce((a, f) => a + f.saldo, 0));
+  const totalEgresos  = round2(raicesEgreso.reduce((a, f) => a + f.saldo, 0));
+  const resultadoEjercicio = round2(totalIngresos - totalEgresos);
 
   const totalPatrimonioNeto = round2(totalPatrimonio + resultadoEjercicio);
 
