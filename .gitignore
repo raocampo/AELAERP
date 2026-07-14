@@ -59,3 +59,4 @@ docs/datosRuc/
 docs/ReIdi.py.ts-main/
 # PDFs técnicos pesados
 docs/*.pdf
+backend/scripts/_check_puchaicela.js
