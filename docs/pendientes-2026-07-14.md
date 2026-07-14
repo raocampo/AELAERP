@@ -124,32 +124,38 @@ cómo cargar los XML porque solo existía como script.
 
 ---
 
-## 🔴 VERIFICAR MAÑANA EN PRODUCCIÓN
+## ✅ Verificado en producción (2026-07-14, confirmado por el usuario)
 
-### Prioridad alta — pediste tú mismo las pruebas hoy
-1. **Configuración de cuentas por referencia** — Contabilidad → Plan de Cuentas →
-   Configuración de referencias → asignar una cuenta a una referencia de **Nómina** o
-   **General** (las que tienen códigos largos, ej. "Ganancia neta del ejercicio" o
-   "Aporte patronal") → Guardar. Antes fallaba siempre con estas; debe guardar sin error.
-2. **Importar retenciones desde Excel** — Retenciones Recibidas → pestaña "⬆ Importar desde
-   Excel" → sube uno de los 3 archivos reales del cliente (o la plantilla) → confirma que
-   aparecen en el listado con su asiento contable.
-3. **Importar ventas desde XML** — Ventas → Importar históricas → modo "🗂 Desde XML
-   autorizados (.zip)" → sube el .zip de XML del cliente → confirma que las facturas
-   aparecen con estado "Autorizado" y su asiento en el Libro Diario.
-4. **Cargar la contabilidad atrasada real del cliente** — cuando confirmes que 1-3
-   funcionan, usar los archivos ya generados en `UtilitariosSCFI/compras-listas-para-importar/`
-   (2 lotes) + los 3 Excel de retenciones + el .zip de XML de ventas para cargar de verdad
-   la contabilidad de Comercial S&S / Daniel Puchaicela. **Esto sí escribe datos reales —
-   avísame antes si quieres que lo acompañe.**
+1. **Configuración de cuentas por referencia** — guarda correctamente, incluso con
+   referencias de código largo (Nómina/General). Fix P2000 confirmado en producción.
+2. **Importar retenciones desde Excel** — pestaña nueva en Retenciones Recibidas,
+   funcionando.
+3. **Importar ventas desde XML** — modo nuevo en Importar Históricas, funcionando.
+4. **Carga real de la contabilidad atrasada de Daniel Ramiro Puchaicela Abendaño**
+   (RUC/cédula 1104196546) — **completada**. Los 2 lotes de compras, los 3 Excel de
+   retenciones y el .zip de 35 XML de ventas ya se subieron todos por las pantallas de
+   arriba y están correctos. Esta tarea queda cerrada.
+
+**Corrección importante**: "Comercial S&S" (tenant visto en capturas anteriores de esta
+sesión) **no tiene relación** con la carga de contabilidad atrasada de Puchaicela — es un
+cliente nuevo y distinto que empieza su contabilidad desde cero en AELA, sin datos
+históricos que migrar. No confundir ambos en futuras sesiones.
+
+---
+
+## 🔴 PENDIENTE — Prueba mañana desde la oficina, con otro cliente
+
+5. **WebServices API con AVALAB** — todavía no se pudo probar hoy (necesita datos/acceso
+   de otro cliente distinto a los de arriba). El usuario la va a probar mañana desde la
+   oficina: generar una API key de prueba desde SuperAdmin y hacer un POST real a
+   `/api/ext/v1/facturas` (y `/pagos`) antes de conectar AVALAB de verdad. Ver
+   `docs/pendientes-2026-07-13-parte3.md` para el detalle del endpoint.
 
 ### Prioridad media — heredado de `pendientes-2026-07-13-parte3.md`, aún sin confirmar
-5. **Cuentas por Cobrar → Vigentes** — debe mostrar facturas reales por primera vez (bug
-   `estadoSri` corregido esa parte).
-6. **WebServices API con AVALAB** — generar API key de prueba desde SuperAdmin y hacer un
-   POST real a `/api/ext/v1/facturas` antes de conectar AVALAB de verdad.
+6. **Cuentas por Cobrar → Vigentes** — debe mostrar facturas reales por primera vez (bug
+   `estadoSri` corregido esa parte). No se ha reportado si ya se probó.
 7. Confirmar en Railway que existen `SUPER_ADMIN_KEY`, `PAYPHONE_*`, `BANCO_*` si se van a
-   usar esas funciones de pago de suscripción.
+   usar las funciones de pago de suscripción.
 
 ---
 
@@ -160,8 +166,11 @@ Repo:     github.com/raocampo/AELAERP  rama: main
 Commits:  f253e25 · 57a9c63 · f3a7126 · 2627c2b
 Backend:  Railway → aelaerp-production.up.railway.app
 Frontend: Vercel  → aela.corpsimtelec.com
-Cliente real con contabilidad atrasada: Comercial S&S (Daniel Ramiro Puchaicela Abendaño)
-  RUC/cédula 1104196546 — archivos de origen en UtilitariosSCFI/ (fuera del repo git)
+
+Cliente con contabilidad atrasada YA CARGADA (2026-07-14): Daniel Ramiro Puchaicela
+  Abendaño, RUC/cédula 1104196546 — archivos de origen quedan en UtilitariosSCFI/
+  (fuera del repo git) por si hace falta revisar algo puntual.
+"Comercial S&S" es un tenant/cliente DISTINTO y no relacionado — empieza desde cero.
 ```
 
 **Archivos nuevos/modificados en esta parte:**

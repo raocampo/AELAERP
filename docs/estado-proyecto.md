@@ -510,8 +510,9 @@ antes de llegar a producción:**
 ### 29. Sesión 2026-07-13/14 (parte 4) — Carga de contabilidad atrasada + 2 bugs de producción confirmados
 
 Ver `docs/pendientes-2026-07-14.md` para el detalle exhaustivo. Continuación directa de la
-parte 3, motivada por un cliente real (Comercial S&S / Daniel Puchaicela) con contabilidad
-atrasada desde junio 2023.
+parte 3, motivada por un cliente real (Daniel Ramiro Puchaicela Abendaño) con contabilidad
+atrasada desde junio 2023 — carga completada y confirmada el 2026-07-14. ("Comercial S&S"
+es un tenant distinto sin relación con esta migración.)
 
 **Bugs de producción corregidos, confirmados con logs reales de Railway:**
 - **Configuración de cuentas por referencia no guardaba** (`f3a7126`) — `P2000: value too
@@ -822,19 +823,21 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
    - Activar/suspender tenants
    - Ver logs de provisioning fallidos
 
-### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-13/14, parte 4)
+### ✅ Verificado en producción (sesión 2026-07-13/14, parte 4) — confirmado 2026-07-14
 
-Ver `docs/pendientes-2026-07-14.md` sección "VERIFICAR MAÑANA EN PRODUCCIÓN".
+Ver `docs/pendientes-2026-07-14.md` para el detalle completo.
 
-1. **Configuración de cuentas por referencia** — asignar cuenta a una referencia de Nómina
-   o General (código largo, ej. "Ganancia neta del ejercicio") → Guardar. Antes fallaba
-   siempre con estas.
-2. **Importar retenciones desde Excel** — Retenciones Recibidas → pestaña "⬆ Importar desde
-   Excel" con uno de los 3 archivos reales del cliente.
-3. **Importar ventas desde XML** — Ventas → Importar históricas → modo XML (.zip).
-4. **Carga real de contabilidad atrasada de Comercial S&S** — una vez confirmados 1-3, usar
-   los archivos ya generados para cargar los datos reales del cliente (escribe en
-   producción — coordinar antes).
+1. ✅ **Configuración de cuentas por referencia** — guarda correctamente (fix P2000 confirmado).
+2. ✅ **Importar retenciones desde Excel** — pestaña nueva en Retenciones Recibidas, funcionando.
+3. ✅ **Importar ventas desde XML** — modo nuevo en Importar Históricas, funcionando.
+4. ✅ **Carga real de contabilidad atrasada de Daniel Ramiro Puchaicela Abendaño** (RUC/cédula
+   1104196546) — completada: 2 lotes de compras, 3 Excel de retenciones y 35 XML de ventas
+   ya subidos y correctos. **"Comercial S&S" es un cliente distinto y no relacionado** —
+   empieza su contabilidad desde cero, sin datos históricos que migrar.
+
+### 🔴 Pendiente — prueba mañana desde la oficina, con otro cliente
+5. **WebServices API con AVALAB** — generar API key de prueba desde SuperAdmin y hacer un
+   POST real a `/api/ext/v1/facturas` antes de conectar AVALAB de verdad.
 
 ### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-13, parte 3 — bugs críticos)
 
