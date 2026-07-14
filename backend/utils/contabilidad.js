@@ -1315,17 +1315,17 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
   }
   if (subtotalInventario < 0) subtotalInventario = 0;
 
+  // Nuevo sistema: catalog COMPRAS (configuracion_cuentas_referencia) tiene prioridad;
+  // si nada configurado ahí, se cae al viejo config (configuracion_contable).
+  const mapaCompras = await obtenerCuentasReferenciaConfiguradas({ empresaId: compra.empresaId, categoria: 'COMPRAS', tx: db });
   const config = await obtenerConfiguracionContable(compra.empresaId, db);
 
-  const cuentaInventario = await _resolverCuenta({
-    empresaId: compra.empresaId,
-    codigoConfigurado: config?.codigoCuentaInventario,
-    codigoDefault: '1.1.04.001',
-    nombreDefault: 'Inventario Mercaderias',
-    tipoDefault: 'ACTIVO',
-    naturalezaDefault: 'DEBITO',
-    tx: db,
-  });
+  const resolverCompra = (ref, codigoOldConfig, codigoDefault, nombreDefault, tipoDefault, natDef) => {
+    if (mapaCompras.has(ref)) return Promise.resolve(mapaCompras.get(ref));
+    return _resolverCuenta({ empresaId: compra.empresaId, codigoConfigurado: codigoOldConfig, codigoDefault, nombreDefault, tipoDefault, naturalezaDefault: natDef, tx: db });
+  };
+
+  const cuentaInventario = await resolverCompra('INVENTARIO_COMPRAS', config?.codigoCuentaInventario, '1.1.04.001', 'Inventario Mercaderias', 'ACTIVO', 'DEBITO');
 
   // Si la factura tiene cuenta de gasto específica configurada, usarla en lugar del default global
   let cuentaCompras = null;
@@ -1336,46 +1336,14 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
     if (!cuentaCompras) console.warn(`[Contabilidad] cuentaGastoId ${compra.cuentaGastoId} no encontrada — usando cuenta default`);
   }
   if (!cuentaCompras) {
-    cuentaCompras = await _resolverCuenta({
-      empresaId: compra.empresaId,
-      codigoConfigurado: config?.codigoCuentaComprasGasto,
-      codigoDefault: '5.2.01.001',
-      nombreDefault: 'Compras Locales',
-      tipoDefault: 'GASTO',
-      naturalezaDefault: 'DEBITO',
-      tx: db,
-    });
+    cuentaCompras = await resolverCompra('COMPRAS_GASTO', config?.codigoCuentaComprasGasto, '5.2.01.001', 'Compras Locales', 'GASTO', 'DEBITO');
   }
 
-  const cuentaIvaCompras = await _resolverCuenta({
-    empresaId: compra.empresaId,
-    codigoConfigurado: config?.codigoCuentaIvaCompras,
-    codigoDefault: '1.1.05.001',
-    nombreDefault: 'IVA Credito Tributario Compras',
-    tipoDefault: 'ACTIVO',
-    naturalezaDefault: 'DEBITO',
-    tx: db,
-  });
+  const cuentaIvaCompras = await resolverCompra('IVA_COMPRAS', config?.codigoCuentaIvaCompras, '1.1.05.001', 'IVA Credito Tributario Compras', 'ACTIVO', 'DEBITO');
 
   const cuentaContrapartida = compra.egresoCajaRegistrado
-    ? await _resolverCuenta({
-        empresaId: compra.empresaId,
-        codigoConfigurado: config?.codigoCuentaCajaCompras,
-        codigoDefault: '1.1.01.001',
-        nombreDefault: 'Caja',
-        tipoDefault: 'ACTIVO',
-        naturalezaDefault: 'DEBITO',
-        tx: db,
-      })
-    : await _resolverCuenta({
-        empresaId: compra.empresaId,
-        codigoConfigurado: config?.codigoCuentaCxP,
-        codigoDefault: '2.1.04.001',
-        nombreDefault: 'Cuentas por Pagar Proveedores',
-        tipoDefault: 'PASIVO',
-        naturalezaDefault: 'CREDITO',
-        tx: db,
-      });
+    ? await resolverCompra('CAJA_PAGO_COMPRAS', config?.codigoCuentaCajaCompras, '1.1.01.001', 'Caja', 'ACTIVO', 'DEBITO')
+    : await resolverCompra('CXP_PROVEEDORES', config?.codigoCuentaCxP, '2.1.04.001', 'Cuentas por Pagar Proveedores', 'PASIVO', 'CREDITO');
 
   const movimientos = [];
   if (subtotalInventario > 0) {

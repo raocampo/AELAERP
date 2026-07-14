@@ -25,7 +25,7 @@ const ContabilidadHub = () => {
   const [cargandoOrigen, setCargandoOrigen] = useState(false);
 
   const [plan, setPlan] = useState([]);
-  const [subTabRef, setSubTabRef] = useState('compras');
+  const [subTabRef, setSubTabRef] = useState('cuentas-ventas');
   const [subTabPlan, setSubTabPlan] = useState('nueva-cuenta');
   const [asientos, setAsientos] = useState([]);
   const [balance, setBalance] = useState(null);
@@ -1678,21 +1678,22 @@ const ContabilidadHub = () => {
           <div className="conta-card">
             <h3>⚙️ Configuración de cuentas contables</h3>
             <p className="conta-import-sub">
-              Relaciona cada referencia (código de retención SRI, concepto de nómina) con la cuenta
-              de tu Plan de Cuentas correspondiente. Si dejas una referencia sin configurar, se usa
-              la cuenta genérica por defecto del sistema.
+              Relaciona cada referencia (ventas, compras, retenciones SRI, nómina) con la cuenta
+              de tu Plan de Cuentas. Si dejas una sin configurar, el sistema usa la cuenta por defecto.
             </p>
             <div className="conta-tabs">
-              <button className={subTabRef === 'facturas' ? 'active' : ''} onClick={() => setSubTabRef('facturas')}>Facturas</button>
-              <button className={subTabRef === 'compras' ? 'active' : ''} onClick={() => setSubTabRef('compras')}>Compras</button>
-              <button className={subTabRef === 'ventas' ? 'active' : ''} onClick={() => setSubTabRef('ventas')}>Ventas</button>
+              <button className={subTabRef === 'cuentas-ventas' ? 'active' : ''} onClick={() => setSubTabRef('cuentas-ventas')}>Ventas</button>
+              <button className={subTabRef === 'cuentas-compras' ? 'active' : ''} onClick={() => setSubTabRef('cuentas-compras')}>Compras</button>
+              <button className={subTabRef === 'ret-compras' ? 'active' : ''} onClick={() => setSubTabRef('ret-compras')}>Ret. Compras</button>
+              <button className={subTabRef === 'ret-ventas' ? 'active' : ''} onClick={() => setSubTabRef('ret-ventas')}>Ret. Ventas</button>
               <button className={subTabRef === 'empleados' ? 'active' : ''} onClick={() => setSubTabRef('empleados')}>Empleados</button>
               <button className={subTabRef === 'general' ? 'active' : ''} onClick={() => setSubTabRef('general')}>General</button>
             </div>
-            {subTabRef === 'facturas' && <ConfiguracionCuentasReferencia categoria="VENTAS" titulo="Cuentas de Ventas" plan={plan} />}
-            {subTabRef === 'compras' && <ConfiguracionCuentasReferencia categoria="RETENCION_COMPRA" titulo="Retenciones — Compras" plan={plan} />}
-            {subTabRef === 'ventas' && <ConfiguracionCuentasReferencia categoria="RETENCION_VENTA" titulo="Retenciones — Ventas" plan={plan} />}
-            {subTabRef === 'empleados' && <ConfiguracionCuentasReferencia categoria="NOMINA" titulo="Empleados — Nómina" plan={plan} />}
+            {subTabRef === 'cuentas-ventas' && <ConfiguracionCuentasReferencia categoria="VENTAS" titulo="Cuentas de Ventas" plan={plan} />}
+            {subTabRef === 'cuentas-compras' && <ConfiguracionCuentasReferencia categoria="COMPRAS" titulo="Cuentas de Compras" plan={plan} />}
+            {subTabRef === 'ret-compras' && <ConfiguracionCuentasReferencia categoria="RETENCION_COMPRA" titulo="Retenciones Compras (por código SRI)" plan={plan} />}
+            {subTabRef === 'ret-ventas' && <ConfiguracionCuentasReferencia categoria="RETENCION_VENTA" titulo="Retenciones Ventas (por código SRI)" plan={plan} />}
+            {subTabRef === 'empleados' && <ConfiguracionCuentasReferencia categoria="NOMINA" titulo="Nómina — Empleados" plan={plan} />}
             {subTabRef === 'general' && <ConfiguracionCuentasReferencia categoria="GENERAL" titulo="General" plan={plan} />}
           </div>
           )}
