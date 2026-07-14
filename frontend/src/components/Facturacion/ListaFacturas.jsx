@@ -9,8 +9,7 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaCorta } from '../../utils/fecha';
 import { IcVer, IcPDF, IcDescargar, IcReenviar, IcAnular } from '../../utils/icons';
-import { descargarExcel } from '../../utils/exportCsv';
-import { printHtmlReport, buildDataTable } from '../../utils/reportPrint';
+import { descargarExcel, descargarPdf } from '../../utils/exportCsv';
 import './ListaFacturas.css';
 
 // Base URL del servidor sin /api al final (para fetch directo con Authorization header)
@@ -37,6 +36,8 @@ const TabFacturas = ({ navigate, onIrNC }) => {
   const [loading,  setLoading]    = useState(true);
   const [busqueda, setBusqueda]   = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
   const [modalAnular, setModalAnular]   = useState(null);
   const [motivoAnul,  setMotivoAnul]    = useState('');
   const [anulandoId,  setAnulandoId]    = useState(null);
@@ -44,33 +45,31 @@ const TabFacturas = ({ navigate, onIrNC }) => {
   const [exportando,      setExportando]      = useState(false);
   const [imprimiendoPdf,  setImprimiendoPdf]  = useState(false);
 
-  const cargar = useCallback(async ({ termino = busqueda, estado = filtroEstado } = {}) => {
+  const buildParams = useCallback(() => {
+    const p = {};
+    if (filtroEstado) p.estado = filtroEstado;
+    if (busqueda)     p.busqueda = busqueda;
+    if (fechaDesde)   p.fechaDesde = fechaDesde;
+    if (fechaHasta)   p.fechaHasta = fechaHasta;
+    return p;
+  }, [busqueda, filtroEstado, fechaDesde, fechaHasta]);
+
+  const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {};
-      if (estado) params.estado = estado;
-      if (termino) params.busqueda = termino;
-      const res = await api.get('/facturas', { params });
+      const res = await api.get('/facturas', { params: buildParams() });
       setFacturas(res.data.data || []);
     } catch {
       toast.error('Error al cargar facturas');
     } finally {
       setLoading(false);
     }
-  }, [busqueda, filtroEstado]);
+  }, [buildParams]);
 
   useEffect(() => {
-    if (!busqueda && !filtroEstado) {
-      cargar({ termino: busqueda, estado: filtroEstado });
-      return undefined;
-    }
-
-    const timer = setTimeout(() => {
-      cargar({ termino: busqueda, estado: filtroEstado });
-    }, 350);
-
+    const timer = setTimeout(() => { cargar(); }, busqueda ? 350 : 0);
     return () => clearTimeout(timer);
-  }, [busqueda, cargar, filtroEstado]);
+  }, [cargar, busqueda]);
 
   const descargarPDF = async (factura) => {
     try {
@@ -127,10 +126,7 @@ const TabFacturas = ({ navigate, onIrNC }) => {
   const exportarExcel = async () => {
     setExportando(true);
     try {
-      const params = {};
-      if (filtroEstado) params.estado = filtroEstado;
-      if (busqueda)     params.busqueda = busqueda;
-      await descargarExcel(api, '/facturas/exportar/xlsx', params, `ventas-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      await descargarExcel(api, '/facturas/exportar/xlsx', buildParams(), `ventas-${new Date().toISOString().slice(0, 10)}.xlsx`);
       toast.success('Excel exportado correctamente');
     } catch {
       toast.error('No se pudo exportar el Excel');
@@ -142,52 +138,7 @@ const TabFacturas = ({ navigate, onIrNC }) => {
   const imprimirPdf = async () => {
     setImprimiendoPdf(true);
     try {
-      const cfg    = await api.get('/facturas/configuracion').catch(() => ({ data: { data: {} } }));
-      const stored = JSON.parse(localStorage.getItem('aela_empresa') || '{}');
-      const d      = cfg.data?.data || {};
-      const empresa = {
-        razonSocial: d.razonSocial || stored.razonSocial || '',
-        ruc:         d.ruc         || stored.ruc         || '',
-        direccion:   d.dirMatriz   || stored.direccion   || '',
-        telefono:    d.telefono    || stored.telefono    || '',
-        email:       d.emailNotificaciones || stored.email || '',
-        logoUrl:     d.logoUrl     || null,
-      };
-
-      const estadoLabel = {
-        PENDIENTE_FIRMA: 'Pendiente firma', LISTO_ENVIAR: 'Listo enviar',
-        ENVIADO: 'Enviado', AUTORIZADO: 'Autorizado',
-        RECHAZADO: 'Rechazado', ANULADO: 'Anulado', HISTORICO: 'Histórica',
-      };
-
-      const filas = facturas.map((f) => [
-        f.numeroFactura || '',
-        formatFechaCorta(f.fechaEmision),
-        f.razonSocialComprador || '',
-        f.identificacionComprador || '',
-        `$${Number(f.importeTotal || 0).toFixed(2)}`,
-        estadoLabel[f.estadoSri] || f.estadoSri || '',
-        f.anulada ? 'Sí' : 'No',
-      ]);
-
-      const totalGeneral = facturas.reduce((s, f) => s + Number(f.importeTotal || 0), 0);
-      filas.push(['', 'TOTAL', '', '', `$${totalGeneral.toFixed(2)}`, '', '']);
-
-      const tabla = buildDataTable(
-        ['Nro Factura', 'Fecha', 'Cliente', 'CI/RUC', 'Total', 'Estado SRI', 'Anulada'],
-        filas,
-      );
-
-      let subtitulo = `${facturas.length} registro(s)`;
-      if (filtroEstado) subtitulo += ` | Estado: ${estadoLabel[filtroEstado] || filtroEstado}`;
-      if (busqueda)     subtitulo += ` | Búsqueda: "${busqueda}"`;
-
-      printHtmlReport({
-        title: 'Libro de Ventas',
-        subtitle: subtitulo,
-        sections: [{ title: 'Detalle de Facturas', html: tabla }],
-        empresa,
-      });
+      await descargarPdf(api, '/facturas/exportar/pdf', buildParams(), `ventas-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch {
       toast.error('No se pudo generar el PDF');
     } finally {
@@ -224,6 +175,8 @@ const TabFacturas = ({ navigate, onIrNC }) => {
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
         />
+        <input type="date" className="fact-select" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} title="Desde" />
+        <input type="date" className="fact-select" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} title="Hasta" />
         <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} className="fact-select">
           <option value="">Todos los estados</option>
           <option value="PENDIENTE_FIRMA">Pendiente firma</option>
@@ -418,6 +371,8 @@ const TabNotasCredito = ({ navigate }) => {
   const [ncs, setNcs]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(null);
+  const [exportando, setExportando] = useState(false);
+  const [imprimiendoPdf, setImprimiendoPdf] = useState(false);
 
   const recargar = () => {
     setLoading(true);
@@ -453,9 +408,32 @@ const TabNotasCredito = ({ navigate }) => {
     }
   };
 
+  const exportarExcel = async () => {
+    setExportando(true);
+    try { await descargarExcel(api, '/facturas/notas-credito/exportar/xlsx', {}, `notas-credito-${new Date().toISOString().slice(0, 10)}.xlsx`); }
+    catch { toast.error('No se pudo exportar el Excel'); }
+    finally { setExportando(false); }
+  };
+
+  const exportarPdf = async () => {
+    setImprimiendoPdf(true);
+    try { await descargarPdf(api, '/facturas/notas-credito/exportar/pdf', {}, `notas-credito-${new Date().toISOString().slice(0, 10)}.pdf`); }
+    catch { toast.error('No se pudo generar el PDF'); }
+    finally { setImprimiendoPdf(false); }
+  };
+
   if (loading) return <div className="loading">Cargando Notas de Crédito...</div>;
 
   return (
+    <>
+      <div className="fact-export-bar">
+        <button className="btn-secondary" onClick={exportarExcel} disabled={exportando || ncs.length === 0}>
+          {exportando ? 'Exportando…' : '⬇ Excel'}
+        </button>
+        <button className="btn-secondary" onClick={exportarPdf} disabled={imprimiendoPdf || ncs.length === 0}>
+          {imprimiendoPdf ? 'Generando…' : '🖨 PDF'}
+        </button>
+      </div>
     <div className="fact-table-wrap">
       {ncs.length === 0 ? (
         <div className="fact-vacio"><p>No hay Notas de Crédito emitidas.</p></div>
@@ -508,6 +486,7 @@ const TabNotasCredito = ({ navigate }) => {
         </table>
       )}
     </div>
+    </>
   );
 };
 

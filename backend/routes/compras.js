@@ -373,6 +373,154 @@ router.get('/exportar/csv', async (req, res) => {
 });
 
 // GET /api/compras/exportar/xlsx — Excel con los mismos filtros que el listado
+// GET /api/compras/exportar/pdf — PDF con los mismos filtros que el listado (PDFKit)
+router.get('/exportar/pdf', async (req, res) => {
+  try {
+    const PDFDocument = require('pdfkit');
+    const { fechaDesde, fechaHasta, busqueda, proveedor, tipoGasto, origenRegistro } = req.query;
+    const where = { empresaId: req.empresa.id };
+
+    if (fechaDesde || fechaHasta) {
+      where.fechaEmision = {};
+      if (fechaDesde) where.fechaEmision.gte = new Date(fechaDesde);
+      if (fechaHasta) {
+        const hasta = new Date(fechaHasta); hasta.setHours(23, 59, 59, 999);
+        where.fechaEmision.lte = hasta;
+      }
+    }
+    const termino = limpiarTexto(proveedor || busqueda);
+    if (termino) {
+      where.OR = [
+        { razonSocialProveedor: { contains: termino, mode: 'insensitive' } },
+        { identificacionProveedor: { contains: termino, mode: 'insensitive' } },
+        { numeroFactura: { contains: termino, mode: 'insensitive' } },
+      ];
+    }
+    if (origenRegistro) where.origenRegistro = origenRegistro;
+    const cols = await getColsCompra();
+    if (cols.tipoGasto && tipoGasto) {
+      where.tipoGasto = tipoGasto === 'SIN_CLASIFICAR' ? null : tipoGasto;
+    }
+
+    const [items, cfg] = await Promise.all([
+      prisma.facturas_compra.findMany({
+        where, orderBy: { fechaEmision: 'desc' }, take: 5000,
+        select: {
+          fechaEmision: true, numeroFactura: true, razonSocialProveedor: true,
+          identificacionProveedor: true, subtotal0: true, subtotal15: true,
+          totalIva: true, importeTotal: true,
+          ...(cols.anulada ? { anulada: true } : {}),
+        },
+      }),
+      prisma.configuracion_sri.findFirst({
+        where: { empresaId: req.empresa.id },
+        select: { razonSocial: true, ruc: true, dirMatriz: true },
+      }),
+    ]);
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="compras-${fecha}.pdf"`);
+
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 32, bottom: 32, left: 32, right: 32 }, autoFirstPage: true });
+    doc.pipe(res);
+
+    const ML = 32, W = 531;
+    const NEGRO = '#1e293b', GRIS = '#64748b', VERDE = '#0f766e';
+    const ROWH = 14;
+
+    // COLS: x, w, label, align
+    const COLS = [
+      { x: ML,      w: 50,  label: 'Fecha',      align: 'left' },
+      { x: ML+50,   w: 80,  label: 'N° Factura', align: 'left' },
+      { x: ML+130,  w: 135, label: 'Proveedor',  align: 'left' },
+      { x: ML+265,  w: 65,  label: 'RUC/CI',     align: 'left' },
+      { x: ML+330,  w: 42,  label: 'Base 0%',    align: 'right' },
+      { x: ML+372,  w: 43,  label: 'Base 15%',   align: 'right' },
+      { x: ML+415,  w: 38,  label: 'IVA',        align: 'right' },
+      { x: ML+453,  w: 52,  label: 'Total',      align: 'right' },
+      { x: ML+505,  w: 26,  label: 'Est.',       align: 'center' },
+    ];
+
+    let y = 32;
+    const drawHeader = () => {
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(NEGRO)
+         .text(cfg?.razonSocial || '', ML, y, { width: W });
+      y = doc.y + 2;
+      doc.fontSize(8).font('Helvetica').fillColor(GRIS)
+         .text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC')}`, ML, y, { width: W });
+      y = doc.y + 8;
+      doc.fontSize(13).font('Helvetica-Bold').fillColor(VERDE).text('LIBRO DE COMPRAS', ML, y, { width: W });
+      y = doc.y + 4;
+      let sub = `${items.length} registro(s)`;
+      if (fechaDesde || fechaHasta) sub += `  |  Del ${fechaDesde || '—'} al ${fechaHasta || '—'}`;
+      if (termino) sub += `  |  Búsqueda: "${termino}"`;
+      doc.fontSize(7.5).font('Helvetica').fillColor(GRIS).text(sub, ML, y, { width: W });
+      y = doc.y + 10;
+      doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(1).stroke(VERDE);
+      y += 6;
+    };
+
+    const drawColHeaders = () => {
+      doc.rect(ML, y - 1, W, ROWH + 2).fill('#ecfeff');
+      doc.fontSize(7.5).font('Helvetica-Bold').fillColor(VERDE);
+      COLS.forEach(c => doc.text(c.label, c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+      y += ROWH;
+      doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.4).stroke('#94a3b8');
+      y += 3;
+    };
+
+    drawHeader();
+    drawColHeaders();
+
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
+    const fmtNum  = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+    let totBase0 = 0, totBase15 = 0, totIva = 0, totTotal = 0;
+    let rowIdx = 0;
+
+    for (const r of items) {
+      if (y > doc.page.height - 64) {
+        doc.addPage();
+        y = 32;
+        drawColHeaders();
+      }
+      if (rowIdx % 2 === 1) {
+        doc.rect(ML, y - 1, W, ROWH + 1).fill('#f8fafc');
+      }
+      doc.fontSize(7.5).font('Helvetica').fillColor(r.anulada ? '#94a3b8' : NEGRO);
+      const cells = [
+        fmtDate(r.fechaEmision), r.numeroFactura || '',
+        (r.razonSocialProveedor || '').slice(0, 28), r.identificacionProveedor || '',
+        fmtNum(r.subtotal0), fmtNum(r.subtotal15), fmtNum(r.totalIva), fmtNum(r.importeTotal),
+        r.anulada ? 'Anul' : 'OK',
+      ];
+      COLS.forEach((c, i) => doc.text(cells[i], c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+      y += ROWH;
+
+      totBase0  += Number(r.subtotal0  || 0);
+      totBase15 += Number(r.subtotal15 || 0);
+      totIva    += Number(r.totalIva   || 0);
+      totTotal  += Number(r.importeTotal || 0);
+      rowIdx++;
+    }
+
+    // Totals
+    if (y > doc.page.height - 48) { doc.addPage(); y = 32; }
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.6).stroke('#94a3b8');
+    y += 4;
+    doc.rect(ML, y - 1, W, ROWH + 2).fill('#ecfeff');
+    doc.fontSize(7.5).font('Helvetica-Bold').fillColor(VERDE);
+    const tots = ['', 'TOTALES', '', '', fmtNum(totBase0), fmtNum(totBase15), fmtNum(totIva), fmtNum(totTotal), ''];
+    COLS.forEach((c, i) => doc.text(tots[i], c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+
+    doc.end();
+  } catch (error) {
+    console.error('GET /compras/exportar/pdf:', error);
+    if (!res.headersSent) res.status(500).json({ success: false, mensaje: 'No se pudo generar el PDF de compras' });
+  }
+});
+
 router.get('/exportar/xlsx', async (req, res) => {
   try {
     const XLSX = require('xlsx');

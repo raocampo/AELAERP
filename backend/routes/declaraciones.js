@@ -168,6 +168,36 @@ router.get('/f104', async (req, res) => {
       });
     });
 
+    // ── NC RECIBIDAS DE PROVEEDORES ──────────────────────────────────────────────
+    // Almacenadas en docs_recibidos_otros con tipoDocumento='04'. Solo tienen
+    // importeTotal; el IVA se extrae del xmlAutorizado si está disponible.
+    // Reducen el crédito fiscal de IVA (casillero 521/523 del F104 real).
+    function extractIvaDeNcXml(xml) {
+      if (!xml) return 0;
+      let total = 0;
+      const bloques = xml.match(/<totalImpuesto>[\s\S]*?<\/totalImpuesto>/g) || [];
+      for (const b of bloques) {
+        if (!/<codigo>2<\/codigo>/.test(b)) continue; // código 2 = IVA
+        const m = b.match(/<valor>([\d.]+)<\/valor>/);
+        if (m) total += parseFloat(m[1]) || 0;
+      }
+      return parseFloat(total.toFixed(2));
+    }
+
+    const ncReci = await db.docs_recibidos_otros.findMany({
+      where: { empresaId, tipoDocumento: '04', fechaEmision: filtroFecha },
+      select: { importeTotal: true, xmlAutorizado: true },
+    });
+
+    let ncReciIva = 0, ncReciSubtotal = 0;
+    ncReci.forEach((nc) => {
+      const iva = extractIvaDeNcXml(nc.xmlAutorizado);
+      ncReciIva      += iva;
+      ncReciSubtotal += Math.max(0, d(nc.importeTotal) - iva);
+    });
+    ncReciIva      = parseFloat(ncReciIva.toFixed(2));
+    ncReciSubtotal = parseFloat(ncReciSubtotal.toFixed(2));
+
     // ── CRÉDITO TRIBUTARIO ARRASTRADO DEL MES ANTERIOR ──────────────────────────
     // No se calcula automáticamente encadenando meses (el saldo oficial ante el
     // SRI puede no coincidir con lo que este sistema calcularía solo, p.ej. si
@@ -180,7 +210,7 @@ router.get('/f104', async (req, res) => {
 
     // ── CÁLCULO FINAL ────────────────────────────────────────────────────────────
     const ivaGenerado    = parseFloat(ivaVentasNeto.toFixed(2));
-    const ivaCreditoFiscal = parseFloat((ivaCompras + liqIva).toFixed(2));
+    const ivaCreditoFiscal = parseFloat((ivaCompras + liqIva - ncReciIva).toFixed(2));
     const ivaRetenidoClientes = parseFloat((retencionIVA30 + retencionIVA70 + retencionIVA100 + retencionIVAOtro).toFixed(2));
     const ivaACobrarPagar = parseFloat((ivaGenerado - ivaCreditoFiscal - ivaRetenidoClientes - creditoTributarioAnterior).toFixed(2));
 
@@ -203,6 +233,7 @@ router.get('/f104', async (req, res) => {
         subtotal15:          parseFloat(comprasSubtotal15.toFixed(2)),
         ivaCompras:          parseFloat(ivaCompras.toFixed(2)),
         liquidaciones:       { subtotal0: parseFloat(liqSubtotal0.toFixed(2)), subtotal15: parseFloat(liqSubtotal15.toFixed(2)), iva: parseFloat(liqIva.toFixed(2)) },
+        ncRecibidas:         { subtotal: ncReciSubtotal, iva: ncReciIva, cantidad: ncReci.length },
         ivaCreditoFiscal,
       },
       retenciones: {

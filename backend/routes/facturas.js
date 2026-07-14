@@ -703,6 +703,143 @@ router.delete('/configuracion/certificado', permitirConfigurarSri, async (req, r
 // ────────────────────────────────────────────────────────────────────────────
 
 // GET /api/facturas  — lista con filtros opcionales
+// GET /api/facturas/exportar/pdf — PDF de ventas con PDFKit
+router.get('/exportar/pdf', permitirVerFacturacion, async (req, res) => {
+  try {
+    const PDFDocument = require('pdfkit');
+    const { estado, fechaDesde, fechaHasta, busqueda } = req.query;
+    const where = { empresaId: req.empresa.id };
+
+    if (estado) where.estadoSri = estado;
+    if (fechaDesde || fechaHasta) {
+      where.fechaEmision = {};
+      if (fechaDesde) where.fechaEmision.gte = new Date(fechaDesde);
+      if (fechaHasta) {
+        const hasta = new Date(fechaHasta); hasta.setHours(23, 59, 59, 999);
+        where.fechaEmision.lte = hasta;
+      }
+    }
+    if (busqueda) {
+      where.OR = [
+        { numeroFactura:           { contains: busqueda, mode: 'insensitive' } },
+        { razonSocialComprador:    { contains: busqueda, mode: 'insensitive' } },
+        { identificacionComprador: { contains: busqueda, mode: 'insensitive' } },
+      ];
+    }
+
+    const [facturas, cfg] = await Promise.all([
+      prisma.facturas.findMany({
+        where, orderBy: { fechaEmision: 'desc' }, take: 5000,
+        select: {
+          numeroFactura: true, fechaEmision: true,
+          razonSocialComprador: true, identificacionComprador: true,
+          subtotal0: true, subtotal15: true, totalIva: true, importeTotal: true,
+          estadoSri: true, anulada: true,
+        },
+      }),
+      prisma.configuracion_sri.findFirst({
+        where: { empresaId: req.empresa.id },
+        select: { razonSocial: true, ruc: true },
+      }),
+    ]);
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="ventas-${fecha}.pdf"`);
+
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 32, bottom: 32, left: 32, right: 32 }, autoFirstPage: true });
+    doc.pipe(res);
+
+    const ML = 32, W = 531;
+    const NEGRO = '#1e293b', GRIS = '#64748b', VERDE = '#0f766e';
+    const ROWH = 14;
+
+    const ESTADO_LABEL = {
+      PENDIENTE_FIRMA: 'Pendiente', LISTO_ENVIAR: 'Listo', ENVIADO: 'Enviado',
+      AUTORIZADO: 'Autorizado', RECHAZADO: 'Rechazado', ANULADO: 'Anulado', HISTORICO: 'Histórica',
+    };
+
+    const COLS = [
+      { x: ML,      w: 90,  label: 'N° Factura', align: 'left'  },
+      { x: ML+90,   w: 52,  label: 'Fecha',      align: 'left'  },
+      { x: ML+142,  w: 155, label: 'Cliente',    align: 'left'  },
+      { x: ML+297,  w: 72,  label: 'RUC/CI',     align: 'left'  },
+      { x: ML+369,  w: 42,  label: 'Base 0%',    align: 'right' },
+      { x: ML+411,  w: 43,  label: 'Base 15%',   align: 'right' },
+      { x: ML+454,  w: 38,  label: 'Total',      align: 'right' },
+      { x: ML+492,  w: 39,  label: 'Estado',     align: 'center'},
+    ];
+
+    let y = 32;
+    const drawColHeaders = () => {
+      doc.rect(ML, y - 1, W, ROWH + 2).fill('#ecfeff');
+      doc.fontSize(7.5).font('Helvetica-Bold').fillColor(VERDE);
+      COLS.forEach(c => doc.text(c.label, c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+      y += ROWH;
+      doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.4).stroke('#94a3b8');
+      y += 3;
+    };
+
+    // Header
+    doc.fontSize(12).font('Helvetica-Bold').fillColor(NEGRO)
+       .text(cfg?.razonSocial || '', ML, y, { width: W });
+    y = doc.y + 2;
+    doc.fontSize(8).font('Helvetica').fillColor(GRIS)
+       .text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC')}`, ML, y, { width: W });
+    y = doc.y + 8;
+    doc.fontSize(13).font('Helvetica-Bold').fillColor(VERDE).text('LIBRO DE VENTAS', ML, y, { width: W });
+    y = doc.y + 4;
+    let sub = `${facturas.length} registro(s)`;
+    if (fechaDesde || fechaHasta) sub += `  |  Del ${fechaDesde || '—'} al ${fechaHasta || '—'}`;
+    if (estado) sub += `  |  Estado: ${ESTADO_LABEL[estado] || estado}`;
+    if (busqueda) sub += `  |  Búsqueda: "${busqueda}"`;
+    doc.fontSize(7.5).font('Helvetica').fillColor(GRIS).text(sub, ML, y, { width: W });
+    y = doc.y + 10;
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(1).stroke(VERDE);
+    y += 6;
+
+    drawColHeaders();
+
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
+    const fmtNum  = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+    let totBase0 = 0, totBase15 = 0, totTotal = 0, rowIdx = 0;
+    for (const f of facturas) {
+      if (y > doc.page.height - 64) {
+        doc.addPage(); y = 32; drawColHeaders();
+      }
+      if (rowIdx % 2 === 1) doc.rect(ML, y - 1, W, ROWH + 1).fill('#f8fafc');
+      doc.fontSize(7.5).font('Helvetica').fillColor(f.anulada ? '#94a3b8' : NEGRO);
+      const cells = [
+        f.numeroFactura || '', fmtDate(f.fechaEmision),
+        (f.razonSocialComprador || '').slice(0, 30), f.identificacionComprador || '',
+        fmtNum(f.subtotal0), fmtNum(f.subtotal15), fmtNum(f.importeTotal),
+        ESTADO_LABEL[f.estadoSri] || f.estadoSri || '',
+      ];
+      COLS.forEach((c, i) => doc.text(cells[i], c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+      y += ROWH;
+      totBase0  += Number(f.subtotal0  || 0);
+      totBase15 += Number(f.subtotal15 || 0);
+      totTotal  += Number(f.importeTotal || 0);
+      rowIdx++;
+    }
+
+    // Totals
+    if (y > doc.page.height - 48) { doc.addPage(); y = 32; }
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.6).stroke('#94a3b8');
+    y += 4;
+    doc.rect(ML, y - 1, W, ROWH + 2).fill('#ecfeff');
+    doc.fontSize(7.5).font('Helvetica-Bold').fillColor(VERDE);
+    const tots = ['TOTALES', '', '', '', fmtNum(totBase0), fmtNum(totBase15), fmtNum(totTotal), ''];
+    COLS.forEach((c, i) => doc.text(tots[i], c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+
+    doc.end();
+  } catch (error) {
+    console.error('GET /facturas/exportar/pdf:', error);
+    if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // GET /api/facturas/exportar/xlsx — Excel de ventas con los mismos filtros que el listado
 router.get('/exportar/xlsx', permitirVerFacturacion, async (req, res) => {
   try {
@@ -1291,6 +1428,128 @@ router.get('/:id/xml', permitirVerFacturacion, async (req, res) => {
 // ────────────────────────────────────────────────────────────────────────────
 // NOTAS DE CRÉDITO
 // ────────────────────────────────────────────────────────────────────────────
+
+// GET /api/facturas/notas-credito/exportar/xlsx
+router.get('/notas-credito/exportar/xlsx', permitirVerFacturacion, async (req, res) => {
+  try {
+    const XLSX = require('xlsx');
+    const ncs = await prisma.notas_credito.findMany({
+      where: { empresaId: req.empresa.id },
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
+      select: {
+        numeroNC: true, fechaEmision: true, razonSocialComprador: true, identificacionComprador: true,
+        importeTotal: true, estadoSri: true, motivoModificacion: true, numeroFacturaAfectada: true,
+      },
+    });
+
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
+    const fmtNum  = (v) => Number(v || 0).toFixed(2);
+
+    const headers = ['N° NC', 'Fecha', 'Cliente', 'CI/RUC', 'Factura Afectada', 'Total', 'Estado SRI', 'Motivo'];
+    const rows    = ncs.map(nc => [
+      nc.numeroNC, fmtDate(nc.fechaEmision), nc.razonSocialComprador, nc.identificacionComprador,
+      nc.numeroFacturaAfectada, fmtNum(nc.importeTotal), nc.estadoSri || '', nc.motivoModificacion || '',
+    ]);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 36 }, { wch: 14 }, { wch: 22 }, { wch: 10 }, { wch: 16 }, { wch: 40 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'NC Emitidas');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="notas-credito-${fecha}.xlsx"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('GET /notas-credito/exportar/xlsx:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /api/facturas/notas-credito/exportar/pdf
+router.get('/notas-credito/exportar/pdf', permitirVerFacturacion, async (req, res) => {
+  try {
+    const PDFDocument = require('pdfkit');
+    const [ncs, cfg] = await Promise.all([
+      prisma.notas_credito.findMany({
+        where: { empresaId: req.empresa.id },
+        orderBy: { createdAt: 'desc' },
+        take: 5000,
+        select: {
+          numeroNC: true, fechaEmision: true, razonSocialComprador: true, identificacionComprador: true,
+          importeTotal: true, estadoSri: true, numeroFacturaAfectada: true,
+        },
+      }),
+      prisma.configuracion_sri.findFirst({ where: { empresaId: req.empresa.id }, select: { razonSocial: true, ruc: true } }),
+    ]);
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="notas-credito-${fecha}.pdf"`);
+
+    const ML = 32, W = 531, ROWH = 14, NEGRO = '#1e293b', GRIS = '#64748b', VERDE = '#0f766e';
+    const COLS = [
+      { x: ML,      w: 110, label: 'N° NC',          align: 'left'  },
+      { x: ML+110,  w: 52,  label: 'Fecha',          align: 'left'  },
+      { x: ML+162,  w: 175, label: 'Cliente',        align: 'left'  },
+      { x: ML+337,  w: 72,  label: 'CI/RUC',         align: 'left'  },
+      { x: ML+409,  w: 80,  label: 'Fact. afectada', align: 'left'  },
+      { x: ML+489,  w: 42,  label: 'Total',          align: 'right' },
+    ];
+
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 32, bottom: 32, left: 32, right: 32 }, autoFirstPage: true });
+    doc.pipe(res);
+
+    let y = 32;
+    doc.fontSize(12).font('Helvetica-Bold').fillColor(NEGRO).text(cfg?.razonSocial || '', ML, y, { width: W });
+    y = doc.y + 2;
+    doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC')}`, ML, y, { width: W });
+    y = doc.y + 8;
+    doc.fontSize(13).font('Helvetica-Bold').fillColor(VERDE).text('NOTAS DE CRÉDITO EMITIDAS', ML, y, { width: W });
+    y = doc.y + 4;
+    doc.fontSize(7.5).font('Helvetica').fillColor(GRIS).text(`${ncs.length} registro(s)`, ML, y, { width: W });
+    y = doc.y + 10;
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(1).stroke(VERDE);
+    y += 6;
+
+    const drawColHeaders = () => {
+      doc.rect(ML, y - 1, W, ROWH + 2).fill('#ecfeff');
+      doc.fontSize(7.5).font('Helvetica-Bold').fillColor(VERDE);
+      COLS.forEach(c => doc.text(c.label, c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+      y += ROWH;
+      doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.4).stroke('#94a3b8');
+      y += 3;
+    };
+    drawColHeaders();
+
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
+    const fmtNum  = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+    let totTotal = 0;
+    for (let i = 0; i < ncs.length; i++) {
+      const nc = ncs[i];
+      if (y > doc.page.height - 64) { doc.addPage(); y = 32; drawColHeaders(); }
+      if (i % 2 === 1) doc.rect(ML, y - 1, W, ROWH + 1).fill('#f8fafc');
+      doc.fontSize(7.5).font('Helvetica').fillColor(NEGRO);
+      const cells = [nc.numeroNC, fmtDate(nc.fechaEmision), (nc.razonSocialComprador || '').slice(0, 30), nc.identificacionComprador, nc.numeroFacturaAfectada || '', fmtNum(nc.importeTotal)];
+      COLS.forEach((c, j) => doc.text(cells[j], c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+      y += ROWH;
+      totTotal += Number(nc.importeTotal || 0);
+    }
+
+    if (y > doc.page.height - 48) { doc.addPage(); y = 32; }
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.6).stroke('#94a3b8');
+    y += 4;
+    doc.rect(ML, y - 1, W, ROWH + 2).fill('#ecfeff');
+    doc.fontSize(7.5).font('Helvetica-Bold').fillColor(VERDE);
+    COLS.forEach((c, i) => doc.text(i === 0 ? 'TOTALES' : (i === 5 ? fmtNum(totTotal) : ''), c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+    doc.end();
+  } catch (err) {
+    console.error('GET /notas-credito/exportar/pdf:', err);
+    if (!res.headersSent) res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // GET /api/facturas/notas-credito — lista
 router.get('/notas-credito/lista', permitirVerFacturacion, async (req, res) => {

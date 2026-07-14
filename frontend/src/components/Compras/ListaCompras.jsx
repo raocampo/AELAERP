@@ -3,8 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
-import { descargarCsv, descargarExcel } from '../../utils/exportCsv';
-import { printHtmlReport, buildDataTable } from '../../utils/reportPrint';
+import { descargarCsv, descargarExcel, descargarPdf } from '../../utils/exportCsv';
 import { parseFechaLocal } from '../../utils/fecha';
 import { IcVer, IcEditar } from '../../utils/icons';
 import './ListaCompras.css';
@@ -362,55 +361,7 @@ export default function ListaCompras() {
   const imprimirPdf = async () => {
     setImprimiendoPdf(true);
     try {
-      const [resItems, resEmp] = await Promise.all([
-        api.get('/compras', { params: { ...filtros, page: 1, limit: 5000 } }),
-        api.get('/facturas/configuracion').catch(() => ({ data: { data: null } })),
-      ]);
-      const todos = resItems.data?.data || [];
-      const cfg   = resEmp.data?.data || {};
-      const stored = JSON.parse(localStorage.getItem('aela_empresa') || '{}');
-      const empresa = {
-        razonSocial: cfg.razonSocial || stored.razonSocial || '',
-        ruc:         cfg.ruc         || stored.ruc         || '',
-        direccion:   cfg.dirMatriz   || stored.direccion   || '',
-        telefono:    cfg.telefono    || stored.telefono    || '',
-        email:       cfg.emailNotificaciones || stored.email || '',
-        logoUrl:     cfg.logoUrl     || null,
-      };
-
-      const filas = todos.map((r) => [
-        r.fechaEmision ? new Date(r.fechaEmision).toLocaleDateString('es-EC') : '',
-        r.numeroFactura || '',
-        r.razonSocialProveedor || '',
-        r.identificacionProveedor || '',
-        `$${Number(r.subtotal0 || 0).toFixed(2)}`,
-        `$${Number(r.subtotal15 || 0).toFixed(2)}`,
-        `$${Number(r.totalIva || 0).toFixed(2)}`,
-        `$${Number(r.importeTotal || 0).toFixed(2)}`,
-        r.anulada ? 'Anulada' : 'Vigente',
-      ]);
-
-      const totalGeneral = todos.reduce((s, r) => s + Number(r.importeTotal || 0), 0);
-      const totalIvaSuma = todos.reduce((s, r) => s + Number(r.totalIva || 0), 0);
-      filas.push(['', '', '', 'TOTALES', '', '', `$${totalIvaSuma.toFixed(2)}`, `$${totalGeneral.toFixed(2)}`, '']);
-
-      const tabla = buildDataTable(
-        ['Fecha', 'Nro Factura', 'Proveedor', 'RUC/CI', 'Base 0%', 'Base IVA', 'IVA', 'Total', 'Estado'],
-        filas,
-      );
-
-      let subtitulo = `${todos.length} registro(s)`;
-      if (filtros.fechaDesde || filtros.fechaHasta) {
-        subtitulo += ` | Del ${filtros.fechaDesde || '—'} al ${filtros.fechaHasta || '—'}`;
-      }
-      if (filtros.busqueda) subtitulo += ` | Búsqueda: "${filtros.busqueda}"`;
-
-      printHtmlReport({
-        title: 'Libro de Compras',
-        subtitle: subtitulo,
-        sections: [{ title: 'Detalle de Compras', html: tabla }],
-        empresa,
-      });
+      await descargarPdf(api, '/compras/exportar/pdf', filtros, `compras-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch {
       toast.error('No se pudo generar el PDF');
     } finally {

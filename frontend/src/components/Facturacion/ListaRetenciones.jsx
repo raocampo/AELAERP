@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import { IcPDF, IcXML, IcReenviar, IcAnular, IcEditar } from '../../utils/icons';
+import { descargarExcel, descargarPdf } from '../../utils/exportCsv';
 import './ListaRetenciones.css';
 
 const BADGE = {
@@ -37,6 +38,8 @@ export default function ListaRetenciones() {
   const [modalEditar, setModalEditar] = useState(null); // retención completa
   const [impuestosEdit, setImpuestosEdit] = useState([]);
   const [guardandoEdit, setGuardandoEdit] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [imprimiendoPdf, setImprimiendoPdf] = useState(false);
 
   const cargar = useCallback(async (pg = 1) => {
     setLoading(true);
@@ -146,6 +149,22 @@ export default function ListaRetenciones() {
     }
   };
 
+  const exportarExcel = async () => {
+    setExportando(true);
+    try {
+      await descargarExcel(api, '/retenciones/exportar/xlsx', filtros, `retenciones-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch { alert('No se pudo exportar el Excel'); }
+    finally { setExportando(false); }
+  };
+
+  const exportarPdf = async () => {
+    setImprimiendoPdf(true);
+    try {
+      await descargarPdf(api, '/retenciones/exportar/pdf', filtros, `retenciones-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch { alert('No se pudo generar el PDF'); }
+    finally { setImprimiendoPdf(false); }
+  };
+
   const fmtFecha = (f) => f ? formatFechaCorta(f) : '-';
 
   return (
@@ -182,6 +201,12 @@ export default function ListaRetenciones() {
           onChange={handleFiltro} className="ret-input" placeholder="Buscar proveedor..."
         />
         <button className="btn-primary" onClick={() => cargar(1)}>Buscar</button>
+        <button className="btn-secondary" onClick={exportarExcel} disabled={exportando}>
+          {exportando ? 'Exportando…' : '⬇ Excel'}
+        </button>
+        <button className="btn-secondary" onClick={exportarPdf} disabled={imprimiendoPdf}>
+          {imprimiendoPdf ? 'Generando…' : '🖨 PDF'}
+        </button>
       </div>
 
       {error && <div className="ret-error">{error}</div>}

@@ -172,6 +172,150 @@ async function procesarRetencionEnSRI(retencionId, xmlGenerado, config) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ─── Helper: construir where de retenciones con filtros ─────────────────────
+function buildWhereRetenciones(empresaId, q) {
+  const { fechaDesde, fechaHasta, estado, proveedor } = q;
+  const where = { empresaId };
+  if (fechaDesde || fechaHasta) {
+    where.fechaEmision = {};
+    if (fechaDesde) where.fechaEmision.gte = new Date(fechaDesde);
+    if (fechaHasta) { const h = new Date(fechaHasta); h.setHours(23,59,59,999); where.fechaEmision.lte = h; }
+  }
+  if (estado) where.estadoSri = estado;
+  if (proveedor) {
+    where.OR = [
+      { razonSocialProveedor: { contains: proveedor, mode: 'insensitive' } },
+      { identificacionProveedor: { contains: proveedor, mode: 'insensitive' } },
+    ];
+  }
+  return where;
+}
+
+// GET /api/retenciones/exportar/xlsx
+router.get('/exportar/xlsx', async (req, res) => {
+  try {
+    const XLSX = require('xlsx');
+    const items = await prisma.retenciones.findMany({
+      where: buildWhereRetenciones(req.empresa.id, req.query),
+      orderBy: { fechaEmision: 'desc' },
+      take: 5000,
+      select: {
+        numeroRetencion: true, fechaEmision: true, periodoFiscal: true,
+        razonSocialProveedor: true, identificacionProveedor: true,
+        totalRetenido: true, estadoSri: true, anulada: true,
+      },
+    });
+
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
+    const fmtNum  = (v) => Number(v || 0).toFixed(2);
+
+    const headers = ['N° Retención', 'Fecha', 'Período Fiscal', 'Proveedor', 'RUC/CI', 'Total Retenido', 'Estado SRI', 'Anulada'];
+    const rows    = items.map(r => [
+      r.numeroRetencion, fmtDate(r.fechaEmision), r.periodoFiscal || '',
+      r.razonSocialProveedor, r.identificacionProveedor,
+      fmtNum(r.totalRetenido), r.estadoSri || '', r.anulada ? 'Si' : 'No',
+    ]);
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 10 }, { wch: 36 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 8 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Retenciones');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="retenciones-${fecha}.xlsx"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('GET /retenciones/exportar/xlsx:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /api/retenciones/exportar/pdf
+router.get('/exportar/pdf', async (req, res) => {
+  try {
+    const PDFDocument = require('pdfkit');
+    const [items, cfg] = await Promise.all([
+      prisma.retenciones.findMany({
+        where: buildWhereRetenciones(req.empresa.id, req.query),
+        orderBy: { fechaEmision: 'desc' },
+        take: 5000,
+        select: {
+          numeroRetencion: true, fechaEmision: true, razonSocialProveedor: true,
+          identificacionProveedor: true, totalRetenido: true, estadoSri: true, anulada: true,
+        },
+      }),
+      prisma.configuracion_sri.findFirst({ where: { empresaId: req.empresa.id }, select: { razonSocial: true, ruc: true } }),
+    ]);
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="retenciones-${fecha}.pdf"`);
+
+    const ML = 32, W = 531, ROWH = 14, NEGRO = '#1e293b', GRIS = '#64748b', VERDE = '#0f766e';
+    const COLS = [
+      { x: ML,      w: 110, label: 'N° Retención', align: 'left'  },
+      { x: ML+110,  w: 52,  label: 'Fecha',        align: 'left'  },
+      { x: ML+162,  w: 190, label: 'Proveedor',    align: 'left'  },
+      { x: ML+352,  w: 70,  label: 'RUC/CI',       align: 'left'  },
+      { x: ML+422,  w: 55,  label: 'Total Ret.',   align: 'right' },
+      { x: ML+477,  w: 54,  label: 'Estado',       align: 'center'},
+    ];
+
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 32, bottom: 32, left: 32, right: 32 }, autoFirstPage: true });
+    doc.pipe(res);
+
+    let y = 32;
+    doc.fontSize(12).font('Helvetica-Bold').fillColor(NEGRO).text(cfg?.razonSocial || '', ML, y, { width: W });
+    y = doc.y + 2;
+    doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC')}`, ML, y, { width: W });
+    y = doc.y + 8;
+    doc.fontSize(13).font('Helvetica-Bold').fillColor(VERDE).text('COMPROBANTES DE RETENCIÓN EMITIDOS', ML, y, { width: W });
+    y = doc.y + 4;
+    doc.fontSize(7.5).font('Helvetica').fillColor(GRIS).text(`${items.length} registro(s)`, ML, y, { width: W });
+    y = doc.y + 10;
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(1).stroke(VERDE);
+    y += 6;
+
+    const drawColHeaders = () => {
+      doc.rect(ML, y - 1, W, ROWH + 2).fill('#ecfeff');
+      doc.fontSize(7.5).font('Helvetica-Bold').fillColor(VERDE);
+      COLS.forEach(c => doc.text(c.label, c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+      y += ROWH;
+      doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.4).stroke('#94a3b8');
+      y += 3;
+    };
+    drawColHeaders();
+
+    const ESTADO_LABEL = { AUTORIZADO: 'Autorizado', PENDIENTE_FIRMA: 'Pendiente', ENVIADO: 'Enviado', RECHAZADO: 'Rechazado', ANULADO: 'Anulado' };
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
+    const fmtNum  = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+    let totTotal = 0;
+    for (let i = 0; i < items.length; i++) {
+      const r = items[i];
+      if (y > doc.page.height - 64) { doc.addPage(); y = 32; drawColHeaders(); }
+      if (i % 2 === 1) doc.rect(ML, y - 1, W, ROWH + 1).fill('#f8fafc');
+      doc.fontSize(7.5).font('Helvetica').fillColor(r.anulada ? '#94a3b8' : NEGRO);
+      const cells = [r.numeroRetencion, fmtDate(r.fechaEmision), (r.razonSocialProveedor || '').slice(0, 32), r.identificacionProveedor, fmtNum(r.totalRetenido), ESTADO_LABEL[r.estadoSri] || r.estadoSri];
+      COLS.forEach((c, j) => doc.text(cells[j], c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+      y += ROWH;
+      totTotal += Number(r.totalRetenido || 0);
+    }
+
+    if (y > doc.page.height - 48) { doc.addPage(); y = 32; }
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.6).stroke('#94a3b8');
+    y += 4;
+    doc.rect(ML, y - 1, W, ROWH + 2).fill('#ecfeff');
+    doc.fontSize(7.5).font('Helvetica-Bold').fillColor(VERDE);
+    COLS.forEach((c, i) => doc.text(i === 0 ? 'TOTALES' : (i === 4 ? fmtNum(totTotal) : ''), c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+    doc.end();
+  } catch (err) {
+    console.error('GET /retenciones/exportar/pdf:', err);
+    if (!res.headersSent) res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // GET /api/retenciones
 // Lista con filtros: fechaDesde, fechaHasta, estado, proveedor
 // ─────────────────────────────────────────────────────────────────────────────

@@ -165,6 +165,9 @@ function F104View({ data, onRecargar }) {
           {compras.liquidaciones.iva > 0 && (
             <FilaDecl label="IVA en liquidaciones de compra" valor={fmtNum(compras.liquidaciones.iva)} />
           )}
+          {compras.ncRecibidas?.iva > 0 && (
+            <FilaDecl label={`(-) NC recibidas de proveedores (${compras.ncRecibidas.cantidad})`} valor={`-${fmtNum(compras.ncRecibidas.iva)}`} warn />
+          )}
           <FilaDecl label="IVA crédito fiscal total" valor={fmtNum(compras.ivaCreditoFiscal)} highlight />
         </section>
 

@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import { IcXML } from '../../utils/icons';
+import { descargarExcel, descargarPdf } from '../../utils/exportCsv';
 import ImportarRetencionesRecibidas from './ImportarRetencionesRecibidas';
 import './ListaRetenciones.css';
 
@@ -85,6 +86,8 @@ export default function ListaRetencionesRecibidas() {
   const [error, setError]   = useState('');
   const [modalDetalle, setModalDetalle] = useState(null);
   const [recalculando, setRecalculando] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [imprimiendoPdf, setImprimiendoPdf] = useState(false);
 
   const [filtros, setFiltros] = useState({
     desde: '', hasta: '', agente: '', incluirAnuladas: false,
@@ -143,6 +146,24 @@ export default function ListaRetencionesRecibidas() {
     }
   };
 
+  const exportarExcel = async () => {
+    setExportando(true);
+    try {
+      const params = { ...filtros, incluirAnuladas: filtros.incluirAnuladas ? 'true' : 'false' };
+      await descargarExcel(api, '/retenciones-recibidas/exportar/xlsx', params, `retenciones-recibidas-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch { alert('No se pudo exportar el Excel'); }
+    finally { setExportando(false); }
+  };
+
+  const exportarPdf = async () => {
+    setImprimiendoPdf(true);
+    try {
+      const params = { ...filtros, incluirAnuladas: filtros.incluirAnuladas ? 'true' : 'false' };
+      await descargarPdf(api, '/retenciones-recibidas/exportar/pdf', params, `retenciones-recibidas-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch { alert('No se pudo generar el PDF'); }
+    finally { setImprimiendoPdf(false); }
+  };
+
   const sumaIva   = registros.reduce((s, r) => s + Number(r.totalRetencionIva || 0), 0);
   const sumaRenta = registros.reduce((s, r) => s + Number(r.totalRetencionRenta || 0), 0);
 
@@ -184,6 +205,12 @@ export default function ListaRetencionesRecibidas() {
           Ver anuladas
         </label>
         <button className="btn-primary" onClick={() => cargar(1)}>Buscar</button>
+        <button className="btn-secondary" onClick={exportarExcel} disabled={exportando}>
+          {exportando ? 'Exportando…' : '⬇ Excel'}
+        </button>
+        <button className="btn-secondary" onClick={exportarPdf} disabled={imprimiendoPdf}>
+          {imprimiendoPdf ? 'Generando…' : '🖨 PDF'}
+        </button>
       </div>
 
       {error && <div className="ret-error">{error}</div>}

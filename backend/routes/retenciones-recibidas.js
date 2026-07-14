@@ -18,6 +18,164 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.use(proteger);
 router.use(autorizarPermiso('compras.gestionar'));
 
+// ─── Helper: where con filtros ────────────────────────────────
+function buildWhereRR(empresaId, q) {
+  const { desde, hasta, agente, incluirAnuladas } = q;
+  const where = { empresaId };
+  if (incluirAnuladas !== 'true') where.anulada = false;
+  if (desde || hasta) {
+    where.fechaEmision = {};
+    if (desde) where.fechaEmision.gte = new Date(desde);
+    if (hasta) { const h = new Date(hasta); h.setHours(23,59,59,999); where.fechaEmision.lte = h; }
+  }
+  if (agente) {
+    where.OR = [
+      { rucAgente: { contains: agente, mode: 'insensitive' } },
+      { razonSocialAgente: { contains: agente, mode: 'insensitive' } },
+    ];
+  }
+  return where;
+}
+
+// GET /api/retenciones-recibidas/exportar/xlsx
+router.get('/exportar/xlsx', async (req, res) => {
+  try {
+    const db = req.prisma || prisma;
+    const empresaId = req.empresa?.id ?? req.usuario?.empresaId ?? 1;
+    const XLSX = require('xlsx');
+    const items = await db.retenciones_recibidas.findMany({
+      where: buildWhereRR(empresaId, req.query),
+      orderBy: { fechaEmision: 'desc' },
+      take: 5000,
+      select: {
+        claveAcceso: true, rucAgente: true, razonSocialAgente: true,
+        fechaEmision: true, numDocSustento: true,
+        totalRetencionIva: true, totalRetencionRenta: true, anulada: true,
+      },
+    });
+
+    function extraerNumero(ca) {
+      if (!ca || ca.length < 39) return ca || '';
+      return `${ca.substring(24,27)}-${ca.substring(27,30)}-${ca.substring(30,39)}`;
+    }
+
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
+    const fmtNum  = (v) => Number(v || 0).toFixed(2);
+
+    const headers = ['N° Retención', 'Fecha', 'Agente (Cliente)', 'RUC Agente', 'Doc. Sustento', 'Ret. IVA', 'Ret. Renta', 'Total', 'Anulada'];
+    const rows    = items.map(r => {
+      const totRet = Number(r.totalRetencionIva || 0) + Number(r.totalRetencionRenta || 0);
+      return [extraerNumero(r.claveAcceso), fmtDate(r.fechaEmision), r.razonSocialAgente, r.rucAgente, r.numDocSustento || '', fmtNum(r.totalRetencionIva), fmtNum(r.totalRetencionRenta), fmtNum(totRet), r.anulada ? 'Si' : 'No'];
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 36 }, { wch: 14 }, { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 8 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Ret. Recibidas');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="retenciones-recibidas-${fecha}.xlsx"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('GET /retenciones-recibidas/exportar/xlsx:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /api/retenciones-recibidas/exportar/pdf
+router.get('/exportar/pdf', async (req, res) => {
+  try {
+    const db = req.prisma || prisma;
+    const empresaId = req.empresa?.id ?? req.usuario?.empresaId ?? 1;
+    const PDFDocument = require('pdfkit');
+
+    const [items, cfg] = await Promise.all([
+      db.retenciones_recibidas.findMany({
+        where: buildWhereRR(empresaId, req.query),
+        orderBy: { fechaEmision: 'desc' },
+        take: 5000,
+        select: {
+          claveAcceso: true, rucAgente: true, razonSocialAgente: true,
+          fechaEmision: true, totalRetencionIva: true, totalRetencionRenta: true, anulada: true,
+        },
+      }),
+      prisma.configuracion_sri.findFirst({ where: { empresaId }, select: { razonSocial: true, ruc: true } }),
+    ]);
+
+    function extraerNumero(ca) {
+      if (!ca || ca.length < 39) return ca || '';
+      return `${ca.substring(24,27)}-${ca.substring(27,30)}-${ca.substring(30,39)}`;
+    }
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="retenciones-recibidas-${fecha}.pdf"`);
+
+    const ML = 32, W = 531, ROWH = 14, NEGRO = '#1e293b', GRIS = '#64748b', VERDE = '#0f766e';
+    const COLS = [
+      { x: ML,      w: 110, label: 'N° Retención', align: 'left'  },
+      { x: ML+110,  w: 52,  label: 'Fecha',        align: 'left'  },
+      { x: ML+162,  w: 195, label: 'Agente',       align: 'left'  },
+      { x: ML+357,  w: 72,  label: 'RUC Agente',   align: 'left'  },
+      { x: ML+429,  w: 48,  label: 'Ret. IVA',     align: 'right' },
+      { x: ML+477,  w: 54,  label: 'Ret. Renta',   align: 'right' },
+    ];
+
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 32, bottom: 32, left: 32, right: 32 }, autoFirstPage: true });
+    doc.pipe(res);
+
+    let y = 32;
+    doc.fontSize(12).font('Helvetica-Bold').fillColor(NEGRO).text(cfg?.razonSocial || '', ML, y, { width: W });
+    y = doc.y + 2;
+    doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC')}`, ML, y, { width: W });
+    y = doc.y + 8;
+    doc.fontSize(13).font('Helvetica-Bold').fillColor(VERDE).text('COMPROBANTES DE RETENCIÓN RECIBIDOS', ML, y, { width: W });
+    y = doc.y + 4;
+    doc.fontSize(7.5).font('Helvetica').fillColor(GRIS).text(`${items.length} registro(s)`, ML, y, { width: W });
+    y = doc.y + 10;
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(1).stroke(VERDE);
+    y += 6;
+
+    const drawColHeaders = () => {
+      doc.rect(ML, y - 1, W, ROWH + 2).fill('#ecfeff');
+      doc.fontSize(7.5).font('Helvetica-Bold').fillColor(VERDE);
+      COLS.forEach(c => doc.text(c.label, c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+      y += ROWH;
+      doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.4).stroke('#94a3b8');
+      y += 3;
+    };
+    drawColHeaders();
+
+    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
+    const fmtNum  = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+    let totIva = 0, totRenta = 0;
+    for (let i = 0; i < items.length; i++) {
+      const r = items[i];
+      if (y > doc.page.height - 64) { doc.addPage(); y = 32; drawColHeaders(); }
+      if (i % 2 === 1) doc.rect(ML, y - 1, W, ROWH + 1).fill('#f8fafc');
+      doc.fontSize(7.5).font('Helvetica').fillColor(r.anulada ? '#94a3b8' : NEGRO);
+      const cells = [extraerNumero(r.claveAcceso), fmtDate(r.fechaEmision), (r.razonSocialAgente || '').slice(0, 32), r.rucAgente, fmtNum(r.totalRetencionIva), fmtNum(r.totalRetencionRenta)];
+      COLS.forEach((c, j) => doc.text(cells[j], c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+      y += ROWH;
+      totIva   += Number(r.totalRetencionIva || 0);
+      totRenta += Number(r.totalRetencionRenta || 0);
+    }
+
+    if (y > doc.page.height - 48) { doc.addPage(); y = 32; }
+    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.6).stroke('#94a3b8');
+    y += 4;
+    doc.rect(ML, y - 1, W, ROWH + 2).fill('#ecfeff');
+    doc.fontSize(7.5).font('Helvetica-Bold').fillColor(VERDE);
+    COLS.forEach((c, i) => doc.text(i === 0 ? 'TOTALES' : (i === 4 ? fmtNum(totIva) : (i === 5 ? fmtNum(totRenta) : '')), c.x, y, { width: c.w, align: c.align, lineBreak: false }));
+    doc.end();
+  } catch (err) {
+    console.error('GET /retenciones-recibidas/exportar/pdf:', err);
+    if (!res.headersSent) res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ─── GET / — listar con filtros ───────────────────────────────
 router.get('/', async (req, res) => {
   try {
