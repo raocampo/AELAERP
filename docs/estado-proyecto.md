@@ -476,6 +476,37 @@ verificación y backlog completo).
 - Facturas y proformas de venta aceptan hasta 4 decimales en precio unitario (`sri.js` acumula
   con precisión completa antes de redondear; totales SRI siguen siendo 2 dec, obligatorio).
 
+### 28. Sesión 2026-07-13 (parte 3) — Auditoría de código: 2 bugs críticos + 4 features documentados retroactivamente
+
+Ver `docs/pendientes-2026-07-13-parte3.md` para el detalle exhaustivo. Sesión de auditoría
+de código (no de features reportadas por el usuario) sobre trabajo de otra sesión que había
+quedado sin documentar ni verificar.
+
+**Bugs críticos encontrados y corregidos, ninguno reportado — detectados leyendo el código
+antes de llegar a producción:**
+- **Cuentas por Cobrar nunca funcionó** (`021a759`) — las 7 consultas de `cxc.js` filtraban
+  `estadoSri: 'AUTORIZADA'` (femenino) pero el valor real que se guarda en todo el resto del
+  sistema es `'AUTORIZADO'` (masculino) — nunca coincidía. "Vigentes"/"Canceladas" siempre
+  vacío, registrar cobro y el importador Excel de cobros fallaban al 100%.
+- **WebServices API (`/api/ext/v1`) no funcionaba en absoluto** (`9480db6`) — escrito contra
+  un schema imaginado: nombres de campo inexistentes, campos obligatorios nunca provistos,
+  `detalles` (columna Json) tratada como relación Prisma, pagos escritos en una tabla
+  (`pagos_factura`) que no existe. Reescrito completo siguiendo el patrón de "Importar
+  facturas históricas" (AVALAB ya emite sus propias facturas autorizadas por el SRI; AELA
+  solo las registra para contabilidad, no las autoriza). Verificado con script de
+  integración real contra `scfi_dev` (cliente, factura, asiento, cobro, asiento de cobro).
+
+**Features documentados retroactivamente (ya en `main`, de otra sesión, sin doc):**
+- Permisos de Configuración (Config SRI/Sistema) ampliados a rol contador (`98bdc5c`).
+- Módulo de Anticipos de clientes y proveedores, tab dentro de CxC/CxP (`704efc0`) —
+  auditado, sin bugs.
+- Fix de aislamiento de tenant: `api.js` ahora extrae el tenant del JWT en vez de
+  `localStorage` (podía quedar residual del último tenant visitado) + botón "Restaurar plan
+  AELA" (`780782b`).
+- Vencimientos automáticos de plan (trial/pagado), PRO mono/multiempresa, y pagos de
+  suscripción (transferencia/PayPhone/Stripe) con aprobación manual vía `SUPER_ADMIN_KEY`
+  (`1dc8ca6`) — auditado, sin bugs.
+
 ### 26. Sesión 2026-07-12 — Bug real en declaraciones (F104/retenciones recibidas), RUC vs Cédula, DetalleCompra responsiva, recibo de cobro
 
 Ver `docs/pendientes-2026-07-12.md` para el detalle exhaustivo. A diferencia de sesiones
@@ -760,6 +791,19 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
    - Ver todos los tenants, planes, estado
    - Activar/suspender tenants
    - Ver logs de provisioning fallidos
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-13, parte 3 — bugs críticos)
+
+Ver `docs/pendientes-2026-07-13-parte3.md` sección "VERIFICAR EN PRODUCCIÓN". Los 2 más
+urgentes, porque antes de estos fixes el módulo entero no funcionaba:
+
+1. **Cuentas por Cobrar → Vigentes** — debe mostrar facturas pendientes reales por primera
+   vez (antes siempre vacío por el bug `estadoSri: 'AUTORIZADA'` vs `'AUTORIZADO'`).
+2. **WebServices API con AVALAB** — antes de conectar AVALAB en serio, probar
+   `POST /api/ext/v1/facturas` con una API key de prueba y datos reales, y confirmar que la
+   factura y su asiento contable aparecen en el Libro Diario del tenant correcto.
+3. Confirmar en Railway que existe `SUPER_ADMIN_KEY` (aprobar pagos de suscripción
+   manualmente) y las variables de `PAYPHONE_*`/`BANCO_*` si ya se va a usar esa pasarela.
 
 ### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-13)
 
