@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { parseFechaLocal } from '../../utils/fecha';
+import { IcXML } from '../../utils/icons';
+import './ListaCompras.css';
+import './DetalleCompra.css';
 
 function fmtFecha(valor) {
   if (!valor) return 'Sin fecha';
@@ -50,6 +53,7 @@ export default function NotasCreditoRecibidas() {
 
   return (
     <div className="compras-page">
+      {/* ── Header ──────────────────────────────────────────────── */}
       <div className="compras-header">
         <div>
           <h1>Notas de Crédito Recibidas</h1>
@@ -60,30 +64,27 @@ export default function NotasCreditoRecibidas() {
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* ── KPIs ────────────────────────────────────────────────── */}
       <section className="compras-summary">
         <article className="compras-summary-card"><span>Total registros</span><strong>{total}</strong></article>
-        <article className="compras-summary-card"><span>Total período</span><strong>{fmtMoneda(totalMonto)}</strong></article>
+        <article className="compras-summary-card compras-summary-card--iva"><span>Total período</span><strong>{fmtMoneda(totalMonto)}</strong></article>
       </section>
 
-      {/* Filtros */}
-      <section className="compras-filtros-panel">
+      {/* ── Filtros ──────────────────────────────────────────────── */}
+      <section className="compras-filtros">
         <input
-          className="compras-filtro-input"
-          placeholder="Buscar proveedor, RUC o clave..."
+          placeholder="Buscar proveedor, RUC o clave de acceso"
           value={filtros.busqueda}
           onChange={(e) => actualizarFiltro('busqueda', e.target.value)}
         />
         <input
           type="date"
-          className="compras-filtro-input"
           value={filtros.fechaDesde}
           onChange={(e) => actualizarFiltro('fechaDesde', e.target.value)}
           title="Desde"
         />
         <input
           type="date"
-          className="compras-filtro-input"
           value={filtros.fechaHasta}
           onChange={(e) => actualizarFiltro('fechaHasta', e.target.value)}
           title="Hasta"
@@ -91,56 +92,60 @@ export default function NotasCreditoRecibidas() {
         <button className="btn-secondary" onClick={() => setFiltros(FILTROS_INICIALES)}>Limpiar</button>
       </section>
 
-      {/* Tabla */}
+      {/* ── Paginación superior ──────────────────────────────────── */}
+      {pages > 1 && (
+        <div className="compras-pagination">
+          <button className="btn-secondary" disabled={filtros.page <= 1} onClick={() => actualizarFiltro('page', filtros.page - 1)}>← Anterior</button>
+          <span className="compras-pagination-info">Página <strong>{filtros.page}</strong> de <strong>{pages}</strong> — mostrando {items.length} de {total} registros</span>
+          <button className="btn-secondary" disabled={filtros.page >= pages} onClick={() => actualizarFiltro('page', filtros.page + 1)}>Siguiente →</button>
+        </div>
+      )}
+
+      {/* ── Tabla ────────────────────────────────────────────────── */}
       <section className="compras-card">
         {loading ? (
-          <p style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>Cargando...</p>
+          <div className="compras-empty">Cargando notas de crédito...</div>
         ) : items.length === 0 ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-            <p style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📭</p>
-            <p>No hay notas de crédito recibidas de proveedores.</p>
-            <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
-              Las notas de crédito se importan desde el Buzón SRI (documentos tipo 04).
-            </p>
+          <div className="compras-empty">
+            No hay notas de crédito recibidas de proveedores. Se importan automáticamente desde
+            el Buzón SRI (documentos tipo 04).
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="compras-tabla">
+          <div className="compras-table-wrap">
+            <table className="compras-table">
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Proveedor</th>
-                  <th>RUC Emisor</th>
-                  <th>Clave / Autorización</th>
-                  <th style={{ textAlign: 'right' }}>Importe</th>
-                  <th>Registrada</th>
-                  <th>XML</th>
+                  <th>Fecha</th><th>Proveedor</th>
+                  <th className="compras-col-auth">Clave / Autorización</th>
+                  <th>Importe</th><th>Recibida</th><th>XML</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((nc) => (
                   <tr key={nc.id}>
-                    <td>{fmtFecha(nc.fechaEmision)}</td>
-                    <td style={{ fontWeight: 600 }}>{nc.razonSocialEmisor}</td>
-                    <td style={{ fontSize: '0.82rem', color: '#64748b' }}>{nc.rucEmisor}</td>
-                    <td style={{ fontSize: '0.78rem', color: '#64748b', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {nc.claveAcceso}
+                    <td data-label="Fecha">{fmtFecha(nc.fechaEmision)}</td>
+                    <td data-label="Proveedor">
+                      <div className="compras-provider">
+                        <strong>{nc.razonSocialEmisor}</strong>
+                        <span>{nc.rucEmisor}</span>
+                      </div>
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmtMoneda(nc.importeTotal)}</td>
-                    <td style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                      {nc.createdAt ? fmtFecha(nc.createdAt) : '—'}
+                    <td data-label="Clave / Autorización" className="compras-col-auth compras-auth-cell">
+                      {nc.claveAcceso
+                        ? <span title={nc.claveAcceso}>{nc.claveAcceso}</span>
+                        : <span className="compras-muted">—</span>}
                     </td>
-                    <td>
+                    <td data-label="Importe"><strong>{fmtMoneda(nc.importeTotal)}</strong></td>
+                    <td data-label="Recibida">
+                      {nc.createdAt ? fmtFecha(nc.createdAt) : <span className="compras-muted">—</span>}
+                    </td>
+                    <td data-label="XML">
                       {nc.xmlAutorizado ? (
-                        <button
-                          className="btn-secondary"
-                          style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
-                          onClick={() => setXmlModal(nc.xmlAutorizado)}
-                        >
-                          Ver XML
+                        <button className="btn-icon" title="Ver XML autorizado" onClick={() => setXmlModal(nc.xmlAutorizado)}>
+                          <IcXML />
                         </button>
                       ) : (
-                        <span style={{ color: '#cbd5e1', fontSize: '0.78rem' }}>—</span>
+                        <span className="compras-muted">—</span>
                       )}
                     </td>
                   </tr>
@@ -150,29 +155,16 @@ export default function NotasCreditoRecibidas() {
           </div>
         )}
 
-        {/* Paginación */}
         {pages > 1 && (
-          <div className="compras-paginacion">
-            <button
-              className="btn-secondary"
-              disabled={filtros.page <= 1}
-              onClick={() => actualizarFiltro('page', filtros.page - 1)}
-            >
-              ← Anterior
-            </button>
-            <span>Página {filtros.page} de {pages}</span>
-            <button
-              className="btn-secondary"
-              disabled={filtros.page >= pages}
-              onClick={() => actualizarFiltro('page', filtros.page + 1)}
-            >
-              Siguiente →
-            </button>
+          <div className="compras-pagination compras-pagination--bottom">
+            <button className="btn-secondary" disabled={filtros.page <= 1} onClick={() => actualizarFiltro('page', filtros.page - 1)}>← Anterior</button>
+            <span className="compras-pagination-info">Página <strong>{filtros.page}</strong> de <strong>{pages}</strong></span>
+            <button className="btn-secondary" disabled={filtros.page >= pages} onClick={() => actualizarFiltro('page', filtros.page + 1)}>Siguiente →</button>
           </div>
         )}
       </section>
 
-      {/* Modal XML */}
+      {/* ── Modal XML ────────────────────────────────────────────── */}
       {xmlModal && (
         <div className="dc-modal-overlay" onClick={() => setXmlModal(null)}>
           <div className="dc-modal" style={{ maxWidth: 800 }} onClick={(e) => e.stopPropagation()}>
