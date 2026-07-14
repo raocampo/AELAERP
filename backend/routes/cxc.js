@@ -167,7 +167,7 @@ router.get('/vigentes', autorizarPermiso('cxc.ver'), async (req, res) => {
     const empresaId = obtenerEmpresaId(req);
 
     const facturas = await db.facturas.findMany({
-      where: { empresaId, anulada: false, estadoSri: 'AUTORIZADA' },
+      where: { empresaId, anulada: false, estadoSri: 'AUTORIZADO' },
       select: {
         id: true, numeroFactura: true, fechaEmision: true, importeTotal: true,
         razonSocialComprador: true, identificacionComprador: true, clienteId: true,
@@ -194,7 +194,7 @@ router.get('/canceladas', autorizarPermiso('cxc.ver'), async (req, res) => {
     const empresaId = obtenerEmpresaId(req);
 
     const facturas = await db.facturas.findMany({
-      where: { empresaId, anulada: false, estadoSri: 'AUTORIZADA' },
+      where: { empresaId, anulada: false, estadoSri: 'AUTORIZADO' },
       select: {
         id: true, numeroFactura: true, fechaEmision: true, importeTotal: true,
         razonSocialComprador: true, identificacionComprador: true, clienteId: true,
@@ -333,7 +333,7 @@ router.post('/cobros', autorizarPermiso('cxc.gestionar'), async (req, res) => {
       const factura = await tx.facturas.findFirst({ where: { id: facturaIdNum, empresaId } });
       if (!factura) throw Object.assign(new Error('Factura no encontrada'), { status: 404 });
       if (factura.anulada) throw Object.assign(new Error('La factura está anulada'), { status: 400 });
-      if (factura.estadoSri !== 'AUTORIZADA') throw Object.assign(new Error('La factura no está autorizada por el SRI'), { status: 400 });
+      if (factura.estadoSri !== 'AUTORIZADO') throw Object.assign(new Error('La factura no está autorizada por el SRI'), { status: 400 });
 
       const agregados = await tx.cobros_cliente.aggregate({
         where: { empresaId, facturaId: facturaIdNum, anulado: false },
@@ -376,7 +376,7 @@ router.get('/reporte/antiguedad', autorizarPermiso('cxc.ver'), async (req, res) 
     const hoy = new Date();
 
     const facturas = await db.facturas.findMany({
-      where: { empresaId, anulada: false, estadoSri: 'AUTORIZADA' },
+      where: { empresaId, anulada: false, estadoSri: 'AUTORIZADO' },
       select: { id: true, numeroFactura: true, fechaEmision: true, importeTotal: true, razonSocialComprador: true, identificacionComprador: true, clienteId: true },
     });
 
@@ -410,7 +410,7 @@ router.get('/reporte/estado-cuenta', autorizarPermiso('cxc.ver'), async (req, re
 
     if (!clienteId) {
       const facturas = await db.facturas.findMany({
-        where: { empresaId, anulada: false, estadoSri: 'AUTORIZADA' },
+        where: { empresaId, anulada: false, estadoSri: 'AUTORIZADO' },
         select: { id: true, clienteId: true, importeTotal: true, razonSocialComprador: true, identificacionComprador: true },
       });
       const cobrado = await obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id));
@@ -428,7 +428,7 @@ router.get('/reporte/estado-cuenta', autorizarPermiso('cxc.ver'), async (req, re
 
     const [facturas, cobros] = await Promise.all([
       db.facturas.findMany({
-        where: { empresaId, clienteId, anulada: false, estadoSri: 'AUTORIZADA' },
+        where: { empresaId, clienteId, anulada: false, estadoSri: 'AUTORIZADO' },
         select: { id: true, numeroFactura: true, fechaEmision: true, importeTotal: true },
         orderBy: { fechaEmision: 'asc' },
       }),
@@ -670,7 +670,7 @@ router.post('/cobros/importar', autorizarPermiso('cxc.gestionar'), _upload.singl
           const factura = await tx.facturas.findFirst({ where: { empresaId, numeroFactura: numeroFact } });
           if (!factura) throw new Error('Factura no encontrada');
           if (factura.anulada) throw new Error('La factura está anulada');
-          if (factura.estadoSri !== 'AUTORIZADA') throw new Error('Factura no autorizada por el SRI');
+          if (factura.estadoSri !== 'AUTORIZADO') throw new Error('Factura no autorizada por el SRI');
 
           await tx.$queryRaw`SELECT id FROM facturas WHERE id = ${factura.id} FOR UPDATE`;
 
