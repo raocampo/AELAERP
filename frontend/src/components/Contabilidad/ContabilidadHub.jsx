@@ -1683,11 +1683,13 @@ const ContabilidadHub = () => {
               la cuenta genérica por defecto del sistema.
             </p>
             <div className="conta-tabs">
+              <button className={subTabRef === 'facturas' ? 'active' : ''} onClick={() => setSubTabRef('facturas')}>Facturas</button>
               <button className={subTabRef === 'compras' ? 'active' : ''} onClick={() => setSubTabRef('compras')}>Compras</button>
               <button className={subTabRef === 'ventas' ? 'active' : ''} onClick={() => setSubTabRef('ventas')}>Ventas</button>
               <button className={subTabRef === 'empleados' ? 'active' : ''} onClick={() => setSubTabRef('empleados')}>Empleados</button>
               <button className={subTabRef === 'general' ? 'active' : ''} onClick={() => setSubTabRef('general')}>General</button>
             </div>
+            {subTabRef === 'facturas' && <ConfiguracionCuentasReferencia categoria="VENTAS" titulo="Cuentas de Ventas" plan={plan} />}
             {subTabRef === 'compras' && <ConfiguracionCuentasReferencia categoria="RETENCION_COMPRA" titulo="Retenciones — Compras" plan={plan} />}
             {subTabRef === 'ventas' && <ConfiguracionCuentasReferencia categoria="RETENCION_VENTA" titulo="Retenciones — Ventas" plan={plan} />}
             {subTabRef === 'empleados' && <ConfiguracionCuentasReferencia categoria="NOMINA" titulo="Empleados — Nómina" plan={plan} />}

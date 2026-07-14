@@ -428,53 +428,37 @@ async function crearAsientoFacturaAutorizada({ facturaId, usuarioId, fecha = new
 
   const referencia = `FAC-${factura.id}`;
   const existente = await db.asientos_contables.findFirst({
-    where: {
-      empresaId: factura.empresaId,
-      tipo: 'FACTURA',
-      referencia,
-    },
+    where: { empresaId: factura.empresaId, tipo: 'FACTURA', referencia },
   });
   if (existente) return { asiento: existente, creado: false };
 
-  const total = round2(factura.importeTotal);
-  const iva = round2(factura.totalIva || 0);
-  const ventas = round2(total - iva);
+  const total        = round2(factura.importeTotal);
+  const totalIva     = round2(factura.totalIva || 0);
+  const subtotal0    = round2(factura.subtotal0 || 0);
+  const subtotalGrav = round2((factura.subtotal5 || 0) + (factura.subtotal15 || 0));
+  // absorb rounding, propina, noObjeto, etc. into gravadas
+  const ventasGrav   = round2(subtotalGrav + round2(total - subtotal0 - subtotalGrav - totalIva));
 
-  const cuentaCxC = await ensureCuentaMovimiento({
-    empresaId: factura.empresaId,
-    codigo: '1.1.03.001',
-    nombre: 'Cuentas por Cobrar',
-    tipo: 'ACTIVO',
-    naturaleza: 'DEBITO',
-    tx: db,
+  const mapaVentas = await obtenerCuentasReferenciaConfiguradas({
+    empresaId: factura.empresaId, categoria: 'VENTAS', tx: db,
   });
 
-  const cuentaVentas = await ensureCuentaMovimiento({
-    empresaId: factura.empresaId,
-    codigo: '4.1.01.001',
-    nombre: 'Ventas Servicios',
-    tipo: 'INGRESO',
-    naturaleza: 'CREDITO',
-    tx: db,
-  });
+  const resolver = (ref, codDef, nomDef, tipoDef, natDef) =>
+    _resolverCuentaPorCodigo({ empresaId: factura.empresaId, mapaConfig: mapaVentas, codigoReferencia: ref, codigoDefault: codDef, nombreDefault: nomDef, tipoDefault: tipoDef, naturalezaDefault: natDef, tx: db });
 
-  const cuentaIvaVentas = await ensureCuentaMovimiento({
-    empresaId: factura.empresaId,
-    codigo: '2.1.01.001',
-    nombre: 'IVA Ventas por Pagar',
-    tipo: 'PASIVO',
-    naturaleza: 'CREDITO',
-    tx: db,
-  });
+  const cuentaCxC        = await resolver('CXC_CLIENTES',    '1.1.03.001', 'Cuentas por Cobrar Clientes', 'ACTIVO',  'DEBITO');
+  const cuentaVentas0    = await resolver('VENTAS_0',        '4.1.01.002', 'Ventas Tarifa 0%',            'INGRESO', 'CREDITO');
+  const cuentaVentasGrav = await resolver('VENTAS_GRAVADAS', '4.1.01.001', 'Ventas Netas Gravadas',       'INGRESO', 'CREDITO');
+  const cuentaIvaVentas  = await resolver('IVA_VENTAS',      '2.1.01.001', 'IVA Ventas por Pagar',        'PASIVO',  'CREDITO');
 
-  const detalles = [
-    { cuentaId: cuentaCxC.id, descripcion: `Factura ${factura.numeroFactura}`, debe: total, haber: 0 },
-    { cuentaId: cuentaVentas.id, descripcion: `Ventas factura ${factura.numeroFactura}`, debe: 0, haber: ventas },
+  const nf = factura.numeroFactura;
+  const rawDetalles = [
+    { cuentaId: cuentaCxC.id,        descripcion: `Factura ${nf}`,           debe: total,     haber: 0 },
+    { cuentaId: cuentaVentas0.id,    descripcion: `Ventas 0% factura ${nf}`, debe: 0,         haber: subtotal0  },
+    { cuentaId: cuentaVentasGrav.id, descripcion: `Ventas factura ${nf}`,    debe: 0,         haber: ventasGrav },
+    { cuentaId: cuentaIvaVentas.id,  descripcion: `IVA factura ${nf}`,       debe: 0,         haber: totalIva   },
   ];
-
-  if (iva > 0) {
-    detalles.push({ cuentaId: cuentaIvaVentas.id, descripcion: `IVA factura ${factura.numeroFactura}`, debe: 0, haber: iva });
-  }
+  const detalles = _agruparDetallesPorCuenta(rawDetalles);
 
   const asiento = await crearAsientoContable({
     empresaId: factura.empresaId,

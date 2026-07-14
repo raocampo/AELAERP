@@ -2163,6 +2163,54 @@ router.get('/importar/plantilla', async (_req, res) => {
   }
 });
 
+// POST /api/facturas/:id/regenerar-asiento — elimina el asiento FACTURA existente y crea uno nuevo
+// Útil para contabilizar facturas históricas importadas o para regenerar con nuevas cuentas configuradas.
+router.post('/:id/regenerar-asiento', permitirEmitirFacturacion, async (req, res) => {
+  try {
+    const facturaId = parseInt(req.params.id, 10);
+    const db = req.prisma || prisma;
+    const empresaId = req.empresa.id;
+
+    const factura = await db.facturas.findFirst({ where: { id: facturaId, empresaId } });
+    if (!factura) return res.status(404).json({ ok: false, error: 'Factura no encontrada' });
+    if (factura.anulada) return res.status(400).json({ ok: false, error: 'La factura está anulada — no se puede regenerar' });
+
+    const asientoExistente = await db.asientos_contables.findFirst({
+      where: { empresaId, tipo: 'FACTURA', referencia: `FAC-${facturaId}` },
+      select: { id: true, cerrado: true, bloqueado: true },
+    });
+
+    if (asientoExistente) {
+      if (asientoExistente.cerrado) {
+        return res.status(400).json({ ok: false, error: 'El asiento está en un período cerrado y no puede modificarse' });
+      }
+      if (asientoExistente.bloqueado) {
+        return res.status(400).json({ ok: false, error: 'El asiento está bloqueado. Desblóqueelo desde Contabilidad antes de regenerar' });
+      }
+      await db.$transaction(async (tx) => {
+        await tx.asientos_contables_detalle.deleteMany({ where: { asientoId: asientoExistente.id } });
+        await tx.asientos_contables.delete({ where: { id: asientoExistente.id } });
+      });
+    }
+
+    const resultado = await crearAsientoFacturaAutorizada({
+      facturaId,
+      usuarioId: req.usuario?.id,
+      fecha: factura.fechaEmision || new Date(),
+      db,
+    });
+
+    res.json({
+      ok: true,
+      mensaje: asientoExistente ? 'Asiento regenerado con las cuentas configuradas' : 'Asiento generado correctamente',
+      data: resultado.asiento,
+    });
+  } catch (error) {
+    console.error('POST /facturas/:id/regenerar-asiento:', error);
+    res.status(500).json({ ok: false, error: error.message || 'No se pudo regenerar el asiento' });
+  }
+});
+
 // POST /api/facturas/importar/preview — valida el archivo sin importar
 // POST /api/facturas/importar/generar-asientos-faltantes — reparación retroactiva
 // Facturas históricas importadas ANTES del fix que engancha crearAsientoFacturaAutorizada

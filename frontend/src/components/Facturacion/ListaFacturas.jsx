@@ -44,6 +44,8 @@ const TabFacturas = ({ navigate, onIrNC }) => {
   const [ncResultado, setNcResultado]   = useState(null);
   const [exportando,      setExportando]      = useState(false);
   const [imprimiendoPdf,  setImprimiendoPdf]  = useState(false);
+  const [modalAsiento,    setModalAsiento]    = useState(null);
+  const [regenerandoId,   setRegenerandoId]   = useState(null);
 
   const buildParams = useCallback(() => {
     const p = {};
@@ -143,6 +145,19 @@ const TabFacturas = ({ navigate, onIrNC }) => {
       toast.error('No se pudo generar el PDF');
     } finally {
       setImprimiendoPdf(false);
+    }
+  };
+
+  const regenerarAsiento = async (factura) => {
+    setRegenerandoId(factura.id);
+    try {
+      const res = await api.post(`/facturas/${factura.id}/regenerar-asiento`);
+      toast.success(res.data.mensaje || 'Asiento generado correctamente');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'No se pudo generar el asiento');
+    } finally {
+      setRegenerandoId(null);
+      setModalAsiento(null);
     }
   };
 
@@ -273,6 +288,16 @@ const TabFacturas = ({ navigate, onIrNC }) => {
                           <IcReenviar/>
                         </button>
                       )}
+                      {!f.anulada && (
+                        <button
+                          className="btn-icon"
+                          title="Contabilizar / Regenerar asiento"
+                          style={{ fontSize: '0.9rem' }}
+                          onClick={() => setModalAsiento(f)}
+                        >
+                          📒
+                        </button>
+                      )}
                       {!f.anulada && f.estadoSri !== 'ANULADO' && (
                         <button className="btn-icon ic-anular" title="Anular factura"
                           onClick={() => setModalAnular(f)}>
@@ -339,6 +364,32 @@ const TabFacturas = ({ navigate, onIrNC }) => {
       )}
 
       {/* Modal resultado NC de anulación */}
+      {/* Modal contabilizar / regenerar asiento */}
+      {modalAsiento && (
+        <div className="modal-overlay" onClick={() => setModalAsiento(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3>📒 Contabilizar Factura {modalAsiento.numeroFactura}</h3>
+            <p style={{ color: '#64748b', fontSize: '0.88rem', margin: '8px 0 12px' }}>
+              Se generará (o regenerará) el asiento contable con las cuentas configuradas en
+              <strong> Contabilidad › Configuración › Facturas</strong>.
+              Si ya existe un asiento para esta factura y no está cerrado, será reemplazado.
+            </p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setModalAsiento(null)}>
+                Cancelar
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => regenerarAsiento(modalAsiento)}
+                disabled={regenerandoId === modalAsiento.id}
+              >
+                {regenerandoId === modalAsiento.id ? 'Generando...' : '📒 Generar asiento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {ncResultado && (
         <div className="modal-overlay" onClick={() => setNcResultado(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>

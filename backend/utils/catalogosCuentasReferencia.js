@@ -54,11 +54,20 @@ function _catalogoRetencion(esVenta) {
   return [...renta, ...iva];
 }
 
+// Conceptos de ventas (facturas de venta) — usados en crearAsientoFacturaAutorizada
+const CONCEPTOS_VENTAS = [
+  { codigoReferencia: 'CXC_CLIENTES',    etiqueta: 'Cuentas por Cobrar Clientes',  codigoDefault: '1.1.03.001', nombreDefault: 'Cuentas por Cobrar Clientes',  tipoDefault: 'ACTIVO',  naturalezaDefault: 'DEBITO'  },
+  { codigoReferencia: 'VENTAS_0',        etiqueta: 'Ventas Netas 0%',              codigoDefault: '4.1.01.002', nombreDefault: 'Ventas Tarifa 0%',             tipoDefault: 'INGRESO', naturalezaDefault: 'CREDITO' },
+  { codigoReferencia: 'VENTAS_GRAVADAS', etiqueta: 'Ventas Netas Gravadas (IVA)',  codigoDefault: '4.1.01.001', nombreDefault: 'Ventas Netas Gravadas',         tipoDefault: 'INGRESO', naturalezaDefault: 'CREDITO' },
+  { codigoReferencia: 'IVA_VENTAS',      etiqueta: 'IVA Ventas por Pagar',         codigoDefault: '2.1.01.001', nombreDefault: 'IVA Ventas por Pagar',         tipoDefault: 'PASIVO',  naturalezaDefault: 'CREDITO' },
+];
+
 const CATALOGOS = {
   RETENCION_COMPRA: () => _catalogoRetencion(false),
   RETENCION_VENTA:  () => _catalogoRetencion(true),
   NOMINA:           () => CONCEPTOS_NOMINA,
   GENERAL:          () => CONCEPTOS_GENERAL,
+  VENTAS:           () => CONCEPTOS_VENTAS,
 };
 
 function obtenerCatalogoReferencias(categoria) {
@@ -71,4 +80,5 @@ module.exports = {
   CATEGORIAS: Object.keys(CATALOGOS),
   obtenerCatalogoReferencias,
   CONCEPTOS_NOMINA,
+  CONCEPTOS_VENTAS,
 };
