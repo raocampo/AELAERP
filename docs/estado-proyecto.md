@@ -1,6 +1,6 @@
 # Estado del Proyecto AELA
 
-Fecha de referencia: `2026-07-13`
+Fecha de referencia: `2026-07-14`
 
 ## Resumen general
 
@@ -507,6 +507,36 @@ antes de llegar a producción:**
   suscripción (transferencia/PayPhone/Stripe) con aprobación manual vía `SUPER_ADMIN_KEY`
   (`1dc8ca6`) — auditado, sin bugs.
 
+### 29. Sesión 2026-07-13/14 (parte 4) — Carga de contabilidad atrasada + 2 bugs de producción confirmados
+
+Ver `docs/pendientes-2026-07-14.md` para el detalle exhaustivo. Continuación directa de la
+parte 3, motivada por un cliente real (Comercial S&S / Daniel Puchaicela) con contabilidad
+atrasada desde junio 2023.
+
+**Bugs de producción corregidos, confirmados con logs reales de Railway:**
+- **Configuración de cuentas por referencia no guardaba** (`f3a7126`) — `P2000: value too
+  long for column`. `codigoReferencia` era VARCHAR(20) pero el catálogo de nómina/general
+  tiene códigos de hasta 34 caracteres (`INVENTARIO_TRANSFERENCIAS_TRANSITO`,
+  `GANANCIA_NETA_EJERCICIO`, etc.). Ampliado a VARCHAR(50). De paso, el PUT no tenía el
+  mismo respaldo que el GET para tablas faltantes en tenants sin el fix — ahora se auto-repara.
+- **`auditoria.userAgent`/`ip` faltantes en tenants antiguos** (`f3a7126`) — confirmado en
+  logs (`column userAgent does not exist`), nunca rompía nada visible
+  (`registrarAuditoria` traga sus propios errores) pero ensuciaba los logs en cada acción
+  auditada. `applySchemaFixes.js` nunca tuvo una entrada para esas columnas.
+
+**Features — 3 utilidades de carga masiva, promovidas de scripts a funciones reales de la app:**
+- `convertirComprasHistoricasSRI.js`: convierte exports crudos del SRI (multi-hoja, hasta 8
+  layouts de columnas distintos) a la plantilla de "Importar Compras Históricas", combinando
+  todo en la menor cantidad de archivos posible (respeta el límite de 1000 filas). Se queda
+  como script — no hay UI porque el input es demasiado variable para automatizar sin revisión.
+- **Retenciones Recibidas** (`57a9c63`): nueva pestaña "⬆ Importar desde Excel" — acepta
+  directo el "Listado de Retenciones" que exporta el SRI, mismo wizard que Compras.
+- **Importar Históricas de ventas** (`2627c2b`): nuevo modo "🗂 Desde XML autorizados (.zip)"
+  además del Excel — parsea `<factura>` autorizado directamente, sin re-teclear nada.
+
+Las 3 utilidades se verificaron end-to-end vía HTTP real (JWT real, no solo `node -c`)
+contra los archivos reales del cliente antes de entregarlas.
+
 ### 26. Sesión 2026-07-12 — Bug real en declaraciones (F104/retenciones recibidas), RUC vs Cédula, DetalleCompra responsiva, recibo de cobro
 
 Ver `docs/pendientes-2026-07-12.md` para el detalle exhaustivo. A diferencia de sesiones
@@ -791,6 +821,20 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
    - Ver todos los tenants, planes, estado
    - Activar/suspender tenants
    - Ver logs de provisioning fallidos
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-13/14, parte 4)
+
+Ver `docs/pendientes-2026-07-14.md` sección "VERIFICAR MAÑANA EN PRODUCCIÓN".
+
+1. **Configuración de cuentas por referencia** — asignar cuenta a una referencia de Nómina
+   o General (código largo, ej. "Ganancia neta del ejercicio") → Guardar. Antes fallaba
+   siempre con estas.
+2. **Importar retenciones desde Excel** — Retenciones Recibidas → pestaña "⬆ Importar desde
+   Excel" con uno de los 3 archivos reales del cliente.
+3. **Importar ventas desde XML** — Ventas → Importar históricas → modo XML (.zip).
+4. **Carga real de contabilidad atrasada de Comercial S&S** — una vez confirmados 1-3, usar
+   los archivos ya generados para cargar los datos reales del cliente (escribe en
+   producción — coordinar antes).
 
 ### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-13, parte 3 — bugs críticos)
 
