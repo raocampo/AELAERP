@@ -507,6 +507,53 @@ antes de llegar a producción:**
   suscripción (transferencia/PayPhone/Stripe) con aprobación manual vía `SUPER_ADMIN_KEY`
   (`1dc8ca6`) — auditado, sin bugs.
 
+### 30. Sesión 2026-07-14 (parte 2) — Estados Financieros Jerárquicos + ATS Paginación + PDF SRI
+
+Ver `docs/pendientes-2026-07-14-parte2.md` para el detalle exhaustivo (commits, helpers PDF,
+lógica de jerarquía, lista de verificación en producción).
+
+#### Feature — Auto-crear períodos contables faltantes (`8c4271d`)
+`POST /contabilidad/periodos/auto-crear`: detecta años con asientos pero sin período creado
+y los genera automáticamente (CERRADO para años pasados, ABIERTO para el año en curso).
+Botón "Crear períodos sugeridos" en ContabilidadHub → Períodos.
+
+#### Feature — Estados Financieros Jerárquicos como SISOFIA (`328c2ae`)
+Nueva función `construirJerarquiaContable(empresaId, tipos, filtros)`:
+- Carga plan de cuentas completo (hojas + grupos) y movimientos del período
+- Burbujea sumas desde hijos hacia padres por `codigoPadre` (procesa en orden reverso de código)
+- Devuelve lista plana con `nivel` y `esGrupo` para renderizado jerárquico
+
+Las 3 funciones de estados renovadas:
+- **Balance de Comprobación**: jerarquía de todos los tipos, columnas Débito/Crédito/Saldo
+- **Estado de Resultados**: INGRESO/GASTO/COSTO con `gananciaNetaPeriodo` al final
+- **Balance General**: ACTIVO/PASIVO/PATRIMONIO, `resultadoEjercicio` calculado por separado
+  (no requiere asiento de cierre para cuadrar), `totalPatrimonioNeto` = Patrimonio + Resultado
+
+UI en ContabilidadHub:
+- 4 filtros etiquetados (Período, Desde, Hasta, Corte Balance)
+- 4 KPI cards (Activos, Pasivos, Patrimonio Neto, Resultado Ejercicio)
+- Indicador "Balanceado" (verde/rojo) con tolerancia $0.01
+- Sub-tabs: Situación Financiera | Estado de Resultados | Balance de Comprobación
+- Indentación dinámica con CSS custom property `--nivel`: `padding-left: calc((var(--nivel,1) - 1) * 18px)`
+- `.fila-grupo` (negrita), `.fila-resultado-ejercicio` (amarillo), `.fila-total-final` (verde)
+
+Fix ESLint (`e725d14`): `(balanceGeneral?.totalPatrimonioNeto ?? balanceGeneral?.totalPatrimonio) || 0`
+
+#### Feature — ATS: Paginación en todos los tabs + PDF rediseñado (`a816eb0`)
+**Paginación** (50 registros/página):
+- Hook `usePagina(items)` + componente `Paginador` con botones «/‹/›/»
+- Aplicado en: TabVentas (facturas), TabCompras, TabRetenciones, TabAnulados
+- Los totales del `<tfoot>` siempre son del array completo, no del slice — correcto
+
+**PDF talón resumen** (PDFKit):
+- Cabecera estilo SRI: badge azul con "SERVICIO DE RENTAS INTERNAS / SRI", bloque de empresa
+  con RUC + Razón Social + Período en celdas con bordes, caja "ATS" esquina superior derecha
+- 4 secciones (A: Ventas, B: Compras, C: Agente Retención, D: Liquidación IVA) con headers
+  azul marino `#003087`
+- Tablas con 3 columnas: Campo | Descripción | Valor, filas alternadas, fila de total en azul
+- Números de campo SRI visibles: 419, 429, 509, 563, 564, 601/602, 721, 799, 799-IR
+- Footer informativo en caja gris
+
 ### 29. Sesión 2026-07-13/14 (parte 4) — Carga de contabilidad atrasada + 2 bugs de producción confirmados
 
 Ver `docs/pendientes-2026-07-14.md` para el detalle exhaustivo. Continuación directa de la
@@ -822,6 +869,20 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
    - Ver todos los tenants, planes, estado
    - Activar/suspender tenants
    - Ver logs de provisioning fallidos
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-14, parte 2)
+
+Ver `docs/pendientes-2026-07-14-parte2.md` sección "VERIFICAR EN PRODUCCIÓN". Requieren navegador:
+
+1. **Períodos automáticos** — Contabilidad → Períodos → "Crear períodos sugeridos" → deben aparecer
+   los años con asientos (2023, 2024, 2025, 2026) según la BD de producción.
+2. **KPI cards** — Contabilidad → "Cierre y Estados", seleccionar un período, confirmar los 4 KPIs
+   y el indicador "Balanceado: Sí/No" con color correcto.
+3. **Estados jerárquicos** — verificar los 3 sub-tabs con jerarquía (grupos en negrita, hojas
+   indentadas, totales acumulados correctos). Comparar con SISOFIA.
+4. **Paginación ATS** — período con 108 compras → paginador "Página 1 de 3 (108 registros)".
+5. **PDF ATS** — pulsar "Imprimir PDF" → verificar header SRI, tabla empresa, secciones A/B/C/D
+   con bordes y campos SRI visibles.
 
 ### ✅ Verificado en producción (sesión 2026-07-13/14, parte 4) — confirmado 2026-07-14
 
