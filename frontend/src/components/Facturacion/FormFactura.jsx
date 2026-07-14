@@ -8,6 +8,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { fmtLinea } from '../../utils/formato';
 import './FormFactura.css';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -731,7 +732,7 @@ const FormFactura = () => {
                 const cant   = parseFloat(det.cantidad)       || 0;
                 const precio = parseFloat(det.precioUnitario) || 0;
                 const desc   = parseFloat(det.descuento)      || 0;
-                const sub    = (cant * precio - desc).toFixed(4);
+                const sub    = fmtLinea(cant * precio - desc);
                 return (
                   <div key={idx} className="fact-det-row">
                     <input style={{ flex: '0 0 66px' }} value={det.codigoPrincipal}

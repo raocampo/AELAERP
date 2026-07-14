@@ -511,6 +511,51 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/compras/notas-credito — notas de crédito recibidas de proveedores (tipoDocumento '04')
+// Provienen del buzón SRI / docs_recibidos_otros
+// IMPORTANTE: debe registrarse antes de GET /:id — de lo contrario Express matchea
+// "notas-credito" como si fuera un :id y nunca llega a este handler.
+router.get('/notas-credito', autorizarPermiso('compras.gestionar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const { busqueda, fechaDesde, fechaHasta, page = 1, limit = 50 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const where = { empresaId, tipoDocumento: '04' };
+    if (busqueda) {
+      where.OR = [
+        { razonSocialEmisor: { contains: busqueda, mode: 'insensitive' } },
+        { rucEmisor: { contains: busqueda } },
+        { claveAcceso: { contains: busqueda } },
+      ];
+    }
+    if (fechaDesde || fechaHasta) {
+      where.fechaEmision = {};
+      if (fechaDesde) where.fechaEmision.gte = new Date(fechaDesde);
+      if (fechaHasta) {
+        const fd = new Date(fechaHasta);
+        fd.setHours(23, 59, 59, 999);
+        where.fechaEmision.lte = fd;
+      }
+    }
+
+    const [total, notas] = await Promise.all([
+      prisma.docs_recibidos_otros.count({ where }),
+      prisma.docs_recibidos_otros.findMany({
+        where,
+        orderBy: { fechaEmision: 'desc' },
+        skip,
+        take: parseInt(limit),
+      }),
+    ]);
+
+    res.json({ success: true, data: notas, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch (error) {
+    console.error('GET /compras/notas-credito:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al obtener notas de crédito' });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const compra = await prisma.facturas_compra.findFirst({
@@ -1698,49 +1743,6 @@ router.patch('/:id/item-utilidad', autorizarPermiso('compras.gestionar'), async 
   } catch (error) {
     console.error('PATCH /compras/:id/item-utilidad:', error);
     res.status(500).json({ success: false, mensaje: error.message || 'Error al actualizar ítem' });
-  }
-});
-
-// GET /api/compras/notas-credito — notas de crédito recibidas de proveedores (tipoDocumento '04')
-// Provienen del buzón SRI / docs_recibidos_otros
-router.get('/notas-credito', autorizarPermiso('compras.gestionar'), async (req, res) => {
-  try {
-    const empresaId = req.empresa.id;
-    const { busqueda, fechaDesde, fechaHasta, page = 1, limit = 50 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    const where = { empresaId, tipoDocumento: '04' };
-    if (busqueda) {
-      where.OR = [
-        { razonSocialEmisor: { contains: busqueda, mode: 'insensitive' } },
-        { rucEmisor: { contains: busqueda } },
-        { claveAcceso: { contains: busqueda } },
-      ];
-    }
-    if (fechaDesde || fechaHasta) {
-      where.fechaEmision = {};
-      if (fechaDesde) where.fechaEmision.gte = new Date(fechaDesde);
-      if (fechaHasta) {
-        const fd = new Date(fechaHasta);
-        fd.setHours(23, 59, 59, 999);
-        where.fechaEmision.lte = fd;
-      }
-    }
-
-    const [total, notas] = await Promise.all([
-      prisma.docs_recibidos_otros.count({ where }),
-      prisma.docs_recibidos_otros.findMany({
-        where,
-        orderBy: { fechaEmision: 'desc' },
-        skip,
-        take: parseInt(limit),
-      }),
-    ]);
-
-    res.json({ success: true, data: notas, total, page: parseInt(page), limit: parseInt(limit) });
-  } catch (error) {
-    console.error('GET /compras/notas-credito:', error);
-    res.status(500).json({ success: false, mensaje: 'Error al obtener notas de crédito' });
   }
 });
 

@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { fmtLinea } from '../../utils/formato';
 import './FormProforma.css';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -434,7 +435,7 @@ export default function FormProforma() {
                         </select>
                       </td>
                       <td className="prf-td-total">
-                        ${total.toFixed(4)}
+                        ${fmtLinea(total)}
                       </td>
                       <td>
                         <button type="button" className="prf-btn-del" onClick={() => eliminarLinea(i)}>✕</button>
