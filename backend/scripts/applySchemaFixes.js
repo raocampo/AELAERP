@@ -118,6 +118,10 @@ const FIXES = [
     "updatedAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "config_cuentas_ref_empresa_cat_cod_key" ON "configuracion_cuentas_referencia"("empresaId", "categoria", "codigoReferencia")`,
+  // codigoReferencia nació en VARCHAR(20) pero el catálogo de nómina/general
+  // tiene códigos de hasta 34 caracteres (INVENTARIO_TRANSFERENCIAS_TRANSITO)
+  // — causaba P2000 "value too long for column" al guardar (2026-07-13).
+  `ALTER TABLE "configuracion_cuentas_referencia" ALTER COLUMN "codigoReferencia" TYPE VARCHAR(50)`,
   `CREATE INDEX IF NOT EXISTS "config_cuentas_ref_empresaId_idx" ON "configuracion_cuentas_referencia"("empresaId")`,
   `CREATE INDEX IF NOT EXISTS "config_cuentas_ref_cuentaId_idx" ON "configuracion_cuentas_referencia"("cuentaId")`,
   // Cuentas por Cobrar / Pagar — subledger de cobros y pagos (2026-07-07)
@@ -388,6 +392,30 @@ const FIXES = [
   // Gastos personales en facturas de compra — excluir de declaración IVA F104 (2026-07-13)
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "esGastoPersonal"        BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "categoriaGastoPersonal" VARCHAR(30)`,
+  // Auditoría — tabla existe en tenants antiguos pero nunca recibió las
+  // columnas ip/userAgent que utils/auditoria.js viene escribiendo desde
+  // hace tiempo (2026-07-13). registrarAuditoria() nunca deja que esto
+  // interrumpa la operación principal (try/catch propio), pero sí
+  // contaminaba los logs de Railway con "column userAgent does not exist"
+  // en cada acción auditada de esos tenants — útil de corregir igual.
+  `CREATE TABLE IF NOT EXISTS "auditoria" (
+    "id"          SERIAL PRIMARY KEY,
+    "empresaId"   INTEGER NOT NULL DEFAULT 1,
+    "usuarioId"   INTEGER,
+    "accion"      VARCHAR(100) NOT NULL,
+    "tabla"       VARCHAR(100),
+    "registroId"  INTEGER,
+    "datosAntes"  JSONB,
+    "datosNuevos" JSONB,
+    "ip"          VARCHAR(45),
+    "userAgent"   VARCHAR(500),
+    "fecha"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `ALTER TABLE "auditoria" ADD COLUMN IF NOT EXISTS "ip"        VARCHAR(45)`,
+  `ALTER TABLE "auditoria" ADD COLUMN IF NOT EXISTS "userAgent" VARCHAR(500)`,
+  `CREATE INDEX IF NOT EXISTS "auditoria_empresaId_idx" ON "auditoria"("empresaId")`,
+  `CREATE INDEX IF NOT EXISTS "auditoria_accion_idx"    ON "auditoria"("accion")`,
+  `CREATE INDEX IF NOT EXISTS "auditoria_fecha_idx"     ON "auditoria"("fecha")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

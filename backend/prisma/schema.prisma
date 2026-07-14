@@ -325,7 +325,7 @@ model configuracion_cuentas_referencia {
   id               Int      @id @default(autoincrement())
   empresaId        Int
   categoria        String   @db.VarChar(30)  // RETENCION_COMPRA | RETENCION_VENTA | NOMINA | GENERAL
-  codigoReferencia String   @db.VarChar(20)  // '303', '721', 'GASTO_SUELDOS', 'CAJA_GENERAL', ...
+  codigoReferencia String   @db.VarChar(50)  // '303', '721', 'GASTO_SUELDOS', 'INVENTARIO_TRANSFERENCIAS_TRANSITO', ...
   cuentaId         Int
   updatedAt        DateTime @updatedAt
 

@@ -1409,6 +1409,39 @@ router.get('/configuracion-referencias/:categoria', async (req, res) => {
   }
 });
 
+// La tabla se crea vía migración + applySchemaFixes.js, pero tenants que no
+// hayan recibido ese fix todavía (deploy parcial, orden de ejecución, etc.)
+// se quedan sin ella. GET ya lo tolera devolviendo el catálogo vacío; PUT no
+// tenía el mismo respaldo y el usuario solo veía "Error al guardar la
+// configuración de referencias" sin más contexto. Auto-reparable: crea la
+// tabla si falta (idempotente, mismo SQL que scripts/applySchemaFixes.js)
+// antes de intentar guardar, en vez de esperar al próximo deploy.
+async function asegurarTablaConfiguracionReferencia(db) {
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "configuracion_cuentas_referencia" (
+      "id"               SERIAL PRIMARY KEY,
+      "empresaId"        INTEGER NOT NULL,
+      "categoria"        VARCHAR(30) NOT NULL,
+      "codigoReferencia" VARCHAR(50) NOT NULL,
+      "cuentaId"         INTEGER NOT NULL,
+      "updatedAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await db.$executeRawUnsafe(`
+    ALTER TABLE "configuracion_cuentas_referencia" ALTER COLUMN "codigoReferencia" TYPE VARCHAR(50)
+  `);
+  await db.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "config_cuentas_ref_empresa_cat_cod_key"
+      ON "configuracion_cuentas_referencia"("empresaId", "categoria", "codigoReferencia")
+  `);
+  await db.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "config_cuentas_ref_empresaId_idx" ON "configuracion_cuentas_referencia"("empresaId")
+  `);
+  await db.$executeRawUnsafe(`
+    CREATE INDEX IF NOT EXISTS "config_cuentas_ref_cuentaId_idx" ON "configuracion_cuentas_referencia"("cuentaId")
+  `);
+}
+
 // PUT /api/contabilidad/configuracion-referencias/:categoria
 router.put('/configuracion-referencias/:categoria', async (req, res) => {
   try {
@@ -1418,6 +1451,8 @@ router.put('/configuracion-referencias/:categoria', async (req, res) => {
     if (!CATEGORIAS_CONFIG_REFERENCIA.includes(categoria)) {
       return res.status(400).json({ success: false, mensaje: 'Categoría inválida' });
     }
+
+    await asegurarTablaConfiguracionReferencia(db);
 
     const catalogo = obtenerCatalogoReferencias(categoria);
     const codigosValidos = new Set(catalogo.map((c) => c.codigoReferencia));
@@ -1454,8 +1489,14 @@ router.put('/configuracion-referencias/:categoria', async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('PUT /contabilidad/configuracion-referencias/:categoria:', error);
-    res.status(500).json({ success: false, mensaje: 'Error al guardar la configuración de referencias' });
+    console.error('PUT /contabilidad/configuracion-referencias/:categoria:', {
+      empresaId: obtenerEmpresaId(req), categoria: req.params.categoria,
+      code: error.code, meta: error.meta, message: error.message,
+    });
+    if (error.code === 'P2003') {
+      return res.status(400).json({ success: false, mensaje: 'Una de las cuentas seleccionadas no es válida para esta empresa' });
+    }
+    res.status(500).json({ success: false, mensaje: 'Error al guardar la configuración de referencias', codigo: error.code || null });
   }
 });
 
