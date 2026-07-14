@@ -1,0 +1,232 @@
+[
+  {
+    "Hoja": "JUNIO 2023 COMPRAS",
+    "Ano": 2023,
+    "Mes": 6,
+    "Base0": 3050.19,
+    "BaseIva": 67177.56,
+    "Iva": 8056.12,
+    "Total": 78283.99,
+    "Filas": 497
+  },
+  {
+    "Hoja": "JULIO 2023 COMPRAS",
+    "Ano": 2023,
+    "Mes": 7,
+    "Base0": 13502.66,
+    "BaseIva": 107576.72,
+    "Iva": 12908.95,
+    "Total": 133988.31,
+    "Filas": 339
+  },
+  {
+    "Hoja": "AGOSTO 2023 COMPRAS",
+    "Ano": 2023,
+    "Mes": 8,
+    "Base0": 9192.47,
+    "BaseIva": 155176.53,
+    "Iva": 18621.08,
+    "Total": 182990.02,
+    "Filas": 559
+  },
+  {
+    "Hoja": "septiembre 2023",
+    "Ano": 2023,
+    "Mes": 9,
+    "Base0": 11167.07,
+    "BaseIva": 137867.05,
+    "Iva": 16550.87,
+    "Total": 165584.98,
+    "Filas": 398
+  },
+  {
+    "Hoja": "OCT 2023 COMPRAS",
+    "Ano": 2023,
+    "Mes": 10,
+    "Base0": 0.0,
+    "BaseIva": 142998.11,
+    "Iva": 17159.76,
+    "Total": 165846.03,
+    "Filas": 326
+  },
+  {
+    "Hoja": "NOV 2023 COMPRAS",
+    "Ano": 2023,
+    "Mes": 11,
+    "Base0": 3970.73,
+    "BaseIva": 33843.94,
+    "Iva": 4055.23,
+    "Total": 41869.90,
+    "Filas": 407
+  },
+  {
+    "Hoja": "DIC 2023 COMPRAS",
+    "Ano": 2023,
+    "Mes": 12,
+    "Base0": 3205.64,
+    "BaseIva": 264253.10,
+    "Iva": 31706.87,
+    "Total": 299165.61,
+    "Filas": 436
+  },
+  {
+    "Hoja": "ENERO 2024 COMPRAS",
+    "Ano": 2024,
+    "Mes": 1,
+    "Base0": 0.0,
+    "BaseIva": 72904.49,
+    "Iva": 8736.81,
+    "Total": 82715.83,
+    "Filas": 427
+  },
+  {
+    "Hoja": "FEBRERO 2024 COMRPAS",
+    "Ano": 2024,
+    "Mes": 2,
+    "Base0": 0.0,
+    "BaseIva": 2621.74,
+    "Iva": 314.47,
+    "Total": 4902.08,
+    "Filas": 317
+  },
+  {
+    "Hoja": "MARZO 2024 COMP",
+    "Ano": 2024,
+    "Mes": 3,
+    "Base0": 0.0,
+    "BaseIva": 2165.61,
+    "Iva": 259.78,
+    "Total": 6033.40,
+    "Filas": 260
+  },
+  {
+    "Hoja": "ABRIL 2024 COMPRAS",
+    "Ano": 2024,
+    "Mes": 4,
+    "Base0": 0.0,
+    "BaseIva": 1520.31,
+    "Iva": 322.20,
+    "Total": 5277.53,
+    "Filas": 391
+  },
+  {
+    "Hoja": "MAYO 2024 COMPRAS",
+    "Ano": 2024,
+    "Mes": 5,
+    "Base0": 4538.66,
+    "BaseIva": 92493.03,
+    "Iva": 14134.99,
+    "Total": 116386.85,
+    "Filas": 387
+  },
+  {
+    "Hoja": "JUNIO 2024 COMPRAS",
+    "Ano": 2024,
+    "Mes": 6,
+    "Base0": 5000.91,
+    "BaseIva": 21350.13,
+    "Iva": 3257.46,
+    "Total": 32889.37,
+    "Filas": 434
+  },
+  {
+    "Hoja": "JULIO 2024 COMP",
+    "Ano": 2024,
+    "Mes": 7,
+    "Base0": 5421.38,
+    "BaseIva": 151964.37,
+    "Iva": 23647.90,
+    "Total": 198267.61,
+    "Filas": 463
+  },
+  {
+    "Hoja": "AGOSTO 2024 COMP",
+    "Ano": 2024,
+    "Mes": 8,
+    "Base0": 1491.08,
+    "BaseIva": 14245.35,
+    "Iva": 2326.67,
+    "Total": 21944.38,
+    "Filas": 560
+  },
+  {
+    "Hoja": "SEPTI 2024 COMPR",
+    "Ano": 2024,
+    "Mes": 9,
+    "Base0": 1118.26,
+    "BaseIva": 5772.83,
+    "Iva": 877.06,
+    "Total": 8006.39,
+    "Filas": 334
+  },
+  {
+    "Hoja": "OCT 2024 COMPR",
+    "Ano": 2024,
+    "Mes": 10,
+    "Base0": 0.0,
+    "BaseIva": 2130.87,
+    "Iva": 333.85,
+    "Total": 3594.51,
+    "Filas": 273
+  },
+  {
+    "Hoja": "NOV 2024 COMPR",
+    "Ano": 2024,
+    "Mes": 11,
+    "Base0": 752.26,
+    "BaseIva": 1752.60,
+    "Iva": 296.48,
+    "Total": 3479.64,
+    "Filas": 308
+  },
+  {
+    "Hoja": "DIC 2024 COMP",
+    "Ano": 2024,
+    "Mes": 12,
+    "Base0": 70685.82,
+    "BaseIva": 152802.04,
+    "Iva": 22918.03,
+    "Total": 246405.89,
+    "Filas": 239
+  },
+  {
+    "Hoja": "ENERO 2025",
+    "Ano": 2025,
+    "Mes": 1,
+    "Base0": 877.69,
+    "BaseIva": 1718.37,
+    "Iva": 490.39,
+    "Total": 7739.10,
+    "Filas": 341
+  },
+  {
+    "Hoja": "FEB 2025",
+    "Ano": 2025,
+    "Mes": 2,
+    "Base0": 864.01,
+    "BaseIva": 8482.81,
+    "Iva": 1297.07,
+    "Total": 11138.76,
+    "Filas": 290
+  },
+  {
+    "Hoja": "MARZO 2025",
+    "Ano": 2025,
+    "Mes": 3,
+    "Base0": 942.99,
+    "BaseIva": 6335.62,
+    "Iva": 995.62,
+    "Total": 9179.02,
+    "Filas": 354
+  },
+  {
+    "Hoja": "ABRIL 2025",
+    "Ano": 2025,
+    "Mes": 4,
+    "Base0": 945.69,
+    "BaseIva": 10357.86,
+    "Iva": 1561.09,
+    "Total": 13010.70,
+    "Filas": 408
+  }
+]
