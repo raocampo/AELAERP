@@ -279,3 +279,68 @@
   border-radius: 10px;
 }
 .ats-placeholder strong { color: #d97706; }
+
+/* Tabs bar */
+.ats-tabs-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0;
+}
+
+.ats-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 8px 18px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -2px;
+}
+.ats-tab-btn:hover  { color: #192C4A; }
+.ats-tab-btn.activo { color: #192C4A; border-bottom-color: #192C4A; }
+
+/* Mini-cards de resumen compras */
+.ats-mini-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ats-mini-label { font-size: 0.72rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.ats-mini-val   { font-size: 0.95rem; font-weight: 700; color: #192C4A; }
+
+/* Proveedor truncado */
+.ats-proveedor {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* btn-descargar-ats sin fondo degradado (fuera del box) */
+.ats-periodo-selector .btn-descargar-ats {
+  background: #192C4A;
+  color: #fff;
+  padding: 9px 20px;
+  font-size: 0.9rem;
+  box-shadow: none;
+}
+.ats-periodo-selector .btn-descargar-ats:hover { background: #1e3a5f; transform: none; }
+
+@media (prefers-color-scheme: dark) {
+  .ats-mini-card { background: #1e293b; border-color: #334155; }
+  .ats-mini-label { color: #94a3b8; }
+  .ats-mini-val   { color: #e2e8f0; }
+  .ats-tabs-bar { border-bottom-color: #334155; }
+  .ats-tab-btn  { color: #94a3b8; }
+  .ats-tab-btn.activo { color: #60a5fa; border-bottom-color: #60a5fa; }
+}
