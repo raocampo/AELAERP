@@ -2285,7 +2285,7 @@ const ContabilidadHub = () => {
                   <div className="conta-kpi"><span>Balance Haber</span><strong>{toMoney(balance?.resumen?.totalHaber)}</strong></div>
                   <div className="conta-kpi"><span>Utilidad período</span><strong>{toMoney(balanceGeneral?.resultadoEjercicio ?? estadoResultados?.utilidad)}</strong></div>
                   <div className="conta-kpi"><span>Activos</span><strong>{toMoney(balanceGeneral?.totalActivos)}</strong></div>
-                  <div className="conta-kpi"><span>Pasivos + Patrimonio</span><strong>{toMoney((balanceGeneral?.totalPasivos || 0) + (balanceGeneral?.totalPatrimonioNeto ?? balanceGeneral?.totalPatrimonio || 0))}</strong></div>
+                  <div className="conta-kpi"><span>Pasivos + Patrimonio</span><strong>{toMoney((balanceGeneral?.totalPasivos || 0) + ((balanceGeneral?.totalPatrimonioNeto ?? balanceGeneral?.totalPatrimonio) || 0))}</strong></div>
                   <div className={`conta-kpi ${balanceGeneral?.balanceado ? '' : 'conta-kpi-warn'}`}><span>Balanceado</span><strong>{balanceGeneral?.balanceado ? 'Sí' : 'No'}</strong></div>
                 </div>
 
