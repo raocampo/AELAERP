@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import { IcXML } from '../../utils/icons';
+import ImportarRetencionesRecibidas from './ImportarRetencionesRecibidas';
 import './ListaRetenciones.css';
 
 const TIPO_LABEL = { '1': 'Renta', '2': 'IVA', '4': 'IVA', '6': 'LRTI Art.97', '7': 'ISD' };
@@ -75,6 +76,7 @@ function ModalDetalles({ retencion, onClose }) {
 }
 
 export default function ListaRetencionesRecibidas() {
+  const [tab, setTab] = useState('listado');
   const [registros, setRegistros] = useState([]);
   const [total, setTotal]   = useState(0);
   const [pages, setPages]   = useState(1);
@@ -151,11 +153,27 @@ export default function ListaRetencionesRecibidas() {
           <h1 className="ret-title">Retenciones Recibidas</h1>
           <p className="ret-subtitle">Comprobantes de retención emitidos por clientes (agentes de retención)</p>
         </div>
-        <button className="btn-secondary" onClick={recalcularTotales} disabled={recalculando} title="Vuelve a leer el XML de cada retención y corrige los totales si estaban en $0.00">
-          {recalculando ? 'Recalculando...' : '🔄 Recalcular totales'}
+        {tab === 'listado' && (
+          <button className="btn-secondary" onClick={recalcularTotales} disabled={recalculando} title="Vuelve a leer el XML de cada retención y corrige los totales si estaban en $0.00">
+            {recalculando ? 'Recalculando...' : '🔄 Recalcular totales'}
+          </button>
+        )}
+      </div>
+
+      {/* Pestañas */}
+      <div className="ret-tabs">
+        <button className={`ret-tab ${tab === 'listado' ? 'activa' : ''}`} onClick={() => setTab('listado')}>
+          📋 Listado
+        </button>
+        <button className={`ret-tab ${tab === 'importar' ? 'activa' : ''}`} onClick={() => setTab('importar')}>
+          ⬆ Importar desde Excel
         </button>
       </div>
 
+      {tab === 'importar' ? (
+        <ImportarRetencionesRecibidas onImportado={() => { setTab('listado'); cargar(1); }} />
+      ) : (
+      <>
       {/* Filtros */}
       <div className="ret-filtros">
         <input type="date" name="desde" value={filtros.desde} onChange={handleFiltro} className="ret-input" />
@@ -260,6 +278,8 @@ export default function ListaRetencionesRecibidas() {
       )}
 
       {modalDetalle && <ModalDetalles retencion={modalDetalle} onClose={() => setModalDetalle(null)} />}
+      </>
+      )}
     </div>
   );
 }

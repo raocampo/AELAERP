@@ -246,38 +246,79 @@ function escribirPlantilla(facturas, rutaSalida) {
   XLSX.writeFile(wb, rutaSalida);
 }
 
+// AELA limita a 1000 filas por importación (routes/compras.js valida esto en
+// preview y en ejecutar) — no es negociable desde el archivo de origen.
+const MAX_FILAS_POR_LOTE = 1000;
+
 // ─── Main ───────────────────────────────────────────────────────────────────
+// Por defecto combina TODOS los meses en la menor cantidad de archivos
+// posible (respetando el límite de 1000 filas), para minimizar cuántas veces
+// hay que subir algo por el asistente de "Importar Históricas". Pasa
+// --por-mes si prefieres un archivo por hoja de origen (más granular, más
+// archivos).
+const porMes = process.argv.includes('--por-mes');
+
 function main() {
   const wb = XLSX.readFile(archivoOrigen);
   fs.mkdirSync(carpetaSalida, { recursive: true });
 
-  let totalFacturas = 0, totalImporte = 0, totalLineas = 0;
-  const resumen = [];
+  let totalLineas = 0;
+  const resumenHojas = [];
+  const todasLasFacturas = [];
 
   for (const nombreHoja of wb.SheetNames) {
     const { facturas, avisos, filasLeidas } = procesarHoja(nombreHoja, wb.Sheets[nombreHoja]);
-    if (facturas.length === 0) {
-      resumen.push({ hoja: nombreHoja, filasLeidas, facturas: 0, importe: 0, avisos });
-      continue;
-    }
-    const importe = round2(facturas.reduce((s, f) => s + f.subtotal_sin_iva + f.subtotal_con_iva + f.iva_total, 0));
-    const nombreArchivo = `plantilla-compras-${nombreHoja.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}.xlsx`;
-    escribirPlantilla(facturas, path.join(carpetaSalida, nombreArchivo));
-
-    totalFacturas += facturas.length;
-    totalImporte += importe;
     totalLineas += filasLeidas;
-    resumen.push({ hoja: nombreHoja, filasLeidas, facturas: facturas.length, importe, avisos, archivo: nombreArchivo });
+    const importe = round2(facturas.reduce((s, f) => s + f.subtotal_sin_iva + f.subtotal_con_iva + f.iva_total, 0));
+    resumenHojas.push({ hoja: nombreHoja, filasLeidas, facturas: facturas.length, importe, avisos });
+    todasLasFacturas.push(...facturas);
   }
 
-  console.log('\n=== RESUMEN DE CONVERSIÓN ===\n');
-  for (const r of resumen) {
-    console.log(`${r.hoja.padEnd(24)} | ${String(r.filasLeidas).padStart(5)} líneas → ${String(r.facturas).padStart(4)} facturas | $${r.importe.toFixed(2).padStart(12)} | ${r.archivo || '(sin datos)'}`);
+  console.log('\n=== POR HOJA DE ORIGEN ===\n');
+  for (const r of resumenHojas) {
+    console.log(`${r.hoja.padEnd(24)} | ${String(r.filasLeidas).padStart(5)} líneas → ${String(r.facturas).padStart(4)} facturas | $${r.importe.toFixed(2).padStart(12)}`);
     r.avisos.forEach((a) => console.log(`   ⚠ ${a}`));
   }
+
+  const totalFacturas = todasLasFacturas.length;
+  const totalImporte = round2(todasLasFacturas.reduce((s, f) => s + f.subtotal_sin_iva + f.subtotal_con_iva + f.iva_total, 0));
   console.log(`\nTOTAL: ${totalLineas} líneas leídas → ${totalFacturas} facturas agrupadas, $${totalImporte.toFixed(2)}`);
+
+  console.log('\n=== ARCHIVOS ESCRITOS ===\n');
+  const archivosEscritos = [];
+
+  if (porMes) {
+    // Modo por-mes: un archivo por hoja de origen
+    for (const nombreHoja of wb.SheetNames) {
+      const { facturas } = procesarHoja(nombreHoja, wb.Sheets[nombreHoja]);
+      if (facturas.length === 0) continue;
+      const nombreArchivo = `plantilla-compras-${nombreHoja.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}.xlsx`;
+      escribirPlantilla(facturas, path.join(carpetaSalida, nombreArchivo));
+      archivosEscritos.push(nombreArchivo);
+      console.log(`${nombreArchivo} (${facturas.length} facturas)`);
+    }
+  } else {
+    // Modo combinado (default): todas las facturas ordenadas por fecha,
+    // partidas en la menor cantidad de lotes de máximo 1000 filas.
+    todasLasFacturas.sort((a, b) => a.fecha_emision.localeCompare(b.fecha_emision));
+    const totalLotes = Math.ceil(totalFacturas / MAX_FILAS_POR_LOTE) || 1;
+    for (let i = 0; i < totalLotes; i++) {
+      const lote = todasLasFacturas.slice(i * MAX_FILAS_POR_LOTE, (i + 1) * MAX_FILAS_POR_LOTE);
+      if (lote.length === 0) continue;
+      const nombreArchivo = `plantilla-compras-lote-${i + 1}-de-${totalLotes}.xlsx`;
+      escribirPlantilla(lote, path.join(carpetaSalida, nombreArchivo));
+      archivosEscritos.push(nombreArchivo);
+      console.log(`${nombreArchivo} (${lote.length} facturas, ${lote[0].fecha_emision} a ${lote[lote.length - 1].fecha_emision})`);
+    }
+  }
+
   console.log(`\nArchivos escritos en: ${carpetaSalida}`);
-  console.log('Súbelos uno por uno en AELA → Compras → Importar históricas (cada uno ya trae menos de 1000 filas).');
+  if (porMes) {
+    console.log(`${archivosEscritos.length} archivo(s), uno por mes de origen.`);
+  } else {
+    console.log(`Solo ${archivosEscritos.length} archivo(s) — sube cada uno por AELA → Compras → Importar históricas, en orden, cada uno con su propia vista previa antes de confirmar.`);
+    console.log('(Usa --por-mes si prefieres un archivo separado por cada mes de origen en vez de lotes combinados.)');
+  }
 }
 
 main();

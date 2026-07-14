@@ -1,26 +1,24 @@
 // ====================================
-// IMPORTAR RETENCIONES RECIBIDAS DESDE EL EXCEL "LISTADO DE RETENCIONES" DEL SRI
+// IMPORTAR RETENCIONES RECIBIDAS DESDE EXCEL — LÍNEA DE COMANDOS
 //
-// El sistema hoy solo carga retenciones_recibidas parseando XML del Buzón
-// SRI (utils/buzon.js) — no existe una vía de Excel. Este script cubre el
-// caso de contabilidad atrasada: el Excel "LISTADO RETENCIONES ..." ya trae
-// una fila = un comprobante real (con clave de acceso, secuencial, documento
-// sustento), así que se mapea 1:1 contra retenciones_recibidas usando la
-// MISMA función de asiento contable que usa el Buzón SRI (no se reinventa).
+// Ahora que existe la pestaña "Importar" dentro de Retenciones Recibidas en
+// la app (misma lógica, en backend/utils/importarRetencionesRecibidas.js),
+// este script sigue sirviendo para cargas masivas fuera del navegador —
+// por ejemplo, escribir directo contra una base que no sea la que tenga
+// activo backend/.env en ese momento.
 //
-// Por defecto corre en modo DRY-RUN (no escribe nada, solo valida y muestra
-// qué crearía). Pasa --ejecutar para escribir de verdad — usa el
-// DATABASE_URL que tenga backend/.env en ese momento, así que confirma antes
-// contra qué base vas a correrlo (local de prueba vs producción).
+// Por defecto corre en modo DRY-RUN (no escribe nada, solo valida). Pasa
+// --ejecutar para escribir de verdad.
 //
 // Uso:
 //   node scripts/importarRetencionesRecibidasExcel.js "<archivo.xlsx>" <empresaId>              (dry-run)
 //   node scripts/importarRetencionesRecibidasExcel.js "<archivo.xlsx>" <empresaId> --ejecutar    (escribe)
 // ====================================
 
-const XLSX = require('xlsx');
+const fs = require('fs');
 const { PrismaClient } = require('@prisma/client');
-const { crearAsientoRetencionRecibida, round2 } = require('../utils/contabilidad');
+const { leerExcel, validarFila, round2 } = require('../utils/importarRetencionesRecibidas');
+const { crearAsientoRetencionRecibida } = require('../utils/contabilidad');
 
 const [, , archivo, empresaIdArg, flag] = process.argv;
 if (!archivo || !empresaIdArg) {
@@ -30,100 +28,12 @@ if (!archivo || !empresaIdArg) {
 const empresaId = parseInt(empresaIdArg, 10);
 const ejecutar = flag === '--ejecutar';
 
-function parsearFecha(valor) {
-  if (!valor) return null;
-  if (typeof valor === 'number') {
-    const d = XLSX.SSF.parse_date_code(valor);
-    return d ? new Date(Date.UTC(d.y, d.m - 1, d.d, 12)) : null;
-  }
-  const s = String(valor).trim();
-  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], 12));
-  m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-  if (m) return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`);
-  return null;
-}
-function parsearDecimal(v) {
-  if (v === null || v === undefined || v === '') return 0;
-  return parseFloat(String(v).replace(',', '.').trim()) || 0;
-}
-
-function leerFilas(archivo) {
-  const wb = XLSX.readFile(archivo);
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
-}
-
-function validarFila(raw, numFila) {
-  const errores = [];
-  const clave = String(raw['Autorización'] || '').replace(/\s/g, '');
-  if (!/^\d{49}$/.test(clave)) errores.push(`Autorización inválida (debe tener 49 dígitos): "${clave}"`);
-
-  const rucAgente = String(raw['No. Id Age. Ret.'] || '').trim();
-  if (!rucAgente) errores.push('No. Id Age. Ret. (RUC del agente de retención) es requerido');
-
-  const razonSocialAgente = String(raw['Raz. Social Ag. Retención'] || '').trim();
-  if (!razonSocialAgente) errores.push('Raz. Social Ag. Retención es requerida');
-
-  const fechaEmision = parsearFecha(raw['Fecha Emisión']);
-  if (!fechaEmision) errores.push(`Fecha Emisión inválida: "${raw['Fecha Emisión']}"`);
-
-  const fechaAutorizacion = parsearFecha(raw['Fecha Autorización']) || fechaEmision;
-
-  const baseRenta  = parsearDecimal(raw['Base Ret. Renta #1']);
-  const pctRenta    = parsearDecimal(raw['Porcentaje Ret. Renta #1']);
-  const valorRenta = parsearDecimal(raw['Valor Ret. Renta #1']);
-  const baseIva    = parsearDecimal(raw['Base Ret. IVA #1']);
-  const pctIva      = parsearDecimal(raw['Porcentaje Ret. IVA #1']);
-  const valorIva   = parsearDecimal(raw['Valor Ret. IVA #1']);
-
-  if (valorRenta === 0 && valorIva === 0) {
-    errores.push('No tiene ni Valor Ret. Renta #1 ni Valor Ret. IVA #1 (fila sin monto)');
-  }
-
-  const numDocSustento = String(raw['Documento Sustento'] || '').trim() || null;
-  const fechaDocSustento = parsearFecha(raw['Fecha Emi. Sustento']);
-
-  const detalles = [];
-  if (valorRenta !== 0 || baseRenta !== 0) {
-    detalles.push({
-      codigo: '1', codigoRetencion: String(raw['Cod. Ret. Renta #1'] || '').trim() || null,
-      porcentajeRetener: pctRenta, valorRetener: valorRenta, baseImponible: baseRenta,
-      numDocSustento, fechaEmisionDocSustento: fechaDocSustento,
-    });
-  }
-  if (valorIva !== 0 || baseIva !== 0) {
-    detalles.push({
-      codigo: '2', codigoRetencion: null,
-      porcentajeRetener: pctIva, valorRetener: valorIva, baseImponible: baseIva,
-      numDocSustento, fechaEmisionDocSustento: fechaDocSustento,
-    });
-  }
-
-  return {
-    valida: errores.length === 0,
-    errores,
-    fila: numFila,
-    datos: {
-      claveAcceso: clave,
-      numeroAutorizacion: clave,
-      fechaAutorizacion,
-      rucAgente,
-      razonSocialAgente,
-      fechaEmision,
-      numDocSustento,
-      totalRetencionIva: round2(valorIva),
-      totalRetencionRenta: round2(valorRenta),
-      detalles,
-    },
-  };
-}
-
 async function main() {
-  const filas = leerFilas(archivo);
+  const buffer = fs.readFileSync(archivo);
+  const filas = leerExcel(buffer);
   console.log(`Leídas ${filas.length} filas de "${archivo}"\n`);
 
-  const validadas = filas.map((raw, i) => validarFila(raw, i + 2));
+  const validadas = filas.map((raw, i) => ({ fila: i + 2, ...validarFila(raw) }));
   const validas = validadas.filter((v) => v.valida);
   const invalidas = validadas.filter((v) => !v.valida);
 
@@ -139,8 +49,6 @@ async function main() {
 
   if (!ejecutar) {
     console.log('Modo DRY-RUN — no se escribió nada. Revisa los datos arriba y vuelve a correr con --ejecutar para confirmar.');
-    console.log('Ejemplo de la primera fila válida que se crearía:');
-    console.log(JSON.stringify(validas[0]?.datos, null, 2));
     return;
   }
 

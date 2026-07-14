@@ -31,6 +31,27 @@
 }
 
 
+/* Pestañas */
+.ret-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 16px;
+}
+.ret-tab {
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+.ret-tab:hover { color: #192C4A; }
+.ret-tab.activa { color: #192C4A; border-bottom-color: #192C4A; }
+
 /* Filtros */
 .ret-filtros {
   display: flex;
