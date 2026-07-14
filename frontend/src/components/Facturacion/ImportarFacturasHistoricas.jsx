@@ -24,6 +24,7 @@ function PasoIndicador({ paso }) {
 }
 
 export default function ImportarFacturasHistoricas() {
+  const [modo, setModo]         = useState('excel'); // 'excel' | 'xml'
   const [paso, setPaso]         = useState(0);
   const [archivo, setArchivo]   = useState(null);
   const [preview, setPreview]   = useState(null);
@@ -77,7 +78,8 @@ export default function ImportarFacturasHistoricas() {
     try {
       const fd = new FormData();
       fd.append('archivo', archivo);
-      const { data } = await api.post('/facturas/importar/preview', fd);
+      const endpoint = modo === 'xml' ? '/facturas/importar/xml-preview' : '/facturas/importar/preview';
+      const { data } = await api.post(endpoint, fd);
       setPreview(data);
       setPaso(2);
     } catch (err) {
@@ -96,7 +98,8 @@ export default function ImportarFacturasHistoricas() {
     try {
       const fd = new FormData();
       fd.append('archivo', archivo);
-      const { data } = await api.post('/facturas/importar/ejecutar', fd);
+      const endpoint = modo === 'xml' ? '/facturas/importar/xml-ejecutar' : '/facturas/importar/ejecutar';
+      const { data } = await api.post(endpoint, fd);
       setResultado(data);
       setPaso(3);
     } catch (err) {
@@ -126,10 +129,27 @@ export default function ImportarFacturasHistoricas() {
 
       <PasoIndicador paso={paso} />
 
+      {(paso === 0 || paso === 1) && (
+        <div className="ifh-modo-toggle" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button
+            className={modo === 'excel' ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => setModo('excel')}
+          >
+            📊 Desde Excel (plantilla)
+          </button>
+          <button
+            className={modo === 'xml' ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => setModo('xml')}
+          >
+            🗂 Desde XML autorizados (.zip)
+          </button>
+        </div>
+      )}
+
       {error && <div className="ifh-alerta-error">{error}</div>}
 
       {/* ── PASO 0: Instrucciones ── */}
-      {paso === 0 && (
+      {paso === 0 && modo === 'excel' && (
         <div className="ifh-card">
           <h2 className="ifh-card-titulo">¿Cómo funciona?</h2>
 
@@ -191,6 +211,56 @@ export default function ImportarFacturasHistoricas() {
         </div>
       )}
 
+      {/* ── PASO 0 (modo XML): Instrucciones ── */}
+      {paso === 0 && modo === 'xml' && (
+        <div className="ifh-card">
+          <h2 className="ifh-card-titulo">¿Cómo funciona?</h2>
+
+          <div className="ifh-info-grid">
+            <div className="ifh-info-item">
+              <span className="ifh-info-num">1</span>
+              <div>
+                <strong>Junta tus XML en un .zip</strong>
+                <p>Los archivos autorizados que descargaste de srienlinea.sri.gob.ec — no hace falta editarlos ni llenar ninguna plantilla.</p>
+              </div>
+            </div>
+            <div className="ifh-info-item">
+              <span className="ifh-info-num">2</span>
+              <div>
+                <strong>Sube el .zip</strong>
+                <p>AELA lee cada XML: clave de acceso, cliente, ítems y totales — todo viene del comprobante autorizado.</p>
+              </div>
+            </div>
+            <div className="ifh-info-item">
+              <span className="ifh-info-num">3</span>
+              <div>
+                <strong>Revisa la vista previa</strong>
+                <p>Si un XML no se puede leer (formato distinto, dañado) se marca con el error específico y no bloquea al resto.</p>
+              </div>
+            </div>
+            <div className="ifh-info-item">
+              <span className="ifh-info-num">4</span>
+              <div>
+                <strong>Confirma la importación</strong>
+                <p>Cada factura queda como "Autorizado" (ya lo estaba en el SRI) y genera su asiento contable con la fecha real.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="ifh-nota">
+            <strong>Importante:</strong> estas facturas ya fueron autorizadas por el SRI en su
+            momento — AELA no las vuelve a firmar ni enviar, solo las registra para tu contabilidad.
+            Si la clave de acceso de un XML ya existe en el sistema, esa factura se omite (no se duplica).
+          </div>
+
+          <div className="ifh-acciones">
+            <button className="btn-primary" onClick={() => setPaso(1)}>
+              Continuar → Cargar archivo
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── ¿Ya importaste facturas antes de esta corrección? Repara sin reimportar ── */}
       {paso === 0 && (
         <div className="ifh-card">
@@ -229,7 +299,12 @@ export default function ImportarFacturasHistoricas() {
       {paso === 1 && (
         <div className="ifh-card">
           <h2 className="ifh-card-titulo">Seleccionar archivo</h2>
-          <p className="ifh-card-desc">Formatos aceptados: <strong>.xlsx, .xls</strong> — Máximo 1000 filas por importación.</p>
+          <p className="ifh-card-desc">
+            {modo === 'xml'
+              ? <>Formato aceptado: <strong>.zip</strong> (con los XML autorizados adentro) — Máximo 1000 archivos por importación.</>
+              : <>Formatos aceptados: <strong>.xlsx, .xls</strong> — Máximo 1000 filas por importación.</>
+            }
+          </p>
 
           <div
             className={`ifh-dropzone ${archivo ? 'ifh-dropzone-ok' : ''}`}
@@ -249,7 +324,7 @@ export default function ImportarFacturasHistoricas() {
               </>
             ) : (
               <>
-                <span className="ifh-dropzone-icon">📂</span>
+                <span className="ifh-dropzone-icon">{modo === 'xml' ? '🗂' : '📂'}</span>
                 <span>Haz clic o arrastra tu archivo aquí</span>
               </>
             )}
@@ -257,14 +332,14 @@ export default function ImportarFacturasHistoricas() {
           <input
             ref={inputRef}
             type="file"
-            accept=".xlsx,.xls"
+            accept={modo === 'xml' ? '.zip' : '.xlsx,.xls'}
             style={{ display: 'none' }}
             onChange={seleccionarArchivo}
           />
 
           <div className="ifh-acciones">
             <button className="btn-secondary" onClick={() => setPaso(0)}>← Volver</button>
-            <button className="btn-secondary" onClick={descargarPlantilla}>Descargar plantilla</button>
+            {modo === 'excel' && <button className="btn-secondary" onClick={descargarPlantilla}>Descargar plantilla</button>}
             <button className="btn-primary" onClick={cargarPreview} disabled={!archivo || cargando}>
               {cargando ? 'Procesando...' : 'Validar archivo →'}
             </button>

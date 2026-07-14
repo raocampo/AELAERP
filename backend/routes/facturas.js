@@ -1611,6 +1611,9 @@ const {
   construirDetalles,
   generarPlantilla,
 } = require('../utils/importarFacturasHistoricas');
+const { parsearFacturaXML } = require('../utils/importarFacturasVentaXML');
+const AdmZip = require('adm-zip');
+const { crearAsientoFacturaAutorizada: _crearAsientoXml } = require('../utils/contabilidad');
 
 const uploadImportacion = multer({
   storage: multer.memoryStorage(),
@@ -1631,6 +1634,186 @@ function multerImportacion(req, res, next) {
     next();
   });
 }
+
+// Importación de ventas históricas desde XML autorizados (.zip) — para
+// clientes que ya tienen a mano los XML descargados de srienlinea.sri.gob.ec,
+// en vez de tener que re-teclear cada factura en la plantilla Excel.
+const uploadImportacionZip = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (/\.zip$/i.test(file.originalname)) cb(null, true);
+    else cb(new Error('Solo se acepta un archivo .zip con los XML'));
+  },
+});
+function multerImportacionZip(req, res, next) {
+  uploadImportacionZip.single('archivo')(req, res, (err) => {
+    if (err) return res.status(400).json({ ok: false, error: err.message });
+    next();
+  });
+}
+
+// Adapta el shape de parsearFacturaXML() al mismo "datos" que ya consume el
+// wizard de vista previa (fecha/razonSocial/subtotalExento/subtotalGravado/
+// ivaTotal/importeTotal/parsedNum/numeroAutorizacion) — misma tabla, sin
+// tener que duplicar el frontend para el modo XML.
+function adaptarDatosXmlAPreview(d) {
+  return {
+    fecha: d.fechaEmision,
+    razonSocial: d.razonSocialComprador,
+    descripcion: d.detalles.map((it) => it.descripcion).slice(0, 2).join(' / ') || 'Factura importada desde XML',
+    subtotalExento: round2XmlImport(d.subtotal0 + d.subtotalNoObjetoIva),
+    subtotalGravado: round2XmlImport(d.subtotal5 + d.subtotal15),
+    ivaTotal: d.totalIva,
+    importeTotal: d.importeTotal,
+    parsedNum: { estab: d.numeroFactura.split('-')[0], ptoEmi: d.numeroFactura.split('-')[1], secuencial: d.secuencial },
+    numeroAutorizacion: d.numeroAutorizacion,
+    claveAcceso: d.claveAcceso,
+  };
+}
+function round2XmlImport(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+
+function leerXmlsDeZip(buffer) {
+  const zip = new AdmZip(buffer);
+  return zip.getEntries()
+    .filter((e) => !e.isDirectory && /\.xml$/i.test(e.entryName))
+    .map((e) => ({ nombre: e.entryName, contenido: e.getData().toString('utf8') }));
+}
+
+// GET /api/facturas/importar/xml-plantilla — no hay plantilla que llenar;
+// esto solo documenta el requisito para que el botón "Descargar" del wizard
+// tenga a dónde apuntar en modo XML (devuelve las instrucciones como texto).
+router.get('/importar/xml-instrucciones', (_req, res) => {
+  res.json({
+    ok: true,
+    texto: 'Comprime en un .zip los XML autorizados de tus facturas de venta '
+      + '(descargados de srienlinea.sri.gob.ec). Cada archivo debe ser el '
+      + '<factura> autorizado tal cual — no hace falta llenar ninguna plantilla.',
+  });
+});
+
+// POST /api/facturas/importar/xml-preview — valida el .zip sin importar
+router.post('/importar/xml-preview', multerImportacionZip, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió archivo' });
+
+    const archivos = leerXmlsDeZip(req.file.buffer);
+    if (archivos.length === 0) return res.status(400).json({ ok: false, error: 'El .zip no contiene archivos .xml' });
+    if (archivos.length > 1000) return res.status(400).json({ ok: false, error: 'Máximo 1000 archivos por importación' });
+
+    const resultado = archivos.map((a, idx) => {
+      try {
+        const datos = parsearFacturaXML(a.contenido);
+        return { fila: idx + 1, archivo: a.nombre, valida: true, errores: [], datos: adaptarDatosXmlAPreview(datos) };
+      } catch (err) {
+        return { fila: idx + 1, archivo: a.nombre, valida: false, errores: [err.message], datos: null };
+      }
+    });
+
+    const validas = resultado.filter((r) => r.valida).length;
+    res.json({ ok: true, filas: resultado, validas, invalidas: resultado.length - validas, total: archivos.length });
+  } catch (error) {
+    console.error('POST /facturas/importar/xml-preview:', error);
+    res.status(500).json({ ok: false, error: `Error al procesar el .zip: ${error.message}` });
+  }
+});
+
+// POST /api/facturas/importar/xml-ejecutar — importa las facturas válidas del .zip
+router.post('/importar/xml-ejecutar', multerImportacionZip, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió archivo' });
+
+    const db = req.prisma || prisma;
+    const empresaId = req.empresa.id;
+
+    const archivos = leerXmlsDeZip(req.file.buffer);
+    if (archivos.length === 0) return res.status(400).json({ ok: false, error: 'El .zip no contiene archivos .xml' });
+    if (archivos.length > 1000) return res.status(400).json({ ok: false, error: 'Máximo 1000 archivos por importación' });
+
+    const importadas = [];
+    const errores = [];
+
+    for (const [idx, a] of archivos.entries()) {
+      const filaNum = idx + 1;
+      let d;
+      try {
+        d = parsearFacturaXML(a.contenido);
+      } catch (err) {
+        errores.push({ fila: filaNum, errores: [`${a.nombre}: ${err.message}`] });
+        continue;
+      }
+
+      try {
+        const existente = await db.facturas.findUnique({ where: { claveAcceso: d.claveAcceso }, select: { id: true } });
+        if (existente) {
+          errores.push({ fila: filaNum, errores: [`Ya existe una factura con esta clave de acceso (${a.nombre})`] });
+          continue;
+        }
+
+        let cliente = null;
+        try {
+          cliente = await db.clientes.upsert({
+            where: { empresaId_identificacion: { identificacion: d.identificacionComprador, empresaId } },
+            update: {},
+            create: {
+              empresaId, identificacion: d.identificacionComprador, razonSocial: d.razonSocialComprador,
+              tipoIdentificacion: d.tipoIdentificacionComprador,
+            },
+          });
+        } catch { /* identificación no apta para clientes (consumidor final genérico) — sin vincular */ }
+
+        const creada = await db.facturas.create({
+          data: {
+            empresaId, claveAcceso: d.claveAcceso, numeroFactura: d.numeroFactura, secuencial: d.secuencial,
+            rucEmisor: d.rucEmisor, razonSocialEmisor: d.razonSocialEmisor,
+            tipoIdentificacionComprador: d.tipoIdentificacionComprador,
+            identificacionComprador: d.identificacionComprador, razonSocialComprador: d.razonSocialComprador,
+            emailComprador: d.emailComprador, clienteId: cliente?.id || null,
+            fechaEmision: d.fechaEmision,
+            subtotal0: d.subtotal0, subtotal5: d.subtotal5, subtotal15: d.subtotal15,
+            subtotalNoObjetoIva: d.subtotalNoObjetoIva, totalDescuento: d.totalDescuento,
+            totalIva: d.totalIva, propina: d.propina, importeTotal: d.importeTotal,
+            detalles: d.detalles, pagos: d.pagos,
+            estadoSri: 'AUTORIZADO', numeroAutorizacion: d.numeroAutorizacion,
+            origenRegistro: 'IMPORTACION',
+          },
+          select: { id: true, numeroFactura: true, importeTotal: true, estadoSri: true },
+        });
+
+        let asientoOk = false;
+        try {
+          const rAsiento = await _crearAsientoXml({ facturaId: creada.id, usuarioId: req.usuario.id, fecha: d.fechaEmision, db });
+          asientoOk = !!rAsiento.asiento;
+        } catch (contErr) {
+          console.error(`[Importar XML] Asiento contable fila ${filaNum} (factura ${creada.id}):`, contErr.message);
+        }
+
+        importadas.push({
+          fila: filaNum, id: creada.id, numeroFactura: creada.numeroFactura,
+          total: parseFloat(creada.importeTotal), estadoSri: creada.estadoSri, asientoOk,
+        });
+      } catch (err) {
+        if (err.code === 'P2002') {
+          errores.push({ fila: filaNum, errores: [`Ya existe una factura con esa clave de acceso o número (${a.nombre})`] });
+        } else {
+          console.error(`[Importar XML] fila ${filaNum} (${a.nombre}):`, err.message);
+          errores.push({ fila: filaNum, errores: [err.message] });
+        }
+      }
+    }
+
+    await registrarAuditoria({
+      db, usuarioId: req.usuario.id, empresaId,
+      accion: 'IMPORTAR_FACTURAS_HISTORICAS_XML', tabla: 'facturas',
+      descripcion: `Importadas ${importadas.length} facturas desde XML. Errores: ${errores.length}`,
+    });
+
+    res.json({ ok: true, importadas: importadas.length, errores: errores.length, detalle: { importadas, errores } });
+  } catch (error) {
+    console.error('POST /facturas/importar/xml-ejecutar:', error);
+    res.status(500).json({ ok: false, error: `Error en importación: ${error.message}` });
+  }
+});
 
 // GET /api/facturas/importar/plantilla — descarga la plantilla Excel
 router.get('/importar/plantilla', async (_req, res) => {
