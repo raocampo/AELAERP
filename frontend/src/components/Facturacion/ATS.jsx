@@ -9,6 +9,29 @@ import { formatFechaCorta } from '../../utils/fecha';
 import { descargarPdf } from '../../utils/exportCsv';
 import './ATS.css';
 
+const POR_PAGINA = 50;
+
+function usePagina(items) {
+  const [pagina, setPagina] = useState(1);
+  const totalPaginas = Math.max(1, Math.ceil(items.length / POR_PAGINA));
+  const paginaReal = Math.min(pagina, totalPaginas);
+  const slice = items.slice((paginaReal - 1) * POR_PAGINA, paginaReal * POR_PAGINA);
+  return { slice, pagina: paginaReal, totalPaginas, setPagina };
+}
+
+function Paginador({ pagina, totalPaginas, total, setPagina }) {
+  if (totalPaginas <= 1) return null;
+  return (
+    <div className="ats-paginador">
+      <button disabled={pagina === 1} onClick={() => setPagina(1)}>«</button>
+      <button disabled={pagina === 1} onClick={() => setPagina(p => p - 1)}>‹ Anterior</button>
+      <span>Página <strong>{pagina}</strong> de <strong>{totalPaginas}</strong> ({total} registros)</span>
+      <button disabled={pagina === totalPaginas} onClick={() => setPagina(p => p + 1)}>Siguiente ›</button>
+      <button disabled={pagina === totalPaginas} onClick={() => setPagina(totalPaginas)}>»</button>
+    </div>
+  );
+}
+
 const MESES = [
   { v: '01', l: 'Enero' },   { v: '02', l: 'Febrero' },  { v: '03', l: 'Marzo' },
   { v: '04', l: 'Abril' },   { v: '05', l: 'Mayo' },      { v: '06', l: 'Junio' },
@@ -25,6 +48,8 @@ function TabVentas({ data }) {
   const liquidaciones = data.liquidaciones || [];
   const ncs          = data.ncs          || [];
 
+  const { slice: sliceF, pagina: paginaF, totalPaginas: totalF, setPagina: setPaginaF } = usePagina(facturas);
+
   const totF  = facturas.reduce((s, f) => s + parseFloat(f.importeTotal || 0), 0);
   const totL  = liquidaciones.reduce((s, l) => s + parseFloat(l.importeTotal || 0), 0);
   const totNC = ncs.reduce((s, n) => s + parseFloat(n.importeTotal || 0), 0);
@@ -37,6 +62,7 @@ function TabVentas({ data }) {
           Facturas emitidas autorizadas
           <span className="ats-sec-count">{facturas.length}</span>
         </h3>
+        <Paginador pagina={paginaF} totalPaginas={totalF} total={facturas.length} setPagina={setPaginaF} />
         {facturas.length === 0 ? (
           <p className="ats-empty">No hay facturas autorizadas en este período.</p>
         ) : (
@@ -55,7 +81,7 @@ function TabVentas({ data }) {
                 </tr>
               </thead>
               <tbody>
-                {facturas.map(f => (
+                {sliceF.map(f => (
                   <tr key={f.id}>
                     <td className="ats-num">{f.numeroFactura}</td>
                     <td>{fmtFecha(f.fechaEmision)}</td>
@@ -172,13 +198,14 @@ function TabVentas({ data }) {
 // ─── Tab Compras ──────────────────────────────────────────────────────────────
 function TabCompras({ data }) {
   const compras = data.compras || [];
+  const { slice, pagina, totalPaginas, setPagina } = usePagina(compras);
 
-  const totBase0   = compras.reduce((s, c) => s + parseFloat(c.subtotal0 || 0), 0);
+  const totBase0    = compras.reduce((s, c) => s + parseFloat(c.subtotal0 || 0), 0);
   const totBaseGrav = compras.reduce((s, c) => s + parseFloat(c.subtotal15 || 0) + parseFloat(c.subtotal5 || 0), 0);
-  const totIva     = compras.reduce((s, c) => s + parseFloat(c.totalIva || 0), 0);
-  const totTotal   = compras.reduce((s, c) => s + parseFloat(c.importeTotal || 0), 0);
-  const totRetIR   = compras.reduce((s, c) => s + parseFloat(c.retencionRenta || 0), 0);
-  const totRetIva  = compras.reduce((s, c) => s + parseFloat(c.retencionIVA || 0), 0);
+  const totIva      = compras.reduce((s, c) => s + parseFloat(c.totalIva || 0), 0);
+  const totTotal    = compras.reduce((s, c) => s + parseFloat(c.importeTotal || 0), 0);
+  const totRetIR    = compras.reduce((s, c) => s + parseFloat(c.retencionRenta || 0), 0);
+  const totRetIva   = compras.reduce((s, c) => s + parseFloat(c.retencionIVA || 0), 0);
 
   return (
     <div className="ats-seccion">
@@ -206,6 +233,7 @@ function TabCompras({ data }) {
         </div>
       )}
 
+      <Paginador pagina={pagina} totalPaginas={totalPaginas} total={compras.length} setPagina={setPagina} />
       {compras.length === 0 ? (
         <p className="ats-empty">No hay facturas de compra en este período.</p>
       ) : (
@@ -228,7 +256,7 @@ function TabCompras({ data }) {
               </tr>
             </thead>
             <tbody>
-              {compras.map(c => {
+              {slice.map(c => {
                 const ret = (c.retenciones || [])[0];
                 const baseGrav = parseFloat(c.subtotal15 || 0) + parseFloat(c.subtotal5 || 0);
                 return (
@@ -272,6 +300,7 @@ function TabCompras({ data }) {
 // ─── Tab Retenciones ──────────────────────────────────────────────────────────
 function TabRetenciones({ data }) {
   const retenciones = data.retenciones || [];
+  const { slice: sliceR, pagina: paginaR, totalPaginas: totalR, setPagina: setPaginaR } = usePagina(retenciones);
 
   return (
     <div className="ats-seccion">
@@ -279,6 +308,7 @@ function TabRetenciones({ data }) {
         Comprobantes de Retención emitidos
         <span className="ats-sec-count">{retenciones.length}</span>
       </h3>
+      <Paginador pagina={paginaR} totalPaginas={totalR} total={retenciones.length} setPagina={setPaginaR} />
       {retenciones.length === 0 ? (
         <p className="ats-empty">No hay retenciones autorizadas en este período.</p>
       ) : (
@@ -297,7 +327,7 @@ function TabRetenciones({ data }) {
               </tr>
             </thead>
             <tbody>
-              {retenciones.map(ret => {
+              {sliceR.map(ret => {
                 const imps = Array.isArray(ret.impuestos) ? ret.impuestos
                   : (typeof ret.impuestos === 'string' ? JSON.parse(ret.impuestos) : []);
                 const retRenta = imps.filter(i => String(i.codigo) === '1').reduce((s, i) => s + parseFloat(i.valorRetenido || 0), 0);
@@ -334,12 +364,14 @@ function TabRetenciones({ data }) {
 // ─── Tab Anulados ─────────────────────────────────────────────────────────────
 function TabAnulados({ data }) {
   const anulados = data.anulados || [];
+  const { slice: sliceA, pagina: paginaA, totalPaginas: totalA, setPagina: setPaginaA } = usePagina(anulados);
   return (
     <div className="ats-seccion">
       <h3 className="ats-seccion-titulo">
         Comprobantes Anulados del período
         <span className="ats-sec-count">{anulados.length}</span>
       </h3>
+      <Paginador pagina={paginaA} totalPaginas={totalA} total={anulados.length} setPagina={setPaginaA} />
       {anulados.length === 0 ? (
         <p className="ats-empty">No hay comprobantes anulados en este período.</p>
       ) : (
@@ -354,7 +386,7 @@ function TabAnulados({ data }) {
               </tr>
             </thead>
             <tbody>
-              {anulados.map(f => (
+              {sliceA.map(f => (
                 <tr key={f.id}>
                   <td>Factura</td>
                   <td className="ats-num">{f.numeroFactura}</td>

@@ -336,6 +336,28 @@
 }
 .ats-periodo-selector .btn-descargar-ats:hover { background: #1e3a5f; transform: none; }
 
+/* Paginador */
+.ats-paginador {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.ats-paginador button {
+  padding: 4px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #1e40af;
+  transition: background 0.15s;
+}
+.ats-paginador button:hover:not(:disabled) { background: #eff6ff; }
+.ats-paginador button:disabled { opacity: 0.4; cursor: not-allowed; }
+.ats-paginador span { font-size: 0.83rem; color: #475569; padding: 0 4px; }
+
 @media (prefers-color-scheme: dark) {
   .ats-mini-card { background: #1e293b; border-color: #334155; }
   .ats-mini-label { color: #94a3b8; }
@@ -343,4 +365,7 @@
   .ats-tabs-bar { border-bottom-color: #334155; }
   .ats-tab-btn  { color: #94a3b8; }
   .ats-tab-btn.activo { color: #60a5fa; border-bottom-color: #60a5fa; }
+  .ats-paginador button { background: #1e293b; border-color: #334155; color: #60a5fa; }
+  .ats-paginador button:hover:not(:disabled) { background: #1e3a5f; }
+  .ats-paginador span { color: #94a3b8; }
 }

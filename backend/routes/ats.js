@@ -485,101 +485,174 @@ router.get('/exportar/pdf', async (req, res) => {
     }, 0);
 
     // ── PDFKit ────────────────────────────────────────────────────────────────
+    const retPctOrdenados = Object.entries(retPorPct).sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
+
     const doc = new PDFDocument({ size: 'A4', margins: { top: 36, bottom: 36, left: 36, right: 36 } });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="talonATS_${anio}${mesPad}.pdf"`);
     doc.pipe(res);
 
-    const PW = 595 - 72; // usable width
-    const fmtM = (n) => `$${n.toFixed(2)}`;
+    const ML = 36, MR = 36;
+    const PW = 595 - ML - MR;
+    const fmtM = (n) => `$ ${Number(n).toFixed(2)}`;
+    const SRI_BLUE = '#003087';
+    const COL_CAMPO = 46;
+    const COL_VAL   = 88;
+    const COL_DESC  = PW - COL_CAMPO - COL_VAL;
+    const ROW_H     = 15;
 
-    // Header
-    doc.fontSize(13).font('Helvetica-Bold').text('TALÓN RESUMEN — ANEXO TRANSACCIONAL SIMPLIFICADO', { align: 'center' });
-    doc.moveDown(0.3);
-    doc.fontSize(10).font('Helvetica').text(`${config.razonSocial}  |  RUC: ${config.ruc}`, { align: 'center' });
-    doc.text(`Período: ${periodo}`, { align: 'center' });
-    doc.moveDown(0.5);
-    doc.moveTo(36, doc.y).lineTo(559, doc.y).stroke();
-    doc.moveDown(0.5);
+    // ── Cabecera estilo SRI ──────────────────────────────────────────────────
+    // Badge izquierdo (simula logo SRI)
+    doc.rect(ML, 36, 88, 48).fillAndStroke(SRI_BLUE, SRI_BLUE);
+    doc.fillColor('white').font('Helvetica-Bold').fontSize(6)
+      .text('SERVICIO DE RENTAS INTERNAS', ML + 2, 42, { width: 84, align: 'center' });
+    doc.fontSize(16).text('SRI', ML + 2, 51, { width: 84, align: 'center' });
+    doc.fontSize(5.5).text('República del Ecuador', ML + 2, 73, { width: 84, align: 'center' });
+    doc.fillColor('black');
 
-    // Helper: tabla 2 columnas
-    const tblRow = (label, valor, bold = false) => {
-      const y = doc.y;
-      if (bold) doc.font('Helvetica-Bold'); else doc.font('Helvetica');
-      doc.fontSize(9).text(label, 36, y, { width: PW * 0.72 });
-      doc.text(valor, 36 + PW * 0.72, y, { width: PW * 0.28, align: 'right' });
-      doc.moveDown(0.15);
-    };
+    // Bloque central del título
+    doc.fillColor(SRI_BLUE).font('Helvetica-Bold').fontSize(12)
+      .text('ANEXO TRANSACCIONAL SIMPLIFICADO', ML + 94, 40, { width: PW - 94 - 78, align: 'center' });
+    doc.fontSize(9)
+      .text('TALÓN RESUMEN DEL PERÍODO', ML + 94, 56, { width: PW - 94 - 78, align: 'center' });
+    doc.fillColor('black');
 
-    const sectionHeader = (title) => {
-      doc.moveDown(0.4);
-      doc.fontSize(10).font('Helvetica-Bold')
-        .fillColor('#1e40af').text(title, 36);
+    // Caja "ATS" (esquina superior derecha)
+    doc.rect(ML + PW - 76, 36, 76, 48).stroke(SRI_BLUE);
+    doc.fontSize(6.5).font('Helvetica').fillColor('#64748b')
+      .text('FORMULARIO', ML + PW - 76, 43, { width: 76, align: 'center' });
+    doc.fontSize(20).font('Helvetica-Bold').fillColor(SRI_BLUE)
+      .text('ATS', ML + PW - 76, 52, { width: 76, align: 'center' });
+    doc.fillColor('black');
+
+    // Fila de datos de la empresa
+    const infoY = 90;
+    doc.rect(ML, infoY, PW, 34).stroke('#94a3b8');
+    const col3 = Math.floor(PW / 3);
+    doc.moveTo(ML + col3, infoY).lineTo(ML + col3, infoY + 34).stroke('#94a3b8');
+    doc.moveTo(ML + col3 * 2, infoY).lineTo(ML + col3 * 2, infoY + 34).stroke('#94a3b8');
+    doc.fontSize(6.5).fillColor('#64748b').font('Helvetica')
+      .text('RUC / NÚMERO DE IDENTIFICACIÓN', ML + 3, infoY + 3)
+      .text('RAZÓN SOCIAL', ML + col3 + 3, infoY + 3)
+      .text('PERÍODO FISCAL', ML + col3 * 2 + 3, infoY + 3);
+    doc.fontSize(9).fillColor('black').font('Helvetica-Bold')
+      .text(config.ruc || '—', ML + 3, infoY + 13, { width: col3 - 6 })
+      .text(config.razonSocial || '—', ML + col3 + 3, infoY + 13, { width: col3 - 6 })
+      .text(periodo, ML + col3 * 2 + 3, infoY + 13, { width: col3 - 6 });
+
+    // ── Helpers tabla ────────────────────────────────────────────────────────
+    let curY = infoY + 40;
+    let rowAlt = false;
+
+    const drawSecHeader = (letra, title) => {
+      curY += 6;
+      doc.rect(ML, curY, PW, ROW_H + 2).fillAndStroke(SRI_BLUE, SRI_BLUE);
+      doc.fillColor('white').font('Helvetica-Bold').fontSize(8.5)
+        .text(`${letra}.  ${title}`, ML + 4, curY + 4, { width: PW - 8 });
       doc.fillColor('black');
-      doc.moveTo(36, doc.y).lineTo(559, doc.y).lineWidth(0.5).stroke();
-      doc.lineWidth(1);
-      doc.moveDown(0.2);
+      curY += ROW_H + 4;
+      rowAlt = false;
     };
 
-    // ── VENTAS ────────────────────────────────────────────────────────────────
-    sectionHeader('VENTAS (documentos emitidos)');
-    tblRow(`Facturas emitidas autorizadas`, `${facturas.length} doc.`);
-    tblRow(`Liquidaciones de compra emitidas`, `${liquidaciones.length} doc.`);
-    tblRow(`Notas de crédito emitidas`, `${ncs.length} doc.`);
-    doc.moveDown(0.1);
-    tblRow('Base 0%', fmtM(vBase0));
-    tblRow('Base gravada (15%/5%)', fmtM(vBaseGrav));
-    tblRow('IVA generado', fmtM(vIva));
-    tblRow('Total ventas brutas', fmtM(vTotal));
-    tblRow('(-) Notas de crédito emitidas', fmtM(vNcTotal));
-    tblRow('TOTAL VENTAS NETAS (campo 419)', fmtM(vNeto), true);
+    const drawTblHeader = () => {
+      doc.rect(ML, curY, PW, ROW_H).fillAndStroke('#dbeafe', '#93c5fd');
+      doc.moveTo(ML + COL_CAMPO, curY).lineTo(ML + COL_CAMPO, curY + ROW_H).stroke('#93c5fd');
+      doc.moveTo(ML + COL_CAMPO + COL_DESC, curY).lineTo(ML + COL_CAMPO + COL_DESC, curY + ROW_H).stroke('#93c5fd');
+      doc.fillColor(SRI_BLUE).font('Helvetica-Bold').fontSize(7.5)
+        .text('CAMPO', ML + 2, curY + 4, { width: COL_CAMPO - 4, align: 'center' })
+        .text('DESCRIPCIÓN', ML + COL_CAMPO + 3, curY + 4, { width: COL_DESC - 6 })
+        .text('VALOR (USD)', ML + COL_CAMPO + COL_DESC + 3, curY + 4, { width: COL_VAL - 6, align: 'right' });
+      doc.fillColor('black');
+      curY += ROW_H;
+    };
 
-    // ── COMPRAS ───────────────────────────────────────────────────────────────
-    sectionHeader('COMPRAS (documentos recibidos)');
-    tblRow(`Facturas de compra registradas`, `${compras.length} doc.`);
-    doc.moveDown(0.1);
-    tblRow('Base 0%', fmtM(cBase0));
-    tblRow('Base gravada (15%/5%)', fmtM(cBaseGrav));
-    tblRow('IVA pagado', fmtM(cIva));
-    tblRow('TOTAL ADQUISICIONES (campo 509)', fmtM(cTotal), true);
+    const drawRow = (campo, desc, valor, bold = false) => {
+      const bg = rowAlt ? '#f8fafc' : '#ffffff';
+      doc.rect(ML, curY, PW, ROW_H).fillAndStroke(bg, '#e2e8f0');
+      doc.moveTo(ML + COL_CAMPO, curY + 1).lineTo(ML + COL_CAMPO, curY + ROW_H - 1).lineWidth(0.4).stroke('#cbd5e1');
+      doc.moveTo(ML + COL_CAMPO + COL_DESC, curY + 1).lineTo(ML + COL_CAMPO + COL_DESC, curY + ROW_H - 1).stroke('#cbd5e1');
+      doc.lineWidth(1);
+      const fc = bold ? SRI_BLUE : '#1e293b';
+      const fn = bold ? 'Helvetica-Bold' : 'Helvetica';
+      doc.fillColor(fc).font(fn).fontSize(7.5)
+        .text(campo, ML + 2, curY + 4, { width: COL_CAMPO - 4, align: 'center' })
+        .text(desc,   ML + COL_CAMPO + 3, curY + 4, { width: COL_DESC - 6 })
+        .text(valor,  ML + COL_CAMPO + COL_DESC + 3, curY + 4, { width: COL_VAL - 6, align: 'right' });
+      doc.fillColor('black');
+      rowAlt = !rowAlt;
+      curY += ROW_H;
+    };
 
-    // ── RETENCIONES RECIBIDAS (crédito tributario) ─────────────────────────
-    sectionHeader('RETENCIONES RECIBIDAS EN COMPRAS');
-    tblRow('Retención IR aplicada en compras', fmtM(cRetIR));
-    tblRow('Retención IVA aplicada en compras', fmtM(cRetIva));
-    tblRow('CRÉDITO TRIBUTARIO IVA (campo 564)', fmtM(cIva - cRetIva), true);
+    const drawTotalRow = (campo, desc, valor) => {
+      curY += 2;
+      doc.rect(ML, curY, PW, ROW_H + 2).fillAndStroke('#1e40af', '#1e40af');
+      doc.fillColor('white').font('Helvetica-Bold').fontSize(8)
+        .text(campo, ML + 2, curY + 5, { width: COL_CAMPO - 4, align: 'center' })
+        .text(desc,  ML + COL_CAMPO + 3, curY + 5, { width: COL_DESC - 6 })
+        .text(valor, ML + COL_CAMPO + COL_DESC + 3, curY + 5, { width: COL_VAL - 6, align: 'right' });
+      doc.fillColor('black');
+      curY += ROW_H + 4;
+      rowAlt = false;
+    };
 
-    // ── AGENTE DE RETENCIÓN EMITIDA ───────────────────────────────────────
-    sectionHeader('AGENTE DE RETENCIÓN (retenciones emitidas)');
-    tblRow(`Total comprobantes emitidos`, `${retenciones.length} doc.`);
-    doc.moveDown(0.1);
-    const retPctOrdenados = Object.entries(retPorPct).sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
+    // ── A. VENTAS ────────────────────────────────────────────────────────────
+    drawSecHeader('A', 'VENTAS / INGRESOS');
+    drawTblHeader();
+    drawRow('', `Facturas emitidas autorizadas (${facturas.length} doc.)`, fmtM(facturas.reduce((s, f) => s + r2(f.importeTotal), 0)));
+    if (liquidaciones.length > 0)
+      drawRow('', `Liquidaciones de compra emitidas (${liquidaciones.length} doc.)`, fmtM(liquidaciones.reduce((s, l) => s + r2(l.importeTotal), 0)));
+    drawRow('', 'Base tarifa 0% / no sujeto IVA', fmtM(vBase0));
+    drawRow('', 'Base gravada (tarifa 15% y 5%)', fmtM(vBaseGrav));
+    drawRow('429', 'IVA generado en ventas', fmtM(vIva));
+    if (ncs.length > 0)
+      drawRow('', `Notas de crédito emitidas (${ncs.length} doc.) — descuenta`, `(${fmtM(vNcTotal)})`);
+    drawTotalRow('419', 'TOTAL VENTAS NETAS', fmtM(vNeto));
+
+    // ── B. COMPRAS ───────────────────────────────────────────────────────────
+    drawSecHeader('B', 'ADQUISICIONES / COMPRAS');
+    drawTblHeader();
+    drawRow('', `Facturas de compra registradas (${compras.length} doc.)`, fmtM(cTotal));
+    drawRow('', 'Base tarifa 0% / no sujeto IVA', fmtM(cBase0));
+    drawRow('', 'Base gravada (tarifa 15% y 5%)', fmtM(cBaseGrav));
+    drawRow('563', 'IVA en adquisiciones', fmtM(cIva));
+    drawRow('', 'Retención IR recibida en compras', fmtM(cRetIR));
+    drawRow('564', 'Retención IVA recibida (crédito trib. IVA)', fmtM(cRetIva));
+    drawTotalRow('509', 'TOTAL ADQUISICIONES', fmtM(cTotal));
+
+    // ── C. AGENTE DE RETENCIÓN ───────────────────────────────────────────────
+    drawSecHeader('C', 'AGENTE DE RETENCIÓN (retenciones emitidas)');
+    drawTblHeader();
+    drawRow('', `Comprobantes de retención emitidos (${retenciones.length} doc.)`, '');
     if (retPctOrdenados.length > 0) {
       retPctOrdenados.forEach(([pct, val]) => {
-        tblRow(`  Retención IVA ${pct}%`, fmtM(val));
+        drawRow('721', `Retención IVA al ${pct}%`, fmtM(val));
       });
     } else {
-      tblRow('  Sin retenciones IVA emitidas', '-');
+      drawRow('', 'Sin retenciones IVA emitidas en el período', '-');
     }
-    tblRow('Total retenido IVA (campo 799)', fmtM(totalRetIvaPorPct), true);
-    tblRow('Total retenido IR (campo 799-IR)', fmtM(totalRetIrEmitido), true);
-    tblRow('TOTAL CONSOLIDADO A PAGAR', fmtM(totalRetIvaPorPct), true);
+    drawRow('799-IR', 'Total retenciones IR emitidas', fmtM(totalRetIrEmitido));
+    drawTotalRow('799', 'TOTAL RETENCIONES IVA EMITIDAS', fmtM(totalRetIvaPorPct));
 
-    // ── LIQUIDACIÓN RESUMEN ───────────────────────────────────────────────
-    sectionHeader('LIQUIDACIÓN DEL IVA');
-    const ivaGenerado = vIva;
-    const ctIva = cIva;
-    tblRow('IVA generado en ventas (campo 429)', fmtM(ivaGenerado));
-    tblRow('(-) Crédito tributario adquisiciones (564)', fmtM(ctIva));
-    const saldo = ivaGenerado - ctIva;
-    tblRow(saldo >= 0 ? 'IMPUESTO CAUSADO (campo 601)' : 'CRÉDITO TRIBUTARIO (campo 602)', fmtM(Math.abs(saldo)), true);
+    // ── D. LIQUIDACIÓN IVA ───────────────────────────────────────────────────
+    drawSecHeader('D', 'LIQUIDACIÓN DEL IVA');
+    drawTblHeader();
+    const saldo = vIva - cIva;
+    drawRow('429', 'IVA generado en ventas', fmtM(vIva));
+    drawRow('564', '(-) Crédito tributario en adquisiciones', `(${fmtM(cIva)})`);
+    drawTotalRow(
+      saldo >= 0 ? '601' : '602',
+      saldo >= 0 ? 'IMPUESTO CAUSADO' : 'CRÉDITO TRIBUTARIO SIGUIENTE PERÍODO',
+      fmtM(Math.abs(saldo)),
+    );
 
-    // Footer
-    doc.moveDown(1);
-    doc.moveTo(36, doc.y).lineTo(559, doc.y).lineWidth(0.5).stroke();
-    doc.moveDown(0.3);
-    doc.fontSize(8).font('Helvetica').fillColor('#64748b')
-      .text(`Generado: ${new Date().toLocaleString('es-EC')}  |  AELA ERP  |  Período: ${periodo}`, { align: 'center' });
+    // ── Footer ───────────────────────────────────────────────────────────────
+    curY += 4;
+    doc.rect(ML, curY, PW, 18).fillAndStroke('#f1f5f9', '#e2e8f0');
+    doc.fontSize(6.5).font('Helvetica').fillColor('#64748b')
+      .text(
+        `Generado: ${new Date().toLocaleString('es-EC')}  |  AELA ERP  |  Solo para uso informativo — el archivo XML del ATS es el documento oficial`,
+        ML + 4, curY + 5, { width: PW - 8, align: 'center' },
+      );
 
     doc.end();
   } catch (err) {
