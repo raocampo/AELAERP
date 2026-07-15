@@ -416,6 +416,18 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "auditoria_empresaId_idx" ON "auditoria"("empresaId")`,
   `CREATE INDEX IF NOT EXISTS "auditoria_accion_idx"    ON "auditoria"("accion")`,
   `CREATE INDEX IF NOT EXISTS "auditoria_fecha_idx"     ON "auditoria"("fecha")`,
+  // IVA 12% histórico Ecuador (pre-2024-04-22) — campo subtotal12 (2026-07-15)
+  // Ecuador usó 12% desde 2001 hasta el 21-abr-2024 (y 14% brevemente en 2016-2017).
+  // Antes este sistema guardaba toda base gravada en subtotal15 como catch-all.
+  // La columna subtotal12 separa correctamente esa base para ATS, F104 y XML SRI.
+  `ALTER TABLE "facturas"            ADD COLUMN IF NOT EXISTS "subtotal12" DECIMAL(14,2) NOT NULL DEFAULT 0`,
+  `ALTER TABLE "facturas_compra"     ADD COLUMN IF NOT EXISTS "subtotal12" DECIMAL(14,2) NOT NULL DEFAULT 0`,
+  `ALTER TABLE "liquidaciones_compra" ADD COLUMN IF NOT EXISTS "subtotal12" DECIMAL(14,2) NOT NULL DEFAULT 0`,
+  // Backfill retroactivo: mover subtotal15 → subtotal12 en registros pre-2024-04-22.
+  // Es idempotente: después del primer run, subtotal15 ya es 0 en esos registros.
+  `UPDATE "facturas"            SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
+  `UPDATE "facturas_compra"     SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
+  `UPDATE "liquidaciones_compra" SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
 ];
 
 async function applyFixesToDb(connectionString, label) {
