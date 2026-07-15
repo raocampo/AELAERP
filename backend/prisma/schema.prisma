@@ -484,6 +484,7 @@ model facturas {
   fechaEmision                  DateTime
   subtotal0                     Decimal   @default(0) @db.Decimal(14, 2)
   subtotal5                     Decimal   @default(0) @db.Decimal(14, 2)
+  subtotal12                    Decimal   @default(0) @db.Decimal(14, 2)
   subtotal15                    Decimal   @default(0) @db.Decimal(14, 2)
   subtotalNoObjetoIva           Decimal   @default(0) @db.Decimal(14, 2)
   totalDescuento                Decimal   @default(0) @db.Decimal(14, 2)
@@ -547,6 +548,7 @@ model facturas_compra {
   fechaEmision                  DateTime
   subtotal0                     Decimal   @default(0) @db.Decimal(14, 2)
   subtotal5                     Decimal   @default(0) @db.Decimal(14, 2)
+  subtotal12                    Decimal   @default(0) @db.Decimal(14, 2)
   subtotal15                    Decimal   @default(0) @db.Decimal(14, 2)
   totalDescuento                Decimal   @default(0) @db.Decimal(14, 2)
   totalIva                      Decimal   @default(0) @db.Decimal(14, 2)
@@ -780,6 +782,7 @@ model liquidaciones_compra {
   razonSocialProveedor          String    @db.VarChar(300)
   direccionProveedor            String?   @db.VarChar(300)
   subtotal0                     Decimal   @default(0) @db.Decimal(14, 2)
+  subtotal12                    Decimal   @default(0) @db.Decimal(14, 2)
   subtotal15                    Decimal   @default(0) @db.Decimal(14, 2)
   totalDescuento                Decimal   @default(0) @db.Decimal(14, 2)
   totalIva                      Decimal   @default(0) @db.Decimal(14, 2)

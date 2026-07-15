@@ -76,6 +76,7 @@ function TabVentas({ data }) {
                   <th>RUC / CI</th>
                   <th className="text-right">Base 0%</th>
                   <th className="text-right">Base 5%</th>
+                  <th className="text-right">Base 12%</th>
                   <th className="text-right">Base 15%</th>
                   <th className="text-right">IVA</th>
                   <th className="text-right">Total</th>
@@ -90,6 +91,7 @@ function TabVentas({ data }) {
                     <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{f.identificacionComprador}</td>
                     <td className="ats-money">{fmt(f.subtotal0)}</td>
                     <td className="ats-money">{fmt(f.subtotal5 || 0)}</td>
+                    <td className="ats-money">{fmt(f.subtotal12 || 0)}</td>
                     <td className="ats-money">{fmt(f.subtotal15)}</td>
                     <td className="ats-money">{fmt(f.totalIva)}</td>
                     <td className="ats-money ats-money-total">{fmt(f.importeTotal)}</td>
@@ -101,6 +103,7 @@ function TabVentas({ data }) {
                   <td colSpan={4}><strong>TOTALES</strong></td>
                   <td className="ats-money"><strong>{fmt(facturas.reduce((s, f) => s + parseFloat(f.subtotal0 || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(facturas.reduce((s, f) => s + parseFloat(f.subtotal5 || 0), 0))}</strong></td>
+                  <td className="ats-money"><strong>{fmt(facturas.reduce((s, f) => s + parseFloat(f.subtotal12 || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(facturas.reduce((s, f) => s + parseFloat(f.subtotal15 || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(facturas.reduce((s, f) => s + parseFloat(f.totalIva || 0), 0))}</strong></td>
                   <td className="ats-money ats-money-total"><strong>{fmt(totF)}</strong></td>
@@ -123,7 +126,8 @@ function TabVentas({ data }) {
               <thead>
                 <tr>
                   <th>Número</th><th>Fecha</th><th>Proveedor</th><th>Identificación</th>
-                  <th className="text-right">Base 0%</th><th className="text-right">Base grav.</th>
+                  <th className="text-right">Base 0%</th><th className="text-right">Base 12%</th>
+                  <th className="text-right">Base 15%</th>
                   <th className="text-right">IVA</th><th className="text-right">Total</th>
                 </tr>
               </thead>
@@ -135,6 +139,7 @@ function TabVentas({ data }) {
                     <td>{l.razonSocialProveedor}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{l.identificacionProveedor}</td>
                     <td className="ats-money">{fmt(l.subtotal0)}</td>
+                    <td className="ats-money">{fmt(l.subtotal12 || 0)}</td>
                     <td className="ats-money">{fmt(l.subtotal15)}</td>
                     <td className="ats-money">{fmt(l.totalIva)}</td>
                     <td className="ats-money ats-money-total">{fmt(l.importeTotal)}</td>
@@ -145,6 +150,7 @@ function TabVentas({ data }) {
                 <tr className="ats-tfoot">
                   <td colSpan={4}><strong>TOTALES</strong></td>
                   <td className="ats-money"><strong>{fmt(liquidaciones.reduce((s, l) => s + parseFloat(l.subtotal0 || 0), 0))}</strong></td>
+                  <td className="ats-money"><strong>{fmt(liquidaciones.reduce((s, l) => s + parseFloat(l.subtotal12 || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(liquidaciones.reduce((s, l) => s + parseFloat(l.subtotal15 || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(liquidaciones.reduce((s, l) => s + parseFloat(l.totalIva || 0), 0))}</strong></td>
                   <td className="ats-money ats-money-total"><strong>{fmt(totL)}</strong></td>
@@ -205,6 +211,7 @@ function TabCompras({ data }) {
 
   const totBase0    = compras.reduce((s, c) => s + parseFloat(c.subtotal0 || 0), 0);
   const totBase5    = compras.reduce((s, c) => s + parseFloat(c.subtotal5 || 0), 0);
+  const totBase12   = compras.reduce((s, c) => s + parseFloat(c.subtotal12 || 0), 0);
   const totBase15   = compras.reduce((s, c) => s + parseFloat(c.subtotal15 || 0), 0);
   const totIva      = compras.reduce((s, c) => s + parseFloat(c.totalIva || 0), 0);
   const totTotal    = compras.reduce((s, c) => s + parseFloat(c.importeTotal || 0), 0);
@@ -223,8 +230,9 @@ function TabCompras({ data }) {
         <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
           {[
             ['Base 0%', totBase0],
-            ...(totBase5 > 0 ? [['Base 5%', totBase5]] : []),
-            ['Base 15%', totBase15],
+            ...(totBase5 > 0  ? [['Base 5%',  totBase5]]  : []),
+            ...(totBase12 > 0 ? [['Base 12%', totBase12]] : []),
+            ...(totBase15 > 0 ? [['Base 15%', totBase15]] : []),
             ['IVA pagado', totIva],
             ['Total compras', totTotal],
             ['Ret. IR', totRetIR],
@@ -253,6 +261,7 @@ function TabCompras({ data }) {
                 <th>Autorización</th>
                 <th className="text-right">Base 0%</th>
                 <th className="text-right">Base 5%</th>
+                <th className="text-right">Base 12%</th>
                 <th className="text-right">Base 15%</th>
                 <th className="text-right">IVA</th>
                 <th className="text-right">Total</th>
@@ -274,6 +283,7 @@ function TabCompras({ data }) {
                         title={c.numeroAutorizacion}>{c.numeroAutorizacion ? c.numeroAutorizacion.slice(0, 14) + '…' : '—'}</td>
                     <td className="ats-money">{fmt(c.subtotal0)}</td>
                     <td className="ats-money">{fmt(c.subtotal5 || 0)}</td>
+                    <td className="ats-money">{fmt(c.subtotal12 || 0)}</td>
                     <td className="ats-money">{fmt(c.subtotal15)}</td>
                     <td className="ats-money">{fmt(c.totalIva)}</td>
                     <td className="ats-money ats-money-total">{fmt(c.importeTotal)}</td>
@@ -289,6 +299,7 @@ function TabCompras({ data }) {
                 <td colSpan={5}><strong>TOTALES</strong></td>
                 <td className="ats-money"><strong>{fmt(totBase0)}</strong></td>
                 <td className="ats-money"><strong>{fmt(totBase5)}</strong></td>
+                <td className="ats-money"><strong>{fmt(totBase12)}</strong></td>
                 <td className="ats-money"><strong>{fmt(totBase15)}</strong></td>
                 <td className="ats-money"><strong>{fmt(totIva)}</strong></td>
                 <td className="ats-money ats-money-total"><strong>{fmt(totTotal)}</strong></td>

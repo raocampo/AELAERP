@@ -39,6 +39,7 @@ const UNIDADES_TIEMPO = ['dias', 'meses', 'años'];
 const IVA_OPCIONES = [
   { valor: 0,  label: '0%' },
   { valor: 5,  label: '5%' },
+  { valor: 12, label: '12%' },
   { valor: 15, label: '15%' },
   { valor: 6,  label: 'No Objeto IVA' },
   { valor: 7,  label: 'Exento IVA' },
@@ -57,6 +58,7 @@ const DETALLE_VACIO = {
 // ─── Mapeador IVA producto → factura ─────────────────────────────────────────
 const mapearIva = (tarifaIva) => {
   if (tarifaIva === 15) return 15;
+  if (tarifaIva === 12 || tarifaIva === 14) return 12;
   if (tarifaIva === 5)  return 5;
   if (tarifaIva === 6)  return 6; // No Objeto de IVA
   if (tarifaIva === 7)  return 7; // Exento de IVA
@@ -67,7 +69,7 @@ const mapearIva = (tarifaIva) => {
 // Acumulamos con precisión completa (precios hasta 4 dec) y solo redondeamos al final.
 // El SRI exige totales en 2 dec; los precios unitarios admiten hasta 6 dec en el XML.
 const calcularTotales = (detalles) => {
-  let sub0 = 0, sub5 = 0, sub15 = 0, subNoObj = 0, subExento = 0, totalDesc = 0, totalIva = 0;
+  let sub0 = 0, sub5 = 0, sub12 = 0, sub15 = 0, subNoObj = 0, subExento = 0, totalDesc = 0, totalIva = 0;
   detalles.forEach(d => {
     const cant   = parseFloat(d.cantidad)       || 0;
     const precio = parseFloat(d.precioUnitario) || 0;
@@ -77,22 +79,25 @@ const calcularTotales = (detalles) => {
     totalDesc += desc;
     if (ivaPct === 0)  sub0      += sub;
     if (ivaPct === 5)  sub5      += sub;
+    if (ivaPct === 12) sub12     += sub;
     if (ivaPct === 15) sub15     += sub;
     if (ivaPct === 6)  subNoObj  += sub;
     if (ivaPct === 7)  subExento += sub;
     if (ivaPct <= 15)  totalIva  += sub * (ivaPct / 100);
   });
   // Redondear solo al final para respetar el SRI (2 dec en totales)
-  const importeTotal = sub0 + sub5 + sub15 + subNoObj + subExento + totalIva;
+  const importeTotal = sub0 + sub5 + sub12 + sub15 + subNoObj + subExento + totalIva;
   return {
-    subSinImpuestos: parseFloat((sub0 + sub5 + sub15 + subNoObj + subExento).toFixed(2)),
+    subSinImpuestos: parseFloat((sub0 + sub5 + sub12 + sub15 + subNoObj + subExento).toFixed(2)),
     sub0:            parseFloat(sub0.toFixed(2)),
     sub5:            parseFloat(sub5.toFixed(2)),
+    sub12:           parseFloat(sub12.toFixed(2)),
     sub15:           parseFloat(sub15.toFixed(2)),
     subNoObjeto:     parseFloat(subNoObj.toFixed(2)),
     subExento:       parseFloat(subExento.toFixed(2)),
     totalDesc:       parseFloat(totalDesc.toFixed(2)),
     iva5:            parseFloat((sub5  * 0.05).toFixed(2)),
+    iva12:           parseFloat((sub12 * 0.12).toFixed(2)),
     iva15:           parseFloat((sub15 * 0.15).toFixed(2)),
     totalIva:        parseFloat(totalIva.toFixed(2)),
     importeTotal:    parseFloat(importeTotal.toFixed(2)),
@@ -850,15 +855,25 @@ const FormFactura = () => {
           {/* Totales */}
           <div className="fact-totales-box">
             <div className="total-fila"><span>Subtotal sin impuestos:</span><span>${totales.subSinImpuestos.toFixed(2)}</span></div>
-            <div className="total-fila"><span>Subtotal 15.00%:</span><span>${totales.sub15.toFixed(2)}</span></div>
             {totales.sub5 > 0 && (
               <div className="total-fila"><span>Subtotal 5%:</span><span>${totales.sub5.toFixed(2)}</span></div>
             )}
+            {totales.sub12 > 0 && (
+              <div className="total-fila"><span>Subtotal 12%:</span><span>${totales.sub12.toFixed(2)}</span></div>
+            )}
+            {totales.sub15 > 0 && (
+              <div className="total-fila"><span>Subtotal 15%:</span><span>${totales.sub15.toFixed(2)}</span></div>
+            )}
             <div className="total-fila"><span>Subtotal 0%:</span><span>${totales.sub0.toFixed(2)}</span></div>
             <div className="total-fila"><span>Total descuento:</span><span>-${totales.totalDesc.toFixed(2)}</span></div>
-            <div className="total-fila"><span>IVA 15.00%:</span><span>${totales.iva15.toFixed(2)}</span></div>
             {totales.iva5 > 0 && (
               <div className="total-fila"><span>IVA 5%:</span><span>${totales.iva5.toFixed(2)}</span></div>
+            )}
+            {totales.iva12 > 0 && (
+              <div className="total-fila"><span>IVA 12%:</span><span>${totales.iva12.toFixed(2)}</span></div>
+            )}
+            {totales.iva15 > 0 && (
+              <div className="total-fila"><span>IVA 15%:</span><span>${totales.iva15.toFixed(2)}</span></div>
             )}
             <div className="total-fila total-principal">
               <span>Valor a pagar:</span><span>${totales.importeTotal.toFixed(2)}</span>

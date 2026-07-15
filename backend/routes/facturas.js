@@ -872,7 +872,7 @@ router.get('/exportar/xlsx', permitirVerFacturacion, async (req, res) => {
       select: {
         id: true, numeroFactura: true, fechaEmision: true,
         razonSocialComprador: true, identificacionComprador: true, tipoIdentificacionComprador: true,
-        subtotal0: true, subtotal5: true, subtotal15: true, totalIva: true, importeTotal: true,
+        subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, totalIva: true, importeTotal: true,
         estadoSri: true, anulada: true, numeroAutorizacion: true,
         origenRegistro: true, createdAt: true,
       },
@@ -1057,7 +1057,8 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
           fechaEmision: fecha,
           subtotal0: totales.subtotal0,
           subtotal5: totales.subtotal5 || 0,
-          subtotal15: totales.subtotal15,
+          subtotal12: totales.subtotal12 || 0,
+          subtotal15: totales.subtotal15 || 0,
           subtotalNoObjetoIva: 0,
           totalDescuento: totales.totalDescuento,
           totalIva: totales.totalIva,
@@ -1750,7 +1751,7 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
       select: {
         id: true, numeroFactura: true, fechaEmision: true,
         razonSocialComprador: true, identificacionComprador: true,
-        subtotal0: true, subtotal15: true, totalIva: true, importeTotal: true,
+        subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, totalIva: true, importeTotal: true,
         estadoSri: true,
       },
       orderBy: { fechaEmision: 'asc' },
@@ -1792,7 +1793,7 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
       select: {
         id: true, numeroFactura: true, fechaEmision: true,
         razonSocialProveedor: true, identificacionProveedor: true,
-        subtotal0: true, subtotal15: true, totalIva: true, importeTotal: true,
+        subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, totalIva: true, importeTotal: true,
       },
       orderBy: { fechaEmision: 'asc' },
     });
@@ -1800,7 +1801,7 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
     // ── Liquidaciones de compra del período (crédito fiscal adicional) ────────
     const liquidaciones = await db.liquidaciones_compra.findMany({
       where: { empresaId, fechaEmision: filtroFecha, anulada: false },
-      select: { subtotal0: true, subtotal15: true, totalIva: true },
+      select: { subtotal0: true, subtotal12: true, subtotal15: true, totalIva: true },
     });
 
     // ── Notas de crédito recibidas de proveedores del período (tipo SRI 04) ───
@@ -1826,10 +1827,12 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
     // ── Totales ────────────────────────────────────────────────────────────
     const totVentas = facturas.reduce((acc, f) => ({
       subtotal0:    acc.subtotal0    + d(f.subtotal0),
+      subtotal5:    acc.subtotal5    + d(f.subtotal5),
+      subtotal12:   acc.subtotal12   + d(f.subtotal12),
       subtotal15:   acc.subtotal15   + d(f.subtotal15),
       totalIva:     acc.totalIva     + d(f.totalIva),
       importeTotal: acc.importeTotal + d(f.importeTotal),
-    }), { subtotal0: 0, subtotal15: 0, totalIva: 0, importeTotal: 0 });
+    }), { subtotal0: 0, subtotal5: 0, subtotal12: 0, subtotal15: 0, totalIva: 0, importeTotal: 0 });
 
     const totNC = notasCredito.reduce((acc, nc) => ({
       totalSinImpuestos: acc.totalSinImpuestos + d(nc.totalSinImpuestos),
@@ -1839,16 +1842,19 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
 
     const totCompras = compras.reduce((acc, c) => ({
       subtotal0:    acc.subtotal0    + d(c.subtotal0),
+      subtotal5:    acc.subtotal5    + d(c.subtotal5),
+      subtotal12:   acc.subtotal12   + d(c.subtotal12),
       subtotal15:   acc.subtotal15   + d(c.subtotal15),
       totalIva:     acc.totalIva     + d(c.totalIva),
       importeTotal: acc.importeTotal + d(c.importeTotal),
-    }), { subtotal0: 0, subtotal15: 0, totalIva: 0, importeTotal: 0 });
+    }), { subtotal0: 0, subtotal5: 0, subtotal12: 0, subtotal15: 0, totalIva: 0, importeTotal: 0 });
 
     const totLiq = liquidaciones.reduce((acc, l) => ({
       subtotal0:  acc.subtotal0  + d(l.subtotal0),
+      subtotal12: acc.subtotal12 + d(l.subtotal12),
       subtotal15: acc.subtotal15 + d(l.subtotal15),
       totalIva:   acc.totalIva   + d(l.totalIva),
-    }), { subtotal0: 0, subtotal15: 0, totalIva: 0 });
+    }), { subtotal0: 0, subtotal12: 0, subtotal15: 0, totalIva: 0 });
 
     const totNCRecibidas = notasCreditoRecibidas.reduce((acc, nc) => ({
       importeTotal: acc.importeTotal + d(nc.importeTotal),
@@ -1890,6 +1896,8 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
         resumen: {
           ventas: {
             subtotal0:    parseFloat(totVentas.subtotal0.toFixed(2)),
+            subtotal5:    parseFloat(totVentas.subtotal5.toFixed(2)),
+            subtotal12:   parseFloat(totVentas.subtotal12.toFixed(2)),
             subtotal15:   parseFloat(totVentas.subtotal15.toFixed(2)),
             totalIva:     parseFloat(totVentas.totalIva.toFixed(2)),
             importeTotal: parseFloat(totVentas.importeTotal.toFixed(2)),
@@ -1903,15 +1911,18 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
           },
           compras: {
             subtotal0:    parseFloat(totCompras.subtotal0.toFixed(2)),
+            subtotal5:    parseFloat(totCompras.subtotal5.toFixed(2)),
+            subtotal12:   parseFloat(totCompras.subtotal12.toFixed(2)),
             subtotal15:   parseFloat(totCompras.subtotal15.toFixed(2)),
             totalIva:     parseFloat(totCompras.totalIva.toFixed(2)),
             importeTotal: parseFloat(totCompras.importeTotal.toFixed(2)),
             cantidad:     compras.length,
             liquidaciones: {
-              subtotal0: parseFloat(totLiq.subtotal0.toFixed(2)),
+              subtotal0:  parseFloat(totLiq.subtotal0.toFixed(2)),
+              subtotal12: parseFloat(totLiq.subtotal12.toFixed(2)),
               subtotal15: parseFloat(totLiq.subtotal15.toFixed(2)),
-              totalIva:  parseFloat(totLiq.totalIva.toFixed(2)),
-              cantidad:  liquidaciones.length,
+              totalIva:   parseFloat(totLiq.totalIva.toFixed(2)),
+              cantidad:   liquidaciones.length,
             },
             ivaCreditoFiscal,
           },
@@ -2374,9 +2385,12 @@ router.post('/importar/ejecutar', multerImportacion, async (req, res) => {
         const detalles     = construirDetalles(datos);
         const estadoSri    = datos.numeroAutorizacion ? 'AUTORIZADO' : 'HISTORICO';
 
-        // Determinar subtotal5 vs subtotal15 según tasa de IVA histórica
-        const subtotal5  = datos.ivaPct === 5  ? datos.subtotalGravado : 0;
-        const subtotal15 = datos.ivaPct !== 5  ? datos.subtotalGravado : 0;
+        // Determinar subtotal por tasa de IVA histórica (SRI Ecuador)
+        // 5% = bienes básicos desde 2024; 12% = tarifa general hasta 21-abr-2024
+        // 15% = tarifa general desde 22-abr-2024; 14% = temporal 2016-2017
+        const subtotal5  = datos.ivaPct === 5                    ? datos.subtotalGravado : 0;
+        const subtotal12 = (datos.ivaPct === 12 || datos.ivaPct === 14) ? datos.subtotalGravado : 0;
+        const subtotal15 = datos.ivaPct === 15                   ? datos.subtotalGravado : 0;
 
         const creada = await db.facturas.create({
           data: {
@@ -2393,6 +2407,7 @@ router.post('/importar/ejecutar', multerImportacion, async (req, res) => {
             fechaEmision:                datos.fecha,
             subtotal0:                   datos.subtotalExento,
             subtotal5,
+            subtotal12,
             subtotal15,
             subtotalNoObjetoIva:         0,
             totalDescuento:              0,

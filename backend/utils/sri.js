@@ -192,6 +192,7 @@ function generarXMLFactura(data, config) {
   // Calcular totales por tipo de IVA
   let subtotal0    = 0;
   let subtotal5    = 0;
+  let subtotal12   = 0;
   let subtotal15   = 0;
   let subtotalNOIva = 0;
   let totalDesc    = 0;
@@ -210,9 +211,10 @@ function generarXMLFactura(data, config) {
     const ivaLineaFull      = subtotalLineaFull * (IVA_TARIFA[ivaPct] ?? 0);
 
     totalDesc += desc;
-    if (ivaPct === 0)                subtotal0    += subtotalLineaFull;
-    if (ivaPct === 5)                subtotal5    += subtotalLineaFull;
-    if (ivaPct === 15)               subtotal15   += subtotalLineaFull;
+    if (ivaPct === 0)                 subtotal0    += subtotalLineaFull;
+    if (ivaPct === 5)                 subtotal5    += subtotalLineaFull;
+    if (ivaPct === 12)                subtotal12   += subtotalLineaFull;
+    if (ivaPct === 15)                subtotal15   += subtotalLineaFull;
     if (ivaPct === 6 || ivaPct === 7) subtotalNOIva += subtotalLineaFull;
     totalIva  += ivaLineaFull;
 
@@ -236,10 +238,11 @@ function generarXMLFactura(data, config) {
 
   subtotal0    = parseFloat(subtotal0.toFixed(2));
   subtotal5    = parseFloat(subtotal5.toFixed(2));
+  subtotal12   = parseFloat(subtotal12.toFixed(2));
   subtotal15   = parseFloat(subtotal15.toFixed(2));
   totalDesc    = parseFloat(totalDesc.toFixed(2));
   totalIva     = parseFloat(totalIva.toFixed(2));
-  const totalSinImpuestos = parseFloat((subtotal0 + subtotal5 + subtotal15 + subtotalNOIva).toFixed(2));
+  const totalSinImpuestos = parseFloat((subtotal0 + subtotal5 + subtotal12 + subtotal15 + subtotalNOIva).toFixed(2));
   const importeTotal      = parseFloat((totalSinImpuestos + totalIva + parseFloat(propina || 0)).toFixed(2));
 
   // Construir XML con xmlbuilder2
@@ -283,7 +286,7 @@ function generarXMLFactura(data, config) {
 
   // totalConImpuestos
   const totImpuestos = infoFact.ele('totalConImpuestos');
-  if (subtotal0 > 0 || (subtotal5 === 0 && subtotal15 === 0)) {
+  if (subtotal0 > 0 || (subtotal5 === 0 && subtotal12 === 0 && subtotal15 === 0)) {
     const ti0 = totImpuestos.ele('totalImpuesto');
     ti0.ele('codigo').txt('2');
     ti0.ele('codigoPorcentaje').txt('0');
@@ -296,6 +299,13 @@ function generarXMLFactura(data, config) {
     ti5.ele('codigoPorcentaje').txt('5');
     ti5.ele('baseImponible').txt(subtotal5.toFixed(2));
     ti5.ele('valor').txt((subtotal5 * 0.05).toFixed(2));
+  }
+  if (subtotal12 > 0) {
+    const ti12 = totImpuestos.ele('totalImpuesto');
+    ti12.ele('codigo').txt('2');
+    ti12.ele('codigoPorcentaje').txt('2');
+    ti12.ele('baseImponible').txt(subtotal12.toFixed(2));
+    ti12.ele('valor').txt((subtotal12 * 0.12).toFixed(2));
   }
   if (subtotal15 > 0) {
     const ti15 = totImpuestos.ele('totalImpuesto');
@@ -353,7 +363,7 @@ function generarXMLFactura(data, config) {
 
   return {
     xml: root.end({ prettyPrint: true }),
-    totales: { subtotal0, subtotal5, subtotal15, totalDescuento: totalDesc, totalIva, importeTotal, propina: parseFloat(propina || 0) },
+    totales: { subtotal0, subtotal5, subtotal12, subtotal15, totalDescuento: totalDesc, totalIva, importeTotal, propina: parseFloat(propina || 0) },
   };
 }
 
@@ -2154,6 +2164,7 @@ function generarXMLLiquidacionCompra(data, config) {
   const fechaStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 
   let subtotal0   = 0;
+  let subtotal12  = 0;
   let subtotal15  = 0;
   let totalDesc   = 0;
   let totalIva    = 0;
@@ -2165,10 +2176,11 @@ function generarXMLLiquidacionCompra(data, config) {
     const ivaPct = parseInt(det.ivaPorcentaje) || 0;
 
     const subtotalLinea = parseFloat(((cant * precio) - desc).toFixed(2));
-    const ivaLinea      = parseFloat((subtotalLinea * IVA_TARIFA[ivaPct]).toFixed(2));
+    const ivaLinea      = parseFloat((subtotalLinea * (IVA_TARIFA[ivaPct] ?? 0)).toFixed(2));
 
     totalDesc += desc;
     if (ivaPct === 0)  subtotal0  += subtotalLinea;
+    if (ivaPct === 12) subtotal12 += subtotalLinea;
     if (ivaPct === 15) subtotal15 += subtotalLinea;
     totalIva  += ivaLinea;
 
@@ -2188,10 +2200,11 @@ function generarXMLLiquidacionCompra(data, config) {
   });
 
   subtotal0  = parseFloat(subtotal0.toFixed(2));
+  subtotal12 = parseFloat(subtotal12.toFixed(2));
   subtotal15 = parseFloat(subtotal15.toFixed(2));
   totalDesc  = parseFloat(totalDesc.toFixed(2));
   totalIva   = parseFloat(totalIva.toFixed(2));
-  const totalSinImpuestos = parseFloat((subtotal0 + subtotal15).toFixed(2));
+  const totalSinImpuestos = parseFloat((subtotal0 + subtotal12 + subtotal15).toFixed(2));
   const importeTotal      = parseFloat((totalSinImpuestos + totalIva).toFixed(2));
 
   const root = create({ version: '1.0', encoding: 'UTF-8' })
@@ -2230,12 +2243,19 @@ function generarXMLLiquidacionCompra(data, config) {
   infoLiq.ele('totalDescuento').txt(totalDesc.toFixed(2));
 
   const totImpuestos = infoLiq.ele('totalConImpuestos');
-  if (subtotal0 > 0 || subtotal15 === 0) {
+  if (subtotal0 > 0 || (subtotal12 === 0 && subtotal15 === 0)) {
     const ti0 = totImpuestos.ele('totalImpuesto');
     ti0.ele('codigo').txt('2');
     ti0.ele('codigoPorcentaje').txt('0');
     ti0.ele('baseImponible').txt(subtotal0.toFixed(2));
     ti0.ele('valor').txt('0.00');
+  }
+  if (subtotal12 > 0) {
+    const ti12 = totImpuestos.ele('totalImpuesto');
+    ti12.ele('codigo').txt('2');
+    ti12.ele('codigoPorcentaje').txt('2');
+    ti12.ele('baseImponible').txt(subtotal12.toFixed(2));
+    ti12.ele('valor').txt((subtotal12 * 0.12).toFixed(2));
   }
   if (subtotal15 > 0) {
     const ti15 = totImpuestos.ele('totalImpuesto');
@@ -2288,7 +2308,7 @@ function generarXMLLiquidacionCompra(data, config) {
 
   return {
     xml: root.end({ prettyPrint: true }),
-    totales: { subtotal0, subtotal15, totalDescuento: totalDesc, totalIva, importeTotal },
+    totales: { subtotal0, subtotal12, subtotal15, totalDescuento: totalDesc, totalIva, importeTotal },
   };
 }
 

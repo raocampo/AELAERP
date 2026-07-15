@@ -250,10 +250,18 @@ export default function ReportesTributarios() {
                     <strong>{fmt(data.resumen.ventas.subtotal5)}</strong>
                   </div>
                 )}
-                <div className="rep-card-row">
-                  <span>Ventas tarifa 15%</span>
-                  <strong>{fmt(data.resumen.ventas.subtotal15)}</strong>
-                </div>
+                {parseFloat(data.resumen.ventas.subtotal12 || 0) > 0 && (
+                  <div className="rep-card-row">
+                    <span>Ventas tarifa 12%</span>
+                    <strong>{fmt(data.resumen.ventas.subtotal12)}</strong>
+                  </div>
+                )}
+                {parseFloat(data.resumen.ventas.subtotal15 || 0) > 0 && (
+                  <div className="rep-card-row">
+                    <span>Ventas tarifa 15%</span>
+                    <strong>{fmt(data.resumen.ventas.subtotal15)}</strong>
+                  </div>
+                )}
                 <div className="rep-card-row rep-card-row-total">
                   <span>IVA Cobrado</span>
                   <strong>{fmt(data.resumen.ventas.totalIva)}</strong>
@@ -306,10 +314,18 @@ export default function ReportesTributarios() {
                     <strong>{fmt(data.resumen.compras.subtotal5)}</strong>
                   </div>
                 )}
-                <div className="rep-card-row">
-                  <span>Base 15%</span>
-                  <strong>{fmt(data.resumen.compras.subtotal15)}</strong>
-                </div>
+                {parseFloat(data.resumen.compras.subtotal12 || 0) > 0 && (
+                  <div className="rep-card-row">
+                    <span>Base 12%</span>
+                    <strong>{fmt(data.resumen.compras.subtotal12)}</strong>
+                  </div>
+                )}
+                {parseFloat(data.resumen.compras.subtotal15 || 0) > 0 && (
+                  <div className="rep-card-row">
+                    <span>Base 15%</span>
+                    <strong>{fmt(data.resumen.compras.subtotal15)}</strong>
+                  </div>
+                )}
                 <div className="rep-card-row rep-card-row-total">
                   <span>IVA en compras</span>
                   <strong>{fmt(data.resumen.compras.totalIva)}</strong>
@@ -418,6 +434,7 @@ export default function ReportesTributarios() {
                       <th>Identificación</th>
                       <th>Base 0%</th>
                       <th>Base 5%</th>
+                      <th>Base 12%</th>
                       <th>Base 15%</th>
                       <th>IVA</th>
                       <th>Total</th>
@@ -433,6 +450,7 @@ export default function ReportesTributarios() {
                         <td>{f.identificacionComprador}</td>
                         <td className="rep-money">{fmt(f.subtotal0)}</td>
                         <td className="rep-money">{fmt(f.subtotal5 || 0)}</td>
+                        <td className="rep-money">{fmt(f.subtotal12 || 0)}</td>
                         <td className="rep-money">{fmt(f.subtotal15)}</td>
                         <td className="rep-money">{fmt(f.totalIva)}</td>
                         <td className="rep-money rep-money-total">{fmt(f.importeTotal)}</td>
@@ -449,6 +467,7 @@ export default function ReportesTributarios() {
                       <td colSpan={4}><strong>TOTALES</strong></td>
                       <td className="rep-money"><strong>{fmt(data.resumen.ventas.subtotal0)}</strong></td>
                       <td className="rep-money"><strong>{fmt(data.resumen.ventas.subtotal5 || 0)}</strong></td>
+                      <td className="rep-money"><strong>{fmt(data.resumen.ventas.subtotal12 || 0)}</strong></td>
                       <td className="rep-money"><strong>{fmt(data.resumen.ventas.subtotal15)}</strong></td>
                       <td className="rep-money"><strong>{fmt(data.resumen.ventas.totalIva)}</strong></td>
                       <td className="rep-money rep-money-total"><strong>{fmt(data.resumen.ventas.importeTotal)}</strong></td>
@@ -523,6 +542,7 @@ export default function ReportesTributarios() {
                       <th>Identificación</th>
                       <th>Base 0%</th>
                       <th>Base 5%</th>
+                      <th>Base 12%</th>
                       <th>Base 15%</th>
                       <th>IVA</th>
                       <th>Total</th>
@@ -537,6 +557,7 @@ export default function ReportesTributarios() {
                         <td>{c.identificacionProveedor}</td>
                         <td className="rep-money">{fmt(c.subtotal0)}</td>
                         <td className="rep-money">{fmt(c.subtotal5 || 0)}</td>
+                        <td className="rep-money">{fmt(c.subtotal12 || 0)}</td>
                         <td className="rep-money">{fmt(c.subtotal15)}</td>
                         <td className="rep-money">{fmt(c.totalIva)}</td>
                         <td className="rep-money rep-money-total">{fmt(c.importeTotal)}</td>
@@ -548,6 +569,7 @@ export default function ReportesTributarios() {
                       <td colSpan={4}><strong>TOTALES</strong></td>
                       <td className="rep-money"><strong>{fmt(data.resumen.compras.subtotal0)}</strong></td>
                       <td className="rep-money"><strong>{fmt(data.resumen.compras.subtotal5 || 0)}</strong></td>
+                      <td className="rep-money"><strong>{fmt(data.resumen.compras.subtotal12 || 0)}</strong></td>
                       <td className="rep-money"><strong>{fmt(data.resumen.compras.subtotal15)}</strong></td>
                       <td className="rep-money"><strong>{fmt(data.resumen.compras.totalIva)}</strong></td>
                       <td className="rep-money rep-money-total"><strong>{fmt(data.resumen.compras.importeTotal)}</strong></td>

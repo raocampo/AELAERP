@@ -317,6 +317,7 @@ router.get('/exportar/csv', async (req, res) => {
         tipoIdentificacionProveedor: true,
         subtotal0: true,
         subtotal5: true,
+        subtotal12: true,
         subtotal15: true,
         totalDescuento: true,
         totalIva: true,
@@ -407,7 +408,7 @@ router.get('/exportar/pdf', async (req, res) => {
         where, orderBy: { fechaEmision: 'desc' }, take: 5000,
         select: {
           fechaEmision: true, numeroFactura: true, razonSocialProveedor: true,
-          identificacionProveedor: true, subtotal0: true, subtotal15: true,
+          identificacionProveedor: true, subtotal0: true, subtotal12: true, subtotal15: true,
           totalIva: true, importeTotal: true,
           ...(cols.anulada ? { anulada: true } : {}),
         },
@@ -560,7 +561,7 @@ router.get('/exportar/xlsx', async (req, res) => {
       select: {
         id: true, fechaEmision: true, numeroFactura: true, numeroAutorizacion: true,
         razonSocialProveedor: true, identificacionProveedor: true,
-        subtotal0: true, subtotal5: true, subtotal15: true,
+        subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
         totalDescuento: true, totalIva: true, importeTotal: true,
         retencionIVA: true, retencionRenta: true,
         origenRegistro: true,
@@ -663,7 +664,7 @@ router.get('/', async (req, res) => {
     const selectConTipoGasto = {
       id: true, proveedorId: true, numeroFactura: true, numeroAutorizacion: true,
       fechaEmision: true, razonSocialProveedor: true, identificacionProveedor: true,
-      subtotal0: true, subtotal5: true, subtotal15: true, totalIva: true,
+      subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, totalIva: true,
       importeTotal: true, registraInventario: true, egresoCajaRegistrado: true,
       movimientosInventario: true, origenRegistro: true, cuentaGastoId: true,
       ...(cols.tipoGasto ? { tipoGasto: true } : {}),
@@ -686,7 +687,7 @@ router.get('/', async (req, res) => {
       // Totales globales del filtro (no solo la página actual)
       prisma.facturas_compra.aggregate({
         where: whereTipoGasto,
-        _sum: { subtotal0: true, subtotal5: true, subtotal15: true, totalIva: true, importeTotal: true },
+        _sum: { subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, totalIva: true, importeTotal: true },
       }),
     ]);
 
@@ -698,7 +699,7 @@ router.get('/', async (req, res) => {
           by: ['tipoGasto'],
           where: whereTipoGasto,
           _count: { id: true },
-          _sum: { subtotal0: true, subtotal5: true, subtotal15: true, totalIva: true, importeTotal: true },
+          _sum: { subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, totalIva: true, importeTotal: true },
         });
         resumenGrupos = grupos.map((g) => ({
           tipo:   g.tipoGasto || 'SIN_CLASIFICAR',
@@ -1060,14 +1061,15 @@ router.post('/importar/ejecutar', upload.single('archivo'), async (req, res) => 
         const detallesNormalizados = construirDetallesCompra(datos).map((d, i) => normalizarDetalle(d, i));
         const totales = detallesNormalizados.reduce((acc, detalle) => {
           const pct = parseInt(detalle.porcentajeIva) || 0;
-          if (pct === 5) acc.subtotal5 += detalle.subtotal;
-          else if (pct > 0) acc.subtotal15 += detalle.subtotal;
-          else acc.subtotal0 += detalle.subtotal;
+          if (pct === 5)                     acc.subtotal5  += detalle.subtotal;
+          else if (pct === 12 || pct === 14) acc.subtotal12 += detalle.subtotal;
+          else if (pct > 0)                  acc.subtotal15 += detalle.subtotal;
+          else                               acc.subtotal0  += detalle.subtotal;
           acc.totalDescuento += detalle.descuento;
           acc.totalIva += detalle.totalIva;
           acc.importeTotal += detalle.total;
           return acc;
-        }, { subtotal0: 0, subtotal5: 0, subtotal15: 0, totalDescuento: 0, totalIva: 0, importeTotal: 0 });
+        }, { subtotal0: 0, subtotal5: 0, subtotal12: 0, subtotal15: 0, totalDescuento: 0, totalIva: 0, importeTotal: 0 });
 
         const creada = await db.$transaction(async (tx) => {
           const proveedor = await upsertProveedorCompra(tx, {
@@ -1088,8 +1090,9 @@ router.post('/importar/ejecutar', upload.single('archivo'), async (req, res) => 
               numeroFactura: datos.numeroFactura,
               numeroAutorizacion: datos.numeroAutorizacion,
               fechaEmision: datos.fecha,
-              subtotal0: Number(totales.subtotal0.toFixed(2)),
-              subtotal5: Number(totales.subtotal5.toFixed(2)),
+              subtotal0:  Number(totales.subtotal0.toFixed(2)),
+              subtotal5:  Number(totales.subtotal5.toFixed(2)),
+              subtotal12: Number(totales.subtotal12.toFixed(2)),
               subtotal15: Number(totales.subtotal15.toFixed(2)),
               totalDescuento: Number(totales.totalDescuento.toFixed(2)),
               totalIva: Number(totales.totalIva.toFixed(2)),
@@ -1197,9 +1200,10 @@ router.post('/', async (req, res) => {
 
     const totales = detallesNormalizados.reduce((acc, detalle) => {
       const pct = parseInt(detalle.porcentajeIva) || 0;
-      if (pct === 5)       acc.subtotal5  += detalle.subtotal;
-      else if (pct > 0)    acc.subtotal15 += detalle.subtotal;
-      else                 acc.subtotal0  += detalle.subtotal;
+      if (pct === 5)                     acc.subtotal5  += detalle.subtotal;
+      else if (pct === 12 || pct === 14) acc.subtotal12 += detalle.subtotal;
+      else if (pct > 0)                  acc.subtotal15 += detalle.subtotal;
+      else                               acc.subtotal0  += detalle.subtotal;
       acc.totalDescuento += detalle.descuento;
       acc.totalIva += detalle.totalIva;
       acc.importeTotal += detalle.total;
@@ -1207,6 +1211,7 @@ router.post('/', async (req, res) => {
     }, {
       subtotal0: 0,
       subtotal5: 0,
+      subtotal12: 0,
       subtotal15: 0,
       totalDescuento: 0,
       totalIva: 0,
@@ -1271,8 +1276,9 @@ router.post('/', async (req, res) => {
           numeroAutorizacion: limpiarTexto(numeroAutorizacion) || null,
           claveAcceso: limpiarTexto(claveAcceso) || null,
           fechaEmision: fechaDoc,
-          subtotal0: Number(totales.subtotal0.toFixed(2)),
-          subtotal5: Number((totales.subtotal5 || 0).toFixed(2)),
+          subtotal0:  Number(totales.subtotal0.toFixed(2)),
+          subtotal5:  Number((totales.subtotal5 || 0).toFixed(2)),
+          subtotal12: Number((totales.subtotal12 || 0).toFixed(2)),
           subtotal15: Number(totales.subtotal15.toFixed(2)),
           totalDescuento: Number(totales.totalDescuento.toFixed(2)),
           totalIva: Number(totales.totalIva.toFixed(2)),

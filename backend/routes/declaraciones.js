@@ -51,7 +51,7 @@ router.get('/f104', async (req, res) => {
     const facturas = await db.facturas.findMany({
       where: { empresaId, fechaEmision: filtroFecha, anulada: false },
       select: {
-        subtotal0: true, subtotal15: true, subtotal5: true,
+        subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
         totalIva: true, importeTotal: true,
         notas_credito: {
           select: {
@@ -63,6 +63,7 @@ router.get('/f104', async (req, res) => {
 
     let ventasSubtotal0  = 0;
     let ventasSubtotal5  = 0;
+    let ventasSubtotal12 = 0;
     let ventasSubtotal15 = 0;
     let ventasIva        = 0;
     let ncSubtotal       = 0;
@@ -71,6 +72,7 @@ router.get('/f104', async (req, res) => {
     facturas.forEach((f) => {
       ventasSubtotal0  += d(f.subtotal0);
       ventasSubtotal5  += d(f.subtotal5);
+      ventasSubtotal12 += d(f.subtotal12);
       ventasSubtotal15 += d(f.subtotal15);
       ventasIva        += d(f.totalIva);
       f.notas_credito?.forEach((nc) => {
@@ -80,9 +82,11 @@ router.get('/f104', async (req, res) => {
     });
 
     // Ventas netas (descontando notas de crédito del período)
-    const ventasNetas0  = Math.max(0, parseFloat((ventasSubtotal0  - ncSubtotal * (ventasSubtotal0  / (ventasSubtotal0 + ventasSubtotal15 + ventasSubtotal5 + 0.001))).toFixed(2)));
-    const ventasNetas15 = Math.max(0, parseFloat((ventasSubtotal15 - ncSubtotal * (ventasSubtotal15 / (ventasSubtotal0 + ventasSubtotal15 + ventasSubtotal5 + 0.001))).toFixed(2)));
-    const ventasNetas5  = Math.max(0, parseFloat((ventasSubtotal5  - ncSubtotal * (ventasSubtotal5  / (ventasSubtotal0 + ventasSubtotal15 + ventasSubtotal5 + 0.001))).toFixed(2)));
+    const _totBaseVentas = ventasSubtotal0 + ventasSubtotal5 + ventasSubtotal12 + ventasSubtotal15 + 0.001;
+    const ventasNetas0  = Math.max(0, parseFloat((ventasSubtotal0  - ncSubtotal * (ventasSubtotal0  / _totBaseVentas)).toFixed(2)));
+    const ventasNetas5  = Math.max(0, parseFloat((ventasSubtotal5  - ncSubtotal * (ventasSubtotal5  / _totBaseVentas)).toFixed(2)));
+    const ventasNetas12 = Math.max(0, parseFloat((ventasSubtotal12 - ncSubtotal * (ventasSubtotal12 / _totBaseVentas)).toFixed(2)));
+    const ventasNetas15 = Math.max(0, parseFloat((ventasSubtotal15 - ncSubtotal * (ventasSubtotal15 / _totBaseVentas)).toFixed(2)));
     const ivaVentasNeto = parseFloat((ventasIva - ncIva).toFixed(2));
 
     // ── COMPRAS ─────────────────────────────────────────────────────────────────
@@ -99,7 +103,7 @@ router.get('/f104', async (req, res) => {
         OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }],
       },
       select: {
-        subtotal0: true, subtotal15: true, subtotal5: true,
+        subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
         totalIva: true, importeTotal: true, retencionIVA: true,
       },
     });
@@ -111,6 +115,7 @@ router.get('/f104', async (req, res) => {
 
     let comprasSubtotal0  = 0;
     let comprasSubtotal5  = 0;
+    let comprasSubtotal12 = 0;
     let comprasSubtotal15 = 0;
     let ivaCompras        = 0;
     let retencionIvaCompras = 0;
@@ -118,6 +123,7 @@ router.get('/f104', async (req, res) => {
     compras.forEach((c) => {
       comprasSubtotal0  += d(c.subtotal0);
       comprasSubtotal5  += d(c.subtotal5);
+      comprasSubtotal12 += d(c.subtotal12);
       comprasSubtotal15 += d(c.subtotal15);
       ivaCompras        += d(c.totalIva);
       retencionIvaCompras += d(c.retencionIVA);
@@ -126,12 +132,13 @@ router.get('/f104', async (req, res) => {
     // ── LIQUIDACIONES DE COMPRA ─────────────────────────────────────────────────
     const liquidaciones = await db.liquidaciones_compra.findMany({
       where: { empresaId, fechaEmision: filtroFecha, anulada: false },
-      select: { subtotal0: true, subtotal15: true, totalIva: true },
+      select: { subtotal0: true, subtotal12: true, subtotal15: true, totalIva: true },
     });
 
-    let liqSubtotal0 = 0, liqSubtotal15 = 0, liqIva = 0;
+    let liqSubtotal0 = 0, liqSubtotal12 = 0, liqSubtotal15 = 0, liqIva = 0;
     liquidaciones.forEach((l) => {
       liqSubtotal0  += d(l.subtotal0);
+      liqSubtotal12 += d(l.subtotal12);
       liqSubtotal15 += d(l.subtotal15);
       liqIva        += d(l.totalIva);
     });
@@ -219,20 +226,23 @@ router.get('/f104', async (req, res) => {
       ventas: {
         subtotal0:      parseFloat(ventasSubtotal0.toFixed(2)),
         subtotal5:      parseFloat(ventasSubtotal5.toFixed(2)),
+        subtotal12:     parseFloat(ventasSubtotal12.toFixed(2)),
         subtotal15:     parseFloat(ventasSubtotal15.toFixed(2)),
         ivaVentas:      parseFloat(ventasIva.toFixed(2)),
         notasCredito:   { subtotal: parseFloat(ncSubtotal.toFixed(2)), iva: parseFloat(ncIva.toFixed(2)) },
         subtotalNeto0:  ventasNetas0,
         subtotalNeto5:  ventasNetas5,
+        subtotalNeto12: ventasNetas12,
         subtotalNeto15: ventasNetas15,
         ivaGenerado,
       },
       compras: {
         subtotal0:           parseFloat(comprasSubtotal0.toFixed(2)),
         subtotal5:           parseFloat(comprasSubtotal5.toFixed(2)),
+        subtotal12:          parseFloat(comprasSubtotal12.toFixed(2)),
         subtotal15:          parseFloat(comprasSubtotal15.toFixed(2)),
         ivaCompras:          parseFloat(ivaCompras.toFixed(2)),
-        liquidaciones:       { subtotal0: parseFloat(liqSubtotal0.toFixed(2)), subtotal15: parseFloat(liqSubtotal15.toFixed(2)), iva: parseFloat(liqIva.toFixed(2)) },
+        liquidaciones:       { subtotal0: parseFloat(liqSubtotal0.toFixed(2)), subtotal12: parseFloat(liqSubtotal12.toFixed(2)), subtotal15: parseFloat(liqSubtotal15.toFixed(2)), iva: parseFloat(liqIva.toFixed(2)) },
         ncRecibidas:         { subtotal: ncReciSubtotal, iva: ncReciIva, cantidad: ncReci.length },
         ivaCreditoFiscal,
       },
