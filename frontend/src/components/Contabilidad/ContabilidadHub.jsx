@@ -426,6 +426,37 @@ const ContabilidadHub = () => {
     }
   };
 
+  const abrirTodosPeriodos = async () => {
+    if (!window.confirm('¿Abrir todos los períodos? La contadora podrá cerrarlos individualmente cuando cuadre cada uno.')) return;
+    try {
+      const res = await api.post('/contabilidad/periodos/abrir-todos');
+      toast.success(res.data?.mensaje || 'Todos los períodos abiertos');
+      await cargarPeriodos();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al abrir períodos');
+    }
+  };
+
+  const cambiarEstadoPeriodo = async (item) => {
+    const nuevoEstado = item.estado === 'ABIERTO' ? 'CERRADO' : 'ABIERTO';
+    const accion = nuevoEstado === 'CERRADO' ? 'cerrar' : 'abrir';
+    if (!window.confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} el período ${item.codigo}?`)) return;
+    try {
+      await api.put(`/contabilidad/periodos/${item.id}`, {
+        codigo: item.codigo,
+        fechaInicio: item.fechaInicio?.slice(0, 10),
+        fechaFin: item.fechaFin?.slice(0, 10),
+        estado: nuevoEstado,
+        observacion: item.observacion,
+        nombre: item.nombre,
+      });
+      toast.success(`Período ${item.codigo} ${nuevoEstado === 'CERRADO' ? 'cerrado' : 'abierto'}`);
+      await cargarPeriodos();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al cambiar estado');
+    }
+  };
+
   const editarPeriodo = (item) => {
     setPeriodoForm({
       id: item.id,
@@ -1412,7 +1443,12 @@ const ContabilidadHub = () => {
           </div>
 
           <div className="conta-card">
-            <h3>Períodos registrados</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h3 style={{ margin: 0 }}>Períodos registrados</h3>
+              <button className="btn-secondary" onClick={abrirTodosPeriodos} title="Abre todos los períodos para que la contadora registre asientos en cualquiera">
+                Abrir todos
+              </button>
+            </div>
             {loadingPeriodos ? (
               <div className="conta-loading">Cargando períodos...</div>
             ) : (
@@ -1435,8 +1471,15 @@ const ContabilidadHub = () => {
                       <td>
                         <span className={`conta-badge ${item.estado === 'ABIERTO' ? 'ok' : 'warn'}`}>{item.estado}</span>
                       </td>
-                      <td>
+                      <td style={{ display: 'flex', gap: 6 }}>
                         <button className="btn-link" onClick={() => editarPeriodo(item)}>Editar</button>
+                        <button
+                          className="btn-link"
+                          style={{ color: item.estado === 'ABIERTO' ? '#dc2626' : '#16a34a' }}
+                          onClick={() => cambiarEstadoPeriodo(item)}
+                        >
+                          {item.estado === 'ABIERTO' ? 'Cerrar' : 'Abrir'}
+                        </button>
                       </td>
                     </tr>
                   ))}

@@ -464,20 +464,38 @@ router.get('/exportar/pdf', async (req, res) => {
       }),
     ]);
 
-    // ── Totales por tipo de comprobante ───────────────────────────────────────
-    const vFact = { n: facturas.length,     b0: 0, bt: 0, iva: 0 };
-    const vLiq  = { n: liquidaciones.length, b0: 0, bt: 0, iva: 0 };
-    const vNcEm = { n: ncs.length,           b0: 0, bt: 0, iva: 0 };
-    facturas.forEach(f => { vFact.b0 += r2(f.subtotal0); vFact.bt += r2(f.subtotal15) + r2(f.subtotal5 || 0); vFact.iva += r2(f.totalIva); });
-    liquidaciones.forEach(l => { vLiq.b0 += r2(l.subtotal0); vLiq.bt += r2(l.subtotal15); vLiq.iva += r2(l.totalIva); });
-    ncs.forEach(n => { vNcEm.bt -= r2(n.totalSinImpuestos); vNcEm.iva -= r2(n.totalIva); });
-    const vTotN = vFact.n + vLiq.n + vNcEm.n;
-    const vTotB0 = vFact.b0 + vLiq.b0;
-    const vTotBt = vFact.bt + vLiq.bt;
-    const vTotIva = vFact.iva + vLiq.iva;
+    // ── Totales por tipo de comprobante (separando 5% y 15%) ─────────────────
+    const vFact = { n: facturas.length,      b0: 0, bt5: 0, bt15: 0, iva5: 0, iva15: 0 };
+    const vLiq  = { n: liquidaciones.length, b0: 0, bt5: 0, bt15: 0, iva5: 0, iva15: 0 };
+    const vNcEm = { n: ncs.length,           b0: 0, bt5: 0, bt15: 0, iva5: 0, iva15: 0 };
+    facturas.forEach(f => {
+      vFact.b0   += r2(f.subtotal0);
+      vFact.bt5  += r2(f.subtotal5 || 0);
+      vFact.bt15 += r2(f.subtotal15);
+      vFact.iva5  += r2((f.subtotal5 || 0) * 0.05);
+      vFact.iva15 += r2(f.subtotal15 * 0.15);
+    });
+    liquidaciones.forEach(l => {
+      vLiq.b0   += r2(l.subtotal0);
+      vLiq.bt15 += r2(l.subtotal15);
+      vLiq.iva15 += r2(l.subtotal15 * 0.15);
+    });
+    ncs.forEach(n => { vNcEm.bt15 -= r2(n.totalSinImpuestos); vNcEm.iva15 -= r2(n.totalIva); });
+    const vTotN   = vFact.n + vLiq.n + vNcEm.n;
+    const vTotB0  = vFact.b0 + vLiq.b0;
+    const vTotBt5 = vFact.bt5;
+    const vTotBt15 = vFact.bt15 + vLiq.bt15 + vNcEm.bt15;
+    const vTotIva5  = vFact.iva5;
+    const vTotIva15 = vFact.iva15 + vLiq.iva15 + vNcEm.iva15;
 
-    const cFact = { n: compras.length, b0: 0, bt: 0, iva: 0 };
-    compras.forEach(c => { cFact.b0 += r2(c.subtotal0); cFact.bt += r2(c.subtotal15) + r2(c.subtotal5 || 0); cFact.iva += r2(c.totalIva); });
+    const cFact = { n: compras.length, b0: 0, bt5: 0, bt15: 0, iva5: 0, iva15: 0 };
+    compras.forEach(c => {
+      cFact.b0   += r2(c.subtotal0);
+      cFact.bt5  += r2(c.subtotal5 || 0);
+      cFact.bt15 += r2(c.subtotal15);
+      cFact.iva5  += r2((c.subtotal5 || 0) * 0.05);
+      cFact.iva15 += r2(c.subtotal15 * 0.15);
+    });
 
     // ── Retenciones IR por código SRI (303, 307, …) ───────────────────────────
     const retIrPorCod = {};
@@ -632,33 +650,35 @@ router.get('/exportar/pdf', async (req, res) => {
       rowAlt = false;
     };
 
-    // ── COMPRAS (por tipo de comprobante) ─────────────────────────────────────
+    // ── COMPRAS (por tipo de comprobante, separando IVA 5% y 15%) ────────────
     const tc = [
-      { t: 'Cod.',            w: 28,  a: 'center' },
-      { t: 'Transacción',     w: 130, a: 'left'   },
-      { t: 'No. Registros',   w: 52,  a: 'right'  },
-      { t: 'BI Tarifa 0%',    w: 78,  a: 'right'  },
-      { t: 'BI Tarifa',       w: 78,  a: 'right'  },
-      { t: 'BI No Obj. IVA',  w: 78,  a: 'right'  },
-      { t: 'Valor IVA',       w: 79,  a: 'right'  },
+      { t: 'Cod.',           w: 26,  a: 'center' },
+      { t: 'Transacción',    w: 108, a: 'left'   },
+      { t: 'No. Reg.',       w: 42,  a: 'right'  },
+      { t: 'BI 0%',         w: 62,  a: 'right'  },
+      { t: 'BI Tarifa 5%',  w: 57,  a: 'right'  },
+      { t: 'BI Tarifa 15%', w: 62,  a: 'right'  },
+      { t: 'BI No Obj.',    w: 55,  a: 'right'  },
+      { t: 'IVA 5%',        w: 55,  a: 'right'  },
+      { t: 'IVA 15%',       w: 56,  a: 'right'  },
     ];
     secHdr('COMPRAS');
     colHdr(tc);
     if (compras.length > 0)
-      dataRow(tc, ['01', 'FACTURA', compras.length, n2(cFact.b0), n2(cFact.bt), '0.00', n2(cFact.iva)]);
-    dataRow(tc, ['TOTAL', '', compras.length, n2(cFact.b0), n2(cFact.bt), '0.00', n2(cFact.iva)], true);
+      dataRow(tc, ['01', 'FACTURA', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt15), '0.00', n2(cFact.iva5), n2(cFact.iva15)]);
+    dataRow(tc, ['TOTAL', '', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt15), '0.00', n2(cFact.iva5), n2(cFact.iva15)], true);
     curY += 4;
 
-    // ── VENTAS (por tipo de comprobante) ──────────────────────────────────────
+    // ── VENTAS (por tipo de comprobante, separando IVA 5% y 15%) ─────────────
     secHdr('VENTAS');
     colHdr(tc);
     if (facturas.length > 0)
-      dataRow(tc, ['01', 'FACTURA', vFact.n, n2(vFact.b0), n2(vFact.bt), '0.00', n2(vFact.iva)]);
+      dataRow(tc, ['01', 'FACTURA', vFact.n, n2(vFact.b0), n2(vFact.bt5), n2(vFact.bt15), '0.00', n2(vFact.iva5), n2(vFact.iva15)]);
     if (liquidaciones.length > 0)
-      dataRow(tc, ['03', 'LIQUIDACIÓN DE COMPRA', vLiq.n, n2(vLiq.b0), n2(vLiq.bt), '0.00', n2(vLiq.iva)]);
+      dataRow(tc, ['03', 'LIQUIDACIÓN DE COMPRA', vLiq.n, n2(vLiq.b0), '0.00', n2(vLiq.bt15), '0.00', '0.00', n2(vLiq.iva15)]);
     if (ncs.length > 0)
-      dataRow(tc, ['04', 'NOTA DE CRÉDITO', vNcEm.n, '0.00', n2(vNcEm.bt), '0.00', n2(vNcEm.iva)]);
-    dataRow(tc, ['TOTAL', '', vTotN, n2(vTotB0), n2(vTotBt), '0.00', n2(vTotIva)], true);
+      dataRow(tc, ['04', 'NOTA DE CRÉDITO', vNcEm.n, '0.00', n2(vNcEm.bt5), n2(vNcEm.bt15), '0.00', n2(vNcEm.iva5), n2(vNcEm.iva15)]);
+    dataRow(tc, ['TOTAL', '', vTotN, n2(vTotB0), n2(vTotBt5), n2(vTotBt15), '0.00', n2(vTotIva5), n2(vTotIva15)], true);
     curY += 4;
 
     // ── COMPROBANTES ANULADOS ─────────────────────────────────────────────────

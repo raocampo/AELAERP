@@ -655,17 +655,6 @@ router.post('/periodos/auto-crear', async (req, res) => {
       const codigo = `01/${año}`;
       if (codigosExistentes.has(codigo)) continue;
 
-      const esPasado = año < añoActual;
-      const estado = esPasado ? 'CERRADO' : 'ABIERTO';
-
-      // Si vamos a crear ABIERTO, cerrar los anteriores
-      if (estado === 'ABIERTO') {
-        await prisma.periodos_contables.updateMany({
-          where: { empresaId, estado: 'ABIERTO' },
-          data: { estado: 'CERRADO' },
-        });
-      }
-
       const nuevo = await prisma.periodos_contables.create({
         data: {
           empresaId,
@@ -673,7 +662,7 @@ router.post('/periodos/auto-crear', async (req, res) => {
           nombre: `Período ${año}`,
           fechaInicio: new Date(`${año}-01-01T00:00:00.000Z`),
           fechaFin:    new Date(`${año}-12-31T23:59:59.000Z`),
-          estado,
+          estado: 'ABIERTO',
         },
       });
       creados.push(nuevo);
@@ -691,6 +680,21 @@ router.post('/periodos/auto-crear', async (req, res) => {
   } catch (error) {
     console.error('POST /contabilidad/periodos/auto-crear:', error);
     res.status(500).json({ success: false, mensaje: 'Error al auto-crear períodos' });
+  }
+});
+
+// POST /api/contabilidad/periodos/abrir-todos
+router.post('/periodos/abrir-todos', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const result = await prisma.periodos_contables.updateMany({
+      where: { empresaId, estado: 'CERRADO' },
+      data: { estado: 'ABIERTO' },
+    });
+    res.json({ success: true, mensaje: `${result.count} período(s) abierto(s) correctamente` });
+  } catch (error) {
+    console.error('POST /contabilidad/periodos/abrir-todos:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al abrir períodos' });
   }
 });
 
@@ -730,13 +734,6 @@ router.post('/periodos', async (req, res) => {
     }
 
     const creado = await prisma.$transaction(async (tx) => {
-      if (estadoNormalizado === 'ABIERTO') {
-        await tx.periodos_contables.updateMany({
-          where: { empresaId, estado: 'ABIERTO' },
-          data: { estado: 'CERRADO' },
-        });
-      }
-
       return tx.periodos_contables.create({
         data: {
           empresaId,
@@ -805,13 +802,6 @@ router.put('/periodos/:id', async (req, res) => {
     }
 
     const actualizado = await prisma.$transaction(async (tx) => {
-      if (estadoNormalizado === 'ABIERTO') {
-        await tx.periodos_contables.updateMany({
-          where: { empresaId, id: { not: id }, estado: 'ABIERTO' },
-          data: { estado: 'CERRADO' },
-        });
-      }
-
       return tx.periodos_contables.update({
         where: { id },
         data: {
