@@ -299,65 +299,124 @@ function TabCompras({ data }) {
 
 // ─── Tab Retenciones ──────────────────────────────────────────────────────────
 function TabRetenciones({ data }) {
-  const retenciones = data.retenciones || [];
+  const retenciones          = data.retenciones          || [];
+  const retencionesRecibidas = data.retencionesRecibidas || [];
   const { slice: sliceR, pagina: paginaR, totalPaginas: totalR, setPagina: setPaginaR } = usePagina(retenciones);
+  const { slice: sliceRR, pagina: paginaRR, totalPaginas: totalRR, setPagina: setPaginaRR } = usePagina(retencionesRecibidas);
+
+  const totRetIvaRec  = retencionesRecibidas.reduce((s, r) => s + parseFloat(r.totalRetencionIva  || 0), 0);
+  const totRetIrRec   = retencionesRecibidas.reduce((s, r) => s + parseFloat(r.totalRetencionRenta || 0), 0);
 
   return (
-    <div className="ats-seccion">
-      <h3 className="ats-seccion-titulo">
-        Comprobantes de Retención emitidos
-        <span className="ats-sec-count">{retenciones.length}</span>
-      </h3>
-      <Paginador pagina={paginaR} totalPaginas={totalR} total={retenciones.length} setPagina={setPaginaR} />
-      {retenciones.length === 0 ? (
-        <p className="ats-empty">No hay retenciones autorizadas en este período.</p>
-      ) : (
-        <div className="ats-tabla-wrap">
-          <table className="ats-tabla">
-            <thead>
-              <tr>
-                <th>Número</th>
-                <th>Fecha</th>
-                <th>Proveedor</th>
-                <th>Identificación</th>
-                <th>Período</th>
-                <th className="text-right">Ret. Renta</th>
-                <th className="text-right">Ret. IVA</th>
-                <th className="text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sliceR.map(ret => {
-                const imps = Array.isArray(ret.impuestos) ? ret.impuestos
-                  : (typeof ret.impuestos === 'string' ? JSON.parse(ret.impuestos) : []);
-                const retRenta = imps.filter(i => String(i.codigo) === '1').reduce((s, i) => s + parseFloat(i.valorRetenido || 0), 0);
-                const retIva   = imps.filter(i => String(i.codigo) === '2').reduce((s, i) => s + parseFloat(i.valorRetenido || 0), 0);
-                return (
-                  <tr key={ret.id}>
-                    <td className="ats-num">{ret.numeroRetencion}</td>
-                    <td>{fmtFecha(ret.fechaEmision)}</td>
-                    <td>{ret.razonSocialProveedor}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{ret.identificacionProveedor}</td>
-                    <td>{ret.periodoFiscal}</td>
-                    <td className="ats-money">{fmt(retRenta)}</td>
-                    <td className="ats-money">{fmt(retIva)}</td>
-                    <td className="ats-money ats-money-total">{fmt(ret.totalRetenido)}</td>
+    <>
+      {/* Retenciones EMITIDAS */}
+      <div className="ats-seccion">
+        <h3 className="ats-seccion-titulo">
+          Comprobantes de Retención emitidos
+          <span className="ats-sec-count">{retenciones.length}</span>
+        </h3>
+        <Paginador pagina={paginaR} totalPaginas={totalR} total={retenciones.length} setPagina={setPaginaR} />
+        {retenciones.length === 0 ? (
+          <p className="ats-empty">No hay retenciones autorizadas en este período.</p>
+        ) : (
+          <div className="ats-tabla-wrap">
+            <table className="ats-tabla">
+              <thead>
+                <tr>
+                  <th>Número</th>
+                  <th>Fecha</th>
+                  <th>Proveedor</th>
+                  <th>Identificación</th>
+                  <th>Período</th>
+                  <th className="text-right">Ret. Renta</th>
+                  <th className="text-right">Ret. IVA</th>
+                  <th className="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sliceR.map(ret => {
+                  const imps = Array.isArray(ret.impuestos) ? ret.impuestos
+                    : (typeof ret.impuestos === 'string' ? JSON.parse(ret.impuestos) : []);
+                  const retRenta = imps.filter(i => String(i.codigo) === '1').reduce((s, i) => s + parseFloat(i.valorRetenido || 0), 0);
+                  const retIva   = imps.filter(i => String(i.codigo) === '2').reduce((s, i) => s + parseFloat(i.valorRetenido || 0), 0);
+                  return (
+                    <tr key={ret.id}>
+                      <td className="ats-num">{ret.numeroRetencion}</td>
+                      <td>{fmtFecha(ret.fechaEmision)}</td>
+                      <td>{ret.razonSocialProveedor}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{ret.identificacionProveedor}</td>
+                      <td>{ret.periodoFiscal}</td>
+                      <td className="ats-money">{fmt(retRenta)}</td>
+                      <td className="ats-money">{fmt(retIva)}</td>
+                      <td className="ats-money ats-money-total">{fmt(ret.totalRetenido)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="ats-tfoot">
+                  <td colSpan={7}><strong>TOTAL RETENIDO</strong></td>
+                  <td className="ats-money ats-money-total">
+                    <strong>{fmt(retenciones.reduce((s, r) => s + parseFloat(r.totalRetenido || 0), 0))}</strong>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Retenciones RECIBIDAS (emitidas por clientes sobre ventas) */}
+      <div className="ats-seccion">
+        <h3 className="ats-seccion-titulo">
+          Retenciones recibidas de clientes (sobre ventas)
+          <span className="ats-sec-count">{retencionesRecibidas.length}</span>
+        </h3>
+        <Paginador pagina={paginaRR} totalPaginas={totalRR} total={retencionesRecibidas.length} setPagina={setPaginaRR} />
+        {retencionesRecibidas.length === 0 ? (
+          <p className="ats-empty">No hay retenciones recibidas en este período.</p>
+        ) : (
+          <div className="ats-tabla-wrap">
+            <table className="ats-tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Agente (cliente)</th>
+                  <th>RUC Agente</th>
+                  <th>Doc. Sustento</th>
+                  <th className="text-right">Ret. IVA</th>
+                  <th className="text-right">Ret. Renta</th>
+                  <th className="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sliceRR.map(r => (
+                  <tr key={r.id}>
+                    <td>{fmtFecha(r.fechaEmision)}</td>
+                    <td className="ats-proveedor">{r.razonSocialAgente}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{r.rucAgente}</td>
+                    <td>{r.numDocSustento || '—'}</td>
+                    <td className="ats-money">{fmt(r.totalRetencionIva)}</td>
+                    <td className="ats-money">{fmt(r.totalRetencionRenta)}</td>
+                    <td className="ats-money ats-money-total">
+                      {fmt(parseFloat(r.totalRetencionIva || 0) + parseFloat(r.totalRetencionRenta || 0))}
+                    </td>
                   </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="ats-tfoot">
-                <td colSpan={7}><strong>TOTAL RETENIDO</strong></td>
-                <td className="ats-money ats-money-total">
-                  <strong>{fmt(retenciones.reduce((s, r) => s + parseFloat(r.totalRetenido || 0), 0))}</strong>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-    </div>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="ats-tfoot">
+                  <td colSpan={4}><strong>TOTAL RETENCIONES RECIBIDAS</strong></td>
+                  <td className="ats-money ats-money-total"><strong>{fmt(totRetIvaRec)}</strong></td>
+                  <td className="ats-money ats-money-total"><strong>{fmt(totRetIrRec)}</strong></td>
+                  <td className="ats-money ats-money-total"><strong>{fmt(totRetIvaRec + totRetIrRec)}</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -473,7 +532,7 @@ export default function ATS() {
   const tabs = [
     { key: 'ventas',      label: `Ventas (${data ? (data.facturas.length + data.liquidaciones.length) : '—'})` },
     { key: 'compras',     label: `Compras (${data ? data.compras.length : '—'})` },
-    { key: 'retenciones', label: `Retenciones emitidas (${data ? data.retenciones.length : '—'})` },
+    { key: 'retenciones', label: `Retenciones (${data ? `${data.retenciones.length} emit. / ${(data.retencionesRecibidas || []).length} recib.` : '—'})` },
     { key: 'anulados',    label: `Anulados (${data ? data.anulados.length : '—'})` },
   ];
 
