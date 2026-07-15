@@ -1,6 +1,6 @@
 # Estado del Proyecto AELA
 
-Fecha de referencia: `2026-07-14`
+Fecha de referencia: `2026-07-15`
 
 ## Resumen general
 
@@ -507,6 +507,46 @@ antes de llegar a producción:**
   suscripción (transferencia/PayPhone/Stripe) con aprobación manual vía `SUPER_ADMIN_KEY`
   (`1dc8ca6`) — auditado, sin bugs.
 
+### 31. Sesión 2026-07-15 — IVA 12% histórico (Ecuador pre-2024) + campo subtotal12
+
+Ver `docs/pendientes-2026-07-15.md` para el detalle exhaustivo (archivos modificados,
+verificaciones pendientes en producción, pendientes de contabilidad).
+
+**Motivación**: La empresa PUCHAICELA lleva contabilidad de 2023 (IVA 12%). El sistema
+almacenaba toda la base gravada en `subtotal15` como catch-all, generando errores en ATS PDF,
+F104 y XML SRI para períodos históricos.
+
+**Commit**: `e15c737` — migración aplicada en Railway y confirmada en producción.
+
+#### Feature — Campo `subtotal12` en 3 tablas (`e15c737`)
+- Nueva migración `20260715000000_subtotal12_iva_historico`: ADD COLUMN + backfill retroactivo
+  (`subtotal15 → subtotal12` para `fechaEmision < '2024-04-22'`)
+- `backend/prisma/schema.prisma`: `subtotal12 Decimal @default(0)` en `facturas`,
+  `facturas_compra`, `liquidaciones_compra`
+
+#### Feature — XML SRI con IVA 12% correcto (`e15c737`)
+`generarXMLFactura` y `generarXMLLiquidacionCompra` en `sri.js` acumulan `subtotal12` y emiten
+bloque `<totalImpuesto>` con `<codigoPorcentaje>2</codigoPorcentaje>` (código tabla 17 SRI v2.26).
+Al importar XML histórico: IVA 14% (terremoto 2016) también se mapea al bucket 12%.
+
+#### Feature — F104 con desglose 0%/5%/12%/15% (`e15c737`)
+`declaraciones.js` acumula `ventasSubtotal12`, `comprasSubtotal12`, `liqSubtotal12` y los incluye
+en el response. El prorrateo de notas de crédito usa el divisor correcto con los 4 subtotales.
+
+#### Feature — ATS PDF con columnas IVA 12% (`e15c737`)
+PDF talón resumen: 11 columnas ajustadas a 523px totales; `BI T.12%` e `IVA 12%` añadidas.
+XML: `baseImpGrav = sub5 + sub12 + sub15`.
+
+#### Feature — Frontend: opción IVA 12% en FormFactura, columnas en ATS y Reportes (`e15c737`)
+- `FormFactura.jsx`: select con opción 12%, totalizador con filas condicionales
+- `ATS.jsx`: columna "Base 12%" en tabs Ventas y Compras
+- `ReportesTributarios.jsx`: filas y columna "Base 12%" condicionales
+
+#### Pendiente crítico — Verificar asientos contables históricos
+Los asientos de compras/ventas de 2023 pueden tener IVA calculado como `subtotal15 * 0.15`
+(incorrecto). Requiere verificar `totalIva` guardado vs. `subtotal12 * 0.12` y potencialmente
+regenerar asientos afectados. **Sesión aparte** — ver `pendientes-2026-07-15.md`.
+
 ### 30. Sesión 2026-07-14 (parte 2) — Estados Financieros Jerárquicos + ATS Paginación + PDF SRI
 
 Ver `docs/pendientes-2026-07-14-parte2.md` para el detalle exhaustivo (commits, helpers PDF,
@@ -869,6 +909,18 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
    - Ver todos los tenants, planes, estado
    - Activar/suspender tenants
    - Ver logs de provisioning fallidos
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-15 — IVA 12%)
+
+Ver `docs/pendientes-2026-07-15.md` sección "VERIFICAR EN PRODUCCIÓN". Requieren navegador
+con datos reales de PUCHAICELA (2023):
+
+1. **ATS 2023** — columnas "BI T.12%" e "IVA 12%" con valores correctos; "BI T.15%" = $0.
+2. **PDF talón resumen ATS 2023** — las 11 columnas caben sin desbordarse, IVA 12% correcto.
+3. **F104 2023** — `subtotalNeto12` con base ventas gravadas 12%; `compras.subtotal12` correcto.
+4. **Nueva factura con IVA 12%** — totalizador muestra "Base 12%" y "IVA 12%".
+5. **Verificar `totalIva` en compras 2023** — comparar con `subtotal12 * 0.12` (pueden diferir
+   si se importaron antes del backfill).
 
 ### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-14, parte 2)
 
