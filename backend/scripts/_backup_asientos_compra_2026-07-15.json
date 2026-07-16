@@ -1,0 +1,5736 @@
+[
+  {
+    "id": 2245,
+    "empresaId": 4,
+    "numero": "202305-0003",
+    "fecha": "2023-05-17T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-019-000015824",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2162",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "23.1",
+    "totalHaber": "23.1",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.395Z",
+    "detalles": [
+      {
+        "id": 10206,
+        "asientoId": 2245,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-019-000015824",
+        "debe": "20.09",
+        "haber": "0"
+      },
+      {
+        "id": 10207,
+        "asientoId": 2245,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-019-000015824",
+        "debe": "3.01",
+        "haber": "0"
+      },
+      {
+        "id": 10208,
+        "asientoId": 2245,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "23.1"
+      }
+    ]
+  },
+  {
+    "id": 2246,
+    "empresaId": 4,
+    "numero": "202305-0004",
+    "fecha": "2023-05-17T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000003522",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2163",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "17.92",
+    "totalHaber": "17.92",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.415Z",
+    "detalles": [
+      {
+        "id": 10209,
+        "asientoId": 2246,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000003522",
+        "debe": "15.58",
+        "haber": "0"
+      },
+      {
+        "id": 10210,
+        "asientoId": 2246,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000003522",
+        "debe": "2.34",
+        "haber": "0"
+      },
+      {
+        "id": 10211,
+        "asientoId": 2246,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "17.92"
+      }
+    ]
+  },
+  {
+    "id": 975,
+    "empresaId": 4,
+    "numero": "202404-0003",
+    "fecha": "2024-04-01T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-010-000266984",
+    "tipo": "COMPRA",
+    "referencia": "COMP-981",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "22.4",
+    "totalHaber": "22.4",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:22.150Z",
+    "detalles": [
+      {
+        "id": 6919,
+        "asientoId": 975,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-010-000266984",
+        "debe": "19.48",
+        "haber": "0"
+      },
+      {
+        "id": 6920,
+        "asientoId": 975,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-010-000266984",
+        "debe": "2.92",
+        "haber": "0"
+      },
+      {
+        "id": 6921,
+        "asientoId": 975,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "22.4"
+      }
+    ]
+  },
+  {
+    "id": 973,
+    "empresaId": 4,
+    "numero": "202404-0001",
+    "fecha": "2024-04-01T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 162-108-000224890",
+    "tipo": "COMPRA",
+    "referencia": "COMP-979",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "65.02",
+    "totalHaber": "65.02",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:22.037Z",
+    "detalles": [
+      {
+        "id": 6925,
+        "asientoId": 973,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 162-108-000224890",
+        "debe": "62.5",
+        "haber": "0"
+      },
+      {
+        "id": 6926,
+        "asientoId": 973,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 162-108-000224890",
+        "debe": "2.52",
+        "haber": "0"
+      },
+      {
+        "id": 6927,
+        "asientoId": 973,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "65.02"
+      }
+    ]
+  },
+  {
+    "id": 986,
+    "empresaId": 4,
+    "numero": "202404-0014",
+    "fecha": "2024-04-04T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-010-000002555",
+    "tipo": "COMPRA",
+    "referencia": "COMP-992",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "7.81",
+    "totalHaber": "7.81",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:22.801Z",
+    "detalles": [
+      {
+        "id": 6942,
+        "asientoId": 986,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-010-000002555",
+        "debe": "6.79",
+        "haber": "0"
+      },
+      {
+        "id": 6943,
+        "asientoId": 986,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-010-000002555",
+        "debe": "1.02",
+        "haber": "0"
+      },
+      {
+        "id": 6944,
+        "asientoId": 986,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "7.81"
+      }
+    ]
+  },
+  {
+    "id": 985,
+    "empresaId": 4,
+    "numero": "202404-0013",
+    "fecha": "2024-04-04T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-007-000000235",
+    "tipo": "COMPRA",
+    "referencia": "COMP-991",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "70",
+    "totalHaber": "70",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:22.741Z",
+    "detalles": [
+      {
+        "id": 6948,
+        "asientoId": 985,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-007-000000235",
+        "debe": "60.87",
+        "haber": "0"
+      },
+      {
+        "id": 6949,
+        "asientoId": 985,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-007-000000235",
+        "debe": "9.13",
+        "haber": "0"
+      },
+      {
+        "id": 6950,
+        "asientoId": 985,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "70"
+      }
+    ]
+  },
+  {
+    "id": 983,
+    "empresaId": 4,
+    "numero": "202404-0011",
+    "fecha": "2024-04-04T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-015-001223840",
+    "tipo": "COMPRA",
+    "referencia": "COMP-989",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "10",
+    "totalHaber": "10",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:22.619Z",
+    "detalles": [
+      {
+        "id": 6954,
+        "asientoId": 983,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-015-001223840",
+        "debe": "8.7",
+        "haber": "0"
+      },
+      {
+        "id": 6955,
+        "asientoId": 983,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-015-001223840",
+        "debe": "1.3",
+        "haber": "0"
+      },
+      {
+        "id": 6956,
+        "asientoId": 983,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "10"
+      }
+    ]
+  },
+  {
+    "id": 982,
+    "empresaId": 4,
+    "numero": "202404-0010",
+    "fecha": "2024-04-04T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-214-016371736",
+    "tipo": "COMPRA",
+    "referencia": "COMP-988",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "30.8",
+    "totalHaber": "30.8",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:22.556Z",
+    "detalles": [
+      {
+        "id": 6957,
+        "asientoId": 982,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-214-016371736",
+        "debe": "26.78",
+        "haber": "0"
+      },
+      {
+        "id": 6958,
+        "asientoId": 982,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-214-016371736",
+        "debe": "4.02",
+        "haber": "0"
+      },
+      {
+        "id": 6959,
+        "asientoId": 982,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "30.8"
+      }
+    ]
+  },
+  {
+    "id": 992,
+    "empresaId": 4,
+    "numero": "202404-0020",
+    "fecha": "2024-04-05T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-002-000018007",
+    "tipo": "COMPRA",
+    "referencia": "COMP-998",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "59.47",
+    "totalHaber": "59.47",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.171Z",
+    "detalles": [
+      {
+        "id": 6981,
+        "asientoId": 992,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-002-000018007",
+        "debe": "51.71",
+        "haber": "0"
+      },
+      {
+        "id": 6982,
+        "asientoId": 992,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-002-000018007",
+        "debe": "7.76",
+        "haber": "0"
+      },
+      {
+        "id": 6983,
+        "asientoId": 992,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "59.47"
+      }
+    ]
+  },
+  {
+    "id": 990,
+    "empresaId": 4,
+    "numero": "202404-0018",
+    "fecha": "2024-04-05T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-214-000183146",
+    "tipo": "COMPRA",
+    "referencia": "COMP-996",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "15.05",
+    "totalHaber": "15.05",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.049Z",
+    "detalles": [
+      {
+        "id": 6984,
+        "asientoId": 990,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-214-000183146",
+        "debe": "13.09",
+        "haber": "0"
+      },
+      {
+        "id": 6985,
+        "asientoId": 990,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-214-000183146",
+        "debe": "1.96",
+        "haber": "0"
+      },
+      {
+        "id": 6986,
+        "asientoId": 990,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "15.05"
+      }
+    ]
+  },
+  {
+    "id": 976,
+    "empresaId": 4,
+    "numero": "202404-0004",
+    "fecha": "2024-04-02T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-026-000948275",
+    "tipo": "COMPRA",
+    "referencia": "COMP-982",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "2.59",
+    "totalHaber": "2.59",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:22.207Z",
+    "detalles": [
+      {
+        "id": 7064,
+        "asientoId": 976,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-026-000948275",
+        "debe": "2.25",
+        "haber": "0"
+      },
+      {
+        "id": 7065,
+        "asientoId": 976,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-026-000948275",
+        "debe": "0.34",
+        "haber": "0"
+      },
+      {
+        "id": 7066,
+        "asientoId": 976,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "2.59"
+      }
+    ]
+  },
+  {
+    "id": 996,
+    "empresaId": 4,
+    "numero": "202404-0024",
+    "fecha": "2024-04-05T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-002-000000673",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1002",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "43.7",
+    "totalHaber": "43.7",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.416Z",
+    "detalles": [
+      {
+        "id": 6969,
+        "asientoId": 996,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-002-000000673",
+        "debe": "38",
+        "haber": "0"
+      },
+      {
+        "id": 6970,
+        "asientoId": 996,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-002-000000673",
+        "debe": "5.7",
+        "haber": "0"
+      },
+      {
+        "id": 6971,
+        "asientoId": 996,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "43.7"
+      }
+    ]
+  },
+  {
+    "id": 995,
+    "empresaId": 4,
+    "numero": "202404-0023",
+    "fecha": "2024-04-05T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-505-000187399",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1001",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "13",
+    "totalHaber": "13",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.360Z",
+    "detalles": [
+      {
+        "id": 6972,
+        "asientoId": 995,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-505-000187399",
+        "debe": "11.3",
+        "haber": "0"
+      },
+      {
+        "id": 6973,
+        "asientoId": 995,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-505-000187399",
+        "debe": "1.7",
+        "haber": "0"
+      },
+      {
+        "id": 6974,
+        "asientoId": 995,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "13"
+      }
+    ]
+  },
+  {
+    "id": 994,
+    "empresaId": 4,
+    "numero": "202404-0022",
+    "fecha": "2024-04-05T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-216-000186091",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1000",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "21.76",
+    "totalHaber": "21.76",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.296Z",
+    "detalles": [
+      {
+        "id": 6975,
+        "asientoId": 994,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-216-000186091",
+        "debe": "18.92",
+        "haber": "0"
+      },
+      {
+        "id": 6976,
+        "asientoId": 994,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-216-000186091",
+        "debe": "2.84",
+        "haber": "0"
+      },
+      {
+        "id": 6977,
+        "asientoId": 994,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "21.76"
+      }
+    ]
+  },
+  {
+    "id": 993,
+    "empresaId": 4,
+    "numero": "202404-0021",
+    "fecha": "2024-04-05T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 004-003-000018957",
+    "tipo": "COMPRA",
+    "referencia": "COMP-999",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "393.12",
+    "totalHaber": "393.12",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.232Z",
+    "detalles": [
+      {
+        "id": 6978,
+        "asientoId": 993,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 004-003-000018957",
+        "debe": "341.84",
+        "haber": "0"
+      },
+      {
+        "id": 6979,
+        "asientoId": 993,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 004-003-000018957",
+        "debe": "51.28",
+        "haber": "0"
+      },
+      {
+        "id": 6980,
+        "asientoId": 993,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "393.12"
+      }
+    ]
+  },
+  {
+    "id": 1004,
+    "empresaId": 4,
+    "numero": "202404-0032",
+    "fecha": "2024-04-06T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-102-000014334",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1010",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "24",
+    "totalHaber": "24",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.871Z",
+    "detalles": [
+      {
+        "id": 6987,
+        "asientoId": 1004,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-102-000014334",
+        "debe": "20.87",
+        "haber": "0"
+      },
+      {
+        "id": 6988,
+        "asientoId": 1004,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-102-000014334",
+        "debe": "3.13",
+        "haber": "0"
+      },
+      {
+        "id": 6989,
+        "asientoId": 1004,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "24"
+      }
+    ]
+  },
+  {
+    "id": 1003,
+    "empresaId": 4,
+    "numero": "202404-0031",
+    "fecha": "2024-04-06T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-060-003332356",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1009",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "27",
+    "totalHaber": "27",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.811Z",
+    "detalles": [
+      {
+        "id": 6990,
+        "asientoId": 1003,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-060-003332356",
+        "debe": "23.48",
+        "haber": "0"
+      },
+      {
+        "id": 6991,
+        "asientoId": 1003,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-060-003332356",
+        "debe": "3.52",
+        "haber": "0"
+      },
+      {
+        "id": 6992,
+        "asientoId": 1003,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "27"
+      }
+    ]
+  },
+  {
+    "id": 1002,
+    "empresaId": 4,
+    "numero": "202404-0030",
+    "fecha": "2024-04-06T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-101-000249141",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1008",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "4.8",
+    "totalHaber": "4.8",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.754Z",
+    "detalles": [
+      {
+        "id": 6993,
+        "asientoId": 1002,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-101-000249141",
+        "debe": "4.17",
+        "haber": "0"
+      },
+      {
+        "id": 6994,
+        "asientoId": 1002,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-101-000249141",
+        "debe": "0.63",
+        "haber": "0"
+      },
+      {
+        "id": 6995,
+        "asientoId": 1002,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "4.8"
+      }
+    ]
+  },
+  {
+    "id": 1000,
+    "empresaId": 4,
+    "numero": "202404-0028",
+    "fecha": "2024-04-06T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-002-000037131",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1006",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "137.77",
+    "totalHaber": "137.77",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.639Z",
+    "detalles": [
+      {
+        "id": 6996,
+        "asientoId": 1000,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-002-000037131",
+        "debe": "119.8",
+        "haber": "0"
+      },
+      {
+        "id": 6997,
+        "asientoId": 1000,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-002-000037131",
+        "debe": "17.97",
+        "haber": "0"
+      },
+      {
+        "id": 6998,
+        "asientoId": 1000,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "137.77"
+      }
+    ]
+  },
+  {
+    "id": 1005,
+    "empresaId": 4,
+    "numero": "202404-0033",
+    "fecha": "2024-04-08T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-015-001227396",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1011",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "34.01",
+    "totalHaber": "34.01",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.932Z",
+    "detalles": [
+      {
+        "id": 7002,
+        "asientoId": 1005,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-015-001227396",
+        "debe": "29.57",
+        "haber": "0"
+      },
+      {
+        "id": 7003,
+        "asientoId": 1005,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-015-001227396",
+        "debe": "4.44",
+        "haber": "0"
+      },
+      {
+        "id": 7004,
+        "asientoId": 1005,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "34.01"
+      }
+    ]
+  },
+  {
+    "id": 1008,
+    "empresaId": 4,
+    "numero": "202404-0036",
+    "fecha": "2024-04-09T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 015-013-000183946",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1014",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "6.46",
+    "totalHaber": "6.46",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.118Z",
+    "detalles": [
+      {
+        "id": 7005,
+        "asientoId": 1008,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 015-013-000183946",
+        "debe": "5.62",
+        "haber": "0"
+      },
+      {
+        "id": 7006,
+        "asientoId": 1008,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 015-013-000183946",
+        "debe": "0.84",
+        "haber": "0"
+      },
+      {
+        "id": 7007,
+        "asientoId": 1008,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "6.46"
+      }
+    ]
+  },
+  {
+    "id": 1007,
+    "empresaId": 4,
+    "numero": "202404-0035",
+    "fecha": "2024-04-09T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 086-108-000324279",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1013",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "114.13",
+    "totalHaber": "114.13",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.055Z",
+    "detalles": [
+      {
+        "id": 7011,
+        "asientoId": 1007,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 086-108-000324279",
+        "debe": "107.54",
+        "haber": "0"
+      },
+      {
+        "id": 7012,
+        "asientoId": 1007,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 086-108-000324279",
+        "debe": "6.59",
+        "haber": "0"
+      },
+      {
+        "id": 7013,
+        "asientoId": 1007,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "114.13"
+      }
+    ]
+  },
+  {
+    "id": 1009,
+    "empresaId": 4,
+    "numero": "202404-0037",
+    "fecha": "2024-04-10T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-013-000508551",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1015",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "5",
+    "totalHaber": "5",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.180Z",
+    "detalles": [
+      {
+        "id": 7014,
+        "asientoId": 1009,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-013-000508551",
+        "debe": "4.35",
+        "haber": "0"
+      },
+      {
+        "id": 7015,
+        "asientoId": 1009,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-013-000508551",
+        "debe": "0.65",
+        "haber": "0"
+      },
+      {
+        "id": 7016,
+        "asientoId": 1009,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "5"
+      }
+    ]
+  },
+  {
+    "id": 1011,
+    "empresaId": 4,
+    "numero": "202404-0039",
+    "fecha": "2024-04-11T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-002-000152571",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1017",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "4.48",
+    "totalHaber": "4.48",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.309Z",
+    "detalles": [
+      {
+        "id": 7020,
+        "asientoId": 1011,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-002-000152571",
+        "debe": "3.9",
+        "haber": "0"
+      },
+      {
+        "id": 7021,
+        "asientoId": 1011,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-002-000152571",
+        "debe": "0.58",
+        "haber": "0"
+      },
+      {
+        "id": 7022,
+        "asientoId": 1011,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "4.48"
+      }
+    ]
+  },
+  {
+    "id": 1010,
+    "empresaId": 4,
+    "numero": "202404-0038",
+    "fecha": "2024-04-11T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-011-000948807",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1016",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "10",
+    "totalHaber": "10",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.245Z",
+    "detalles": [
+      {
+        "id": 7023,
+        "asientoId": 1010,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-011-000948807",
+        "debe": "8.7",
+        "haber": "0"
+      },
+      {
+        "id": 7024,
+        "asientoId": 1010,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-011-000948807",
+        "debe": "1.3",
+        "haber": "0"
+      },
+      {
+        "id": 7025,
+        "asientoId": 1010,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "10"
+      }
+    ]
+  },
+  {
+    "id": 1014,
+    "empresaId": 4,
+    "numero": "202404-0042",
+    "fecha": "2024-04-12T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-101-000554333",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1020",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "36",
+    "totalHaber": "36",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.496Z",
+    "detalles": [
+      {
+        "id": 7029,
+        "asientoId": 1014,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-101-000554333",
+        "debe": "31.3",
+        "haber": "0"
+      },
+      {
+        "id": 7030,
+        "asientoId": 1014,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-101-000554333",
+        "debe": "4.7",
+        "haber": "0"
+      },
+      {
+        "id": 7031,
+        "asientoId": 1014,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "36"
+      }
+    ]
+  },
+  {
+    "id": 1018,
+    "empresaId": 4,
+    "numero": "202404-0046",
+    "fecha": "2024-04-13T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 090-106-000031511",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1024",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "23.26",
+    "totalHaber": "23.26",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.759Z",
+    "detalles": [
+      {
+        "id": 7049,
+        "asientoId": 1018,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 090-106-000031511",
+        "debe": "20.23",
+        "haber": "0"
+      },
+      {
+        "id": 7050,
+        "asientoId": 1018,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 090-106-000031511",
+        "debe": "3.03",
+        "haber": "0"
+      },
+      {
+        "id": 7051,
+        "asientoId": 1018,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "23.26"
+      }
+    ]
+  },
+  {
+    "id": 1016,
+    "empresaId": 4,
+    "numero": "202404-0044",
+    "fecha": "2024-04-13T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 078-051-000012378",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1022",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "12.39",
+    "totalHaber": "12.39",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.631Z",
+    "detalles": [
+      {
+        "id": 7055,
+        "asientoId": 1016,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 078-051-000012378",
+        "debe": "10.77",
+        "haber": "0"
+      },
+      {
+        "id": 7056,
+        "asientoId": 1016,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 078-051-000012378",
+        "debe": "1.62",
+        "haber": "0"
+      },
+      {
+        "id": 7057,
+        "asientoId": 1016,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "12.39"
+      }
+    ]
+  },
+  {
+    "id": 1015,
+    "empresaId": 4,
+    "numero": "202404-0043",
+    "fecha": "2024-04-13T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 086-110-000238381",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1021",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "61.44",
+    "totalHaber": "61.44",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.566Z",
+    "detalles": [
+      {
+        "id": 7058,
+        "asientoId": 1015,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 086-110-000238381",
+        "debe": "59.81",
+        "haber": "0"
+      },
+      {
+        "id": 7059,
+        "asientoId": 1015,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 086-110-000238381",
+        "debe": "1.63",
+        "haber": "0"
+      },
+      {
+        "id": 7060,
+        "asientoId": 1015,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "61.44"
+      }
+    ]
+  },
+  {
+    "id": 1020,
+    "empresaId": 4,
+    "numero": "202404-0048",
+    "fecha": "2024-04-16T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-013-000511662",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1026",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "10",
+    "totalHaber": "10",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.901Z",
+    "detalles": [
+      {
+        "id": 7078,
+        "asientoId": 1020,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-013-000511662",
+        "debe": "8.7",
+        "haber": "0"
+      },
+      {
+        "id": 7079,
+        "asientoId": 1020,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-013-000511662",
+        "debe": "1.3",
+        "haber": "0"
+      },
+      {
+        "id": 7080,
+        "asientoId": 1020,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "10"
+      }
+    ]
+  },
+  {
+    "id": 1025,
+    "empresaId": 4,
+    "numero": "202404-0053",
+    "fecha": "2024-04-17T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 086-107-000385973",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1031",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "32.54",
+    "totalHaber": "32.54",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:25.209Z",
+    "detalles": [
+      {
+        "id": 7105,
+        "asientoId": 1025,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 086-107-000385973",
+        "debe": "30.49",
+        "haber": "0"
+      },
+      {
+        "id": 7106,
+        "asientoId": 1025,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 086-107-000385973",
+        "debe": "2.05",
+        "haber": "0"
+      },
+      {
+        "id": 7107,
+        "asientoId": 1025,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "32.54"
+      }
+    ]
+  },
+  {
+    "id": 1023,
+    "empresaId": 4,
+    "numero": "202404-0051",
+    "fecha": "2024-04-17T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 090-102-000126065",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1029",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "25.2",
+    "totalHaber": "25.2",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:25.093Z",
+    "detalles": [
+      {
+        "id": 7123,
+        "asientoId": 1023,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 090-102-000126065",
+        "debe": "21.91",
+        "haber": "0"
+      },
+      {
+        "id": 7124,
+        "asientoId": 1023,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 090-102-000126065",
+        "debe": "3.29",
+        "haber": "0"
+      },
+      {
+        "id": 7125,
+        "asientoId": 1023,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "25.2"
+      }
+    ]
+  },
+  {
+    "id": 1029,
+    "empresaId": 4,
+    "numero": "202404-0057",
+    "fecha": "2024-04-18T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 006-002-000092228",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1035",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "82.87",
+    "totalHaber": "82.87",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:25.493Z",
+    "detalles": [
+      {
+        "id": 7129,
+        "asientoId": 1029,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 006-002-000092228",
+        "debe": "73.57",
+        "haber": "0"
+      },
+      {
+        "id": 7130,
+        "asientoId": 1029,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 006-002-000092228",
+        "debe": "9.3",
+        "haber": "0"
+      },
+      {
+        "id": 7131,
+        "asientoId": 1029,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "82.87"
+      }
+    ]
+  },
+  {
+    "id": 1028,
+    "empresaId": 4,
+    "numero": "202404-0056",
+    "fecha": "2024-04-18T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-102-000683365",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1034",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "33.5",
+    "totalHaber": "33.5",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:25.412Z",
+    "detalles": [
+      {
+        "id": 7132,
+        "asientoId": 1028,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-102-000683365",
+        "debe": "29.13",
+        "haber": "0"
+      },
+      {
+        "id": 7133,
+        "asientoId": 1028,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-102-000683365",
+        "debe": "4.37",
+        "haber": "0"
+      },
+      {
+        "id": 7134,
+        "asientoId": 1028,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "33.5"
+      }
+    ]
+  },
+  {
+    "id": 1027,
+    "empresaId": 4,
+    "numero": "202404-0055",
+    "fecha": "2024-04-18T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-011-000001715",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1033",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "3.5",
+    "totalHaber": "3.5",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:25.339Z",
+    "detalles": [
+      {
+        "id": 7137,
+        "asientoId": 1027,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-011-000001715",
+        "debe": "3.04",
+        "haber": "0"
+      },
+      {
+        "id": 7138,
+        "asientoId": 1027,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-011-000001715",
+        "debe": "0.46",
+        "haber": "0"
+      },
+      {
+        "id": 7139,
+        "asientoId": 1027,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "3.5"
+      }
+    ]
+  },
+  {
+    "id": 1035,
+    "empresaId": 4,
+    "numero": "202404-0063",
+    "fecha": "2024-04-19T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-004-000060593",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1041",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "44.22",
+    "totalHaber": "44.22",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:25.928Z",
+    "detalles": [
+      {
+        "id": 7149,
+        "asientoId": 1035,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-004-000060593",
+        "debe": "39.93",
+        "haber": "0"
+      },
+      {
+        "id": 7150,
+        "asientoId": 1035,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-004-000060593",
+        "debe": "4.29",
+        "haber": "0"
+      },
+      {
+        "id": 7151,
+        "asientoId": 1035,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "44.22"
+      }
+    ]
+  },
+  {
+    "id": 1034,
+    "empresaId": 4,
+    "numero": "202404-0062",
+    "fecha": "2024-04-19T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 003-011-000010893",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1040",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "11.5",
+    "totalHaber": "11.5",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:25.858Z",
+    "detalles": [
+      {
+        "id": 7152,
+        "asientoId": 1034,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 003-011-000010893",
+        "debe": "10",
+        "haber": "0"
+      },
+      {
+        "id": 7153,
+        "asientoId": 1034,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 003-011-000010893",
+        "debe": "1.5",
+        "haber": "0"
+      },
+      {
+        "id": 7154,
+        "asientoId": 1034,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "11.5"
+      }
+    ]
+  },
+  {
+    "id": 1033,
+    "empresaId": 4,
+    "numero": "202404-0061",
+    "fecha": "2024-04-19T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 006-002-000092274",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1039",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "20.58",
+    "totalHaber": "20.58",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:25.778Z",
+    "detalles": [
+      {
+        "id": 7158,
+        "asientoId": 1033,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 006-002-000092274",
+        "debe": "17.9",
+        "haber": "0"
+      },
+      {
+        "id": 7159,
+        "asientoId": 1033,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 006-002-000092274",
+        "debe": "2.68",
+        "haber": "0"
+      },
+      {
+        "id": 7160,
+        "asientoId": 1033,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "20.58"
+      }
+    ]
+  },
+  {
+    "id": 1032,
+    "empresaId": 4,
+    "numero": "202404-0060",
+    "fecha": "2024-04-19T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-101-000558353",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1038",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "27.82",
+    "totalHaber": "27.82",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:25.704Z",
+    "detalles": [
+      {
+        "id": 7161,
+        "asientoId": 1032,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-101-000558353",
+        "debe": "24.19",
+        "haber": "0"
+      },
+      {
+        "id": 7162,
+        "asientoId": 1032,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-101-000558353",
+        "debe": "3.63",
+        "haber": "0"
+      },
+      {
+        "id": 7163,
+        "asientoId": 1032,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "27.82"
+      }
+    ]
+  },
+  {
+    "id": 1031,
+    "empresaId": 4,
+    "numero": "202404-0059",
+    "fecha": "2024-04-19T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-002-000030447",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1037",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "20.01",
+    "totalHaber": "20.01",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:25.636Z",
+    "detalles": [
+      {
+        "id": 7166,
+        "asientoId": 1031,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-002-000030447",
+        "debe": "17.4",
+        "haber": "0"
+      },
+      {
+        "id": 7167,
+        "asientoId": 1031,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-002-000030447",
+        "debe": "2.61",
+        "haber": "0"
+      },
+      {
+        "id": 7168,
+        "asientoId": 1031,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "20.01"
+      }
+    ]
+  },
+  {
+    "id": 1037,
+    "empresaId": 4,
+    "numero": "202404-0065",
+    "fecha": "2024-04-20T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-013-000513677",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1043",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "10",
+    "totalHaber": "10",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:26.104Z",
+    "detalles": [
+      {
+        "id": 7182,
+        "asientoId": 1037,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-013-000513677",
+        "debe": "8.7",
+        "haber": "0"
+      },
+      {
+        "id": 7183,
+        "asientoId": 1037,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-013-000513677",
+        "debe": "1.3",
+        "haber": "0"
+      },
+      {
+        "id": 7184,
+        "asientoId": 1037,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "10"
+      }
+    ]
+  },
+  {
+    "id": 1036,
+    "empresaId": 4,
+    "numero": "202404-0064",
+    "fecha": "2024-04-20T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-002-000153445",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1042",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "6",
+    "totalHaber": "6",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:26.008Z",
+    "detalles": [
+      {
+        "id": 7185,
+        "asientoId": 1036,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-002-000153445",
+        "debe": "5.22",
+        "haber": "0"
+      },
+      {
+        "id": 7186,
+        "asientoId": 1036,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-002-000153445",
+        "debe": "0.78",
+        "haber": "0"
+      },
+      {
+        "id": 7187,
+        "asientoId": 1036,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "6"
+      }
+    ]
+  },
+  {
+    "id": 1038,
+    "empresaId": 4,
+    "numero": "202404-0066",
+    "fecha": "2024-04-21T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-011-000003369",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1044",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "16.21",
+    "totalHaber": "16.21",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:26.188Z",
+    "detalles": [
+      {
+        "id": 7191,
+        "asientoId": 1038,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-011-000003369",
+        "debe": "14.83",
+        "haber": "0"
+      },
+      {
+        "id": 7192,
+        "asientoId": 1038,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-011-000003369",
+        "debe": "1.38",
+        "haber": "0"
+      },
+      {
+        "id": 7193,
+        "asientoId": 1038,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "16.21"
+      }
+    ]
+  },
+  {
+    "id": 2201,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-01T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-013-000340686",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2118",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "13.86",
+    "totalHaber": "13.86",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.229Z",
+    "detalles": [
+      {
+        "id": 10079,
+        "asientoId": 2201,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-013-000340686",
+        "debe": "12.05",
+        "haber": "0"
+      },
+      {
+        "id": 10080,
+        "asientoId": 2201,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-013-000340686",
+        "debe": "1.81",
+        "haber": "0"
+      },
+      {
+        "id": 10081,
+        "asientoId": 2201,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "13.86"
+      }
+    ]
+  },
+  {
+    "id": 2202,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-02T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-004-000051791",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2119",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "64.65",
+    "totalHaber": "64.65",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.265Z",
+    "detalles": [
+      {
+        "id": 10082,
+        "asientoId": 2202,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-004-000051791",
+        "debe": "61.17",
+        "haber": "0"
+      },
+      {
+        "id": 10083,
+        "asientoId": 2202,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-004-000051791",
+        "debe": "3.48",
+        "haber": "0"
+      },
+      {
+        "id": 10084,
+        "asientoId": 2202,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "64.65"
+      }
+    ]
+  },
+  {
+    "id": 2203,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-02T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 003-003-000004682",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2120",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "1433.38",
+    "totalHaber": "1433.38",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.288Z",
+    "detalles": [
+      {
+        "id": 10085,
+        "asientoId": 2203,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 003-003-000004682",
+        "debe": "1246.42",
+        "haber": "0"
+      },
+      {
+        "id": 10086,
+        "asientoId": 2203,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 003-003-000004682",
+        "debe": "186.96",
+        "haber": "0"
+      },
+      {
+        "id": 10087,
+        "asientoId": 2203,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "1433.38"
+      }
+    ]
+  },
+  {
+    "id": 2204,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-02T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 086-105-000477610",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2121",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "36.33",
+    "totalHaber": "36.33",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.313Z",
+    "detalles": [
+      {
+        "id": 10089,
+        "asientoId": 2204,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 086-105-000477610",
+        "debe": "3.63",
+        "haber": "0"
+      },
+      {
+        "id": 10090,
+        "asientoId": 2204,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "36.33"
+      },
+      {
+        "id": 10088,
+        "asientoId": 2204,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 086-105-000477610",
+        "debe": "32.7",
+        "haber": "0"
+      }
+    ]
+  },
+  {
+    "id": 2206,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-03T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000003492",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2123",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "17.77",
+    "totalHaber": "17.77",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.369Z",
+    "detalles": [
+      {
+        "id": 10093,
+        "asientoId": 2206,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000003492",
+        "debe": "15.45",
+        "haber": "0"
+      },
+      {
+        "id": 10094,
+        "asientoId": 2206,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000003492",
+        "debe": "2.32",
+        "haber": "0"
+      },
+      {
+        "id": 10095,
+        "asientoId": 2206,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "17.77"
+      }
+    ]
+  },
+  {
+    "id": 2207,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-03T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-010-000000577",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2124",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "7.7",
+    "totalHaber": "7.7",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.392Z",
+    "detalles": [
+      {
+        "id": 10096,
+        "asientoId": 2207,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-010-000000577",
+        "debe": "6.7",
+        "haber": "0"
+      },
+      {
+        "id": 10097,
+        "asientoId": 2207,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-010-000000577",
+        "debe": "1",
+        "haber": "0"
+      },
+      {
+        "id": 10098,
+        "asientoId": 2207,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "7.7"
+      }
+    ]
+  },
+  {
+    "id": 2208,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-03T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-011-000000545",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2125",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "2.06",
+    "totalHaber": "2.06",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.418Z",
+    "detalles": [
+      {
+        "id": 10099,
+        "asientoId": 2208,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-011-000000545",
+        "debe": "1.79",
+        "haber": "0"
+      },
+      {
+        "id": 10100,
+        "asientoId": 2208,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-011-000000545",
+        "debe": "0.27",
+        "haber": "0"
+      },
+      {
+        "id": 10101,
+        "asientoId": 2208,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "2.06"
+      }
+    ]
+  },
+  {
+    "id": 2209,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-04T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-214-013486943",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2126",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "30.81",
+    "totalHaber": "30.81",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.446Z",
+    "detalles": [
+      {
+        "id": 10102,
+        "asientoId": 2209,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-214-013486943",
+        "debe": "26.79",
+        "haber": "0"
+      },
+      {
+        "id": 10103,
+        "asientoId": 2209,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-214-013486943",
+        "debe": "4.02",
+        "haber": "0"
+      },
+      {
+        "id": 10104,
+        "asientoId": 2209,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "30.81"
+      }
+    ]
+  },
+  {
+    "id": 2210,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-04T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000003494",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2127",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "31.83",
+    "totalHaber": "31.83",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.474Z",
+    "detalles": [
+      {
+        "id": 10105,
+        "asientoId": 2210,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000003494",
+        "debe": "27.68",
+        "haber": "0"
+      },
+      {
+        "id": 10106,
+        "asientoId": 2210,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000003494",
+        "debe": "4.15",
+        "haber": "0"
+      },
+      {
+        "id": 10107,
+        "asientoId": 2210,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "31.83"
+      }
+    ]
+  },
+  {
+    "id": 2211,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-04T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-101-000011249",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2128",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "13.36",
+    "totalHaber": "13.36",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.496Z",
+    "detalles": [
+      {
+        "id": 10108,
+        "asientoId": 2211,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-101-000011249",
+        "debe": "11.62",
+        "haber": "0"
+      },
+      {
+        "id": 10109,
+        "asientoId": 2211,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-101-000011249",
+        "debe": "1.74",
+        "haber": "0"
+      },
+      {
+        "id": 10110,
+        "asientoId": 2211,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "13.36"
+      }
+    ]
+  },
+  {
+    "id": 2213,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-04T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-102-000003867",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2130",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "138.62",
+    "totalHaber": "138.62",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.550Z",
+    "detalles": [
+      {
+        "id": 10113,
+        "asientoId": 2213,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-102-000003867",
+        "debe": "120.54",
+        "haber": "0"
+      },
+      {
+        "id": 10114,
+        "asientoId": 2213,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-102-000003867",
+        "debe": "18.08",
+        "haber": "0"
+      },
+      {
+        "id": 10115,
+        "asientoId": 2213,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "138.62"
+      }
+    ]
+  },
+  {
+    "id": 2214,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-04T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 171-030-000020899",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2131",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "20.52",
+    "totalHaber": "20.52",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.572Z",
+    "detalles": [
+      {
+        "id": 10116,
+        "asientoId": 2214,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 171-030-000020899",
+        "debe": "17.84",
+        "haber": "0"
+      },
+      {
+        "id": 10117,
+        "asientoId": 2214,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 171-030-000020899",
+        "debe": "2.68",
+        "haber": "0"
+      },
+      {
+        "id": 10118,
+        "asientoId": 2214,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "20.52"
+      }
+    ]
+  },
+  {
+    "id": 2215,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-04T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-010-000189524",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2132",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "7.45",
+    "totalHaber": "7.45",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.598Z",
+    "detalles": [
+      {
+        "id": 10119,
+        "asientoId": 2215,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-010-000189524",
+        "debe": "6.48",
+        "haber": "0"
+      },
+      {
+        "id": 10120,
+        "asientoId": 2215,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-010-000189524",
+        "debe": "0.97",
+        "haber": "0"
+      },
+      {
+        "id": 10121,
+        "asientoId": 2215,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "7.45"
+      }
+    ]
+  },
+  {
+    "id": 2216,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-05T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000003499",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2133",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "26.19",
+    "totalHaber": "26.19",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.626Z",
+    "detalles": [
+      {
+        "id": 10122,
+        "asientoId": 2216,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000003499",
+        "debe": "22.77",
+        "haber": "0"
+      },
+      {
+        "id": 10123,
+        "asientoId": 2216,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000003499",
+        "debe": "3.42",
+        "haber": "0"
+      },
+      {
+        "id": 10124,
+        "asientoId": 2216,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "26.19"
+      }
+    ]
+  },
+  {
+    "id": 2217,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-05T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000003500",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2134",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "3.07",
+    "totalHaber": "3.07",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.649Z",
+    "detalles": [
+      {
+        "id": 10125,
+        "asientoId": 2217,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000003500",
+        "debe": "2.67",
+        "haber": "0"
+      },
+      {
+        "id": 10126,
+        "asientoId": 2217,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000003500",
+        "debe": "0.4",
+        "haber": "0"
+      },
+      {
+        "id": 10127,
+        "asientoId": 2217,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "3.07"
+      }
+    ]
+  },
+  {
+    "id": 2218,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-05T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-002-000019109",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2135",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "26.69",
+    "totalHaber": "26.69",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.688Z",
+    "detalles": [
+      {
+        "id": 10128,
+        "asientoId": 2218,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-002-000019109",
+        "debe": "23.21",
+        "haber": "0"
+      },
+      {
+        "id": 10129,
+        "asientoId": 2218,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-002-000019109",
+        "debe": "3.48",
+        "haber": "0"
+      },
+      {
+        "id": 10130,
+        "asientoId": 2218,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "26.69"
+      }
+    ]
+  },
+  {
+    "id": 2219,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-05T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-011-000000554",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2136",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "30.29",
+    "totalHaber": "30.29",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.712Z",
+    "detalles": [
+      {
+        "id": 10131,
+        "asientoId": 2219,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-011-000000554",
+        "debe": "26.34",
+        "haber": "0"
+      },
+      {
+        "id": 10132,
+        "asientoId": 2219,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-011-000000554",
+        "debe": "3.95",
+        "haber": "0"
+      },
+      {
+        "id": 10133,
+        "asientoId": 2219,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "30.29"
+      }
+    ]
+  },
+  {
+    "id": 2220,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-07T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-007-000000765",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2137",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "30.08",
+    "totalHaber": "30.08",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.737Z",
+    "detalles": [
+      {
+        "id": 10134,
+        "asientoId": 2220,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-007-000000765",
+        "debe": "26.16",
+        "haber": "0"
+      },
+      {
+        "id": 10135,
+        "asientoId": 2220,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-007-000000765",
+        "debe": "3.92",
+        "haber": "0"
+      },
+      {
+        "id": 10136,
+        "asientoId": 2220,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "30.08"
+      }
+    ]
+  },
+  {
+    "id": 2221,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-08T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-013-000344597",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2138",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "7.39",
+    "totalHaber": "7.39",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.769Z",
+    "detalles": [
+      {
+        "id": 10137,
+        "asientoId": 2221,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-013-000344597",
+        "debe": "6.43",
+        "haber": "0"
+      },
+      {
+        "id": 10138,
+        "asientoId": 2221,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-013-000344597",
+        "debe": "0.96",
+        "haber": "0"
+      },
+      {
+        "id": 10139,
+        "asientoId": 2221,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "7.39"
+      }
+    ]
+  },
+  {
+    "id": 2222,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-08T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 086-106-000315640",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2139",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "17.36",
+    "totalHaber": "17.36",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.791Z",
+    "detalles": [
+      {
+        "id": 10140,
+        "asientoId": 2222,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 086-106-000315640",
+        "debe": "16.28",
+        "haber": "0"
+      },
+      {
+        "id": 10141,
+        "asientoId": 2222,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 086-106-000315640",
+        "debe": "1.08",
+        "haber": "0"
+      },
+      {
+        "id": 10142,
+        "asientoId": 2222,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "17.36"
+      }
+    ]
+  },
+  {
+    "id": 2223,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-09T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-100-000000076",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2140",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "18494.38",
+    "totalHaber": "18494.38",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.819Z",
+    "detalles": [
+      {
+        "id": 10143,
+        "asientoId": 2223,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-100-000000076",
+        "debe": "16082.07",
+        "haber": "0"
+      },
+      {
+        "id": 10144,
+        "asientoId": 2223,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-100-000000076",
+        "debe": "2412.31",
+        "haber": "0"
+      },
+      {
+        "id": 10145,
+        "asientoId": 2223,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "18494.38"
+      }
+    ]
+  },
+  {
+    "id": 2224,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-09T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 111-100-000011098",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2141",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "29.88",
+    "totalHaber": "29.88",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.847Z",
+    "detalles": [
+      {
+        "id": 10146,
+        "asientoId": 2224,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 111-100-000011098",
+        "debe": "28.8",
+        "haber": "0"
+      },
+      {
+        "id": 10147,
+        "asientoId": 2224,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 111-100-000011098",
+        "debe": "1.08",
+        "haber": "0"
+      },
+      {
+        "id": 10148,
+        "asientoId": 2224,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "29.88"
+      }
+    ]
+  },
+  {
+    "id": 2225,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-09T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-011-000000566",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2142",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "6.42",
+    "totalHaber": "6.42",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.874Z",
+    "detalles": [
+      {
+        "id": 10149,
+        "asientoId": 2225,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-011-000000566",
+        "debe": "5.58",
+        "haber": "0"
+      },
+      {
+        "id": 10150,
+        "asientoId": 2225,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-011-000000566",
+        "debe": "0.84",
+        "haber": "0"
+      },
+      {
+        "id": 10151,
+        "asientoId": 2225,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "6.42"
+      }
+    ]
+  },
+  {
+    "id": 998,
+    "empresaId": 4,
+    "numero": "202404-0026",
+    "fecha": "2024-04-05T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 007-928-000475870",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1004",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "21.21",
+    "totalHaber": "21.21",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:23.529Z",
+    "detalles": [
+      {
+        "id": 6963,
+        "asientoId": 998,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 007-928-000475870",
+        "debe": "18.44",
+        "haber": "0"
+      },
+      {
+        "id": 6964,
+        "asientoId": 998,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 007-928-000475870",
+        "debe": "2.77",
+        "haber": "0"
+      },
+      {
+        "id": 6965,
+        "asientoId": 998,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "21.21"
+      }
+    ]
+  },
+  {
+    "id": 1019,
+    "empresaId": 4,
+    "numero": "202404-0047",
+    "fecha": "2024-04-16T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-100-000000357",
+    "tipo": "COMPRA",
+    "referencia": "COMP-1025",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "167.52",
+    "totalHaber": "167.52",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 2,
+    "createdAt": "2026-07-14T04:41:24.831Z",
+    "detalles": [
+      {
+        "id": 7090,
+        "asientoId": 1019,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-100-000000357",
+        "debe": "145.67",
+        "haber": "0"
+      },
+      {
+        "id": 7091,
+        "asientoId": 1019,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-100-000000357",
+        "debe": "21.85",
+        "haber": "0"
+      },
+      {
+        "id": 7092,
+        "asientoId": 1019,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "167.52"
+      }
+    ]
+  },
+  {
+    "id": 2227,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-09T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-007-000332552",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2144",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "28.63",
+    "totalHaber": "28.63",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.931Z",
+    "detalles": [
+      {
+        "id": 10155,
+        "asientoId": 2227,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-007-000332552",
+        "debe": "24.9",
+        "haber": "0"
+      },
+      {
+        "id": 10156,
+        "asientoId": 2227,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-007-000332552",
+        "debe": "3.73",
+        "haber": "0"
+      },
+      {
+        "id": 10157,
+        "asientoId": 2227,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "28.63"
+      }
+    ]
+  },
+  {
+    "id": 2228,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-10T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-015-000003719",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2145",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "8.97",
+    "totalHaber": "8.97",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.954Z",
+    "detalles": [
+      {
+        "id": 10158,
+        "asientoId": 2228,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-015-000003719",
+        "debe": "7.8",
+        "haber": "0"
+      },
+      {
+        "id": 10159,
+        "asientoId": 2228,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-015-000003719",
+        "debe": "1.17",
+        "haber": "0"
+      },
+      {
+        "id": 10160,
+        "asientoId": 2228,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "8.97"
+      }
+    ]
+  },
+  {
+    "id": 2229,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-10T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-011-000818475",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2146",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "13.35",
+    "totalHaber": "13.35",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:16.983Z",
+    "detalles": [
+      {
+        "id": 10161,
+        "asientoId": 2229,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-011-000818475",
+        "debe": "11.61",
+        "haber": "0"
+      },
+      {
+        "id": 10162,
+        "asientoId": 2229,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-011-000818475",
+        "debe": "1.74",
+        "haber": "0"
+      },
+      {
+        "id": 10163,
+        "asientoId": 2229,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "13.35"
+      }
+    ]
+  },
+  {
+    "id": 2230,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-10T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-001-000006179",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2147",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "18.06",
+    "totalHaber": "18.06",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.005Z",
+    "detalles": [
+      {
+        "id": 10164,
+        "asientoId": 2230,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-001-000006179",
+        "debe": "17.79",
+        "haber": "0"
+      },
+      {
+        "id": 10165,
+        "asientoId": 2230,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-001-000006179",
+        "debe": "0.27",
+        "haber": "0"
+      },
+      {
+        "id": 10166,
+        "asientoId": 2230,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "18.06"
+      }
+    ]
+  },
+  {
+    "id": 2231,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-10T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 162-106-000280718",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2148",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "97.24",
+    "totalHaber": "97.24",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.031Z",
+    "detalles": [
+      {
+        "id": 10167,
+        "asientoId": 2231,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 162-106-000280718",
+        "debe": "92.9",
+        "haber": "0"
+      },
+      {
+        "id": 10168,
+        "asientoId": 2231,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 162-106-000280718",
+        "debe": "4.34",
+        "haber": "0"
+      },
+      {
+        "id": 10169,
+        "asientoId": 2231,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "97.24"
+      }
+    ]
+  },
+  {
+    "id": 2232,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-10T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-013-000358010",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2149",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "39.79",
+    "totalHaber": "39.79",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.063Z",
+    "detalles": [
+      {
+        "id": 10170,
+        "asientoId": 2232,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-013-000358010",
+        "debe": "38.59",
+        "haber": "0"
+      },
+      {
+        "id": 10171,
+        "asientoId": 2232,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-013-000358010",
+        "debe": "1.2",
+        "haber": "0"
+      },
+      {
+        "id": 10172,
+        "asientoId": 2232,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "39.79"
+      }
+    ]
+  },
+  {
+    "id": 2236,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-12T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-002-000181021",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2153",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "16.38",
+    "totalHaber": "16.38",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.166Z",
+    "detalles": [
+      {
+        "id": 10179,
+        "asientoId": 2236,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-002-000181021",
+        "debe": "14.24",
+        "haber": "0"
+      },
+      {
+        "id": 10180,
+        "asientoId": 2236,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-002-000181021",
+        "debe": "2.14",
+        "haber": "0"
+      },
+      {
+        "id": 10181,
+        "asientoId": 2236,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "16.38"
+      }
+    ]
+  },
+  {
+    "id": 2237,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-12T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 164-009-000598867",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2154",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "2.44",
+    "totalHaber": "2.44",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.196Z",
+    "detalles": [
+      {
+        "id": 10182,
+        "asientoId": 2237,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 164-009-000598867",
+        "debe": "2.12",
+        "haber": "0"
+      },
+      {
+        "id": 10183,
+        "asientoId": 2237,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 164-009-000598867",
+        "debe": "0.32",
+        "haber": "0"
+      },
+      {
+        "id": 10184,
+        "asientoId": 2237,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "2.44"
+      }
+    ]
+  },
+  {
+    "id": 2238,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-13T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-007-000009717",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2155",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "40.04",
+    "totalHaber": "40.04",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.218Z",
+    "detalles": [
+      {
+        "id": 10185,
+        "asientoId": 2238,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-007-000009717",
+        "debe": "34.82",
+        "haber": "0"
+      },
+      {
+        "id": 10186,
+        "asientoId": 2238,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-007-000009717",
+        "debe": "5.22",
+        "haber": "0"
+      },
+      {
+        "id": 10187,
+        "asientoId": 2238,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "40.04"
+      }
+    ]
+  },
+  {
+    "id": 2239,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-13T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 006-001-000073248",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2156",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "496.4",
+    "totalHaber": "496.4",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.243Z",
+    "detalles": [
+      {
+        "id": 10188,
+        "asientoId": 2239,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 006-001-000073248",
+        "debe": "431.65",
+        "haber": "0"
+      },
+      {
+        "id": 10189,
+        "asientoId": 2239,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 006-001-000073248",
+        "debe": "64.75",
+        "haber": "0"
+      },
+      {
+        "id": 10190,
+        "asientoId": 2239,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "496.4"
+      }
+    ]
+  },
+  {
+    "id": 2240,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-13T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-003-000002359",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2157",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "109.5",
+    "totalHaber": "109.5",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.270Z",
+    "detalles": [
+      {
+        "id": 10191,
+        "asientoId": 2240,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-003-000002359",
+        "debe": "95.22",
+        "haber": "0"
+      },
+      {
+        "id": 10192,
+        "asientoId": 2240,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-003-000002359",
+        "debe": "14.28",
+        "haber": "0"
+      },
+      {
+        "id": 10193,
+        "asientoId": 2240,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "109.5"
+      }
+    ]
+  },
+  {
+    "id": 2241,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-13T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-002-000122206",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2158",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "9.75",
+    "totalHaber": "9.75",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.291Z",
+    "detalles": [
+      {
+        "id": 10194,
+        "asientoId": 2241,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-002-000122206",
+        "debe": "8.48",
+        "haber": "0"
+      },
+      {
+        "id": 10195,
+        "asientoId": 2241,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-002-000122206",
+        "debe": "1.27",
+        "haber": "0"
+      },
+      {
+        "id": 10196,
+        "asientoId": 2241,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "9.75"
+      }
+    ]
+  },
+  {
+    "id": 2242,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-14T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 031-903-000285534",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2159",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "58.53",
+    "totalHaber": "58.53",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.318Z",
+    "detalles": [
+      {
+        "id": 10197,
+        "asientoId": 2242,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 031-903-000285534",
+        "debe": "51.37",
+        "haber": "0"
+      },
+      {
+        "id": 10198,
+        "asientoId": 2242,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 031-903-000285534",
+        "debe": "7.16",
+        "haber": "0"
+      },
+      {
+        "id": 10199,
+        "asientoId": 2242,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "58.53"
+      }
+    ]
+  },
+  {
+    "id": 2243,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-15T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-001-000047375",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2160",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "26.69",
+    "totalHaber": "26.69",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.344Z",
+    "detalles": [
+      {
+        "id": 10200,
+        "asientoId": 2243,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-001-000047375",
+        "debe": "23.21",
+        "haber": "0"
+      },
+      {
+        "id": 10201,
+        "asientoId": 2243,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-001-000047375",
+        "debe": "3.48",
+        "haber": "0"
+      },
+      {
+        "id": 10202,
+        "asientoId": 2243,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "26.69"
+      }
+    ]
+  },
+  {
+    "id": 2244,
+    "empresaId": 4,
+    "numero": "202305-0002",
+    "fecha": "2023-05-16T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000003520",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2161",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "5.9",
+    "totalHaber": "5.9",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.368Z",
+    "detalles": [
+      {
+        "id": 10203,
+        "asientoId": 2244,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000003520",
+        "debe": "5.13",
+        "haber": "0"
+      },
+      {
+        "id": 10204,
+        "asientoId": 2244,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000003520",
+        "debe": "0.77",
+        "haber": "0"
+      },
+      {
+        "id": 10205,
+        "asientoId": 2244,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "5.9"
+      }
+    ]
+  },
+  {
+    "id": 2247,
+    "empresaId": 4,
+    "numero": "202305-0005",
+    "fecha": "2023-05-17T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000003523",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2164",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "2.56",
+    "totalHaber": "2.56",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.445Z",
+    "detalles": [
+      {
+        "id": 10212,
+        "asientoId": 2247,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000003523",
+        "debe": "2.23",
+        "haber": "0"
+      },
+      {
+        "id": 10213,
+        "asientoId": 2247,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000003523",
+        "debe": "0.33",
+        "haber": "0"
+      },
+      {
+        "id": 10214,
+        "asientoId": 2247,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "2.56"
+      }
+    ]
+  },
+  {
+    "id": 2248,
+    "empresaId": 4,
+    "numero": "202305-0006",
+    "fecha": "2023-05-17T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-010-000030300",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2165",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "114.69",
+    "totalHaber": "114.69",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.465Z",
+    "detalles": [
+      {
+        "id": 10215,
+        "asientoId": 2248,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-010-000030300",
+        "debe": "99.73",
+        "haber": "0"
+      },
+      {
+        "id": 10216,
+        "asientoId": 2248,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-010-000030300",
+        "debe": "14.96",
+        "haber": "0"
+      },
+      {
+        "id": 10217,
+        "asientoId": 2248,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "114.69"
+      }
+    ]
+  },
+  {
+    "id": 2250,
+    "empresaId": 4,
+    "numero": "202305-0008",
+    "fecha": "2023-05-18T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-010-000000621",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2167",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "70.23",
+    "totalHaber": "70.23",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.520Z",
+    "detalles": [
+      {
+        "id": 10220,
+        "asientoId": 2250,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-010-000000621",
+        "debe": "61.07",
+        "haber": "0"
+      },
+      {
+        "id": 10221,
+        "asientoId": 2250,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-010-000000621",
+        "debe": "9.16",
+        "haber": "0"
+      },
+      {
+        "id": 10222,
+        "asientoId": 2250,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "70.23"
+      }
+    ]
+  },
+  {
+    "id": 2251,
+    "empresaId": 4,
+    "numero": "202305-0009",
+    "fecha": "2023-05-18T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-010-000030321",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2168",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "110.38",
+    "totalHaber": "110.38",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.546Z",
+    "detalles": [
+      {
+        "id": 10223,
+        "asientoId": 2251,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-010-000030321",
+        "debe": "95.98",
+        "haber": "0"
+      },
+      {
+        "id": 10224,
+        "asientoId": 2251,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-010-000030321",
+        "debe": "14.4",
+        "haber": "0"
+      },
+      {
+        "id": 10225,
+        "asientoId": 2251,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "110.38"
+      }
+    ]
+  },
+  {
+    "id": 2252,
+    "empresaId": 4,
+    "numero": "202305-0010",
+    "fecha": "2023-05-18T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-103-000025548",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2169",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "13.35",
+    "totalHaber": "13.35",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.576Z",
+    "detalles": [
+      {
+        "id": 10226,
+        "asientoId": 2252,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-103-000025548",
+        "debe": "11.61",
+        "haber": "0"
+      },
+      {
+        "id": 10227,
+        "asientoId": 2252,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-103-000025548",
+        "debe": "1.74",
+        "haber": "0"
+      },
+      {
+        "id": 10228,
+        "asientoId": 2252,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "13.35"
+      }
+    ]
+  },
+  {
+    "id": 2254,
+    "empresaId": 4,
+    "numero": "202305-0012",
+    "fecha": "2023-05-18T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-103-000025617",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2171",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "10.27",
+    "totalHaber": "10.27",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.629Z",
+    "detalles": [
+      {
+        "id": 10232,
+        "asientoId": 2254,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-103-000025617",
+        "debe": "8.93",
+        "haber": "0"
+      },
+      {
+        "id": 10233,
+        "asientoId": 2254,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-103-000025617",
+        "debe": "1.34",
+        "haber": "0"
+      },
+      {
+        "id": 10234,
+        "asientoId": 2254,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "10.27"
+      }
+    ]
+  },
+  {
+    "id": 2255,
+    "empresaId": 4,
+    "numero": "202305-0013",
+    "fecha": "2023-05-18T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 178-051-000272864",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2172",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "9.59",
+    "totalHaber": "9.59",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.655Z",
+    "detalles": [
+      {
+        "id": 10235,
+        "asientoId": 2255,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 178-051-000272864",
+        "debe": "8.34",
+        "haber": "0"
+      },
+      {
+        "id": 10236,
+        "asientoId": 2255,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 178-051-000272864",
+        "debe": "1.25",
+        "haber": "0"
+      },
+      {
+        "id": 10237,
+        "asientoId": 2255,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "9.59"
+      }
+    ]
+  },
+  {
+    "id": 2257,
+    "empresaId": 4,
+    "numero": "202305-0015",
+    "fecha": "2023-05-19T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-020-000001277",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2174",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "17.19",
+    "totalHaber": "17.19",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.708Z",
+    "detalles": [
+      {
+        "id": 10240,
+        "asientoId": 2257,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-020-000001277",
+        "debe": "14.95",
+        "haber": "0"
+      },
+      {
+        "id": 10241,
+        "asientoId": 2257,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-020-000001277",
+        "debe": "2.24",
+        "haber": "0"
+      },
+      {
+        "id": 10242,
+        "asientoId": 2257,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "17.19"
+      }
+    ]
+  },
+  {
+    "id": 2259,
+    "empresaId": 4,
+    "numero": "202305-0017",
+    "fecha": "2023-05-20T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-002-000025113",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2176",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "51.65",
+    "totalHaber": "51.65",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.751Z",
+    "detalles": [
+      {
+        "id": 10245,
+        "asientoId": 2259,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-002-000025113",
+        "debe": "44.91",
+        "haber": "0"
+      },
+      {
+        "id": 10246,
+        "asientoId": 2259,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-002-000025113",
+        "debe": "6.74",
+        "haber": "0"
+      },
+      {
+        "id": 10247,
+        "asientoId": 2259,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "51.65"
+      }
+    ]
+  },
+  {
+    "id": 2260,
+    "empresaId": 4,
+    "numero": "202305-0018",
+    "fecha": "2023-05-21T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-010-000005617",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2177",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "14.12",
+    "totalHaber": "14.12",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.782Z",
+    "detalles": [
+      {
+        "id": 10248,
+        "asientoId": 2260,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-010-000005617",
+        "debe": "12.28",
+        "haber": "0"
+      },
+      {
+        "id": 10249,
+        "asientoId": 2260,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-010-000005617",
+        "debe": "1.84",
+        "haber": "0"
+      },
+      {
+        "id": 10250,
+        "asientoId": 2260,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "14.12"
+      }
+    ]
+  },
+  {
+    "id": 2261,
+    "empresaId": 4,
+    "numero": "202305-0019",
+    "fecha": "2023-05-22T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 162-104-000216173",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2178",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "130.97",
+    "totalHaber": "130.97",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.808Z",
+    "detalles": [
+      {
+        "id": 10251,
+        "asientoId": 2261,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 162-104-000216173",
+        "debe": "123.73",
+        "haber": "0"
+      },
+      {
+        "id": 10252,
+        "asientoId": 2261,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 162-104-000216173",
+        "debe": "7.24",
+        "haber": "0"
+      },
+      {
+        "id": 10253,
+        "asientoId": 2261,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "130.97"
+      }
+    ]
+  },
+  {
+    "id": 2263,
+    "empresaId": 4,
+    "numero": "202305-0021",
+    "fecha": "2023-05-22T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000020755",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2181",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "3.56",
+    "totalHaber": "3.56",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.894Z",
+    "detalles": [
+      {
+        "id": 10256,
+        "asientoId": 2263,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000020755",
+        "debe": "3.1",
+        "haber": "0"
+      },
+      {
+        "id": 10257,
+        "asientoId": 2263,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000020755",
+        "debe": "0.46",
+        "haber": "0"
+      },
+      {
+        "id": 10258,
+        "asientoId": 2263,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "3.56"
+      }
+    ]
+  },
+  {
+    "id": 2264,
+    "empresaId": 4,
+    "numero": "202305-0022",
+    "fecha": "2023-05-22T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 164-006-000432266",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2182",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "9.83",
+    "totalHaber": "9.83",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.917Z",
+    "detalles": [
+      {
+        "id": 10259,
+        "asientoId": 2264,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 164-006-000432266",
+        "debe": "8.55",
+        "haber": "0"
+      },
+      {
+        "id": 10260,
+        "asientoId": 2264,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 164-006-000432266",
+        "debe": "1.28",
+        "haber": "0"
+      },
+      {
+        "id": 10261,
+        "asientoId": 2264,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "9.83"
+      }
+    ]
+  },
+  {
+    "id": 2265,
+    "empresaId": 4,
+    "numero": "202305-0023",
+    "fecha": "2023-05-23T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-010-000030376",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2183",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "15.93",
+    "totalHaber": "15.93",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.946Z",
+    "detalles": [
+      {
+        "id": 10262,
+        "asientoId": 2265,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-010-000030376",
+        "debe": "13.85",
+        "haber": "0"
+      },
+      {
+        "id": 10263,
+        "asientoId": 2265,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-010-000030376",
+        "debe": "2.08",
+        "haber": "0"
+      },
+      {
+        "id": 10264,
+        "asientoId": 2265,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "15.93"
+      }
+    ]
+  },
+  {
+    "id": 2266,
+    "empresaId": 4,
+    "numero": "202305-0024",
+    "fecha": "2023-05-23T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-011-000823490",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2184",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "13.86",
+    "totalHaber": "13.86",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:17.980Z",
+    "detalles": [
+      {
+        "id": 10265,
+        "asientoId": 2266,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-011-000823490",
+        "debe": "12.05",
+        "haber": "0"
+      },
+      {
+        "id": 10266,
+        "asientoId": 2266,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-011-000823490",
+        "debe": "1.81",
+        "haber": "0"
+      },
+      {
+        "id": 10267,
+        "asientoId": 2266,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "13.86"
+      }
+    ]
+  },
+  {
+    "id": 2267,
+    "empresaId": 4,
+    "numero": "202305-0025",
+    "fecha": "2023-05-23T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 003-003-000001615",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2185",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "12.48",
+    "totalHaber": "12.48",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.000Z",
+    "detalles": [
+      {
+        "id": 10268,
+        "asientoId": 2267,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 003-003-000001615",
+        "debe": "10.85",
+        "haber": "0"
+      },
+      {
+        "id": 10269,
+        "asientoId": 2267,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 003-003-000001615",
+        "debe": "1.63",
+        "haber": "0"
+      },
+      {
+        "id": 10270,
+        "asientoId": 2267,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "12.48"
+      }
+    ]
+  },
+  {
+    "id": 2268,
+    "empresaId": 4,
+    "numero": "202305-0026",
+    "fecha": "2023-05-24T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 162-103-000503716",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2186",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "1.38",
+    "totalHaber": "1.38",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.035Z",
+    "detalles": [
+      {
+        "id": 10271,
+        "asientoId": 2268,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 162-103-000503716",
+        "debe": "1.2",
+        "haber": "0"
+      },
+      {
+        "id": 10272,
+        "asientoId": 2268,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 162-103-000503716",
+        "debe": "0.18",
+        "haber": "0"
+      },
+      {
+        "id": 10273,
+        "asientoId": 2268,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "1.38"
+      }
+    ]
+  },
+  {
+    "id": 2269,
+    "empresaId": 4,
+    "numero": "202305-0027",
+    "fecha": "2023-05-25T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-100-000000120",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2187",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "5.28",
+    "totalHaber": "5.28",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.057Z",
+    "detalles": [
+      {
+        "id": 10274,
+        "asientoId": 2269,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-100-000000120",
+        "debe": "4.59",
+        "haber": "0"
+      },
+      {
+        "id": 10275,
+        "asientoId": 2269,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-100-000000120",
+        "debe": "0.69",
+        "haber": "0"
+      },
+      {
+        "id": 10276,
+        "asientoId": 2269,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "5.28"
+      }
+    ]
+  },
+  {
+    "id": 2270,
+    "empresaId": 4,
+    "numero": "202305-0028",
+    "fecha": "2023-05-25T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000003544",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2188",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "4.11",
+    "totalHaber": "4.11",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.082Z",
+    "detalles": [
+      {
+        "id": 10277,
+        "asientoId": 2270,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000003544",
+        "debe": "3.57",
+        "haber": "0"
+      },
+      {
+        "id": 10278,
+        "asientoId": 2270,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000003544",
+        "debe": "0.54",
+        "haber": "0"
+      },
+      {
+        "id": 10279,
+        "asientoId": 2270,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "4.11"
+      }
+    ]
+  },
+  {
+    "id": 2271,
+    "empresaId": 4,
+    "numero": "202305-0029",
+    "fecha": "2023-05-25T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 067-050-000420729",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2189",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "14.98",
+    "totalHaber": "14.98",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.105Z",
+    "detalles": [
+      {
+        "id": 10280,
+        "asientoId": 2271,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 067-050-000420729",
+        "debe": "13.03",
+        "haber": "0"
+      },
+      {
+        "id": 10281,
+        "asientoId": 2271,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 067-050-000420729",
+        "debe": "1.95",
+        "haber": "0"
+      },
+      {
+        "id": 10282,
+        "asientoId": 2271,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "14.98"
+      }
+    ]
+  },
+  {
+    "id": 2272,
+    "empresaId": 4,
+    "numero": "202305-0030",
+    "fecha": "2023-05-26T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-011-000000617",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2190",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "2.06",
+    "totalHaber": "2.06",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.125Z",
+    "detalles": [
+      {
+        "id": 10283,
+        "asientoId": 2272,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-011-000000617",
+        "debe": "1.79",
+        "haber": "0"
+      },
+      {
+        "id": 10284,
+        "asientoId": 2272,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-011-000000617",
+        "debe": "0.27",
+        "haber": "0"
+      },
+      {
+        "id": 10285,
+        "asientoId": 2272,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "2.06"
+      }
+    ]
+  },
+  {
+    "id": 2274,
+    "empresaId": 4,
+    "numero": "202305-0032",
+    "fecha": "2023-05-26T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-012-000797619",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2192",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "13.86",
+    "totalHaber": "13.86",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.167Z",
+    "detalles": [
+      {
+        "id": 10289,
+        "asientoId": 2274,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-012-000797619",
+        "debe": "12.05",
+        "haber": "0"
+      },
+      {
+        "id": 10290,
+        "asientoId": 2274,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-012-000797619",
+        "debe": "1.81",
+        "haber": "0"
+      },
+      {
+        "id": 10291,
+        "asientoId": 2274,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "13.86"
+      }
+    ]
+  },
+  {
+    "id": 2275,
+    "empresaId": 4,
+    "numero": "202305-0033",
+    "fecha": "2023-05-27T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 083-046-000140174",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2193",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "30.8",
+    "totalHaber": "30.8",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.191Z",
+    "detalles": [
+      {
+        "id": 10292,
+        "asientoId": 2275,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 083-046-000140174",
+        "debe": "26.78",
+        "haber": "0"
+      },
+      {
+        "id": 10293,
+        "asientoId": 2275,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 083-046-000140174",
+        "debe": "4.02",
+        "haber": "0"
+      },
+      {
+        "id": 10294,
+        "asientoId": 2275,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "30.8"
+      }
+    ]
+  },
+  {
+    "id": 2276,
+    "empresaId": 4,
+    "numero": "202305-0034",
+    "fecha": "2023-05-27T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 016-002-000047155",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2194",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "63.62",
+    "totalHaber": "63.62",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.213Z",
+    "detalles": [
+      {
+        "id": 10295,
+        "asientoId": 2276,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 016-002-000047155",
+        "debe": "55.32",
+        "haber": "0"
+      },
+      {
+        "id": 10296,
+        "asientoId": 2276,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 016-002-000047155",
+        "debe": "8.3",
+        "haber": "0"
+      },
+      {
+        "id": 10297,
+        "asientoId": 2276,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "63.62"
+      }
+    ]
+  },
+  {
+    "id": 2278,
+    "empresaId": 4,
+    "numero": "202305-0036",
+    "fecha": "2023-05-27T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 083-037-000441940",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2196",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "83",
+    "totalHaber": "83",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.261Z",
+    "detalles": [
+      {
+        "id": 10300,
+        "asientoId": 2278,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 083-037-000441940",
+        "debe": "72.17",
+        "haber": "0"
+      },
+      {
+        "id": 10301,
+        "asientoId": 2278,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 083-037-000441940",
+        "debe": "10.83",
+        "haber": "0"
+      },
+      {
+        "id": 10302,
+        "asientoId": 2278,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "83"
+      }
+    ]
+  },
+  {
+    "id": 2280,
+    "empresaId": 4,
+    "numero": "202305-0038",
+    "fecha": "2023-05-29T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 086-106-000319042",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2198",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "50.78",
+    "totalHaber": "50.78",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.312Z",
+    "detalles": [
+      {
+        "id": 10305,
+        "asientoId": 2280,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 086-106-000319042",
+        "debe": "49.04",
+        "haber": "0"
+      },
+      {
+        "id": 10306,
+        "asientoId": 2280,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 086-106-000319042",
+        "debe": "1.74",
+        "haber": "0"
+      },
+      {
+        "id": 10307,
+        "asientoId": 2280,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "50.78"
+      }
+    ]
+  },
+  {
+    "id": 2281,
+    "empresaId": 4,
+    "numero": "202305-0039",
+    "fecha": "2023-05-29T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-013-000354799",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2199",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "13.86",
+    "totalHaber": "13.86",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.348Z",
+    "detalles": [
+      {
+        "id": 10308,
+        "asientoId": 2281,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-013-000354799",
+        "debe": "12.05",
+        "haber": "0"
+      },
+      {
+        "id": 10309,
+        "asientoId": 2281,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-013-000354799",
+        "debe": "1.81",
+        "haber": "0"
+      },
+      {
+        "id": 10310,
+        "asientoId": 2281,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "13.86"
+      }
+    ]
+  },
+  {
+    "id": 2282,
+    "empresaId": 4,
+    "numero": "202305-0040",
+    "fecha": "2023-05-29T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-002-000320119",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2200",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "16.33",
+    "totalHaber": "16.33",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.368Z",
+    "detalles": [
+      {
+        "id": 10311,
+        "asientoId": 2282,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-002-000320119",
+        "debe": "14.2",
+        "haber": "0"
+      },
+      {
+        "id": 10312,
+        "asientoId": 2282,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-002-000320119",
+        "debe": "2.13",
+        "haber": "0"
+      },
+      {
+        "id": 10313,
+        "asientoId": 2282,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "16.33"
+      }
+    ]
+  },
+  {
+    "id": 2283,
+    "empresaId": 4,
+    "numero": "202305-0041",
+    "fecha": "2023-05-29T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-002-000001940",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2201",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "3.85",
+    "totalHaber": "3.85",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.398Z",
+    "detalles": [
+      {
+        "id": 10314,
+        "asientoId": 2283,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-002-000001940",
+        "debe": "3.35",
+        "haber": "0"
+      },
+      {
+        "id": 10315,
+        "asientoId": 2283,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-002-000001940",
+        "debe": "0.5",
+        "haber": "0"
+      },
+      {
+        "id": 10316,
+        "asientoId": 2283,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "3.85"
+      }
+    ]
+  },
+  {
+    "id": 2284,
+    "empresaId": 4,
+    "numero": "202305-0042",
+    "fecha": "2023-05-29T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000003549",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2202",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "24.02",
+    "totalHaber": "24.02",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.422Z",
+    "detalles": [
+      {
+        "id": 10317,
+        "asientoId": 2284,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000003549",
+        "debe": "20.89",
+        "haber": "0"
+      },
+      {
+        "id": 10318,
+        "asientoId": 2284,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000003549",
+        "debe": "3.13",
+        "haber": "0"
+      },
+      {
+        "id": 10319,
+        "asientoId": 2284,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "24.02"
+      }
+    ]
+  },
+  {
+    "id": 2286,
+    "empresaId": 4,
+    "numero": "202305-0044",
+    "fecha": "2023-05-30T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-101-000000151",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2204",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "23135.58",
+    "totalHaber": "23135.58",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.485Z",
+    "detalles": [
+      {
+        "id": 10322,
+        "asientoId": 2286,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-101-000000151",
+        "debe": "20117.9",
+        "haber": "0"
+      },
+      {
+        "id": 10323,
+        "asientoId": 2286,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-101-000000151",
+        "debe": "3017.68",
+        "haber": "0"
+      },
+      {
+        "id": 10324,
+        "asientoId": 2286,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "23135.58"
+      }
+    ]
+  },
+  {
+    "id": 2287,
+    "empresaId": 4,
+    "numero": "202305-0045",
+    "fecha": "2023-05-30T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-013-000355477",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2205",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "13.86",
+    "totalHaber": "13.86",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.518Z",
+    "detalles": [
+      {
+        "id": 10325,
+        "asientoId": 2287,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-013-000355477",
+        "debe": "12.05",
+        "haber": "0"
+      },
+      {
+        "id": 10326,
+        "asientoId": 2287,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-013-000355477",
+        "debe": "1.81",
+        "haber": "0"
+      },
+      {
+        "id": 10327,
+        "asientoId": 2287,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "13.86"
+      }
+    ]
+  },
+  {
+    "id": 2288,
+    "empresaId": 4,
+    "numero": "202305-0046",
+    "fecha": "2023-05-30T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 004-002-000000041",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2206",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "128.35",
+    "totalHaber": "128.35",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.554Z",
+    "detalles": [
+      {
+        "id": 10328,
+        "asientoId": 2288,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 004-002-000000041",
+        "debe": "111.61",
+        "haber": "0"
+      },
+      {
+        "id": 10329,
+        "asientoId": 2288,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 004-002-000000041",
+        "debe": "16.74",
+        "haber": "0"
+      },
+      {
+        "id": 10330,
+        "asientoId": 2288,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "128.35"
+      }
+    ]
+  },
+  {
+    "id": 2289,
+    "empresaId": 4,
+    "numero": "202305-0047",
+    "fecha": "2023-05-30T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 005-002-000003551",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2207",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "1.23",
+    "totalHaber": "1.23",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.587Z",
+    "detalles": [
+      {
+        "id": 10331,
+        "asientoId": 2289,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 005-002-000003551",
+        "debe": "1.07",
+        "haber": "0"
+      },
+      {
+        "id": 10332,
+        "asientoId": 2289,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 005-002-000003551",
+        "debe": "0.16",
+        "haber": "0"
+      },
+      {
+        "id": 10333,
+        "asientoId": 2289,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "1.23"
+      }
+    ]
+  },
+  {
+    "id": 2290,
+    "empresaId": 4,
+    "numero": "202305-0048",
+    "fecha": "2023-05-31T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-002-000005884",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2208",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "90.36",
+    "totalHaber": "90.36",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.610Z",
+    "detalles": [
+      {
+        "id": 10334,
+        "asientoId": 2290,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-002-000005884",
+        "debe": "78.57",
+        "haber": "0"
+      },
+      {
+        "id": 10335,
+        "asientoId": 2290,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-002-000005884",
+        "debe": "11.79",
+        "haber": "0"
+      },
+      {
+        "id": 10336,
+        "asientoId": 2290,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "90.36"
+      }
+    ]
+  },
+  {
+    "id": 2291,
+    "empresaId": 4,
+    "numero": "202305-0049",
+    "fecha": "2023-05-31T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-035-006885143",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2209",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "5.57",
+    "totalHaber": "5.57",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.638Z",
+    "detalles": [
+      {
+        "id": 10337,
+        "asientoId": 2291,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-035-006885143",
+        "debe": "4.84",
+        "haber": "0"
+      },
+      {
+        "id": 10338,
+        "asientoId": 2291,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-035-006885143",
+        "debe": "0.73",
+        "haber": "0"
+      },
+      {
+        "id": 10339,
+        "asientoId": 2291,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "5.57"
+      }
+    ]
+  },
+  {
+    "id": 2292,
+    "empresaId": 4,
+    "numero": "202305-0050",
+    "fecha": "2023-05-31T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-171-014804556",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2210",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "14.25",
+    "totalHaber": "14.25",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.661Z",
+    "detalles": [
+      {
+        "id": 10340,
+        "asientoId": 2292,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-171-014804556",
+        "debe": "12.39",
+        "haber": "0"
+      },
+      {
+        "id": 10341,
+        "asientoId": 2292,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-171-014804556",
+        "debe": "1.86",
+        "haber": "0"
+      },
+      {
+        "id": 10342,
+        "asientoId": 2292,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "14.25"
+      }
+    ]
+  },
+  {
+    "id": 2293,
+    "empresaId": 4,
+    "numero": "202305-0051",
+    "fecha": "2023-05-31T12:00:00.000Z",
+    "descripcion": "Asiento automatico compra 001-001-191483897",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2211",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "9.86",
+    "totalHaber": "9.86",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.687Z",
+    "detalles": [
+      {
+        "id": 10343,
+        "asientoId": 2293,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 001-001-191483897",
+        "debe": "8.57",
+        "haber": "0"
+      },
+      {
+        "id": 10344,
+        "asientoId": 2293,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 001-001-191483897",
+        "debe": "1.29",
+        "haber": "0"
+      },
+      {
+        "id": 10345,
+        "asientoId": 2293,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "9.86"
+      }
+    ]
+  },
+  {
+    "id": 2294,
+    "empresaId": 4,
+    "numero": "202305-0052",
+    "fecha": "2023-05-31T00:00:00.000Z",
+    "descripcion": "Asiento automatico compra 002-003-000009294",
+    "tipo": "COMPRA",
+    "referencia": "COMP-2212",
+    "facturaId": null,
+    "cajaId": null,
+    "totalDebe": "58.52",
+    "totalHaber": "58.52",
+    "cerrado": false,
+    "bloqueado": false,
+    "bloqueadoPor": null,
+    "usuarioId": 1,
+    "createdAt": "2026-07-15T20:18:18.710Z",
+    "detalles": [
+      {
+        "id": 10381,
+        "asientoId": 2294,
+        "cuentaId": 335,
+        "centroCostoId": null,
+        "descripcion": "Compra / gasto por factura 002-003-000009294",
+        "debe": "50.89",
+        "haber": "0"
+      },
+      {
+        "id": 10382,
+        "asientoId": 2294,
+        "cuentaId": 1179,
+        "centroCostoId": null,
+        "descripcion": "IVA credito tributario compra 002-003-000009294",
+        "debe": "7.63",
+        "haber": "0"
+      },
+      {
+        "id": 10383,
+        "asientoId": 2294,
+        "cuentaId": 294,
+        "centroCostoId": null,
+        "descripcion": "Cuenta por pagar proveedor",
+        "debe": "0",
+        "haber": "58.52"
+      }
+    ]
+  }
+]

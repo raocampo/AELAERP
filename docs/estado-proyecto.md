@@ -542,10 +542,31 @@ XML: `baseImpGrav = sub5 + sub12 + sub15`.
 - `ATS.jsx`: columna "Base 12%" en tabs Ventas y Compras
 - `ReportesTributarios.jsx`: filas y columna "Base 12%" condicionales
 
-#### Pendiente crítico — Verificar asientos contables históricos
-Los asientos de compras/ventas de 2023 pueden tener IVA calculado como `subtotal15 * 0.15`
-(incorrecto). Requiere verificar `totalIva` guardado vs. `subtotal12 * 0.12` y potencialmente
-regenerar asientos afectados. **Sesión aparte** — ver `pendientes-2026-07-15.md`.
+#### Fix crítico — Asientos contables históricos con IVA al 15% en vez de 12% (parte 3, madrugada 2026-07-15/16)
+Confirmado y corregido en producción (PUCHAICELA, `empresaId=4`, BD tenant `aela_lsac`):
+**157 de 812 `facturas_compra`** de 2023–abr.2024 tenían `totalIva` calculado al 15% sobre una
+base que ya estaba correctamente en `subtotal12` (ratio actual/esperado ≈ 1.25 = 15/12).
+Origen: `backend/utils/importarComprasHistoricas.js` cae a `ivaPct=15` por default cuando
+`iva_porcentaje` viene vacío; afectó tanto registros `BUZON_SRI` como `IMPORTACION`. Las
+ventas (14 registros) no tuvieron ningún caso — su carga histórica fue por XML autorizado,
+que trae el IVA real, nunca recalculado.
+
+Nuevo script `backend/scripts/verificarIvaHistorico.js` (diagnóstico + `--fix` opcional):
+clasifica cada discrepancia por el ratio `actual/esperado` — solo corrige automáticamente las
+que caen en el rango 1.20–1.30 (el bug confirmado). **16 registros** con ratios ~0.917/~0.667
+(todos con numeración consolidada `H-YYMMDD-NN` de la carga atrasada) no encajan en ese
+patrón — quedaron sin tocar, pendientes de revisión manual de la contadora del cliente.
+
+Tras corregir el campo, `backend/scripts/regenerarAsientosCompraIva12.js` (nuevo) borró y
+recreó en lote los 122 asientos `COMPRA` ya generados con el valor viejo (mismo mecanismo que
+`POST /compras/:id/regenerar-asiento`, respetando período cerrado/bloqueado como guard). 35
+compras no tenían asiento previo. Verificado puntualmente: asiento de la compra con mayor
+diferencia ($603.53) cuadra exacto tras la regeneración.
+
+Respaldo completo antes de cualquier escritura: valores originales de las 157 compras y de
+los 122 asientos+líneas borrados, en `backend/scripts/_backup_*_2026-07-15.json`.
+Detalle exhaustivo (incluyendo cómo se ubicó la BD del tenant en producción) en
+`docs/pendientes-2026-07-15.md` (Parte 3).
 
 #### Fix — `subtotal12` propagado a BDs de tenants (`9a8e2ca`)
 Las BDs de empresa (tenants) no reciben `prisma migrate deploy` — solo la BD principal.

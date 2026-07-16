@@ -1,0 +1,944 @@
+[
+  {
+    "id": 8,
+    "numeroFactura": "007-002-000006320",
+    "totalIva_antes": 1.41,
+    "importeTotal_antes": 10.79
+  },
+  {
+    "id": 9,
+    "numeroFactura": "054-100-000096384",
+    "totalIva_antes": 1.87,
+    "importeTotal_antes": 14.32
+  },
+  {
+    "id": 31,
+    "numeroFactura": "369-002-000634798",
+    "totalIva_antes": 0.44,
+    "importeTotal_antes": 3.37
+  },
+  {
+    "id": 10,
+    "numeroFactura": "033-231-000001633",
+    "totalIva_antes": 5.62,
+    "importeTotal_antes": 43.1
+  },
+  {
+    "id": 11,
+    "numeroFactura": "027-005-000028449",
+    "totalIva_antes": 1.61,
+    "importeTotal_antes": 12.32
+  },
+  {
+    "id": 12,
+    "numeroFactura": "022-022-000107880",
+    "totalIva_antes": 4.71,
+    "importeTotal_antes": 36.13
+  },
+  {
+    "id": 13,
+    "numeroFactura": "014-002-000002896",
+    "totalIva_antes": 0.53,
+    "importeTotal_antes": 4.09
+  },
+  {
+    "id": 14,
+    "numeroFactura": "011-030-000052658",
+    "totalIva_antes": 5.06,
+    "importeTotal_antes": 38.76
+  },
+  {
+    "id": 15,
+    "numeroFactura": "006-901-005028177",
+    "totalIva_antes": 7.4,
+    "importeTotal_antes": 56.73
+  },
+  {
+    "id": 16,
+    "numeroFactura": "001-215-035073514",
+    "totalIva_antes": 3.04,
+    "importeTotal_antes": 23.33
+  },
+  {
+    "id": 17,
+    "numeroFactura": "006-002-000144758",
+    "totalIva_antes": 1.45,
+    "importeTotal_antes": 11.09
+  },
+  {
+    "id": 18,
+    "numeroFactura": "162-107-000223791",
+    "totalIva_antes": 14.16,
+    "importeTotal_antes": 163.14
+  },
+  {
+    "id": 19,
+    "numeroFactura": "060-012-002506920",
+    "totalIva_antes": 1.33,
+    "importeTotal_antes": 10.22
+  },
+  {
+    "id": 21,
+    "numeroFactura": "164-006-000418607",
+    "totalIva_antes": 1.02,
+    "importeTotal_antes": 18.32
+  },
+  {
+    "id": 22,
+    "numeroFactura": "001-017-000038614",
+    "totalIva_antes": 3.01,
+    "importeTotal_antes": 23.1
+  },
+  {
+    "id": 23,
+    "numeroFactura": "001-003-000007122",
+    "totalIva_antes": 1.67,
+    "importeTotal_antes": 12.83
+  },
+  {
+    "id": 24,
+    "numeroFactura": "007-913-000359807",
+    "totalIva_antes": 9.12,
+    "importeTotal_antes": 88.9
+  },
+  {
+    "id": 25,
+    "numeroFactura": "011-002-000036140",
+    "totalIva_antes": 3.61,
+    "importeTotal_antes": 27.7
+  },
+  {
+    "id": 26,
+    "numeroFactura": "010-001-000060762",
+    "totalIva_antes": 6.73,
+    "importeTotal_antes": 51.61
+  },
+  {
+    "id": 27,
+    "numeroFactura": "086-104-000428536",
+    "totalIva_antes": 1.98,
+    "importeTotal_antes": 56.77
+  },
+  {
+    "id": 29,
+    "numeroFactura": "001-100-000068293",
+    "totalIva_antes": 1.2,
+    "importeTotal_antes": 9.21
+  },
+  {
+    "id": 30,
+    "numeroFactura": "006-031-000100948",
+    "totalIva_antes": 11.24,
+    "importeTotal_antes": 86.2
+  },
+  {
+    "id": 44,
+    "numeroFactura": "086-111-000040917",
+    "totalIva_antes": 4.71,
+    "importeTotal_antes": 68.31
+  },
+  {
+    "id": 32,
+    "numeroFactura": "062-100-000120784",
+    "totalIva_antes": 1.05,
+    "importeTotal_antes": 35.29
+  },
+  {
+    "id": 34,
+    "numeroFactura": "001-004-000039619",
+    "totalIva_antes": 0.36,
+    "importeTotal_antes": 2.73
+  },
+  {
+    "id": 36,
+    "numeroFactura": "002-002-000305058",
+    "totalIva_antes": 3.25,
+    "importeTotal_antes": 24.9
+  },
+  {
+    "id": 45,
+    "numeroFactura": "096-005-000001936",
+    "totalIva_antes": 6.39,
+    "importeTotal_antes": 48.99
+  },
+  {
+    "id": 38,
+    "numeroFactura": "001-018-000009284",
+    "totalIva_antes": 3.79,
+    "importeTotal_antes": 52.25
+  },
+  {
+    "id": 39,
+    "numeroFactura": "086-104-000429414",
+    "totalIva_antes": 3.69,
+    "importeTotal_antes": 64.53
+  },
+  {
+    "id": 40,
+    "numeroFactura": "001-006-000025511",
+    "totalIva_antes": 4.94,
+    "importeTotal_antes": 1262.93
+  },
+  {
+    "id": 41,
+    "numeroFactura": "047-002-000032889",
+    "totalIva_antes": 3.08,
+    "importeTotal_antes": 23.59
+  },
+  {
+    "id": 47,
+    "numeroFactura": "001-171-014209635",
+    "totalIva_antes": 1.26,
+    "importeTotal_antes": 9.69
+  },
+  {
+    "id": 49,
+    "numeroFactura": "015-001-000079714",
+    "totalIva_antes": 0.33,
+    "importeTotal_antes": 2.56
+  },
+  {
+    "id": 50,
+    "numeroFactura": "176-031-000025296",
+    "totalIva_antes": 4.81,
+    "importeTotal_antes": 36.9
+  },
+  {
+    "id": 51,
+    "numeroFactura": "002-001-000037147",
+    "totalIva_antes": 1.54,
+    "importeTotal_antes": 11.8
+  },
+  {
+    "id": 979,
+    "numeroFactura": "162-108-000224890",
+    "totalIva_antes": 2.52,
+    "importeTotal_antes": 65.02
+  },
+  {
+    "id": 981,
+    "numeroFactura": "001-010-000266984",
+    "totalIva_antes": 2.92,
+    "importeTotal_antes": 22.4
+  },
+  {
+    "id": 982,
+    "numeroFactura": "001-026-000948275",
+    "totalIva_antes": 0.34,
+    "importeTotal_antes": 2.59
+  },
+  {
+    "id": 988,
+    "numeroFactura": "001-214-016371736",
+    "totalIva_antes": 4.02,
+    "importeTotal_antes": 30.8
+  },
+  {
+    "id": 989,
+    "numeroFactura": "001-015-001223840",
+    "totalIva_antes": 1.3,
+    "importeTotal_antes": 10
+  },
+  {
+    "id": 991,
+    "numeroFactura": "001-007-000000235",
+    "totalIva_antes": 9.13,
+    "importeTotal_antes": 70
+  },
+  {
+    "id": 992,
+    "numeroFactura": "001-010-000002555",
+    "totalIva_antes": 1.02,
+    "importeTotal_antes": 7.81
+  },
+  {
+    "id": 996,
+    "numeroFactura": "005-214-000183146",
+    "totalIva_antes": 1.96,
+    "importeTotal_antes": 15.05
+  },
+  {
+    "id": 998,
+    "numeroFactura": "001-002-000018007",
+    "totalIva_antes": 7.76,
+    "importeTotal_antes": 59.47
+  },
+  {
+    "id": 999,
+    "numeroFactura": "004-003-000018957",
+    "totalIva_antes": 51.28,
+    "importeTotal_antes": 393.12
+  },
+  {
+    "id": 1000,
+    "numeroFactura": "005-216-000186091",
+    "totalIva_antes": 2.84,
+    "importeTotal_antes": 21.76
+  },
+  {
+    "id": 1001,
+    "numeroFactura": "001-505-000187399",
+    "totalIva_antes": 1.7,
+    "importeTotal_antes": 13
+  },
+  {
+    "id": 1002,
+    "numeroFactura": "001-002-000000673",
+    "totalIva_antes": 5.7,
+    "importeTotal_antes": 43.7
+  },
+  {
+    "id": 1004,
+    "numeroFactura": "007-928-000475870",
+    "totalIva_antes": 2.77,
+    "importeTotal_antes": 21.21
+  },
+  {
+    "id": 1006,
+    "numeroFactura": "002-002-000037131",
+    "totalIva_antes": 17.97,
+    "importeTotal_antes": 137.77
+  },
+  {
+    "id": 1008,
+    "numeroFactura": "002-101-000249141",
+    "totalIva_antes": 0.63,
+    "importeTotal_antes": 4.8
+  },
+  {
+    "id": 1009,
+    "numeroFactura": "002-060-003332356",
+    "totalIva_antes": 3.52,
+    "importeTotal_antes": 27
+  },
+  {
+    "id": 1010,
+    "numeroFactura": "001-102-000014334",
+    "totalIva_antes": 3.13,
+    "importeTotal_antes": 24
+  },
+  {
+    "id": 1011,
+    "numeroFactura": "001-015-001227396",
+    "totalIva_antes": 4.44,
+    "importeTotal_antes": 34.01
+  },
+  {
+    "id": 1025,
+    "numeroFactura": "001-100-000000357",
+    "totalIva_antes": 21.85,
+    "importeTotal_antes": 167.52
+  },
+  {
+    "id": 1013,
+    "numeroFactura": "086-108-000324279",
+    "totalIva_antes": 6.59,
+    "importeTotal_antes": 114.13
+  },
+  {
+    "id": 1014,
+    "numeroFactura": "015-013-000183946",
+    "totalIva_antes": 0.84,
+    "importeTotal_antes": 6.46
+  },
+  {
+    "id": 1015,
+    "numeroFactura": "001-013-000508551",
+    "totalIva_antes": 0.65,
+    "importeTotal_antes": 5
+  },
+  {
+    "id": 1016,
+    "numeroFactura": "001-011-000948807",
+    "totalIva_antes": 1.3,
+    "importeTotal_antes": 10
+  },
+  {
+    "id": 1017,
+    "numeroFactura": "001-002-000152571",
+    "totalIva_antes": 0.58,
+    "importeTotal_antes": 4.48
+  },
+  {
+    "id": 1020,
+    "numeroFactura": "001-101-000554333",
+    "totalIva_antes": 4.7,
+    "importeTotal_antes": 36
+  },
+  {
+    "id": 1021,
+    "numeroFactura": "086-110-000238381",
+    "totalIva_antes": 1.63,
+    "importeTotal_antes": 61.44
+  },
+  {
+    "id": 1022,
+    "numeroFactura": "078-051-000012378",
+    "totalIva_antes": 1.62,
+    "importeTotal_antes": 12.39
+  },
+  {
+    "id": 1024,
+    "numeroFactura": "090-106-000031511",
+    "totalIva_antes": 3.03,
+    "importeTotal_antes": 23.26
+  },
+  {
+    "id": 1026,
+    "numeroFactura": "001-013-000511662",
+    "totalIva_antes": 1.3,
+    "importeTotal_antes": 10
+  },
+  {
+    "id": 1029,
+    "numeroFactura": "090-102-000126065",
+    "totalIva_antes": 3.29,
+    "importeTotal_antes": 25.2
+  },
+  {
+    "id": 1031,
+    "numeroFactura": "086-107-000385973",
+    "totalIva_antes": 2.05,
+    "importeTotal_antes": 32.54
+  },
+  {
+    "id": 1033,
+    "numeroFactura": "001-011-000001715",
+    "totalIva_antes": 0.46,
+    "importeTotal_antes": 3.5
+  },
+  {
+    "id": 1034,
+    "numeroFactura": "001-102-000683365",
+    "totalIva_antes": 4.37,
+    "importeTotal_antes": 33.5
+  },
+  {
+    "id": 1035,
+    "numeroFactura": "006-002-000092228",
+    "totalIva_antes": 9.3,
+    "importeTotal_antes": 82.87
+  },
+  {
+    "id": 1037,
+    "numeroFactura": "002-002-000030447",
+    "totalIva_antes": 2.61,
+    "importeTotal_antes": 20.01
+  },
+  {
+    "id": 1038,
+    "numeroFactura": "001-101-000558353",
+    "totalIva_antes": 3.63,
+    "importeTotal_antes": 27.82
+  },
+  {
+    "id": 1039,
+    "numeroFactura": "006-002-000092274",
+    "totalIva_antes": 2.68,
+    "importeTotal_antes": 20.58
+  },
+  {
+    "id": 1040,
+    "numeroFactura": "003-011-000010893",
+    "totalIva_antes": 1.5,
+    "importeTotal_antes": 11.5
+  },
+  {
+    "id": 1041,
+    "numeroFactura": "001-004-000060593",
+    "totalIva_antes": 4.29,
+    "importeTotal_antes": 44.22
+  },
+  {
+    "id": 1042,
+    "numeroFactura": "001-002-000153445",
+    "totalIva_antes": 0.78,
+    "importeTotal_antes": 6
+  },
+  {
+    "id": 1043,
+    "numeroFactura": "001-013-000513677",
+    "totalIva_antes": 1.3,
+    "importeTotal_antes": 10
+  },
+  {
+    "id": 1044,
+    "numeroFactura": "001-011-000003369",
+    "totalIva_antes": 1.38,
+    "importeTotal_antes": 16.21
+  },
+  {
+    "id": 2118,
+    "numeroFactura": "001-013-000340686",
+    "totalIva_antes": 1.81,
+    "importeTotal_antes": 13.86
+  },
+  {
+    "id": 2119,
+    "numeroFactura": "001-004-000051791",
+    "totalIva_antes": 3.48,
+    "importeTotal_antes": 64.65
+  },
+  {
+    "id": 2120,
+    "numeroFactura": "003-003-000004682",
+    "totalIva_antes": 186.96,
+    "importeTotal_antes": 1433.38
+  },
+  {
+    "id": 2121,
+    "numeroFactura": "086-105-000477610",
+    "totalIva_antes": 3.63,
+    "importeTotal_antes": 36.33
+  },
+  {
+    "id": 2123,
+    "numeroFactura": "005-002-000003492",
+    "totalIva_antes": 2.32,
+    "importeTotal_antes": 17.77
+  },
+  {
+    "id": 2124,
+    "numeroFactura": "001-010-000000577",
+    "totalIva_antes": 1,
+    "importeTotal_antes": 7.7
+  },
+  {
+    "id": 2125,
+    "numeroFactura": "001-011-000000545",
+    "totalIva_antes": 0.27,
+    "importeTotal_antes": 2.06
+  },
+  {
+    "id": 2126,
+    "numeroFactura": "001-214-013486943",
+    "totalIva_antes": 4.02,
+    "importeTotal_antes": 30.81
+  },
+  {
+    "id": 2127,
+    "numeroFactura": "005-002-000003494",
+    "totalIva_antes": 4.15,
+    "importeTotal_antes": 31.83
+  },
+  {
+    "id": 2128,
+    "numeroFactura": "002-101-000011249",
+    "totalIva_antes": 1.74,
+    "importeTotal_antes": 13.36
+  },
+  {
+    "id": 2130,
+    "numeroFactura": "002-102-000003867",
+    "totalIva_antes": 18.08,
+    "importeTotal_antes": 138.62
+  },
+  {
+    "id": 2131,
+    "numeroFactura": "171-030-000020899",
+    "totalIva_antes": 2.68,
+    "importeTotal_antes": 20.52
+  },
+  {
+    "id": 2132,
+    "numeroFactura": "005-010-000189524",
+    "totalIva_antes": 0.97,
+    "importeTotal_antes": 7.45
+  },
+  {
+    "id": 2133,
+    "numeroFactura": "005-002-000003499",
+    "totalIva_antes": 3.42,
+    "importeTotal_antes": 26.19
+  },
+  {
+    "id": 2134,
+    "numeroFactura": "005-002-000003500",
+    "totalIva_antes": 0.4,
+    "importeTotal_antes": 3.07
+  },
+  {
+    "id": 2135,
+    "numeroFactura": "001-002-000019109",
+    "totalIva_antes": 3.48,
+    "importeTotal_antes": 26.69
+  },
+  {
+    "id": 2136,
+    "numeroFactura": "001-011-000000554",
+    "totalIva_antes": 3.95,
+    "importeTotal_antes": 30.29
+  },
+  {
+    "id": 2137,
+    "numeroFactura": "001-007-000000765",
+    "totalIva_antes": 3.92,
+    "importeTotal_antes": 30.08
+  },
+  {
+    "id": 2138,
+    "numeroFactura": "001-013-000344597",
+    "totalIva_antes": 0.96,
+    "importeTotal_antes": 7.39
+  },
+  {
+    "id": 2139,
+    "numeroFactura": "086-106-000315640",
+    "totalIva_antes": 1.08,
+    "importeTotal_antes": 17.36
+  },
+  {
+    "id": 2140,
+    "numeroFactura": "001-100-000000076",
+    "totalIva_antes": 2412.31,
+    "importeTotal_antes": 18494.38
+  },
+  {
+    "id": 2141,
+    "numeroFactura": "111-100-000011098",
+    "totalIva_antes": 1.08,
+    "importeTotal_antes": 29.88
+  },
+  {
+    "id": 2142,
+    "numeroFactura": "001-011-000000566",
+    "totalIva_antes": 0.84,
+    "importeTotal_antes": 6.42
+  },
+  {
+    "id": 2144,
+    "numeroFactura": "001-007-000332552",
+    "totalIva_antes": 3.73,
+    "importeTotal_antes": 28.63
+  },
+  {
+    "id": 2145,
+    "numeroFactura": "001-015-000003719",
+    "totalIva_antes": 1.17,
+    "importeTotal_antes": 8.97
+  },
+  {
+    "id": 2146,
+    "numeroFactura": "001-011-000818475",
+    "totalIva_antes": 1.74,
+    "importeTotal_antes": 13.35
+  },
+  {
+    "id": 2147,
+    "numeroFactura": "002-001-000006179",
+    "totalIva_antes": 0.27,
+    "importeTotal_antes": 18.06
+  },
+  {
+    "id": 2169,
+    "numeroFactura": "002-103-000025548",
+    "totalIva_antes": 1.74,
+    "importeTotal_antes": 13.35
+  },
+  {
+    "id": 2148,
+    "numeroFactura": "162-106-000280718",
+    "totalIva_antes": 4.34,
+    "importeTotal_antes": 97.24
+  },
+  {
+    "id": 2149,
+    "numeroFactura": "001-013-000358010",
+    "totalIva_antes": 1.2,
+    "importeTotal_antes": 39.79
+  },
+  {
+    "id": 2153,
+    "numeroFactura": "001-002-000181021",
+    "totalIva_antes": 2.14,
+    "importeTotal_antes": 16.38
+  },
+  {
+    "id": 2154,
+    "numeroFactura": "164-009-000598867",
+    "totalIva_antes": 0.32,
+    "importeTotal_antes": 2.44
+  },
+  {
+    "id": 2155,
+    "numeroFactura": "002-007-000009717",
+    "totalIva_antes": 5.22,
+    "importeTotal_antes": 40.04
+  },
+  {
+    "id": 2156,
+    "numeroFactura": "006-001-000073248",
+    "totalIva_antes": 64.75,
+    "importeTotal_antes": 496.4
+  },
+  {
+    "id": 2157,
+    "numeroFactura": "001-003-000002359",
+    "totalIva_antes": 14.28,
+    "importeTotal_antes": 109.5
+  },
+  {
+    "id": 2158,
+    "numeroFactura": "001-002-000122206",
+    "totalIva_antes": 1.27,
+    "importeTotal_antes": 9.75
+  },
+  {
+    "id": 2183,
+    "numeroFactura": "002-010-000030376",
+    "totalIva_antes": 2.08,
+    "importeTotal_antes": 15.93
+  },
+  {
+    "id": 2159,
+    "numeroFactura": "031-903-000285534",
+    "totalIva_antes": 7.16,
+    "importeTotal_antes": 58.53
+  },
+  {
+    "id": 2160,
+    "numeroFactura": "001-001-000047375",
+    "totalIva_antes": 3.48,
+    "importeTotal_antes": 26.69
+  },
+  {
+    "id": 2161,
+    "numeroFactura": "005-002-000003520",
+    "totalIva_antes": 0.77,
+    "importeTotal_antes": 5.9
+  },
+  {
+    "id": 2162,
+    "numeroFactura": "001-019-000015824",
+    "totalIva_antes": 3.01,
+    "importeTotal_antes": 23.1
+  },
+  {
+    "id": 2163,
+    "numeroFactura": "005-002-000003522",
+    "totalIva_antes": 2.34,
+    "importeTotal_antes": 17.92
+  },
+  {
+    "id": 2164,
+    "numeroFactura": "005-002-000003523",
+    "totalIva_antes": 0.33,
+    "importeTotal_antes": 2.56
+  },
+  {
+    "id": 2165,
+    "numeroFactura": "002-010-000030300",
+    "totalIva_antes": 14.96,
+    "importeTotal_antes": 114.69
+  },
+  {
+    "id": 2167,
+    "numeroFactura": "001-010-000000621",
+    "totalIva_antes": 9.16,
+    "importeTotal_antes": 70.23
+  },
+  {
+    "id": 2168,
+    "numeroFactura": "002-010-000030321",
+    "totalIva_antes": 14.4,
+    "importeTotal_antes": 110.38
+  },
+  {
+    "id": 2171,
+    "numeroFactura": "002-103-000025617",
+    "totalIva_antes": 1.34,
+    "importeTotal_antes": 10.27
+  },
+  {
+    "id": 2172,
+    "numeroFactura": "178-051-000272864",
+    "totalIva_antes": 1.25,
+    "importeTotal_antes": 9.59
+  },
+  {
+    "id": 2174,
+    "numeroFactura": "001-020-000001277",
+    "totalIva_antes": 2.24,
+    "importeTotal_antes": 17.19
+  },
+  {
+    "id": 2176,
+    "numeroFactura": "001-002-000025113",
+    "totalIva_antes": 6.74,
+    "importeTotal_antes": 51.65
+  },
+  {
+    "id": 2177,
+    "numeroFactura": "002-010-000005617",
+    "totalIva_antes": 1.84,
+    "importeTotal_antes": 14.12
+  },
+  {
+    "id": 2178,
+    "numeroFactura": "162-104-000216173",
+    "totalIva_antes": 7.24,
+    "importeTotal_antes": 130.97
+  },
+  {
+    "id": 2181,
+    "numeroFactura": "005-002-000020755",
+    "totalIva_antes": 0.46,
+    "importeTotal_antes": 3.56
+  },
+  {
+    "id": 2182,
+    "numeroFactura": "164-006-000432266",
+    "totalIva_antes": 1.28,
+    "importeTotal_antes": 9.83
+  },
+  {
+    "id": 2184,
+    "numeroFactura": "001-011-000823490",
+    "totalIva_antes": 1.81,
+    "importeTotal_antes": 13.86
+  },
+  {
+    "id": 2185,
+    "numeroFactura": "003-003-000001615",
+    "totalIva_antes": 1.63,
+    "importeTotal_antes": 12.48
+  },
+  {
+    "id": 2186,
+    "numeroFactura": "162-103-000503716",
+    "totalIva_antes": 0.18,
+    "importeTotal_antes": 1.38
+  },
+  {
+    "id": 2187,
+    "numeroFactura": "001-100-000000120",
+    "totalIva_antes": 0.69,
+    "importeTotal_antes": 5.28
+  },
+  {
+    "id": 2188,
+    "numeroFactura": "005-002-000003544",
+    "totalIva_antes": 0.54,
+    "importeTotal_antes": 4.11
+  },
+  {
+    "id": 2189,
+    "numeroFactura": "067-050-000420729",
+    "totalIva_antes": 1.95,
+    "importeTotal_antes": 14.98
+  },
+  {
+    "id": 2190,
+    "numeroFactura": "001-011-000000617",
+    "totalIva_antes": 0.27,
+    "importeTotal_antes": 2.06
+  },
+  {
+    "id": 2192,
+    "numeroFactura": "001-012-000797619",
+    "totalIva_antes": 1.81,
+    "importeTotal_antes": 13.86
+  },
+  {
+    "id": 2193,
+    "numeroFactura": "083-046-000140174",
+    "totalIva_antes": 4.02,
+    "importeTotal_antes": 30.8
+  },
+  {
+    "id": 2194,
+    "numeroFactura": "016-002-000047155",
+    "totalIva_antes": 8.3,
+    "importeTotal_antes": 63.62
+  },
+  {
+    "id": 2196,
+    "numeroFactura": "083-037-000441940",
+    "totalIva_antes": 10.83,
+    "importeTotal_antes": 83
+  },
+  {
+    "id": 2198,
+    "numeroFactura": "086-106-000319042",
+    "totalIva_antes": 1.74,
+    "importeTotal_antes": 50.78
+  },
+  {
+    "id": 2199,
+    "numeroFactura": "001-013-000354799",
+    "totalIva_antes": 1.81,
+    "importeTotal_antes": 13.86
+  },
+  {
+    "id": 2200,
+    "numeroFactura": "002-002-000320119",
+    "totalIva_antes": 2.13,
+    "importeTotal_antes": 16.33
+  },
+  {
+    "id": 2201,
+    "numeroFactura": "001-002-000001940",
+    "totalIva_antes": 0.5,
+    "importeTotal_antes": 3.85
+  },
+  {
+    "id": 2202,
+    "numeroFactura": "005-002-000003549",
+    "totalIva_antes": 3.13,
+    "importeTotal_antes": 24.02
+  },
+  {
+    "id": 2204,
+    "numeroFactura": "001-101-000000151",
+    "totalIva_antes": 3017.68,
+    "importeTotal_antes": 23135.58
+  },
+  {
+    "id": 2205,
+    "numeroFactura": "001-013-000355477",
+    "totalIva_antes": 1.81,
+    "importeTotal_antes": 13.86
+  },
+  {
+    "id": 2206,
+    "numeroFactura": "004-002-000000041",
+    "totalIva_antes": 16.74,
+    "importeTotal_antes": 128.35
+  },
+  {
+    "id": 2207,
+    "numeroFactura": "005-002-000003551",
+    "totalIva_antes": 0.16,
+    "importeTotal_antes": 1.23
+  },
+  {
+    "id": 2208,
+    "numeroFactura": "001-002-000005884",
+    "totalIva_antes": 11.79,
+    "importeTotal_antes": 90.36
+  },
+  {
+    "id": 2209,
+    "numeroFactura": "001-035-006885143",
+    "totalIva_antes": 0.73,
+    "importeTotal_antes": 5.57
+  },
+  {
+    "id": 2210,
+    "numeroFactura": "001-171-014804556",
+    "totalIva_antes": 1.86,
+    "importeTotal_antes": 14.25
+  },
+  {
+    "id": 2211,
+    "numeroFactura": "001-001-191483897",
+    "totalIva_antes": 1.29,
+    "importeTotal_antes": 9.86
+  },
+  {
+    "id": 2212,
+    "numeroFactura": "002-003-000009294",
+    "totalIva_antes": 7.63,
+    "importeTotal_antes": 58.52
+  }
+]

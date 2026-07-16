@@ -361,3 +361,90 @@ DB:       PostgreSQL Railway
 | `frontend/src/components/Facturacion/FormFactura.jsx` | Opción 12% en select IVA, totalizador |
 | `frontend/src/components/Facturacion/ATS.jsx` | Columna Base 12% en ventas y compras |
 | `frontend/src/components/Facturacion/ReportesTributarios.jsx` | Fila y columna Base 12% |
+
+---
+
+## Parte 3 — Verificación y corrección de asientos históricos (madrugada 2026-07-15/16)
+
+Continuación directa del pendiente crítico #1 de la Parte 1: verificar si los asientos
+contables de compras 2023 (PUCHAICELA, `empresaId=4` en la BD de tenant `aela_lsac`)
+quedaron con el IVA calculado al 15% en vez del 12% real. **Se confirmó que sí — bug real,
+no solo teórico — y se corrigió en producción.**
+
+### Cómo se accedió a los datos reales de producción
+
+Puchaicela **no** es un tenant de auto-registro SaaS (la tabla `aela_master.tenants` no la
+tiene) — es un cliente directo dentro de la arquitectura clásica multiempresa, alojado en su
+propia base de datos de Railway junto con otras empresas del mismo revendedor. Todos los
+tenants comparten el mismo servidor/usuario/contraseña de Postgres (confirmado en
+`provisionarTenant.js:152`, comentario *"mismas credenciales, distinta BD"*); solo cambia el
+nombre de la base. Puchaicela vive en **`aela_lsac`**, `empresaId=4` (comprobado listando
+`empresas` en cada base candidata: `aela_sys`, `aela_lsac`, `aela_mprq`,
+`aela_loja_torneos_y_competencia`). El acceso se hizo con `DATABASE_PUBLIC_URL` del servicio
+Postgres de Railway (proxy externo `switchyard.proxy.rlwy.net`), compartida temporalmente por
+el usuario para esta sesión.
+
+### Diagnóstico — `backend/scripts/verificarIvaHistorico.js` (nuevo)
+
+Compara, para `facturas`, `facturas_compra` y `liquidaciones_compra` con `fechaEmision <
+2024-04-22` y `subtotal12 > 0`, el `totalIva` guardado contra el esperado
+(`subtotal5*5% + subtotal12*12% + subtotal15*15%`). Detecta pero **no corrige** por defecto
+(`--fix` opcional). Clasifica cada discrepancia por el ratio `actual/esperado`:
+- **Confirmado** (ratio 1.20–1.30, centrado en 15/12 = 1.25): el bug exacto sospechado —
+  `totalIva` se calculó al 15% sobre una base que en realidad es 12%. Único caso que `--fix`
+  corrige automáticamente.
+- **Revisión manual** (cualquier otro ratio): causa raíz distinta, no se toca.
+
+### Resultado del diagnóstico (empresa 4, `aela_lsac`)
+
+| Tabla | Registros con `subtotal12>0` pre-2024-04-22 | Discrepancias | Confirmadas (bug 15%/12%) | Revisión manual |
+|---|---|---|---|---|
+| `facturas` (ventas) | 14 | 0 | — | — |
+| `facturas_compra` | 812 | 173 | **157** | **16** |
+| `liquidaciones_compra` | 0 | — | — | — |
+
+Las ventas dieron 0 discrepancias porque su carga histórica fue por XML `.zip` de documentos
+autorizados (`2627c2b`) — el `totalIva` se lee directo del `<totalImpuesto><valor>` real del
+SRI, nunca se recalcula. El bug estaba solo en compras, con origen mixto: registros
+`BUZON_SRI` e `IMPORTACION` (`backend/utils/importarComprasHistoricas.js` cae a
+`ivaPct = 15` por default cuando `iva_porcentaje` viene vacío — línea 110).
+
+**Los 16 de revisión manual** son todos asientos consolidados con numeración `H-YYMMDD-NN`
+(de la carga de contabilidad atrasada, sesión 2026-07-13/14 parte 4), con ratios ~0.917 y
+~0.667 respecto al esperado — no encajan en el patrón 15%/12%, posiblemente una base de
+cálculo distinta al consolidar el día. **Quedan sin tocar, pendientes de que la contadora del
+cliente confirme el valor correcto.**
+
+### Corrección aplicada (con autorización explícita del usuario antes de cada paso)
+
+1. Respaldo de los 157 registros (`totalIva`/`importeTotal` antes del fix):
+   `backend/scripts/_backup_totalIva_facturas_compra_2026-07-15.json`
+2. `node scripts/verificarIvaHistorico.js --empresa=4 --fix` → 157 `facturas_compra`
+   corregidas (`totalIva` recalculado a 12%, `importeTotal` ajustado por el mismo delta).
+3. Respaldo de los asientos que se iban a borrar (122, con sus líneas):
+   `backend/scripts/_backup_asientos_compra_2026-07-15.json`
+4. **Nuevo script `backend/scripts/regenerarAsientosCompraIva12.js`**: reproduce en lote lo
+   mismo que hace `POST /api/compras/:id/regenerar-asiento` (borra el asiento `COMPRA`
+   existente + sus líneas, y llama a `crearAsientoFacturaCompraRegistrada` con los valores ya
+   corregidos) para toda la lista del backup. Respeta los mismos guards que el endpoint:
+   omite (sin tocar) asientos en período cerrado o bloqueado.
+5. Ejecutado sobre las 157 compras: **122 asientos regenerados, 35 no tenían asiento previo
+   (no requerían nada), 0 omitidos** (ningún período cerrado/bloqueado en el camino).
+6. Verificación puntual: compra `#2204` (la de mayor diferencia, $603.53) — asiento
+   `202305-0003` cuadra exacto ($22,532.05 debe = haber), línea de IVA crédito tributario en
+   $2,414.15 (12% de $20,117.90) en vez de los $3,017.68 (15%) que tenía antes.
+
+### Pendiente para mañana
+
+1. **Pasar a la contadora la lista de 16 registros de revisión manual** (prefijo `H-YYMMDD-NN`)
+   para que confirme el valor correcto de `totalIva` en cada uno — no se tocaron.
+2. Los scripts (`verificarIvaHistorico.js`, `regenerarAsientosCompraIva12.js`) quedan
+   reutilizables por si aparece el mismo patrón en otro cliente con contabilidad pre-2024.
+3. Retomar el punto 4 original de esta sesión (prioridad media, aún no iniciado):
+   - UI de aviso de gastos personales excluidos en F104 (backend ya filtra, falta mostrar el
+     conteo en el frontend)
+   - F104: desglosar facturas de compra vs. liquidaciones de compra por separado
+   - Notas de crédito recibidas de proveedores en F104 (aún no se registran)
+   - Libro de bancos — verificar contabilización de movimientos 2023 pendientes
+4. Ítem 3 de la lista original (WebServices API / AVALAB) sigue pendiente de probar con otro
+   cliente desde la oficina — sin cambios esta sesión.
