@@ -98,7 +98,7 @@ router.get('/movimientos/exportar/csv', permitirVerInventario, validarInventario
       const s = String(v == null ? '' : v).replace(/"/g, '""');
       return `"${s}"`;
     };
-    const fmtDate = (v) => v ? new Date(v).toLocaleString('es-EC') : '';
+    const fmtDate = (v) => v ? new Date(v).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }) : '';
     const fmtNum = (v, d = 3) => Number(v || 0).toFixed(d);
 
     const headers = [

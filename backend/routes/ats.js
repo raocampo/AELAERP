@@ -605,7 +605,7 @@ router.get('/exportar/pdf', async (req, res) => {
     doc.fillColor('#334155').font('Helvetica').fontSize(8.5)
       .text(`RUC: ${config.ruc || '—'}`, ML + 8, curY + 4)
       .text(`Período: ${periodoLabel}`, ML, curY + 4, { width: PW, align: 'center' })
-      .text(`Fecha de generación: ${new Date().toLocaleString('es-EC')}`,
+      .text(`Fecha de generación: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`,
         ML + 8, curY + 4, { width: PW - 16, align: 'right' });
     curY += 18;
     doc.fillColor('black');

@@ -449,7 +449,7 @@ router.get('/exportar/pdf', async (req, res) => {
          .text(cfg?.razonSocial || '', ML, y, { width: W });
       y = doc.y + 2;
       doc.fontSize(8).font('Helvetica').fillColor(GRIS)
-         .text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC')}`, ML, y, { width: W });
+         .text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`, ML, y, { width: W });
       y = doc.y + 8;
       doc.fontSize(13).font('Helvetica-Bold').fillColor(VERDE).text('LIBRO DE COMPRAS', ML, y, { width: W });
       y = doc.y + 4;

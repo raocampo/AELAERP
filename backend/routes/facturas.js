@@ -785,7 +785,7 @@ router.get('/exportar/pdf', permitirVerFacturacion, async (req, res) => {
        .text(cfg?.razonSocial || '', ML, y, { width: W });
     y = doc.y + 2;
     doc.fontSize(8).font('Helvetica').fillColor(GRIS)
-       .text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC')}`, ML, y, { width: W });
+       .text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`, ML, y, { width: W });
     y = doc.y + 8;
     doc.fontSize(13).font('Helvetica-Bold').fillColor(VERDE).text('LIBRO DE VENTAS', ML, y, { width: W });
     y = doc.y + 4;
@@ -1509,7 +1509,7 @@ router.get('/notas-credito/exportar/pdf', permitirVerFacturacion, async (req, re
     let y = 32;
     doc.fontSize(12).font('Helvetica-Bold').fillColor(NEGRO).text(cfg?.razonSocial || '', ML, y, { width: W });
     y = doc.y + 2;
-    doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC')}`, ML, y, { width: W });
+    doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(`RUC: ${cfg?.ruc || '—'}  |  Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`, ML, y, { width: W });
     y = doc.y + 8;
     doc.fontSize(13).font('Helvetica-Bold').fillColor(VERDE).text('NOTAS DE CRÉDITO EMITIDAS', ML, y, { width: W });
     y = doc.y + 4;

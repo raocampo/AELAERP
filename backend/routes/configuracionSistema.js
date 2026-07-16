@@ -85,7 +85,7 @@ router.post('/test-email', proteger, autorizarPermiso('sistema.configurar'), asy
   try {
     await enviarAlertaSoporte({
       asunto: 'Prueba de SMTP — AELA ERP',
-      mensaje: `¡Configuración SMTP funcionando correctamente!\n\nEste es un correo de prueba enviado desde AELA ERP.\n\nServidor: ${smtpHost}\nDestinatario: ${destino}\nFecha: ${new Date().toLocaleString('es-EC')}`,
+      mensaje: `¡Configuración SMTP funcionando correctamente!\n\nEste es un correo de prueba enviado desde AELA ERP.\n\nServidor: ${smtpHost}\nDestinatario: ${destino}\nFecha: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`,
     });
 
     // También intentar enviar al usuario admin que lanzó la prueba
@@ -100,7 +100,7 @@ router.post('/test-email', proteger, autorizarPermiso('sistema.configurar'), asy
       from:    process.env.SMTP_FROM || 'AELA ERP <info@corpsimtelec.com>',
       to:      destino,
       subject: '✅ Prueba SMTP — AELA ERP',
-      html:    `<p>¡La configuración SMTP de <strong>AELA ERP</strong> funciona correctamente!</p><p>Servidor: <code>${smtpHost}</code></p><p>${new Date().toLocaleString('es-EC')}</p>`,
+      html:    `<p>¡La configuración SMTP de <strong>AELA ERP</strong> funciona correctamente!</p><p>Servidor: <code>${smtpHost}</code></p><p>${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}</p>`,
     });
 
     res.json({ success: true, mensaje: `Email de prueba enviado a ${destino}` });

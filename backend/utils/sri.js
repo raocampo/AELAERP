@@ -1160,7 +1160,7 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
 
     // Fecha de autorización
     const fAut = factura.fechaAutorizacion
-      ? new Date(factura.fechaAutorizacion).toLocaleString('es-EC')
+      ? new Date(factura.fechaAutorizacion).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })
       : '---';
     doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS)
        .text('FECHA Y HORA DE AUTORIZACIÓN:', RP_X, yR, { lineBreak: false });
@@ -1965,7 +1965,7 @@ async function generarRIDERetencion(retencion, configSri, outputPath) {
     yR += 10;
 
     const fAut = retencion.fechaAutorizacion
-      ? new Date(retencion.fechaAutorizacion).toLocaleString('es-EC')
+      ? new Date(retencion.fechaAutorizacion).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })
       : '---';
     doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS)
        .text('FECHA Y HORA DE AUTORIZACIÓN:', RP_X, yR, { lineBreak: false });
@@ -2395,7 +2395,7 @@ async function generarRIDELiquidacionCompra(liq, configSri, outputPath) {
        .text(liq.numeroAutorizacion || 'PENDIENTE DE AUTORIZACIÓN', RP_X, yR, { width: RP_W, lineBreak: false });
     yR += 10;
 
-    const fAut = liq.fechaAutorizacion ? new Date(liq.fechaAutorizacion).toLocaleString('es-EC') : '---';
+    const fAut = liq.fechaAutorizacion ? new Date(liq.fechaAutorizacion).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }) : '---';
     doc.fontSize(6).font('Helvetica-Bold').fillColor(GRIS).text('FECHA Y HORA DE AUTORIZACIÓN:', RP_X, yR, { lineBreak: false });
     yR += 9;
     doc.fontSize(6).font('Helvetica').fillColor(NEGRO).text(fAut, RP_X, yR, { width: RP_W, lineBreak: false });

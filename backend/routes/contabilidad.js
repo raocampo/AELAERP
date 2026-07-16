@@ -2127,7 +2127,7 @@ router.get('/reportes/diario', async (req, res) => {
     const doc = crearDocumentoPdf(res, `libro_diario_${formatDateOnly(new Date())}.pdf`);
     doc.fontSize(14).text('Libro Diario', { align: 'left' });
     doc.moveDown(0.3);
-    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC')}`);
+    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`);
     doc.text(`Filtros: periodo=${req.query.periodo || '-'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} tipo=${req.query.tipo || '-'}`);
     doc.moveDown(0.5);
 
@@ -2211,7 +2211,7 @@ router.get('/reportes/mayor', async (req, res) => {
     const doc = crearDocumentoPdf(res, `libro_mayor_${formatDateOnly(new Date())}.pdf`);
     doc.fontSize(14).text('Libro Mayor', { align: 'left' });
     doc.moveDown(0.3);
-    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC')}`);
+    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`);
     doc.text(`Filtros: cuentaId=${cuentaId || 'todas'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} periodo=${req.query.periodo || '-'}`);
     doc.moveDown(0.5);
 
@@ -2314,7 +2314,7 @@ router.get('/reportes/estados', async (req, res) => {
     const doc = crearDocumentoPdf(res, `estados_financieros_${formatDateOnly(new Date())}.pdf`);
     doc.fontSize(14).text('Estados Financieros', { align: 'left' });
     doc.moveDown(0.3);
-    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC')}`);
+    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`);
     doc.text(`Filtros: periodo=${req.query.periodo || '-'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} fechaBalance=${req.query.fechaBalance || '-'}`);
     doc.moveDown(0.5);
 
