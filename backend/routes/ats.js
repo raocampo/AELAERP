@@ -651,8 +651,8 @@ router.get('/exportar/pdf', async (req, res) => {
       let x = ML;
       cols.forEach((c, i) => {
         if (i > 0) doc.moveTo(x, curY + 2).lineTo(x, curY + COL_H - 2).lineWidth(0.5).stroke('#93c5fd').lineWidth(1);
-        doc.fillColor(SRI_BLUE).font('Helvetica-Bold').fontSize(7.5)
-          .text(c.t, x + 3, curY + 8, { width: c.w - 6, align: c.a || 'center' });
+        doc.fillColor(SRI_BLUE).font('Helvetica-Bold').fontSize(7)
+          .text(c.t, x + 3, curY + 8, { width: c.w - 6, align: c.a || 'center', lineBreak: false });
         x += c.w;
       });
       curY += COL_H;
@@ -665,8 +665,8 @@ router.get('/exportar/pdf', async (req, res) => {
       values.forEach((v, i) => {
         const c = cols[i];
         if (i > 0) doc.moveTo(x, curY + 1).lineTo(x, curY + ROW_H - 1).lineWidth(0.3).stroke('#cbd5e1').lineWidth(1);
-        doc.fillColor(bold ? HDR_BG : '#1e293b').font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8)
-          .text(String(v ?? ''), x + 3, curY + 5, { width: c.w - 6, align: c.a || 'left' });
+        doc.fillColor(bold ? HDR_BG : '#1e293b').font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(7.5)
+          .text(String(v ?? ''), x + 3, curY + 5, { width: c.w - 6, align: c.a || 'left', lineBreak: false });
         x += c.w;
       });
       doc.fillColor('black');
@@ -681,8 +681,8 @@ router.get('/exportar/pdf', async (req, res) => {
       let x = ML;
       values.forEach((v, i) => {
         const c = cols[i];
-        doc.fillColor('white').font('Helvetica-Bold').fontSize(8.5)
-          .text(String(v ?? ''), x + 3, curY + 5, { width: c.w - 6, align: c.a || 'left' });
+        doc.fillColor('white').font('Helvetica-Bold').fontSize(7.5)
+          .text(String(v ?? ''), x + 3, curY + 5, { width: c.w - 6, align: c.a || 'left', lineBreak: false });
         x += c.w;
       });
       doc.fillColor('black');
@@ -692,19 +692,20 @@ router.get('/exportar/pdf', async (req, res) => {
 
     // ── COMPRAS / VENTAS ─────────────────────────────────────────────────────
     // Columnas: total PW=515
-    // 28+95+43+52+47+52+47+33+36+44+38 = 515
+    // 36+95+38+46+44+46+44+35+35+42+54 = 515
+    // Cod ampliada a 36 para que "TOTAL" no se corte; IVA 15% a 54 para números grandes
     const tc = [
-      { t: 'Cod.',       w: 28,  a: 'center' },
+      { t: 'Cod.',       w: 36,  a: 'center' },
       { t: 'Transacción', w: 95,  a: 'left'   },
-      { t: 'No. Reg.',   w: 43,  a: 'right'  },
-      { t: 'BI 0%',      w: 52,  a: 'right'  },
-      { t: 'BI T.5%',    w: 47,  a: 'right'  },
-      { t: 'BI T.12%',   w: 52,  a: 'right'  },
-      { t: 'BI T.15%',   w: 47,  a: 'right'  },
-      { t: 'BI No Obj.', w: 33,  a: 'right'  },
-      { t: 'IVA 5%',     w: 36,  a: 'right'  },
-      { t: 'IVA 12%',    w: 44,  a: 'right'  },
-      { t: 'IVA 15%',    w: 38,  a: 'right'  },
+      { t: 'No. Reg.',   w: 38,  a: 'right'  },
+      { t: 'BI 0%',      w: 46,  a: 'right'  },
+      { t: 'BI T.5%',    w: 44,  a: 'right'  },
+      { t: 'BI T.12%',   w: 46,  a: 'right'  },
+      { t: 'BI T.15%',   w: 44,  a: 'right'  },
+      { t: 'No Obj.',    w: 35,  a: 'right'  },
+      { t: 'IVA 5%',     w: 35,  a: 'right'  },
+      { t: 'IVA 12%',    w: 42,  a: 'right'  },
+      { t: 'IVA 15%',    w: 54,  a: 'right'  },
     ];
 
     secHdr('COMPRAS');
