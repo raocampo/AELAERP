@@ -547,6 +547,24 @@ Los asientos de compras/ventas de 2023 pueden tener IVA calculado como `subtotal
 (incorrecto). Requiere verificar `totalIva` guardado vs. `subtotal12 * 0.12` y potencialmente
 regenerar asientos afectados. **Sesión aparte** — ver `pendientes-2026-07-15.md`.
 
+#### Fix — `subtotal12` propagado a BDs de tenants (`9a8e2ca`)
+Las BDs de empresa (tenants) no reciben `prisma migrate deploy` — solo la BD principal.
+Se añadieron al array `FIXES` de `applySchemaFixes.js` los ALTER TABLE IF NOT EXISTS + backfill
+para `subtotal12` en las 3 tablas. Corrige el error P2022 que aparecía en Railway al startup.
+
+#### Feat — ATS PDF: rediseño completo del talón resumen (`16ab8ec`)
+Logo oficial SRI (`backend/assets/LogoSRI.png`). Layout A4 completo (515pt usable).
+11 columnas ajustadas exactamente: Cod.36+Trans.95+NoReg.38+BI0.46+BIT5.44+BIT12.46+BIT15.44+NoObj.35+IVA5.35+IVA12.42+IVA15.54=515.
+Helpers PDFKit con `lineBreak: false` (colHdr / dataRow / totRow).
+
+#### Fix — ATS PDF: texto cortado en celdas (`1431827`)
+`lineBreak: false` global; Cod. 28→36pt; IVA15 38→54pt; "BI No Obj."→"No Obj."+35pt.
+
+#### Fix — Zona horaria Ecuador en PDFs y logs (`9a883e7`)
+Railway en UTC mostraba hora incorrecta. Nuevo `backend/utils/fechas.js` con `America/Guayaquil`.
+Reemplazo global `toLocaleString('es-EC')` → con timezone en 9 archivos backend.
+`toLocaleDateString` NO modificado (fechas UTC-medianoche se desplazarían un día atrás).
+
 ### 30. Sesión 2026-07-14 (parte 2) — Estados Financieros Jerárquicos + ATS Paginación + PDF SRI
 
 Ver `docs/pendientes-2026-07-14-parte2.md` para el detalle exhaustivo (commits, helpers PDF,

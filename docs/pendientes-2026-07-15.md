@@ -203,6 +203,141 @@ real en este entorno. Verificar con los datos reales de PUCHAICELA (2023):
 
 ---
 
+---
+
+## Parte 2 — Correcciones 2026-07-15 (segunda mitad de sesión)
+
+### Fix: P2022 `subtotal12` en BDs de todos los tenants (`9a8e2ca`)
+
+**Problema**: Railway aplica `prisma migrate deploy` solo contra la BD principal. Las BDs de
+cada empresa (aela_lsac, aela_mprq, etc.) no reciben las migraciones de Prisma. Al arrancar
+Railway después del commit `e15c737`, los tenants arrojaban:
+
+```
+The column `liquidaciones_compra.subtotal12` does not exist in the current database.
+(prisma: P2022)
+```
+
+**Solución**: Añadir las instrucciones `ADD COLUMN IF NOT EXISTS` + backfill retroactivo al
+array `FIXES` de `backend/scripts/applySchemaFixes.js`. Este script corre en cada startup de
+Railway y conecta contra cada tenant activo en `aela_master.tenants`.
+
+Entradas añadidas al final de `FIXES`:
+
+```js
+// IVA 12% histórico Ecuador (pre-2024-04-22) — campo subtotal12 (2026-07-15)
+`ALTER TABLE "facturas"             ADD COLUMN IF NOT EXISTS "subtotal12" DECIMAL(14,2) NOT NULL DEFAULT 0`,
+`ALTER TABLE "facturas_compra"      ADD COLUMN IF NOT EXISTS "subtotal12" DECIMAL(14,2) NOT NULL DEFAULT 0`,
+`ALTER TABLE "liquidaciones_compra" ADD COLUMN IF NOT EXISTS "subtotal12" DECIMAL(14,2) NOT NULL DEFAULT 0`,
+// Backfill retroactivo (idempotente):
+`UPDATE "facturas"             SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
+`UPDATE "facturas_compra"      SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
+`UPDATE "liquidaciones_compra" SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
+```
+
+---
+
+### Feat: ATS PDF — rediseño completo del talón resumen (`16ab8ec`)
+
+**Problema**: El talón PDF del ATS era compacto y sin identidad visual. El usuario solicitó:
+logo oficial del SRI, mejor uso del A4, y formato parecido al documento de referencia del SRI.
+
+**Logo**: Copiado de `UtilitariosSCFI/ATS/LogoSRI.png` a `backend/assets/LogoSRI.png`.
+Referenciado desde `ats.js` como constante `LOGO_SRI` con fallback visual si no se encuentra.
+
+**Constantes de layout A4**:
+```js
+const ML = 40, PW = 515, PAGE_MAX = 802;   // márgenes y ancho útil
+const ROW_H = 18, COL_H = 24, SEC_H = 22, SUB_H = 20;
+```
+
+**Helpers PDFKit** con `lineBreak: false` (previene que el texto se corte dentro de una celda):
+- `colHdr(cols)` — cabecera de columnas (font 7pt, bold)
+- `dataRow(cols, values, bold)` — fila de datos (font 7.5pt)
+- `totRow(cols, values)` — fila de totales (font 7.5pt, bold, fondo gris)
+
+**Columnas finales** (suma exacta = 515pt):
+```
+Cod.(36) | Transacción(95) | No. Reg.(38) | BI 0%(46) | BI T.5%(44) |
+BI T.12%(46) | BI T.15%(44) | No Obj.(35) | IVA 5%(35) | IVA 12%(42) | IVA 15%(54)
+```
+
+**Cabecera PDF**: logo SRI (110×78pt), título "ANEXO TRANSACCIONAL SIMPLIFICADO", empresa,
+período, RUC, y línea de generación con hora Ecuador.
+
+---
+
+### Fix: Columnas ATS PDF — texto cortado en celdas (`1431827`)
+
+**Problema** (reportado por el usuario vía screenshot):
+- "TOTA L" — la palabra "TOTAL" se partía en dos líneas en la columna Cod. (demasiado angosta)
+- "13923.46" — el número se desbordaba de la columna IVA 15% (muy estrecha)
+- "BI No Obj." — la cabecera se wrapeaba a 2 líneas
+
+**Soluciones**:
+- `lineBreak: false` en todos los helpers → PDFKit no intenta ajustar texto, simplemente lo corta al ancho
+- Cod.: 28 → 36pt (suficiente para "TOTAL" en bold 7.5pt)
+- IVA 15%: 38 → 54pt (suficiente para 8 dígitos "13923.46" + padding)
+- Cabecera "BI No Obj." → renombrada a "No Obj." (7 chars) + columna 33 → 35pt
+
+---
+
+### Fix: Zona horaria Ecuador en todos los PDFs y logs (`9a883e7`)
+
+**Problema**: Railway corre en servidores UTC. `new Date().toLocaleString('es-EC')` sin
+timezone usaba UTC, mostrando hora incorrecta. Ejemplo: el usuario reportó
+`"16/7/2026, 1:52:55 a. m."` cuando en Ecuador eran las `20:54 del 15/07/2026`.
+
+**Impacto**: Afectaba la auditoría y el timestamp de generación de PDFs, autorización SRI.
+
+**Solución A** — utilidades centralizadas (`backend/utils/fechas.js` nuevo):
+```js
+const TZ_EC = 'America/Guayaquil';
+const formatFechaHora = (d = new Date()) =>
+  new Date(d).toLocaleString('es-EC', { timeZone: TZ_EC });
+const fechaHoyEC = () =>
+  new Date().toLocaleDateString('en-CA', { timeZone: TZ_EC }); // YYYY-MM-DD
+module.exports = { TZ_EC, formatFechaHora, fechaHoyEC };
+```
+
+**Solución B** — reemplazo global en 9 archivos del backend:
+`toLocaleString('es-EC')` → `toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })`
+
+Archivos afectados:
+- `backend/routes/compras.js`
+- `backend/routes/configuracionSistema.js`
+- `backend/routes/contabilidad.js`
+- `backend/routes/facturas.js`
+- `backend/routes/inventario.js`
+- `backend/routes/retenciones-recibidas.js`
+- `backend/routes/retenciones.js`
+- `backend/utils/sri.js`
+- `backend/routes/ats.js`
+
+**IMPORTANTE — qué NO se cambió**:
+`toLocaleDateString` (sin hora) **no** se modificó. Las fechas tipo `fechaEmision` se almacenan
+como medianoche UTC en PostgreSQL. Añadirles timezone Ecuador las desplazaría al día anterior
+(UTC 00:00 − 5h = día anterior 19:00). Solo `toLocaleString` (fecha+hora) necesita el timezone.
+
+---
+
+## 🔴 VERIFICAR EN PRODUCCIÓN — Parte 2
+
+1. **ATS PDF rediseñado** — generar PDF ATS para un período con datos reales (ej. 2023):
+   - Logo SRI visible en la esquina superior izquierda
+   - 11 columnas caben sin corte ni wrapping
+   - "TOTAL" aparece en una sola línea en la columna Cod.
+   - Números grandes (ej. 92.822,77) visibles sin corte en columna IVA 15%
+
+2. **Hora Ecuador correcta en PDFs** — tras el próximo deploy de Railway, la línea de
+   generación debe mostrar hora Ecuador (UTC-5), no UTC. Verificar comparando con la hora
+   local del equipo (Ecuador = servidor − 5h).
+
+3. **Tenants sin P2022** — verificar en los logs de Railway que ningún tenant arroja el
+   error `P2022` (column does not exist) al inicio.
+
+---
+
 ## Contexto técnico rápido
 
 ```
