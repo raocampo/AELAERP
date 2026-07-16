@@ -5,12 +5,15 @@
 
 const express = require('express');
 const router  = express.Router();
+const path    = require('path');
 const prisma  = require('../config/prisma');
 const PDFDocument = require('pdfkit');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { CODIGOS_RETENCION_RENTA } = require('../utils/sri');
+
+const LOGO_SRI = path.join(__dirname, '../assets/LogoSRI.png');
 
 router.use(proteger);
 router.use(soloFull);
@@ -544,86 +547,115 @@ router.get('/exportar/pdf', async (req, res) => {
     const totalRetIrRecib  = retencionesRecibidas.reduce((s, r) => s + r2(r.totalRetencionRenta), 0);
 
     // ── PDFKit ────────────────────────────────────────────────────────────────
-    const doc = new PDFDocument({ size: 'A4', margins: { top: 30, bottom: 30, left: 36, right: 36 } });
+    const doc = new PDFDocument({
+      size: 'A4',
+      margins: { top: 40, bottom: 40, left: 40, right: 40 },
+      autoFirstPage: true,
+    });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="talonATS_${anio}${mesPad}.pdf"`);
     doc.pipe(res);
 
-    const ML = 36, PW = 595 - 72;
-    const n2       = (v) => Number(v).toFixed(2);
+    // ── Constantes de diseño ─────────────────────────────────────────────────
+    const ML       = 40;
+    const PW       = 515;   // 595 − 80 (márgenes l+r)
+    const PAGE_MAX = 802;   // 842 − 40 (margen inferior)
     const SRI_BLUE = '#003087';
     const HDR_BG   = '#1f3a6e';
     const SUB_BG   = '#2e5fa3';
-    const ALT_BG   = '#f0f4fa';
-    const ROW_H    = 14;
+    const ALT_BG   = '#eef2fb';
+    const ROW_H    = 18;    // filas de datos
+    const COL_H    = 24;    // fila de encabezados de columna
+    const SEC_H    = 22;    // altura de sección principal
+    const SUB_H    = 20;    // altura de sub-sección
+    const n2 = (v) => Number(v || 0).toFixed(2);
 
-    // ── Cabecera ──────────────────────────────────────────────────────────────
-    doc.rect(ML, 30, 86, 52).fillAndStroke(SRI_BLUE, SRI_BLUE);
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(5.5)
-      .text('SERVICIO DE RENTAS INTERNAS', ML + 1, 36, { width: 84, align: 'center' });
-    doc.fontSize(17).text('SRI', ML + 1, 45, { width: 84, align: 'center' });
-    doc.fontSize(5).text('...le hace bien al país!', ML + 1, 72, { width: 84, align: 'center' });
+    // ── Cabecera — Logo + Título ──────────────────────────────────────────────
+    const MT       = 40;
+    const LOGO_W   = 110;
+    const LOGO_H   = 78;
+    const TITLE_X  = ML + LOGO_W + 16;
+    const TITLE_W  = PW - LOGO_W - 16;
+
+    try {
+      doc.image(LOGO_SRI, ML, MT, { width: LOGO_W, height: LOGO_H, fit: [LOGO_W, LOGO_H] });
+    } catch (_) {
+      // Fallback si el logo no existe en el servidor
+      doc.rect(ML, MT, LOGO_W, LOGO_H - 16).fillAndStroke(SRI_BLUE, SRI_BLUE);
+      doc.fillColor('white').font('Helvetica-Bold').fontSize(28)
+        .text('SRI', ML, MT + 12, { width: LOGO_W, align: 'center' });
+      doc.fillColor(SRI_BLUE).font('Helvetica-Oblique').fontSize(7)
+        .text('...le hace bien al país!', ML, MT + LOGO_H - 14, { width: LOGO_W, align: 'center' });
+      doc.fillColor('black');
+    }
+
     doc.fillColor(SRI_BLUE).font('Helvetica-Bold')
-      .fontSize(10).text('TALÓN RESUMEN', ML + 92, 33, { width: PW - 92, align: 'center' })
-      .fontSize(9).text('SERVICIO DE RENTAS INTERNAS', ML + 92, 46, { width: PW - 92, align: 'center' })
-      .fontSize(9).text('ANEXO TRANSACCIONAL', ML + 92, 58, { width: PW - 92, align: 'center' });
+      .fontSize(14).text('TALÓN RESUMEN', TITLE_X, MT + 6, { width: TITLE_W, align: 'center' })
+      .fontSize(11).text('SERVICIO DE RENTAS INTERNAS', TITLE_X, MT + 28, { width: TITLE_W, align: 'center' })
+      .fontSize(10).text('ANEXO TRANSACCIONAL', TITLE_X, MT + 47, { width: TITLE_W, align: 'center' });
     doc.fillColor('black');
 
-    const eY = 88;
-    doc.rect(ML, eY, PW, 14).fillAndStroke('#f8fafc', '#cbd5e1');
-    doc.fillColor('#1e293b').font('Helvetica-Bold').fontSize(7.5)
-      .text(config.razonSocial || '—', ML + 4, eY + 3, { width: PW - 8, align: 'center' });
-    doc.rect(ML, eY + 14, PW, 12).stroke('#cbd5e1');
-    doc.font('Helvetica').fontSize(7)
-      .text(`RUC: ${config.ruc || '—'}`, ML + 4, eY + 17)
-      .text(`Período: ${periodoLabel}    Fecha de generación: ${new Date().toLocaleString('es-EC')}`,
-        ML + PW / 3, eY + 17, { width: PW * 2 / 3, align: 'right' });
+    // Bloque datos empresa
+    let curY = MT + LOGO_H + 14;
+    doc.rect(ML, curY, PW, 20).fillAndStroke('#f1f5f9', '#cbd5e1');
+    doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(10)
+      .text(config.razonSocial || '—', ML + 6, curY + 5, { width: PW - 12, align: 'center' });
+    curY += 20;
+    doc.rect(ML, curY, PW, 18).fillAndStroke('#f8fafc', '#e2e8f0');
+    doc.fillColor('#334155').font('Helvetica').fontSize(8.5)
+      .text(`RUC: ${config.ruc || '—'}`, ML + 8, curY + 4)
+      .text(`Período: ${periodoLabel}`, ML, curY + 4, { width: PW, align: 'center' })
+      .text(`Fecha de generación: ${new Date().toLocaleString('es-EC')}`,
+        ML + 8, curY + 4, { width: PW - 16, align: 'right' });
+    curY += 18;
+    doc.fillColor('black');
+    curY += 16;
 
-    let curY = eY + 32;
-    doc.fontSize(7).font('Helvetica').fillColor('#1e293b')
+    // Párrafo de certificación
+    doc.fontSize(9).font('Helvetica').fillColor('#334155')
       .text(
         `Certifico que la información contenida en el medio magnético del Anexo Transaccional para el período ${periodoLabel}, es fiel reflejo del siguiente reporte:`,
         ML, curY, { width: PW },
       );
-    curY += 22;
+    curY += 30;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     let rowAlt = false;
 
-    const pgCheck = (needed = ROW_H * 3) => {
-      if (curY + needed > 800) { doc.addPage(); curY = 30; rowAlt = false; }
+    const pgCheck = (needed = ROW_H * 4) => {
+      if (curY + needed > PAGE_MAX) { doc.addPage(); curY = 40; rowAlt = false; }
     };
 
     const secHdr = (title) => {
-      pgCheck(ROW_H * 5);
-      doc.rect(ML, curY, PW, ROW_H).fillAndStroke(HDR_BG, HDR_BG);
-      doc.fillColor('white').font('Helvetica-Bold').fontSize(7.5)
-        .text(title, ML + 4, curY + 3, { width: PW - 8, align: 'center' });
+      pgCheck(SEC_H + ROW_H * 6);
+      doc.rect(ML, curY, PW, SEC_H).fillAndStroke(HDR_BG, HDR_BG);
+      doc.fillColor('white').font('Helvetica-Bold').fontSize(9.5)
+        .text(title, ML + 6, curY + 6, { width: PW - 12, align: 'center' });
       doc.fillColor('black');
-      curY += ROW_H;
+      curY += SEC_H;
       rowAlt = false;
     };
 
     const subHdr = (title) => {
-      pgCheck(ROW_H * 4);
-      doc.rect(ML, curY, PW, ROW_H).fillAndStroke(SUB_BG, SUB_BG);
-      doc.fillColor('white').font('Helvetica-Bold').fontSize(7)
-        .text(title, ML + 4, curY + 3, { width: PW - 8, align: 'center' });
+      pgCheck(SUB_H + ROW_H * 4);
+      doc.rect(ML, curY, PW, SUB_H).fillAndStroke(SUB_BG, SUB_BG);
+      doc.fillColor('white').font('Helvetica-Bold').fontSize(8.5)
+        .text(title, ML + 6, curY + 5, { width: PW - 12, align: 'center' });
       doc.fillColor('black');
-      curY += ROW_H;
+      curY += SUB_H;
     };
 
     const colHdr = (cols) => {
       pgCheck();
-      doc.rect(ML, curY, PW, ROW_H).fillAndStroke('#dbeafe', '#93c5fd');
+      doc.rect(ML, curY, PW, COL_H).fillAndStroke('#dbeafe', '#93c5fd');
       let x = ML;
       cols.forEach((c, i) => {
-        if (i > 0) doc.moveTo(x, curY).lineTo(x, curY + ROW_H).lineWidth(0.4).stroke('#93c5fd').lineWidth(1);
-        doc.fillColor(SRI_BLUE).font('Helvetica-Bold').fontSize(6.5)
-          .text(c.t, x + 2, curY + 3, { width: c.w - 4, align: c.a || 'center' });
+        if (i > 0) doc.moveTo(x, curY + 2).lineTo(x, curY + COL_H - 2).lineWidth(0.5).stroke('#93c5fd').lineWidth(1);
+        doc.fillColor(SRI_BLUE).font('Helvetica-Bold').fontSize(7.5)
+          .text(c.t, x + 3, curY + 8, { width: c.w - 6, align: c.a || 'center' });
         x += c.w;
       });
-      curY += ROW_H;
+      curY += COL_H;
     };
 
     const dataRow = (cols, values, bold = false) => {
@@ -633,8 +665,8 @@ router.get('/exportar/pdf', async (req, res) => {
       values.forEach((v, i) => {
         const c = cols[i];
         if (i > 0) doc.moveTo(x, curY + 1).lineTo(x, curY + ROW_H - 1).lineWidth(0.3).stroke('#cbd5e1').lineWidth(1);
-        doc.fillColor(bold ? SRI_BLUE : '#1e293b').font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(6.5)
-          .text(String(v ?? ''), x + 2, curY + 3, { width: c.w - 4, align: c.a || 'left' });
+        doc.fillColor(bold ? HDR_BG : '#1e293b').font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8)
+          .text(String(v ?? ''), x + 3, curY + 5, { width: c.w - 6, align: c.a || 'left' });
         x += c.w;
       });
       doc.fillColor('black');
@@ -644,42 +676,44 @@ router.get('/exportar/pdf', async (req, res) => {
 
     const totRow = (cols, values) => {
       pgCheck();
-      curY += 1;
-      doc.rect(ML, curY, PW, ROW_H).fillAndStroke(HDR_BG, HDR_BG);
+      curY += 2;
+      doc.rect(ML, curY, PW, ROW_H + 2).fillAndStroke(HDR_BG, HDR_BG);
       let x = ML;
       values.forEach((v, i) => {
         const c = cols[i];
-        doc.fillColor('white').font('Helvetica-Bold').fontSize(7)
-          .text(String(v ?? ''), x + 2, curY + 3, { width: c.w - 4, align: c.a || 'left' });
+        doc.fillColor('white').font('Helvetica-Bold').fontSize(8.5)
+          .text(String(v ?? ''), x + 3, curY + 5, { width: c.w - 6, align: c.a || 'left' });
         x += c.w;
       });
       doc.fillColor('black');
-      curY += ROW_H + 2;
+      curY += ROW_H + 2 + 4;
       rowAlt = false;
     };
 
-    // ── COMPRAS / VENTAS (columnas: 5%, 12%, 15%) ────────────────────────────
+    // ── COMPRAS / VENTAS ─────────────────────────────────────────────────────
+    // Columnas: total PW=515
+    // 28+95+43+52+47+52+47+33+36+44+38 = 515
     const tc = [
-      { t: 'Cod.',          w: 26,  a: 'center' },
-      { t: 'Transacción',   w: 82,  a: 'left'   },
-      { t: 'No. Reg.',      w: 42,  a: 'right'  },
-      { t: 'BI 0%',        w: 52,  a: 'right'  },
-      { t: 'BI T.5%',      w: 47,  a: 'right'  },
-      { t: 'BI T.12%',     w: 52,  a: 'right'  },
-      { t: 'BI T.15%',     w: 47,  a: 'right'  },
-      { t: 'BI No Obj.',   w: 32,  a: 'right'  },
-      { t: 'IVA 5%',       w: 45,  a: 'right'  },
-      { t: 'IVA 12%',      w: 52,  a: 'right'  },
-      { t: 'IVA 15%',      w: 46,  a: 'right'  },
+      { t: 'Cod.',       w: 28,  a: 'center' },
+      { t: 'Transacción', w: 95,  a: 'left'   },
+      { t: 'No. Reg.',   w: 43,  a: 'right'  },
+      { t: 'BI 0%',      w: 52,  a: 'right'  },
+      { t: 'BI T.5%',    w: 47,  a: 'right'  },
+      { t: 'BI T.12%',   w: 52,  a: 'right'  },
+      { t: 'BI T.15%',   w: 47,  a: 'right'  },
+      { t: 'BI No Obj.', w: 33,  a: 'right'  },
+      { t: 'IVA 5%',     w: 36,  a: 'right'  },
+      { t: 'IVA 12%',    w: 44,  a: 'right'  },
+      { t: 'IVA 15%',    w: 38,  a: 'right'  },
     ];
+
     secHdr('COMPRAS');
     colHdr(tc);
     if (compras.length > 0)
       dataRow(tc, ['01', 'FACTURA', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), '0.00', n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
-    dataRow(tc, ['TOTAL', '', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), '0.00', n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)], true);
-    curY += 4;
+    totRow(tc,   ['TOTAL', '', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), '0.00', n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
+    curY += 10;
 
-    // ── VENTAS (por tipo de comprobante, separando IVA 5%, 12% y 15%) ─────────
     secHdr('VENTAS');
     colHdr(tc);
     if (facturas.length > 0)
@@ -688,32 +722,35 @@ router.get('/exportar/pdf', async (req, res) => {
       dataRow(tc, ['03', 'LIQUIDACIÓN DE COMPRA', vLiq.n, n2(vLiq.b0), '0.00', n2(vLiq.bt12), n2(vLiq.bt15), '0.00', '0.00', n2(vLiq.iva12), n2(vLiq.iva15)]);
     if (ncs.length > 0)
       dataRow(tc, ['04', 'NOTA DE CRÉDITO', vNcEm.n, '0.00', n2(vNcEm.bt5), '0.00', n2(vNcEm.bt15), '0.00', n2(vNcEm.iva5), '0.00', n2(vNcEm.iva15)]);
-    dataRow(tc, ['TOTAL', '', vTotN, n2(vTotB0), n2(vTotBt5), n2(vTotBt12), n2(vTotBt15), '0.00', n2(vTotIva5), n2(vTotIva12), n2(vTotIva15)], true);
-    curY += 4;
+    totRow(tc,   ['TOTAL', '', vTotN, n2(vTotB0), n2(vTotBt5), n2(vTotBt12), n2(vTotBt15), '0.00', n2(vTotIva5), n2(vTotIva12), n2(vTotIva15)]);
+    curY += 10;
 
     // ── COMPROBANTES ANULADOS ─────────────────────────────────────────────────
-    pgCheck(ROW_H * 2);
-    doc.rect(ML, curY, PW, ROW_H).fillAndStroke(HDR_BG, HDR_BG);
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(7.5)
-      .text('COMPROBANTES ANULADOS', ML + 4, curY + 3, { width: PW - 8, align: 'center' });
+    pgCheck(SEC_H + ROW_H + 12);
+    doc.rect(ML, curY, PW, SEC_H).fillAndStroke(HDR_BG, HDR_BG);
+    doc.fillColor('white').font('Helvetica-Bold').fontSize(9.5)
+      .text('COMPROBANTES ANULADOS', ML + 6, curY + 6, { width: PW - 12, align: 'center' });
     doc.fillColor('black');
-    curY += ROW_H;
-    doc.rect(ML, curY, PW, ROW_H).fillAndStroke('#f8fafc', '#e2e8f0');
-    doc.fillColor('#1e293b').font('Helvetica').fontSize(7)
-      .text('Total de Comprobantes Anulados en el período informado (no incluye los dados de baja)', ML + 4, curY + 3, { width: PW - 70 })
-      .font('Helvetica-Bold').text(String(anuladosFacturas.length), ML + PW - 60, curY + 3, { width: 56, align: 'right' });
+    curY += SEC_H;
+    doc.rect(ML, curY, PW, ROW_H + 2).fillAndStroke('#f8fafc', '#e2e8f0');
+    doc.fillColor('#1e293b').font('Helvetica').fontSize(8.5)
+      .text('Total de Comprobantes Anulados en el período informado (no incluye los dados de baja)',
+        ML + 8, curY + 5, { width: PW - 90 });
+    doc.font('Helvetica-Bold').fontSize(9)
+      .text(String(anuladosFacturas.length), ML + PW - 80, curY + 5, { width: 72, align: 'right' });
     doc.fillColor('black');
-    curY += ROW_H + 4;
+    curY += ROW_H + 2 + 14;
 
     // ── RESUMEN DE RETENCIONES — AGENTE DE RETENCIÓN ──────────────────────────
     secHdr('RESUMEN DE RETENCIONES - AGENTE DE RETENCIÓN');
 
+    // 40+244+58+87+86 = 515
     const irC = [
-      { t: 'Cod.',                   w: 40,  a: 'center' },
-      { t: 'Concepto de Retención',  w: 228, a: 'left'   },
-      { t: 'No. Registros',          w: 52,  a: 'right'  },
-      { t: 'B. Imponible',           w: 101, a: 'right'  },
-      { t: 'Valor retenido',         w: 102, a: 'right'  },
+      { t: 'Cod.',                  w: 40,  a: 'center' },
+      { t: 'Concepto de Retención', w: 244, a: 'left'   },
+      { t: 'No. Registros',         w: 58,  a: 'right'  },
+      { t: 'B. Imponible',          w: 87,  a: 'right'  },
+      { t: 'Valor retenido',        w: 86,  a: 'right'  },
     ];
     subHdr('RETENCIÓN EN LA FUENTE DE IMPUESTO A LA RENTA');
     colHdr(irC);
@@ -724,10 +761,11 @@ router.get('/exportar/pdf', async (req, res) => {
     }
     totRow(irC, ['TOTAL', '', totalRetIrN, n2(totalRetIrBase), n2(totalRetIr)]);
 
+    // 90+305+120 = 515
     const ivaC = [
       { t: 'Operación',             w: 90,  a: 'center' },
-      { t: 'Concepto de Retención', w: 333, a: 'left'   },
-      { t: 'Valor retenido',        w: 100, a: 'right'  },
+      { t: 'Concepto de Retención', w: 305, a: 'left'   },
+      { t: 'Valor retenido',        w: 120, a: 'right'  },
     ];
     subHdr('RETENCIÓN EN LA FUENTE DE IVA');
     colHdr(ivaC);
@@ -737,36 +775,38 @@ router.get('/exportar/pdf', async (req, res) => {
       dataRow(ivaC, ['COMPRA', 'Sin retenciones IVA emitidas en el período', '0.00']);
     }
     totRow(ivaC, ['TOTAL', '', n2(totalRetIvaEmit)]);
-    curY += 4;
+    curY += 12;
 
     // ── RETENCIONES QUE LE EFECTUARON ────────────────────────────────────────
     const recC = [
-      { t: 'Operación',                           w: 90,  a: 'center' },
-      { t: 'Tipo de Retención que le efectuaron',  w: 333, a: 'left'   },
-      { t: 'Valor retenido',                      w: 100, a: 'right'  },
+      { t: 'Operación',                          w: 90,  a: 'center' },
+      { t: 'Tipo de Retención que le efectuaron', w: 305, a: 'left'   },
+      { t: 'Valor retenido',                     w: 120, a: 'right'  },
     ];
     secHdr('RESUMEN DE RETENCIONES QUE LE EFECTUARON EN EL PERIODO');
     colHdr(recC);
     dataRow(recC, ['VENTA', 'Valor de IVA que le han retenido',   n2(totalRetIvaRecib)]);
     dataRow(recC, ['VENTA', 'Valor de Renta que le han retenido', n2(totalRetIrRecib)]);
     totRow(recC, ['TOTAL', '', n2(totalRetIvaRecib + totalRetIrRecib)]);
-    curY += 8;
+    curY += 20;
 
     // ── Declaración y firmas ──────────────────────────────────────────────────
-    pgCheck(70);
-    doc.fontSize(7).font('Helvetica').fillColor('#1e293b')
+    pgCheck(90);
+    doc.fontSize(9).font('Helvetica').fillColor('#334155')
       .text(
         'Declaro que los datos contenidos en este anexo son verdaderos, por lo que asumo la responsabilidad correspondiente, de acuerdo a lo establecido en el Art. 101 de la Codificación de la Ley de Régimen Tributario Interno.',
-        ML, curY, { width: PW },
+        ML, curY, { width: PW, align: 'justify' },
       );
-    curY += 30;
-    pgCheck(40);
-    const fw = (PW - 40) / 2;
-    doc.moveTo(ML, curY + 20).lineTo(ML + fw, curY + 20).stroke('#1e293b');
-    doc.moveTo(ML + fw + 40, curY + 20).lineTo(ML + PW, curY + 20).stroke('#1e293b');
-    doc.fontSize(7).font('Helvetica').fillColor('#1e293b')
-      .text('Firma del Contador', ML, curY + 23, { width: fw, align: 'center' })
-      .text('Firma del Representante', ML + fw + 40, curY + 23, { width: fw, align: 'center' });
+    curY += 40;
+    pgCheck(50);
+    const fw = (PW - 60) / 2;
+    doc.lineWidth(0.8)
+      .moveTo(ML + 10, curY + 28).lineTo(ML + 10 + fw, curY + 28).stroke('#0f172a')
+      .moveTo(ML + 10 + fw + 60, curY + 28).lineTo(ML + PW - 10, curY + 28).stroke('#0f172a');
+    doc.lineWidth(1);
+    doc.fontSize(8.5).font('Helvetica').fillColor('#334155')
+      .text('Firma del Contador', ML + 10, curY + 32, { width: fw, align: 'center' })
+      .text('Firma del Representante Legal', ML + 10 + fw + 60, curY + 32, { width: fw, align: 'center' });
 
     doc.end();
   } catch (err) {
