@@ -132,12 +132,13 @@ router.get('/f104', async (req, res) => {
     // ── LIQUIDACIONES DE COMPRA ─────────────────────────────────────────────────
     const liquidaciones = await db.liquidaciones_compra.findMany({
       where: { empresaId, fechaEmision: filtroFecha, anulada: false },
-      select: { subtotal0: true, subtotal12: true, subtotal15: true, totalIva: true },
+      select: { subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, totalIva: true },
     });
 
-    let liqSubtotal0 = 0, liqSubtotal12 = 0, liqSubtotal15 = 0, liqIva = 0;
+    let liqSubtotal0 = 0, liqSubtotal5 = 0, liqSubtotal12 = 0, liqSubtotal15 = 0, liqIva = 0;
     liquidaciones.forEach((l) => {
       liqSubtotal0  += d(l.subtotal0);
+      liqSubtotal5  += d(l.subtotal5);
       liqSubtotal12 += d(l.subtotal12);
       liqSubtotal15 += d(l.subtotal15);
       liqIva        += d(l.totalIva);
@@ -242,7 +243,7 @@ router.get('/f104', async (req, res) => {
         subtotal12:          parseFloat(comprasSubtotal12.toFixed(2)),
         subtotal15:          parseFloat(comprasSubtotal15.toFixed(2)),
         ivaCompras:          parseFloat(ivaCompras.toFixed(2)),
-        liquidaciones:       { subtotal0: parseFloat(liqSubtotal0.toFixed(2)), subtotal12: parseFloat(liqSubtotal12.toFixed(2)), subtotal15: parseFloat(liqSubtotal15.toFixed(2)), iva: parseFloat(liqIva.toFixed(2)) },
+        liquidaciones:       { subtotal0: parseFloat(liqSubtotal0.toFixed(2)), subtotal5: parseFloat(liqSubtotal5.toFixed(2)), subtotal12: parseFloat(liqSubtotal12.toFixed(2)), subtotal15: parseFloat(liqSubtotal15.toFixed(2)), iva: parseFloat(liqIva.toFixed(2)) },
         ncRecibidas:         { subtotal: ncReciSubtotal, iva: ncReciIva, cantidad: ncReci.length },
         ivaCreditoFiscal,
       },

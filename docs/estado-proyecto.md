@@ -568,6 +568,24 @@ los 122 asientos+líneas borrados, en `backend/scripts/_backup_*_2026-07-15.json
 Detalle exhaustivo (incluyendo cómo se ubicó la BD del tenant en producción) en
 `docs/pendientes-2026-07-15.md` (Parte 3).
 
+#### Fix — IVA 5% no se clasificaba en compras manuales y liquidaciones (2026-07-16)
+Cliente PUCHAICELA reportó que el sistema "no clasifica IVA 5% y 15%". Encontrados 3 bugs
+independientes, ninguno en el backend de facturas/compras normales (que ya era correcto):
+1. `FormCompra.jsx` — select de IVA solo ofrecía 0%/15% (imposible elegir 5%/12% al
+   registrar una compra manual); resumen en pantalla mezclaba todo bajo "15%".
+2. `FormLiquidacion.jsx` + `liquidaciones_compra` — nunca hubo soporte real para 5% en toda
+   la cadena: sin columna en BD, `calcLinea` solo calculaba IVA si era exactamente 15%, y
+   `generarXMLLiquidacionCompra` en `sri.js` ignoraba `ivaPct===5` (quedaba fuera del XML
+   enviado al SRI). De paso se corrigió que `liquidacionesCompra.js` tampoco persistía
+   `subtotal12` pese a que `sri.js` ya lo calculaba desde ayer.
+3. `ats.js` — el PDF talón resumen tenía **hardcodeado `'0.00'`** en las columnas 5% para la
+   fila "LIQUIDACIÓN DE COMPRA" (probable causa visible del reporte del cliente); `vLiq.bt5`/
+   `iva5` nunca se acumulaban pese a estar declarados.
+
+Nueva migración `20260716000000_subtotal5_liquidaciones_compra` (sin backfill — no puede
+haber datos previos en 5% dado que era imposible capturarlos). Detalle exhaustivo en
+`docs/pendientes-2026-07-16.md`.
+
 #### Fix — `subtotal12` propagado a BDs de tenants (`9a8e2ca`)
 Las BDs de empresa (tenants) no reciben `prisma migrate deploy` — solo la BD principal.
 Se añadieron al array `FIXES` de `applySchemaFixes.js` los ALTER TABLE IF NOT EXISTS + backfill

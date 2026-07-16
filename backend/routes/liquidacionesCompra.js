@@ -252,6 +252,8 @@ router.post('/', async (req, res) => {
         razonSocialProveedor,
         direccionProveedor:         direccionProveedor || null,
         subtotal0:                  totales.subtotal0,
+        subtotal5:                  totales.subtotal5,
+        subtotal12:                 totales.subtotal12,
         subtotal15:                 totales.subtotal15,
         totalDescuento:             totales.totalDescuento,
         totalIva:                   totales.totalIva,

@@ -37,7 +37,8 @@ const calcLinea = (det) => {
   const pu   = parseFloat(det.precioUnitario)  || 0;
   const desc = parseFloat(det.descuento)       || 0;
   const base = cant * pu - desc;
-  const iva  = det.porcentajeIva === 15 ? base * 0.15 : 0;
+  const pct  = Number(det.porcentajeIva) || 0;
+  const iva  = base > 0 ? base * (pct / 100) : 0;
   return { base: base < 0 ? 0 : base, iva, total: (base < 0 ? 0 : base) + iva };
 };
 
@@ -75,15 +76,18 @@ export default function FormLiquidacion() {
   const totales = detalles.reduce(
     (acc, d) => {
       const { base, iva } = calcLinea(d);
-      if (d.porcentajeIva === 15) acc.sub15 += base;
+      const pct = Number(d.porcentajeIva);
+      if (pct === 5) acc.sub5 += base;
+      else if (pct === 12) acc.sub12 += base;
+      else if (pct === 15) acc.sub15 += base;
       else acc.sub0 += base;
       acc.iva += iva;
       return acc;
     },
-    { sub0: 0, sub15: 0, iva: 0 }
+    { sub0: 0, sub5: 0, sub12: 0, sub15: 0, iva: 0 }
   );
   const totalDesc = detalles.reduce((s, d) => s + (parseFloat(d.descuento) || 0), 0);
-  const importeTotal = totales.sub0 + totales.sub15 + totales.iva;
+  const importeTotal = totales.sub0 + totales.sub5 + totales.sub12 + totales.sub15 + totales.iva;
 
   // ── Guardar ─────────────────────────────────────────────────────────────────
   const guardar = async (e) => {
@@ -267,6 +271,8 @@ export default function FormLiquidacion() {
                           onChange={e => handleDetalle(idx, 'porcentajeIva', Number(e.target.value))}
                           className="lf-det-input lf-det-iva">
                           <option value={0}>0%</option>
+                          <option value={5}>5%</option>
+                          <option value={12}>12%</option>
                           <option value={15}>15%</option>
                         </select>
                       </td>
@@ -295,6 +301,18 @@ export default function FormLiquidacion() {
                 <span>Subtotal 0%</span>
                 <strong>${totales.sub0.toFixed(2)}</strong>
               </div>
+              {totales.sub5 > 0 && (
+                <div className="lf-tot-row">
+                  <span>Subtotal 5%</span>
+                  <strong>${totales.sub5.toFixed(2)}</strong>
+                </div>
+              )}
+              {totales.sub12 > 0 && (
+                <div className="lf-tot-row">
+                  <span>Subtotal 12%</span>
+                  <strong>${totales.sub12.toFixed(2)}</strong>
+                </div>
+              )}
               <div className="lf-tot-row">
                 <span>Subtotal 15%</span>
                 <strong>${totales.sub15.toFixed(2)}</strong>
@@ -306,7 +324,7 @@ export default function FormLiquidacion() {
                 </div>
               )}
               <div className="lf-tot-row">
-                <span>IVA 15%</span>
+                <span>IVA</span>
                 <strong>${totales.iva.toFixed(2)}</strong>
               </div>
               <div className="lf-tot-row lf-tot-final">

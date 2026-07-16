@@ -108,7 +108,7 @@ router.get('/preview', async (req, res) => {
           id: true, numeroLiquidacion: true, fechaEmision: true,
           tipoIdentificacionProveedor: true, identificacionProveedor: true,
           razonSocialProveedor: true,
-          subtotal0: true, subtotal12: true, subtotal15: true, totalIva: true, importeTotal: true,
+          subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, totalIva: true, importeTotal: true,
         },
         orderBy: { secuencial: 'asc' },
       }),
@@ -482,18 +482,20 @@ router.get('/exportar/pdf', async (req, res) => {
     });
     liquidaciones.forEach(l => {
       vLiq.b0    += r2(l.subtotal0);
+      vLiq.bt5   += r2(l.subtotal5 || 0);
       vLiq.bt12  += r2(l.subtotal12 || 0);
       vLiq.bt15  += r2(l.subtotal15);
+      vLiq.iva5  += r2((l.subtotal5 || 0) * 0.05);
       vLiq.iva12 += r2((l.subtotal12 || 0) * 0.12);
       vLiq.iva15 += r2(l.subtotal15 * 0.15);
     });
     ncs.forEach(n => { vNcEm.bt15 -= r2(n.totalSinImpuestos); vNcEm.iva15 -= r2(n.totalIva); });
     const vTotN    = vFact.n + vLiq.n + vNcEm.n;
     const vTotB0   = vFact.b0 + vLiq.b0;
-    const vTotBt5  = vFact.bt5;
+    const vTotBt5  = vFact.bt5 + vLiq.bt5;
     const vTotBt12 = vFact.bt12 + vLiq.bt12;
     const vTotBt15 = vFact.bt15 + vLiq.bt15 + vNcEm.bt15;
-    const vTotIva5  = vFact.iva5;
+    const vTotIva5  = vFact.iva5 + vLiq.iva5;
     const vTotIva12 = vFact.iva12 + vLiq.iva12;
     const vTotIva15 = vFact.iva15 + vLiq.iva15 + vNcEm.iva15;
 
@@ -720,7 +722,7 @@ router.get('/exportar/pdf', async (req, res) => {
     if (facturas.length > 0)
       dataRow(tc, ['01', 'FACTURA', vFact.n, n2(vFact.b0), n2(vFact.bt5), n2(vFact.bt12), n2(vFact.bt15), '0.00', n2(vFact.iva5), n2(vFact.iva12), n2(vFact.iva15)]);
     if (liquidaciones.length > 0)
-      dataRow(tc, ['03', 'LIQUIDACIÓN DE COMPRA', vLiq.n, n2(vLiq.b0), '0.00', n2(vLiq.bt12), n2(vLiq.bt15), '0.00', '0.00', n2(vLiq.iva12), n2(vLiq.iva15)]);
+      dataRow(tc, ['03', 'LIQUIDACIÓN DE COMPRA', vLiq.n, n2(vLiq.b0), n2(vLiq.bt5), n2(vLiq.bt12), n2(vLiq.bt15), '0.00', n2(vLiq.iva5), n2(vLiq.iva12), n2(vLiq.iva15)]);
     if (ncs.length > 0)
       dataRow(tc, ['04', 'NOTA DE CRÉDITO', vNcEm.n, '0.00', n2(vNcEm.bt5), '0.00', n2(vNcEm.bt15), '0.00', n2(vNcEm.iva5), '0.00', n2(vNcEm.iva15)]);
     totRow(tc,   ['TOTAL', '', vTotN, n2(vTotB0), n2(vTotBt5), n2(vTotBt12), n2(vTotBt15), '0.00', n2(vTotIva5), n2(vTotIva12), n2(vTotIva15)]);

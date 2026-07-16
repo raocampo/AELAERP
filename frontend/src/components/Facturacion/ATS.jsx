@@ -126,7 +126,8 @@ function TabVentas({ data }) {
               <thead>
                 <tr>
                   <th>Número</th><th>Fecha</th><th>Proveedor</th><th>Identificación</th>
-                  <th className="text-right">Base 0%</th><th className="text-right">Base 12%</th>
+                  <th className="text-right">Base 0%</th><th className="text-right">Base 5%</th>
+                  <th className="text-right">Base 12%</th>
                   <th className="text-right">Base 15%</th>
                   <th className="text-right">IVA</th><th className="text-right">Total</th>
                 </tr>
@@ -139,6 +140,7 @@ function TabVentas({ data }) {
                     <td>{l.razonSocialProveedor}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{l.identificacionProveedor}</td>
                     <td className="ats-money">{fmt(l.subtotal0)}</td>
+                    <td className="ats-money">{fmt(l.subtotal5 || 0)}</td>
                     <td className="ats-money">{fmt(l.subtotal12 || 0)}</td>
                     <td className="ats-money">{fmt(l.subtotal15)}</td>
                     <td className="ats-money">{fmt(l.totalIva)}</td>
@@ -150,6 +152,7 @@ function TabVentas({ data }) {
                 <tr className="ats-tfoot">
                   <td colSpan={4}><strong>TOTALES</strong></td>
                   <td className="ats-money"><strong>{fmt(liquidaciones.reduce((s, l) => s + parseFloat(l.subtotal0 || 0), 0))}</strong></td>
+                  <td className="ats-money"><strong>{fmt(liquidaciones.reduce((s, l) => s + parseFloat(l.subtotal5 || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(liquidaciones.reduce((s, l) => s + parseFloat(l.subtotal12 || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(liquidaciones.reduce((s, l) => s + parseFloat(l.subtotal15 || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(liquidaciones.reduce((s, l) => s + parseFloat(l.totalIva || 0), 0))}</strong></td>

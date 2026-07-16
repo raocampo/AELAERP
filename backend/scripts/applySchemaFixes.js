@@ -428,6 +428,10 @@ const FIXES = [
   `UPDATE "facturas"            SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
   `UPDATE "facturas_compra"     SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
   `UPDATE "liquidaciones_compra" SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
+  // IVA 5% en liquidaciones de compra (2026-07-16) — nunca existió esta columna:
+  // el formulario solo permitía elegir 0%/15% y el cálculo de IVA ignoraba 5%,
+  // así que no hace falta backfill (no puede haber datos previos en 5%).
+  `ALTER TABLE "liquidaciones_compra" ADD COLUMN IF NOT EXISTS "subtotal5" DECIMAL(14,2) NOT NULL DEFAULT 0`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

@@ -345,7 +345,10 @@ export default function FormCompra() {
 
   const resumen = detalles.reduce((acc, detalle) => {
     const calc = calcularLinea(detalle);
-    if (detalle.porcentajeIva > 0) acc.subtotal15 += calc.subtotal;
+    const pct = Number(detalle.porcentajeIva);
+    if (pct === 5) acc.subtotal5 += calc.subtotal;
+    else if (pct === 12) acc.subtotal12 += calc.subtotal;
+    else if (pct === 15) acc.subtotal15 += calc.subtotal;
     else acc.subtotal0 += calc.subtotal;
     acc.totalIva += calc.iva;
     acc.total += calc.total;
@@ -353,6 +356,8 @@ export default function FormCompra() {
     return acc;
   }, {
     subtotal0: 0,
+    subtotal5: 0,
+    subtotal12: 0,
     subtotal15: 0,
     totalIva: 0,
     total: 0,
@@ -710,6 +715,8 @@ export default function FormCompra() {
                       <td>
                         <select value={detalle.porcentajeIva} onChange={(e) => actualizarDetalle(index, 'porcentajeIva', Number(e.target.value))}>
                           <option value={0}>0%</option>
+                          <option value={5}>5%</option>
+                          <option value={12}>12%</option>
                           <option value={15}>15%</option>
                         </select>
                       </td>
@@ -771,6 +778,18 @@ export default function FormCompra() {
             <span>Subtotal 0%</span>
             <strong>{resumen.subtotal0.toFixed(2)}</strong>
           </div>
+          {resumen.subtotal5 > 0 && (
+            <div className="compra-total-row">
+              <span>Subtotal 5%</span>
+              <strong>{resumen.subtotal5.toFixed(2)}</strong>
+            </div>
+          )}
+          {resumen.subtotal12 > 0 && (
+            <div className="compra-total-row">
+              <span>Subtotal 12%</span>
+              <strong>{resumen.subtotal12.toFixed(2)}</strong>
+            </div>
+          )}
           <div className="compra-total-row">
             <span>Subtotal 15%</span>
             <strong>{resumen.subtotal15.toFixed(2)}</strong>
