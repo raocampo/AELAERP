@@ -550,6 +550,10 @@ model facturas_compra {
   subtotal5                     Decimal   @default(0) @db.Decimal(14, 2)
   subtotal12                    Decimal   @default(0) @db.Decimal(14, 2)
   subtotal15                    Decimal   @default(0) @db.Decimal(14, 2)
+  // Base imponible No objeto de IVA / Exenta de IVA (SRI tabla 17, códigos 6 y 7).
+  // Distinta de subtotal0 (tarifa 0% — sí es objeto de IVA, solo que a tasa 0).
+  // ATS reporta ambas bajo el mismo campo baseNoGraIva, por eso se combinan aquí.
+  subtotalNoObjeto               Decimal   @default(0) @db.Decimal(14, 2)
   totalDescuento                Decimal   @default(0) @db.Decimal(14, 2)
   totalIva                      Decimal   @default(0) @db.Decimal(14, 2)
   importeTotal                  Decimal   @default(0) @db.Decimal(14, 2)

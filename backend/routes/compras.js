@@ -163,7 +163,11 @@ function normalizarDetalle(detalle, index = 0) {
   const cantidad = Number(toNumber(detalle?.cantidad, 0).toFixed(3));
   const precioUnitario = Number(toNumber(detalle?.precioUnitario, 0).toFixed(4));
   const descuento = Number(toNumber(detalle?.descuento, 0).toFixed(2));
-  const porcentajeIva = Math.max(0, Math.round(toNumber(detalle?.porcentajeIva, 0)));
+  // No objeto de IVA / Exento (SRI tabla 17, códigos 6/7) — categoría distinta
+  // de tarifa 0%. Una línea marcada así nunca lleva IVA, sin importar lo que
+  // llegue en porcentajeIva.
+  const esNoObjetoIva = toBoolean(detalle?.esNoObjetoIva, false);
+  const porcentajeIva = esNoObjetoIva ? 0 : Math.max(0, Math.round(toNumber(detalle?.porcentajeIva, 0)));
 
   if (!descripcion) {
     throw new Error(`La descripcion es requerida en la linea ${index + 1}`);
@@ -188,6 +192,7 @@ function normalizarDetalle(detalle, index = 0) {
     precioUnitario,
     descuento,
     porcentajeIva,
+    esNoObjetoIva,
     subtotal,
     totalIva,
     total,
@@ -1061,7 +1066,8 @@ router.post('/importar/ejecutar', upload.single('archivo'), async (req, res) => 
         const detallesNormalizados = construirDetallesCompra(datos).map((d, i) => normalizarDetalle(d, i));
         const totales = detallesNormalizados.reduce((acc, detalle) => {
           const pct = parseInt(detalle.porcentajeIva) || 0;
-          if (pct === 5)                     acc.subtotal5  += detalle.subtotal;
+          if (detalle.esNoObjetoIva)          acc.subtotalNoObjeto += detalle.subtotal;
+          else if (pct === 5)                acc.subtotal5  += detalle.subtotal;
           else if (pct === 12 || pct === 14) acc.subtotal12 += detalle.subtotal;
           else if (pct > 0)                  acc.subtotal15 += detalle.subtotal;
           else                               acc.subtotal0  += detalle.subtotal;
@@ -1069,7 +1075,7 @@ router.post('/importar/ejecutar', upload.single('archivo'), async (req, res) => 
           acc.totalIva += detalle.totalIva;
           acc.importeTotal += detalle.total;
           return acc;
-        }, { subtotal0: 0, subtotal5: 0, subtotal12: 0, subtotal15: 0, totalDescuento: 0, totalIva: 0, importeTotal: 0 });
+        }, { subtotal0: 0, subtotal5: 0, subtotal12: 0, subtotal15: 0, subtotalNoObjeto: 0, totalDescuento: 0, totalIva: 0, importeTotal: 0 });
 
         const creada = await db.$transaction(async (tx) => {
           const proveedor = await upsertProveedorCompra(tx, {
@@ -1094,6 +1100,7 @@ router.post('/importar/ejecutar', upload.single('archivo'), async (req, res) => 
               subtotal5:  Number(totales.subtotal5.toFixed(2)),
               subtotal12: Number(totales.subtotal12.toFixed(2)),
               subtotal15: Number(totales.subtotal15.toFixed(2)),
+              subtotalNoObjeto: Number(totales.subtotalNoObjeto.toFixed(2)),
               totalDescuento: Number(totales.totalDescuento.toFixed(2)),
               totalIva: Number(totales.totalIva.toFixed(2)),
               importeTotal: Number(totales.importeTotal.toFixed(2)),
@@ -1200,7 +1207,8 @@ router.post('/', async (req, res) => {
 
     const totales = detallesNormalizados.reduce((acc, detalle) => {
       const pct = parseInt(detalle.porcentajeIva) || 0;
-      if (pct === 5)                     acc.subtotal5  += detalle.subtotal;
+      if (detalle.esNoObjetoIva)          acc.subtotalNoObjeto += detalle.subtotal;
+      else if (pct === 5)                acc.subtotal5  += detalle.subtotal;
       else if (pct === 12 || pct === 14) acc.subtotal12 += detalle.subtotal;
       else if (pct > 0)                  acc.subtotal15 += detalle.subtotal;
       else                               acc.subtotal0  += detalle.subtotal;
@@ -1213,6 +1221,7 @@ router.post('/', async (req, res) => {
       subtotal5: 0,
       subtotal12: 0,
       subtotal15: 0,
+      subtotalNoObjeto: 0,
       totalDescuento: 0,
       totalIva: 0,
       importeTotal: 0,
@@ -1280,6 +1289,7 @@ router.post('/', async (req, res) => {
           subtotal5:  Number((totales.subtotal5 || 0).toFixed(2)),
           subtotal12: Number((totales.subtotal12 || 0).toFixed(2)),
           subtotal15: Number(totales.subtotal15.toFixed(2)),
+          subtotalNoObjeto: Number((totales.subtotalNoObjeto || 0).toFixed(2)),
           totalDescuento: Number(totales.totalDescuento.toFixed(2)),
           totalIva: Number(totales.totalIva.toFixed(2)),
           importeTotal: Number(totales.importeTotal.toFixed(2)),

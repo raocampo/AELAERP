@@ -1,6 +1,6 @@
 # Estado del Proyecto AELA
 
-Fecha de referencia: `2026-07-15`
+Fecha de referencia: `2026-07-17`
 
 ## Resumen general
 
@@ -585,6 +585,27 @@ independientes, ninguno en el backend de facturas/compras normales (que ya era c
 Nueva migración `20260716000000_subtotal5_liquidaciones_compra` (sin backfill — no puede
 haber datos previos en 5% dado que era imposible capturarlos). Detalle exhaustivo en
 `docs/pendientes-2026-07-16.md`.
+
+#### Feature — "No objeto de IVA/Exento" en compras + Notas de Venta RIMPE en ATS (2026-07-17)
+Cliente reportó que "el sistema no clasifica las otras compras como exentas o no objeto de
+Iva" y que faltaba una configuración para que las notas de venta RIMPE salgan en el talón
+resumen. Confirmado contra la Ficha Técnica oficial del ATS (SRI): `baseNoGraIva` (No objeto
+de IVA) es un campo legal distinto de `baseImponible` (tarifa 0%) — el sistema nunca tuvo
+forma de capturar esa categoría en compras, todo caía en `subtotal0`. La columna "No Obj."
+del talón PDF ya existía mas estaba hardcodeada a `'0.00'`. Las Notas de Venta (RIMPE
+Negocio Popular) tampoco entraban jamás al ATS pese a ser tipo de comprobante `02` aceptado.
+- Nueva columna `subtotalNoObjeto` en `facturas_compra` (migración
+  `20260717000000_subtotal_no_objeto_compras`, sin backfill) + flag `esNoObjetoIva` por línea
+  en `FormCompra.jsx` (nueva opción de IVA "No objeto / Exento").
+- `ats.js`: columna "No Obj." real en COMPRAS (preview/XML/PDF); Notas de Venta incluidas en
+  VENTAS (tipo `02`, base 0% — diseño ya existente del sistema, "sin IVA") **solo si**
+  `configuracion_sri.negocioPopular = true` (la "configuración" pedida — checkbox ya existía,
+  nunca estaba conectado a nada).
+- Verificado con HTTP real contra `scfi_dev`: compra con línea no-objeto, ATS
+  preview/XML/PDF con valores reales, nota de venta de prueba visible en las 3 rutas del ATS.
+  De paso se resolvieron 2 migraciones de sesiones previas atascadas en estado fallido en la
+  BD local (tablas ya existían, solo faltaba marcarlas completas). Detalle exhaustivo en
+  `docs/pendientes-2026-07-17.md`.
 
 #### Fix — `subtotal12` propagado a BDs de tenants (`9a8e2ca`)
 Las BDs de empresa (tenants) no reciben `prisma migrate deploy` — solo la BD principal.

@@ -47,12 +47,14 @@ function TabVentas({ data }) {
   const facturas     = data.facturas     || [];
   const liquidaciones = data.liquidaciones || [];
   const ncs          = data.ncs          || [];
+  const notasVenta   = data.notasVenta   || [];
 
   const { slice: sliceF, pagina: paginaF, totalPaginas: totalF, setPagina: setPaginaF } = usePagina(facturas);
 
   const totF  = facturas.reduce((s, f) => s + parseFloat(f.importeTotal || 0), 0);
   const totL  = liquidaciones.reduce((s, l) => s + parseFloat(l.importeTotal || 0), 0);
   const totNC = ncs.reduce((s, n) => s + parseFloat(n.importeTotal || 0), 0);
+  const totNV = notasVenta.reduce((s, n) => s + parseFloat(n.total || 0), 0);
 
   return (
     <>
@@ -164,6 +166,43 @@ function TabVentas({ data }) {
         </div>
       )}
 
+      {/* Notas de venta emitidas (RIMPE Negocio Popular) */}
+      {notasVenta.length > 0 && (
+        <div className="ats-seccion">
+          <h3 className="ats-seccion-titulo">
+            Notas de Venta emitidas — RIMPE Negocio Popular (tipo 02)
+            <span className="ats-sec-count">{notasVenta.length}</span>
+          </h3>
+          <div className="ats-tabla-wrap">
+            <table className="ats-tabla">
+              <thead>
+                <tr>
+                  <th>Número</th><th>Fecha</th><th>Cliente</th><th>Identificación</th>
+                  <th className="text-right">Total (Base 0%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {notasVenta.map(n => (
+                  <tr key={n.id}>
+                    <td className="ats-num">{n.numeroNota}</td>
+                    <td>{fmtFecha(n.fechaEmision)}</td>
+                    <td>{n.razonSocial}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{n.identificacion}</td>
+                    <td className="ats-money ats-money-total">{fmt(n.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="ats-tfoot">
+                  <td colSpan={4}><strong>TOTAL</strong></td>
+                  <td className="ats-money ats-money-total"><strong>{fmt(totNV)}</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Notas de crédito emitidas */}
       {ncs.length > 0 && (
         <div className="ats-seccion">
@@ -216,6 +255,7 @@ function TabCompras({ data }) {
   const totBase5    = compras.reduce((s, c) => s + parseFloat(c.subtotal5 || 0), 0);
   const totBase12   = compras.reduce((s, c) => s + parseFloat(c.subtotal12 || 0), 0);
   const totBase15   = compras.reduce((s, c) => s + parseFloat(c.subtotal15 || 0), 0);
+  const totNoObjeto = compras.reduce((s, c) => s + parseFloat(c.subtotalNoObjeto || 0), 0);
   const totIva      = compras.reduce((s, c) => s + parseFloat(c.totalIva || 0), 0);
   const totTotal    = compras.reduce((s, c) => s + parseFloat(c.importeTotal || 0), 0);
   const totRetIR    = compras.reduce((s, c) => s + parseFloat(c.retencionRenta || 0), 0);
@@ -236,6 +276,7 @@ function TabCompras({ data }) {
             ...(totBase5 > 0  ? [['Base 5%',  totBase5]]  : []),
             ...(totBase12 > 0 ? [['Base 12%', totBase12]] : []),
             ...(totBase15 > 0 ? [['Base 15%', totBase15]] : []),
+            ...(totNoObjeto > 0 ? [['No objeto / Exento', totNoObjeto]] : []),
             ['IVA pagado', totIva],
             ['Total compras', totTotal],
             ['Ret. IR', totRetIR],
@@ -266,6 +307,7 @@ function TabCompras({ data }) {
                 <th className="text-right">Base 5%</th>
                 <th className="text-right">Base 12%</th>
                 <th className="text-right">Base 15%</th>
+                <th className="text-right">No objeto / Exento</th>
                 <th className="text-right">IVA</th>
                 <th className="text-right">Total</th>
                 <th className="text-right">Ret. IR</th>
@@ -288,6 +330,7 @@ function TabCompras({ data }) {
                     <td className="ats-money">{fmt(c.subtotal5 || 0)}</td>
                     <td className="ats-money">{fmt(c.subtotal12 || 0)}</td>
                     <td className="ats-money">{fmt(c.subtotal15)}</td>
+                    <td className="ats-money">{fmt(c.subtotalNoObjeto || 0)}</td>
                     <td className="ats-money">{fmt(c.totalIva)}</td>
                     <td className="ats-money ats-money-total">{fmt(c.importeTotal)}</td>
                     <td className="ats-money">{fmt(c.retencionRenta)}</td>
@@ -304,6 +347,7 @@ function TabCompras({ data }) {
                 <td className="ats-money"><strong>{fmt(totBase5)}</strong></td>
                 <td className="ats-money"><strong>{fmt(totBase12)}</strong></td>
                 <td className="ats-money"><strong>{fmt(totBase15)}</strong></td>
+                <td className="ats-money"><strong>{fmt(totNoObjeto)}</strong></td>
                 <td className="ats-money"><strong>{fmt(totIva)}</strong></td>
                 <td className="ats-money ats-money-total"><strong>{fmt(totTotal)}</strong></td>
                 <td className="ats-money"><strong>{fmt(totRetIR)}</strong></td>
@@ -551,7 +595,7 @@ export default function ATS() {
   };
 
   const tabs = [
-    { key: 'ventas',      label: `Ventas (${data ? (data.facturas.length + data.liquidaciones.length) : '—'})` },
+    { key: 'ventas',      label: `Ventas (${data ? (data.facturas.length + data.liquidaciones.length + (data.notasVenta || []).length) : '—'})` },
     { key: 'compras',     label: `Compras (${data ? data.compras.length : '—'})` },
     { key: 'retenciones', label: `Retenciones (${data ? `${data.retenciones.length} emit. / ${(data.retencionesRecibidas || []).length} recib.` : '—'})` },
     { key: 'anulados',    label: `Anulados (${data ? data.anulados.length : '—'})` },
@@ -603,9 +647,9 @@ export default function ATS() {
             <div className="ats-card ats-card-ventas">
               <div className="ats-card-icono">🧾</div>
               <div className="ats-card-titulo">Ventas</div>
-              <div className="ats-card-valor">{data.facturas.length + data.liquidaciones.length}</div>
-              <div className="ats-card-sub">Total: {fmt(data.totales.totalVentasFacturas + data.totales.totalVentasLiquidaciones)}</div>
-              <div className="ats-card-nota">facturas + liquidaciones</div>
+              <div className="ats-card-valor">{data.facturas.length + data.liquidaciones.length + (data.notasVenta || []).length}</div>
+              <div className="ats-card-sub">Total: {fmt(data.totales.totalVentasFacturas + data.totales.totalVentasLiquidaciones + (data.totales.totalVentasNotasVenta || 0))}</div>
+              <div className="ats-card-nota">facturas + liquidaciones{(data.notasVenta || []).length > 0 ? ' + notas de venta' : ''}</div>
             </div>
             <div className="ats-card ats-card-liq">
               <div className="ats-card-icono">🛒</div>

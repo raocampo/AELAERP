@@ -87,9 +87,10 @@ router.get('/preview', async (req, res) => {
     const anio = parseInt(req.query.anio) || new Date().getFullYear();
     const { desde, hasta } = rangoPeriodo(mes, anio);
     const empresaId = req.empresa.id;
+    const config = await prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
 
     const periodoWhere = { fechaEmision: { gte: desde, lte: hasta } };
-    const [facturas, liquidaciones, retenciones, compras, ncs, anuladosFacturas, retencionesRecibidas] = await Promise.all([
+    const [facturas, liquidaciones, retenciones, compras, ncs, anuladosFacturas, retencionesRecibidas, notasVenta] = await Promise.all([
       // Ventas: facturas emitidas autorizadas
       prisma.facturas.findMany({
         where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere },
@@ -168,6 +169,19 @@ router.get('/preview', async (req, res) => {
         },
         orderBy: { fechaEmision: 'asc' },
       }),
+      // Ventas: notas de venta (RIMPE Negocio Popular) — sin IVA, código ATS 02.
+      // Solo se consultan si la empresa está configurada como Negocio Popular.
+      config?.negocioPopular
+        ? prisma.notas_venta.findMany({
+            where: { empresaId, anulada: false, ...periodoWhere },
+            select: {
+              id: true, numeroNota: true, fechaEmision: true,
+              tipoIdentificacion: true, identificacion: true, razonSocial: true,
+              subtotal: true, totalDescuento: true, total: true,
+            },
+            orderBy: { secuencial: 'asc' },
+          })
+        : Promise.resolve([]),
     ]);
 
     const sumar = (arr, campo) => arr.reduce((s, r) => s + r2(r[campo]), 0);
@@ -175,10 +189,12 @@ router.get('/preview', async (req, res) => {
     const totales = {
       totalVentasFacturas:       sumar(facturas, 'importeTotal'),
       totalVentasLiquidaciones:  sumar(liquidaciones, 'importeTotal'),
+      totalVentasNotasVenta:     sumar(notasVenta, 'total'),
       totalCompras:              sumar(compras, 'importeTotal'),
       totalRetenciones:          sumar(retenciones, 'totalRetenido'),
       docFacturas:               facturas.length,
       docLiquidaciones:          liquidaciones.length,
+      docNotasVenta:             notasVenta.length,
       docCompras:                compras.length,
       docRetenciones:            retenciones.length,
       docNCs:                    ncs.length,
@@ -192,7 +208,7 @@ router.get('/preview', async (req, res) => {
       ok: true,
       data: {
         periodo: { mes, anio, label: `${MESES[mes]} ${anio}` },
-        facturas, liquidaciones, retenciones, compras, ncs,
+        facturas, liquidaciones, retenciones, compras, ncs, notasVenta,
         anulados: anuladosFacturas,
         retencionesRecibidas,
         totales,
@@ -216,7 +232,7 @@ router.get('/exportar', async (req, res) => {
 
     const periodoWhere = { fechaEmision: { gte: desde, lte: hasta } };
 
-    const [facturas, liquidaciones, compras, ncs, anuladosFacturas] = await Promise.all([
+    const [facturas, liquidaciones, compras, ncs, anuladosFacturas, notasVenta] = await Promise.all([
       prisma.facturas.findMany({
         where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere },
         orderBy: { secuencial: 'asc' },
@@ -242,6 +258,13 @@ router.get('/exportar', async (req, res) => {
         where: { empresaId, anulada: true, ...periodoWhere },
         orderBy: { secuencial: 'asc' },
       }),
+      // Notas de venta (RIMPE Negocio Popular) — código ATS 02, sin desglose de IVA.
+      config?.negocioPopular
+        ? prisma.notas_venta.findMany({
+            where: { empresaId, anulada: false, ...periodoWhere },
+            orderBy: { secuencial: 'asc' },
+          })
+        : Promise.resolve([]),
     ]);
 
     // ── totalVentas ───────────────────────────────────────────────────────────
@@ -249,6 +272,7 @@ router.get('/exportar', async (req, res) => {
       ...facturas.map(f => r2(f.importeTotal)),
       ...liquidaciones.map(l => r2(l.importeTotal)),
       ...ncs.map(n => r2(n.importeTotal)),
+      ...notasVenta.map(n => r2(n.total)),
     ].reduce((s, v) => s + v, 0);
 
     // ── <ventas> — agrupar por (tipoId, id, tipoComprobante) ─────────────────
@@ -270,6 +294,9 @@ router.get('/exportar', async (req, res) => {
 
     facturas.forEach(f => acumularVenta(f.tipoIdentificacionComprador, f.identificacionComprador, '01', f));
     liquidaciones.forEach(l => acumularVenta(l.tipoIdentificacionProveedor, l.identificacionProveedor, '03', l));
+    // Notas de venta RIMPE: sin desglose de IVA (diseño del sistema — ver
+    // FormNotaVenta.jsx), se reportan como base imponible tarifa 0%.
+    notasVenta.forEach(n => acumularVenta(n.tipoIdentificacion, n.identificacion, '02', { subtotal0: n.total, totalIva: 0 }));
     ncs.forEach(n => {
       const key = `${n.tipoIdentificacionComprador}|${n.identificacionComprador}|04`;
       if (!ventasMap.has(key)) {
@@ -356,6 +383,7 @@ router.get('/exportar', async (req, res) => {
 
       const baseGravada = r2((compra.subtotal5 || 0) + (compra.subtotal12 || 0) + (compra.subtotal15 || 0));
       const base0 = r2(compra.subtotal0 || 0);
+      const baseNoObjeto = r2(compra.subtotalNoObjeto || 0);
 
       comprasXML += `
     <detalleCompras>
@@ -370,7 +398,7 @@ router.get('/exportar', async (req, res) => {
       <secuencial>${sec}</secuencial>
       <fechaEmisionDoc>${fmtFecha(compra.fechaEmision)}</fechaEmisionDoc>
       <autorizacion>${auth}</autorizacion>
-      <baseNoGraIva>0.00</baseNoGraIva>
+      <baseNoGraIva>${baseNoObjeto.toFixed(2)}</baseNoGraIva>
       <baseImponible>${base0.toFixed(2)}</baseImponible>
       <baseImpGrav>${baseGravada.toFixed(2)}</baseImpGrav>
       <montoIce>0.00</montoIce>
@@ -451,7 +479,7 @@ router.get('/exportar/pdf', async (req, res) => {
 
     const periodoWhere = { fechaEmision: { gte: desde, lte: hasta } };
 
-    const [facturas, liquidaciones, compras, ncs, retenciones, anuladosFacturas, retencionesRecibidas] = await Promise.all([
+    const [facturas, liquidaciones, compras, ncs, retenciones, anuladosFacturas, retencionesRecibidas, notasVenta] = await Promise.all([
       prisma.facturas.findMany({ where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere } }),
       prisma.liquidaciones_compra.findMany({ where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere } }),
       prisma.facturas_compra.findMany({
@@ -465,12 +493,20 @@ router.get('/exportar/pdf', async (req, res) => {
         where: { empresaId, anulada: false, fechaEmision: { gte: desde, lte: hasta } },
         select: { totalRetencionIva: true, totalRetencionRenta: true },
       }),
+      // Notas de venta (RIMPE Negocio Popular) — solo si la empresa está
+      // configurada como tal en Configuración SRI.
+      config?.negocioPopular
+        ? prisma.notas_venta.findMany({ where: { empresaId, anulada: false, ...periodoWhere } })
+        : Promise.resolve([]),
     ]);
 
     // ── Totales por tipo de comprobante (separando 5%, 12% y 15%) ────────────
     const vFact = { n: facturas.length,      b0: 0, bt5: 0, bt12: 0, bt15: 0, iva5: 0, iva12: 0, iva15: 0 };
     const vLiq  = { n: liquidaciones.length, b0: 0, bt5: 0, bt12: 0, bt15: 0, iva5: 0, iva12: 0, iva15: 0 };
     const vNcEm = { n: ncs.length,           b0: 0, bt5: 0, bt12: 0, bt15: 0, iva5: 0, iva12: 0, iva15: 0 };
+    // Notas de venta RIMPE: sin desglose de IVA (diseño del sistema), se
+    // reportan íntegramente como base 0%.
+    const vNV   = { n: notasVenta.length,    b0: r2(notasVenta.reduce((s, n) => s + r2(n.total), 0)) };
     facturas.forEach(f => {
       vFact.b0    += r2(f.subtotal0);
       vFact.bt5   += r2(f.subtotal5 || 0);
@@ -490,8 +526,8 @@ router.get('/exportar/pdf', async (req, res) => {
       vLiq.iva15 += r2(l.subtotal15 * 0.15);
     });
     ncs.forEach(n => { vNcEm.bt15 -= r2(n.totalSinImpuestos); vNcEm.iva15 -= r2(n.totalIva); });
-    const vTotN    = vFact.n + vLiq.n + vNcEm.n;
-    const vTotB0   = vFact.b0 + vLiq.b0;
+    const vTotN    = vFact.n + vLiq.n + vNcEm.n + vNV.n;
+    const vTotB0   = vFact.b0 + vLiq.b0 + vNV.b0;
     const vTotBt5  = vFact.bt5 + vLiq.bt5;
     const vTotBt12 = vFact.bt12 + vLiq.bt12;
     const vTotBt15 = vFact.bt15 + vLiq.bt15 + vNcEm.bt15;
@@ -499,12 +535,13 @@ router.get('/exportar/pdf', async (req, res) => {
     const vTotIva12 = vFact.iva12 + vLiq.iva12;
     const vTotIva15 = vFact.iva15 + vLiq.iva15 + vNcEm.iva15;
 
-    const cFact = { n: compras.length, b0: 0, bt5: 0, bt12: 0, bt15: 0, iva5: 0, iva12: 0, iva15: 0 };
+    const cFact = { n: compras.length, b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, iva5: 0, iva12: 0, iva15: 0 };
     compras.forEach(c => {
       cFact.b0    += r2(c.subtotal0);
       cFact.bt5   += r2(c.subtotal5 || 0);
       cFact.bt12  += r2(c.subtotal12 || 0);
       cFact.bt15  += r2(c.subtotal15);
+      cFact.noObj += r2(c.subtotalNoObjeto || 0);
       cFact.iva5  += r2((c.subtotal5 || 0) * 0.05);
       cFact.iva12 += r2((c.subtotal12 || 0) * 0.12);
       cFact.iva15 += r2(c.subtotal15 * 0.15);
@@ -713,8 +750,8 @@ router.get('/exportar/pdf', async (req, res) => {
     secHdr('COMPRAS');
     colHdr(tc);
     if (compras.length > 0)
-      dataRow(tc, ['01', 'FACTURA', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), '0.00', n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
-    totRow(tc,   ['TOTAL', '', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), '0.00', n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
+      dataRow(tc, ['01', 'FACTURA', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), n2(cFact.noObj), n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
+    totRow(tc,   ['TOTAL', '', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), n2(cFact.noObj), n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
     curY += 10;
 
     secHdr('VENTAS');
@@ -723,6 +760,8 @@ router.get('/exportar/pdf', async (req, res) => {
       dataRow(tc, ['01', 'FACTURA', vFact.n, n2(vFact.b0), n2(vFact.bt5), n2(vFact.bt12), n2(vFact.bt15), '0.00', n2(vFact.iva5), n2(vFact.iva12), n2(vFact.iva15)]);
     if (liquidaciones.length > 0)
       dataRow(tc, ['03', 'LIQUIDACIÓN DE COMPRA', vLiq.n, n2(vLiq.b0), n2(vLiq.bt5), n2(vLiq.bt12), n2(vLiq.bt15), '0.00', n2(vLiq.iva5), n2(vLiq.iva12), n2(vLiq.iva15)]);
+    if (vNV.n > 0)
+      dataRow(tc, ['02', 'NOTA DE VENTA', vNV.n, n2(vNV.b0), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']);
     if (ncs.length > 0)
       dataRow(tc, ['04', 'NOTA DE CRÉDITO', vNcEm.n, '0.00', n2(vNcEm.bt5), '0.00', n2(vNcEm.bt15), '0.00', n2(vNcEm.iva5), '0.00', n2(vNcEm.iva15)]);
     totRow(tc,   ['TOTAL', '', vTotN, n2(vTotB0), n2(vTotBt5), n2(vTotBt12), n2(vTotBt15), '0.00', n2(vTotIva5), n2(vTotIva12), n2(vTotIva15)]);

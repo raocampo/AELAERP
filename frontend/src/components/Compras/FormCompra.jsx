@@ -29,6 +29,7 @@ const detalleVacio = () => ({
   precioVentaReferencial: '',
   utilidadPct: '',
   porcentajeIva: 15,
+  esNoObjetoIva: false,
   descuento: '0',
   inventariable: true,
 });
@@ -44,7 +45,7 @@ function calcularLinea(detalle) {
   const precioUnitario = parseFloat(detalle.precioUnitario) || 0;
   const descuento = parseFloat(detalle.descuento) || 0;
   const subtotal = Math.max((cantidad * precioUnitario) - descuento, 0);
-  const iva = detalle.porcentajeIva > 0 ? subtotal * (detalle.porcentajeIva / 100) : 0;
+  const iva = (!detalle.esNoObjetoIva && detalle.porcentajeIva > 0) ? subtotal * (detalle.porcentajeIva / 100) : 0;
   return {
     subtotal,
     iva,
@@ -260,6 +261,14 @@ export default function FormCompra() {
     }));
   };
 
+  const actualizarIva = (index, valor) => {
+    setDetalles((prev) => prev.map((item, idx) => {
+      if (idx !== index) return item;
+      if (valor === 'NO_OBJETO') return { ...item, esNoObjetoIva: true, porcentajeIva: 0 };
+      return { ...item, esNoObjetoIva: false, porcentajeIva: Number(valor) };
+    }));
+  };
+
   const agregarLinea = () => setDetalles((prev) => [...prev, detalleVacio()]);
   const eliminarLinea = (index) => setDetalles((prev) => prev.filter((_, idx) => idx !== index));
 
@@ -346,7 +355,8 @@ export default function FormCompra() {
   const resumen = detalles.reduce((acc, detalle) => {
     const calc = calcularLinea(detalle);
     const pct = Number(detalle.porcentajeIva);
-    if (pct === 5) acc.subtotal5 += calc.subtotal;
+    if (detalle.esNoObjetoIva) acc.subtotalNoObjeto += calc.subtotal;
+    else if (pct === 5) acc.subtotal5 += calc.subtotal;
     else if (pct === 12) acc.subtotal12 += calc.subtotal;
     else if (pct === 15) acc.subtotal15 += calc.subtotal;
     else acc.subtotal0 += calc.subtotal;
@@ -359,6 +369,7 @@ export default function FormCompra() {
     subtotal5: 0,
     subtotal12: 0,
     subtotal15: 0,
+    subtotalNoObjeto: 0,
     totalIva: 0,
     total: 0,
     totalDescuento: 0,
@@ -416,6 +427,7 @@ export default function FormCompra() {
           precioVentaReferencial: detalle.precioVentaReferencial || detalle.precioUnitario,
           utilidadPct: detalle.utilidadPct !== '' ? parseFloat(detalle.utilidadPct) : null,
           porcentajeIva: detalle.porcentajeIva,
+          esNoObjetoIva: detalle.esNoObjetoIva,
           descuento: detalle.descuento,
           inventariable: detalle.inventariable,
         })),
@@ -713,11 +725,15 @@ export default function FormCompra() {
                         />
                       </td>
                       <td>
-                        <select value={detalle.porcentajeIva} onChange={(e) => actualizarDetalle(index, 'porcentajeIva', Number(e.target.value))}>
+                        <select
+                          value={detalle.esNoObjetoIva ? 'NO_OBJETO' : detalle.porcentajeIva}
+                          onChange={(e) => actualizarIva(index, e.target.value)}
+                        >
                           <option value={0}>0%</option>
                           <option value={5}>5%</option>
                           <option value={12}>12%</option>
                           <option value={15}>15%</option>
+                          <option value="NO_OBJETO">No objeto / Exento</option>
                         </select>
                       </td>
                       <td><input type="number" step="0.01" min="0" value={detalle.descuento} onChange={(e) => actualizarDetalle(index, 'descuento', e.target.value)} /></td>
@@ -794,6 +810,12 @@ export default function FormCompra() {
             <span>Subtotal 15%</span>
             <strong>{resumen.subtotal15.toFixed(2)}</strong>
           </div>
+          {resumen.subtotalNoObjeto > 0 && (
+            <div className="compra-total-row">
+              <span>No objeto / Exento</span>
+              <strong>{resumen.subtotalNoObjeto.toFixed(2)}</strong>
+            </div>
+          )}
           <div className="compra-total-row">
             <span>Descuento</span>
             <strong>{resumen.totalDescuento.toFixed(2)}</strong>

@@ -432,6 +432,9 @@ const FIXES = [
   // el formulario solo permitía elegir 0%/15% y el cálculo de IVA ignoraba 5%,
   // así que no hace falta backfill (no puede haber datos previos en 5%).
   `ALTER TABLE "liquidaciones_compra" ADD COLUMN IF NOT EXISTS "subtotal5" DECIMAL(14,2) NOT NULL DEFAULT 0`,
+  // Compras "No objeto de IVA" / "Exentas de IVA" (2026-07-17) — categoría SRI
+  // distinta de tarifa 0% (subtotal0). Sin backfill, ver migración para detalle.
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "subtotalNoObjeto" DECIMAL(14,2) NOT NULL DEFAULT 0`,
 ];
 
 async function applyFixesToDb(connectionString, label) {
