@@ -7,6 +7,16 @@ const prisma = require('../config/prisma');
 const TIPOS_SISTEMA   = ['lite', 'medium', 'pro'];
 const MODOS_OPERACION = ['monoempresa', 'multiempresa'];
 
+// Catálogo completo de flags de módulo — usado para validar `modulosContratados`
+// y para construir el techo explícito por tenant en capacidadesModulos().
+const MODULOS_TODOS = [
+  'cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado',
+  'comprasHabilitadas', 'buzonSriHabilitado',
+  'contabilidadHabilitada', 'retencionesHabilitadas', 'liquidacionesHabilitadas',
+  'atsHabilitado', 'tributarioHabilitado', 'bancosHabilitado',
+  'talentoHumanoHabilitado',
+];
+
 // ─── Normalizar plan ──────────────────────────────────────────────────────────
 function normalizarTipoSistema(value, fallback = 'pro') {
   const raw = String(value || fallback || 'pro').toLowerCase();
@@ -31,10 +41,13 @@ function capacidadesPlan(plan) {
         posHabilitado:            false,
         inventarioHabilitado:     false,
         comprasHabilitadas:       false,
+        buzonSriHabilitado:       false,
         contabilidadHabilitada:   false,
         retencionesHabilitadas:   false,
         liquidacionesHabilitadas: false,
         atsHabilitado:            false,
+        tributarioHabilitado:     false,
+        bancosHabilitado:         false,
         talentoHumanoHabilitado:  false,
       };
     case 'medium':
@@ -43,10 +56,13 @@ function capacidadesPlan(plan) {
         posHabilitado:            true,
         inventarioHabilitado:     true,
         comprasHabilitadas:       true,
+        buzonSriHabilitado:       true,
         contabilidadHabilitada:   false,
         retencionesHabilitadas:   false,
         liquidacionesHabilitadas: false,
         atsHabilitado:            false,
+        tributarioHabilitado:     true,
+        bancosHabilitado:         true,
         talentoHumanoHabilitado:  true,
       };
     case 'pro':
@@ -56,13 +72,30 @@ function capacidadesPlan(plan) {
         posHabilitado:            true,
         inventarioHabilitado:     true,
         comprasHabilitadas:       true,
+        buzonSriHabilitado:       true,
         contabilidadHabilitada:   true,
         retencionesHabilitadas:   true,
         liquidacionesHabilitadas: true,
         atsHabilitado:            true,
+        tributarioHabilitado:     true,
+        bancosHabilitado:         true,
         talentoHumanoHabilitado:  true,
       };
   }
+}
+
+// ─── Capacidades por tenant (techo explícito) ─────────────────────────────────
+// Si la empresa tiene `modulosContratados` (array de claves), ese es el techo
+// exacto — independiente del plan. Si es null/undefined, cae al techo legado
+// por plan (capacidadesPlan) — cero cambio de comportamiento para tenants que
+// no se hayan reconfigurado explícitamente desde el panel super-admin.
+function capacidadesModulos(empresa = {}) {
+  const contratados = empresa?.modulosContratados;
+  if (Array.isArray(contratados)) {
+    const set = new Set(contratados);
+    return Object.fromEntries(MODULOS_TODOS.map((k) => [k, set.has(k)]));
+  }
+  return capacidadesPlan(normalizarTipoSistema(empresa?.plan));
 }
 
 // ─── Limites por plan ─────────────────────────────────────────────────────────
@@ -79,7 +112,7 @@ function limitesPlan(plan) {
 function construirConfiguracionSistemaBase(empresa = {}) {
   const tipoSistema    = normalizarTipoSistema(empresa.plan || process.env.AELA_EDITION || 'pro');
   const modoOperacion  = normalizarModoOperacion(process.env.MODO_EMPRESA || 'monoempresa');
-  const caps           = capacidadesPlan(tipoSistema);
+  const caps           = capacidadesModulos(empresa);
 
   return {
     empresaId: empresa.id,
@@ -129,9 +162,9 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
 
   const config      = await asegurarConfiguracionSistemaEmpresa(empresa, tx);
   const tipoSistema = normalizarTipoSistema(config?.tipoSistema || empresa.plan || process.env.AELA_EDITION);
-  const caps        = capacidadesPlan(tipoSistema);
+  const caps        = capacidadesModulos(empresa);
 
-  // Fusión: lo que dice la BD, pero limitado por las capacidades del plan
+  // Fusión: lo que dice la BD, pero limitado por el techo (módulos contratados o plan)
   return {
     ...construirConfiguracionSistemaBase(empresa),
     ...config,
@@ -140,15 +173,18 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
     modoOperacion: normalizarModoOperacion(config?.modoOperacion || await obtenerModoOperacionGlobal(tx)),
     impresionAutoReciboPos:  Boolean(config?.impresionAutoReciboPos ?? false),
     impresoraKiosko:         String(config?.impresoraKiosko || '').trim(),
-    // Forzar a false los módulos que el plan no permite
+    // Forzar a false los módulos que el techo no permite
     cajaDiariaHabilitada:     caps.cajaDiariaHabilitada     && Boolean(config?.cajaDiariaHabilitada     ?? true),
     posHabilitado:            caps.posHabilitado            && Boolean(config?.posHabilitado            ?? false),
     inventarioHabilitado:     caps.inventarioHabilitado     && Boolean(config?.inventarioHabilitado     ?? false),
     comprasHabilitadas:       caps.comprasHabilitadas       && Boolean(config?.comprasHabilitadas       ?? true),
+    buzonSriHabilitado:       caps.buzonSriHabilitado       && Boolean(config?.buzonSriHabilitado       ?? true),
     contabilidadHabilitada:   caps.contabilidadHabilitada   && Boolean(config?.contabilidadHabilitada   ?? true),
     retencionesHabilitadas:   caps.retencionesHabilitadas   && Boolean(config?.retencionesHabilitadas   ?? true),
     liquidacionesHabilitadas: caps.liquidacionesHabilitadas && Boolean(config?.liquidacionesHabilitadas ?? true),
     atsHabilitado:            caps.atsHabilitado            && Boolean(config?.atsHabilitado            ?? true),
+    tributarioHabilitado:     caps.tributarioHabilitado     && Boolean(config?.tributarioHabilitado     ?? true),
+    bancosHabilitado:         caps.bancosHabilitado         && Boolean(config?.bancosHabilitado         ?? true),
     talentoHumanoHabilitado:  caps.talentoHumanoHabilitado  && Boolean(config?.talentoHumanoHabilitado  ?? false),
     sbuEcuador:               parseFloat(config?.sbuEcuador) || 480.00,
   };
@@ -166,7 +202,10 @@ async function obtenerModoOperacionGlobal(tx = prisma) {
 // ─── Construir payload para actualización ────────────────────────────────────
 function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
   const tipoSistema = normalizarTipoSistema(reqBody.tipoSistema, actual.tipoSistema);
-  const caps        = capacidadesPlan(tipoSistema);
+  // Techo: modulosContratados de `actual` si existe (empresa fusionada, ver
+  // routes/configuracionSistema.js), si no el legado por `tipoSistema` ya resuelto
+  // arriba — nunca actual.plan directo, que puede faltar según qué se fusionó.
+  const caps        = capacidadesModulos({ modulosContratados: actual.modulosContratados, plan: tipoSistema });
 
   // Helper: un flag solo puede ser true si el plan lo permite
   const flag = (key, defaultVal = false) => {
@@ -189,10 +228,13 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
     inventarioHabilitado:     flag('inventarioHabilitado', false),
     permitirStockNegativo:    Boolean(reqBody.permitirStockNegativo !== undefined ? reqBody.permitirStockNegativo : actual.permitirStockNegativo),
     comprasHabilitadas:       flag('comprasHabilitadas', true),
+    buzonSriHabilitado:       flag('buzonSriHabilitado', true),
     contabilidadHabilitada:   flag('contabilidadHabilitada', true),
     retencionesHabilitadas:   flag('retencionesHabilitadas', true),
     liquidacionesHabilitadas: flag('liquidacionesHabilitadas', true),
     atsHabilitado:            flag('atsHabilitado', true),
+    tributarioHabilitado:     flag('tributarioHabilitado', true),
+    bancosHabilitado:         flag('bancosHabilitado', true),
     talentoHumanoHabilitado:  flag('talentoHumanoHabilitado', false),
     sbuEcuador:               parseFloat(reqBody.sbuEcuador) > 0
                                 ? parseFloat(reqBody.sbuEcuador)
@@ -203,9 +245,11 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
 module.exports = {
   TIPOS_SISTEMA,
   MODOS_OPERACION,
+  MODULOS_TODOS,
   normalizarTipoSistema,
   normalizarModoOperacion,
   capacidadesPlan,
+  capacidadesModulos,
   limitesPlan,
   construirConfiguracionSistemaBase,
   construirPayloadConfiguracionSistema,

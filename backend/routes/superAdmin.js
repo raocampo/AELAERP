@@ -8,6 +8,8 @@
 const express = require('express');
 const router  = express.Router();
 const { getPrismaMaster } = require('../config/prismaMaster');
+const { actualizarModulosContratadosTenant } = require('../utils/provisionarTenant');
+const { MODULOS_TODOS } = require('../utils/configuracionSistema');
 
 // ─── Middleware: verificar clave de super-admin ───────────────────────────────
 function verificarSuperAdmin(req, res, next) {
@@ -125,6 +127,19 @@ router.put('/tenants/:id', verificarSuperAdmin, async (req, res) => {
       } else {
         data[c] = req.body[c];
       }
+    }
+
+    // Módulos contratados — techo por tenant, independiente del plan. Sincroniza
+    // master + BD del tenant (empresas.modulosContratados) vía el helper dedicado,
+    // no por el loop genérico de arriba.
+    if (req.body.modulosContratados !== undefined) {
+      const raw = req.body.modulosContratados;
+      const modulos = raw === null
+        ? null
+        : (Array.isArray(raw) ? raw : []).filter((m) => MODULOS_TODOS.includes(m));
+      const tenantActual = await master.tenants.findUnique({ where: { id: parseInt(req.params.id, 10) } });
+      if (!tenantActual) return res.status(404).json({ success: false, mensaje: 'Tenant no encontrado' });
+      await actualizarModulosContratadosTenant(tenantActual.slug, modulos);
     }
 
     // Dominio personalizado (marca blanca) — se guarda dentro de brandConfig.dominio

@@ -438,6 +438,16 @@ const FIXES = [
   // Tipo de comprobante recibido del proveedor en compras (2026-07-17) —
   // FACTURA (default) o NOTA_VENTA (proveedor RIMPE Negocio Popular).
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "tipoComprobante" VARCHAR(20) NOT NULL DEFAULT 'FACTURA'`,
+  // Módulos activables por empresa (2026-07-17) — Buzón SRI, Tributario
+  // (declaraciones/retenciones recibidas/reportes) y Bancos ahora tienen flag
+  // propio en vez de depender de comprasHabilitadas o quedar sin gate. Default
+  // true: no oculta nada para tenants existentes hasta que se reconfigure.
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "buzonSriHabilitado" BOOLEAN NOT NULL DEFAULT true`,
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "tributarioHabilitado" BOOLEAN NOT NULL DEFAULT true`,
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "bancosHabilitado" BOOLEAN NOT NULL DEFAULT true`,
+  // Techo de módulos contratados por tenant (2026-07-17) — null = usar el techo
+  // legado derivado de `plan`, ver capacidadesModulos() en configuracionSistema.js.
+  `ALTER TABLE "empresas" ADD COLUMN IF NOT EXISTS "modulosContratados" JSONB`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

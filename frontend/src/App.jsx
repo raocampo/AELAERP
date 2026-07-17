@@ -242,7 +242,7 @@ function App() {
                 <Route path="retenciones/nueva" element={<ProRoute><ModuleRoute moduleKey="retenciones"><PermissionRoute permission="retenciones.gestionar"><FormRetencion /></PermissionRoute></ModuleRoute></ProRoute>} />
 
                 {/* Retenciones Recibidas — Medium y Pro */}
-                <Route path="retenciones-recibidas" element={<MediumRoute><PermissionRoute permission="compras.gestionar"><ListaRetencionesRecibidas /></PermissionRoute></MediumRoute>} />
+                <Route path="retenciones-recibidas" element={<MediumRoute><ModuleRoute moduleKey="tributario"><PermissionRoute permission="compras.gestionar"><ListaRetencionesRecibidas /></PermissionRoute></ModuleRoute></MediumRoute>} />
 
                 {/* Liquidaciones — solo Pro */}
                 <Route path="liquidaciones"       element={<ProRoute><ModuleRoute moduleKey="liquidaciones"><PermissionRoute permission="liquidaciones.gestionar"><ListaLiquidaciones /></PermissionRoute></ModuleRoute></ProRoute>} />
@@ -253,7 +253,7 @@ function App() {
                 <Route path="notas-debito/nueva" element={<ProRoute><PermissionRoute permission="facturacion.emitir"><FormNotaDebito /></PermissionRoute></ProRoute>} />
 
                 {/* Buzón SRI — Medium y Pro */}
-                <Route path="buzon" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><BuzonSRI /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="buzon" element={<MediumRoute><ModuleRoute moduleKey="buzonSri"><PermissionRoute permission="compras.gestionar"><BuzonSRI /></PermissionRoute></ModuleRoute></MediumRoute>} />
 
                 {/* Guías de Remisión — Medium y Pro */}
                 <Route path="guias-remision"         element={<MediumRoute><PermissionRoute permission="facturacion.ver"><ListaGuiasRemision /></PermissionRoute></MediumRoute>} />
@@ -261,18 +261,18 @@ function App() {
                 <Route path="guias-remision/:id/editar" element={<MediumRoute><PermissionRoute permission="facturacion.emitir"><FormGuiaRemision /></PermissionRoute></MediumRoute>} />
 
                 {/* Declaraciones tributarias — solo Pro */}
-                <Route path="declaraciones" element={<ProRoute><PermissionRoute permission="tributario.reportes"><Declaraciones /></PermissionRoute></ProRoute>} />
+                <Route path="declaraciones" element={<ProRoute><ModuleRoute moduleKey="tributario"><PermissionRoute permission="tributario.reportes"><Declaraciones /></PermissionRoute></ModuleRoute></ProRoute>} />
 
                 {/* Tributario — solo Pro */}
                 <Route path="ats"                  element={<ProRoute><ModuleRoute moduleKey="ats"><PermissionRoute permission="tributario.reportes"><ATS /></PermissionRoute></ModuleRoute></ProRoute>} />
-                <Route path="reportes-tributarios" element={<ProRoute><PermissionRoute permission="tributario.reportes"><ReportesTributarios /></PermissionRoute></ProRoute>} />
+                <Route path="reportes-tributarios" element={<ProRoute><ModuleRoute moduleKey="tributario"><PermissionRoute permission="tributario.reportes"><ReportesTributarios /></PermissionRoute></ModuleRoute></ProRoute>} />
 
                 {/* Contabilidad — solo Pro */}
                 <Route path="contabilidad" element={<ProRoute><ModuleRoute moduleKey="contabilidad"><PermissionRoute permission="contabilidad.ver"><ContabilidadHub /></PermissionRoute></ModuleRoute></ProRoute>} />
-                <Route path="bancos" element={<MediumRoute><PermissionRoute permission="bancos.ver"><BancosHub /></PermissionRoute></MediumRoute>} />
-                <Route path="cuentas-por-cobrar" element={<MediumRoute><PermissionRoute permission="cxc.ver"><CuentasPorCobrarHub /></PermissionRoute></MediumRoute>} />
-                <Route path="cuentas-por-pagar" element={<MediumRoute><PermissionRoute permission="cxp.ver"><CuentasPorPagarHub /></PermissionRoute></MediumRoute>} />
-                <Route path="caja-chica" element={<MediumRoute><PermissionRoute permission="cajaChica.ver"><CajaChicaHub /></PermissionRoute></MediumRoute>} />
+                <Route path="bancos" element={<MediumRoute><ModuleRoute moduleKey="bancos"><PermissionRoute permission="bancos.ver"><BancosHub /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="cuentas-por-cobrar" element={<MediumRoute><ModuleRoute moduleKey="contabilidad"><PermissionRoute permission="cxc.ver"><CuentasPorCobrarHub /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="cuentas-por-pagar" element={<MediumRoute><ModuleRoute moduleKey="contabilidad"><PermissionRoute permission="cxp.ver"><CuentasPorPagarHub /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="caja-chica" element={<MediumRoute><ModuleRoute moduleKey="contabilidad"><PermissionRoute permission="cajaChica.ver"><CajaChicaHub /></PermissionRoute></ModuleRoute></MediumRoute>} />
 
                 {/* Configuración SRI — todos los planes */}
                 <Route path="configuracion-sri" element={<PermissionRoute permission="sri.configurar"><ConfiguracionSRI /></PermissionRoute>} />

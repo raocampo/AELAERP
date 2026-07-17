@@ -313,4 +313,48 @@ async function actualizarPlanTenant(slug, nuevoPlan, datosSuscripcion = {}) {
   return tenantActualizado;
 }
 
-module.exports = { provisionarTenant, actualizarPlanTenant, generarSlug, generarSlugUnico };
+// ─── Cambiar módulos contratados de un tenant existente ──────────────────────
+/**
+ * Fija el techo explícito de módulos de un tenant (independiente del plan) en
+ * la BD master Y en su propia BD (empresa) — mismo patrón que actualizarPlanTenant.
+ *
+ * @param {string} slug
+ * @param {string[]|null} modulos  - claves de MODULOS_TODOS, o null para volver
+ *                                   al techo legado derivado del plan.
+ */
+async function actualizarModulosContratadosTenant(slug, modulos) {
+  const master = getPrismaMaster();
+
+  const tenant = await master.tenants.findUnique({ where: { slug } });
+  if (!tenant) throw new Error(`Tenant '${slug}' no encontrado`);
+
+  const valor = Array.isArray(modulos) ? modulos : null;
+
+  const tenantActualizado = await master.tenants.update({
+    where: { id: tenant.id },
+    data:  { modulosContratados: valor },
+  });
+
+  try {
+    const prismaT = await getTenantPrisma(tenant);
+    await prismaT.empresas.updateMany({
+      data: { modulosContratados: valor },
+    });
+  } catch (err) {
+    console.warn(`[modulos] No se pudo actualizar la BD del tenant '${slug}':`, err.message);
+  }
+
+  const { invalidarCacheTenant } = require('../middleware/tenant');
+  invalidarCacheTenant(slug);
+
+  console.log(`[modulos] Tenant '${slug}' actualizado — módulos contratados: ${valor ? valor.join(', ') : '(techo legado por plan)'}`);
+  return tenantActualizado;
+}
+
+module.exports = {
+  provisionarTenant,
+  actualizarPlanTenant,
+  actualizarModulosContratadosTenant,
+  generarSlug,
+  generarSlugUnico,
+};

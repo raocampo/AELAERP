@@ -120,7 +120,7 @@ const GRUPOS_MENU = [
       { to: '/compras',       icon: '🛒', label: 'Compras',       planMin: 'medium', permiso: 'compras.gestionar',       modulo: 'comprasHabilitadas' },
       { to: '/compras/importar-historicas', icon: '📥', label: 'Importar históricas', planMin: 'medium', permiso: 'compras.gestionar', modulo: 'comprasHabilitadas' },
       { to: '/liquidaciones', icon: '📄', label: 'Liquidaciones', planMin: 'pro',    permiso: 'liquidaciones.gestionar', modulo: 'liquidacionesHabilitadas' },
-      { to: '/buzon',         icon: '📥', label: 'Buzón SRI',     planMin: 'medium', permiso: 'compras.gestionar',       modulo: 'comprasHabilitadas' },
+      { to: '/buzon',         icon: '📥', label: 'Buzón SRI',     planMin: 'medium', permiso: 'compras.gestionar',       modulo: 'buzonSriHabilitado' },
     ],
   },
   {
@@ -147,10 +147,10 @@ const GRUPOS_MENU = [
     label: 'Tributario',
     items: [
       { to: '/retenciones',           icon: '📋', label: 'Retenciones emitidas',  planMin: 'pro',    permiso: 'retenciones.gestionar', modulo: 'retencionesHabilitadas' },
-      { to: '/retenciones-recibidas', icon: '📥', label: 'Retenciones recibidas', planMin: 'medium', permiso: 'compras.gestionar' },
+      { to: '/retenciones-recibidas', icon: '📥', label: 'Retenciones recibidas', planMin: 'medium', permiso: 'compras.gestionar', modulo: 'tributarioHabilitado' },
       { to: '/ats',                   icon: '📁', label: 'ATS',                   planMin: 'pro',    permiso: 'tributario.reportes', modulo: 'atsHabilitado' },
-      { to: '/declaraciones',        icon: '🏛️', label: 'Declaraciones',        planMin: 'pro', permiso: 'tributario.reportes' },
-      { to: '/reportes-tributarios', icon: '📈', label: 'Reportes Tributarios', planMin: 'pro', permiso: 'tributario.reportes' },
+      { to: '/declaraciones',        icon: '🏛️', label: 'Declaraciones',        planMin: 'pro', permiso: 'tributario.reportes', modulo: 'tributarioHabilitado' },
+      { to: '/reportes-tributarios', icon: '📈', label: 'Reportes Tributarios', planMin: 'pro', permiso: 'tributario.reportes', modulo: 'tributarioHabilitado' },
     ],
   },
   {
@@ -159,9 +159,9 @@ const GRUPOS_MENU = [
     label: 'Contabilidad',
     items: [
       { to: '/contabilidad',       icon: '💼', label: 'Contabilidad',        planMin: 'pro',    permiso: 'contabilidad.ver', modulo: 'contabilidadHabilitada' },
-      { to: '/cuentas-por-cobrar', icon: '💰', label: 'Cuentas por Cobrar',  planMin: 'medium', permiso: 'cxc.ver' },
-      { to: '/cuentas-por-pagar',  icon: '💳', label: 'Cuentas por Pagar',   planMin: 'medium', permiso: 'cxp.ver' },
-      { to: '/caja-chica',         icon: '💵', label: 'Caja Chica',          planMin: 'medium', permiso: 'cajaChica.ver' },
+      { to: '/cuentas-por-cobrar', icon: '💰', label: 'Cuentas por Cobrar',  planMin: 'medium', permiso: 'cxc.ver', modulo: 'contabilidadHabilitada' },
+      { to: '/cuentas-por-pagar',  icon: '💳', label: 'Cuentas por Pagar',   planMin: 'medium', permiso: 'cxp.ver', modulo: 'contabilidadHabilitada' },
+      { to: '/caja-chica',         icon: '💵', label: 'Caja Chica',          planMin: 'medium', permiso: 'cajaChica.ver', modulo: 'contabilidadHabilitada' },
     ],
   },
   {
@@ -169,12 +169,12 @@ const GRUPOS_MENU = [
     icon: '🏦',
     label: 'Bancos',
     items: [
-      { to: '/bancos',             icon: '🏦', label: 'Cuentas Bancarias',       planMin: 'medium', permiso: 'bancos.ver' },
-      { to: '/bancos?tab=libro',   icon: '📋', label: 'Libro de Bancos',         planMin: 'medium', permiso: 'bancos.ver' },
-      { to: '/bancos?tab=ingreso', icon: '⬇️', label: 'Comprobantes de Ingreso', planMin: 'medium', permiso: 'bancos.gestionar' },
-      { to: '/bancos?tab=pago',    icon: '⬆️', label: 'Comprobantes de Pago',    planMin: 'medium', permiso: 'bancos.gestionar' },
-      { to: '/bancos?tab=credito', icon: '✚',  label: 'Notas de Crédito',        planMin: 'medium', permiso: 'bancos.gestionar' },
-      { to: '/bancos?tab=debito',  icon: '−',  label: 'Notas de Débito',         planMin: 'medium', permiso: 'bancos.gestionar' },
+      { to: '/bancos',             icon: '🏦', label: 'Cuentas Bancarias',       planMin: 'medium', permiso: 'bancos.ver', modulo: 'bancosHabilitado' },
+      { to: '/bancos?tab=libro',   icon: '📋', label: 'Libro de Bancos',         planMin: 'medium', permiso: 'bancos.ver', modulo: 'bancosHabilitado' },
+      { to: '/bancos?tab=ingreso', icon: '⬇️', label: 'Comprobantes de Ingreso', planMin: 'medium', permiso: 'bancos.gestionar', modulo: 'bancosHabilitado' },
+      { to: '/bancos?tab=pago',    icon: '⬆️', label: 'Comprobantes de Pago',    planMin: 'medium', permiso: 'bancos.gestionar', modulo: 'bancosHabilitado' },
+      { to: '/bancos?tab=credito', icon: '✚',  label: 'Notas de Crédito',        planMin: 'medium', permiso: 'bancos.gestionar', modulo: 'bancosHabilitado' },
+      { to: '/bancos?tab=debito',  icon: '−',  label: 'Notas de Débito',         planMin: 'medium', permiso: 'bancos.gestionar', modulo: 'bancosHabilitado' },
     ],
   },
   {

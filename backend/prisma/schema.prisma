@@ -51,6 +51,9 @@ model empresas {
   // ── Macro Empresa: jerarquía de subsidiarias ──
   parentEmpresaId     Int?
   esMatriz            Boolean   @default(false)
+  // Módulos contratados — techo explícito por tenant, sincronizado desde la BD
+  // master (super-admin). null = usar el techo legado derivado de `plan`.
+  modulosContratados  Json?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -283,6 +286,9 @@ model configuracion_sistema {
   liquidacionesHabilitadas Boolean @default(true)
   atsHabilitado         Boolean   @default(true)
   talentoHumanoHabilitado Boolean @default(false)
+  buzonSriHabilitado    Boolean   @default(true)
+  tributarioHabilitado  Boolean   @default(true)
+  bancosHabilitado      Boolean   @default(true)
   sbuEcuador            Decimal   @default(460.00) @db.Decimal(8, 2)
   updatedAt             DateTime  @updatedAt
 

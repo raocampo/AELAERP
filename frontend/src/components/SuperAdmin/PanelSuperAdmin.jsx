@@ -21,6 +21,29 @@ const ESTADO_LABELS = {
 const PLAN_LABELS = { lite: 'Lite', medium: 'Medium', pro: 'Pro' };
 const TIPO_LABELS = { monoempresa: '1 empresa', multiempresa: 'Multi' };
 
+// Catálogo de módulos — espejo de MODULOS_TODOS en backend/utils/configuracionSistema.js
+const MODULOS_CATALOGO = [
+  { key: 'cajaDiariaHabilitada',     label: 'Caja Diaria' },
+  { key: 'posHabilitado',            label: 'POS' },
+  { key: 'inventarioHabilitado',     label: 'Inventario' },
+  { key: 'comprasHabilitadas',       label: 'Compras' },
+  { key: 'buzonSriHabilitado',       label: 'Buzón SRI' },
+  { key: 'contabilidadHabilitada',   label: 'Contabilidad (+ CxC/CxP/Caja Chica)' },
+  { key: 'retencionesHabilitadas',   label: 'Retenciones emitidas' },
+  { key: 'liquidacionesHabilitadas', label: 'Liquidaciones de compra' },
+  { key: 'atsHabilitado',            label: 'ATS' },
+  { key: 'tributarioHabilitado',     label: 'Tributario (Declaraciones/Ret. recibidas/Reportes)' },
+  { key: 'bancosHabilitado',         label: 'Bancos' },
+  { key: 'talentoHumanoHabilitado',  label: 'Talento Humano' },
+];
+
+// Presets rápidos — mismos módulos que capacidadesPlan() en el backend
+const PRESETS_PLAN = {
+  lite:   [],
+  medium: ['cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado', 'comprasHabilitadas', 'buzonSriHabilitado', 'tributarioHabilitado', 'bancosHabilitado', 'talentoHumanoHabilitado'],
+  pro:    MODULOS_CATALOGO.map((m) => m.key),
+};
+
 function Badge({ estado }) {
   const cfg = ESTADO_LABELS[estado] || { label: estado, cls: '' };
   return <span className={`sa-badge ${cfg.cls}`}>{cfg.label}</span>;
@@ -77,8 +100,19 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
     autoRenovar:         tenant.autoRenovar  || false,
     dominioPersonalizado: (tenant.brandConfig?.dominio) || '',
   });
+  // Módulos contratados: null = usar el techo derivado del plan (comportamiento
+  // legado); array = techo personalizado, independiente del plan.
+  const [modulosPersonalizados, setModulosPersonalizados] = useState(
+    Array.isArray(tenant.modulosContratados)
+  );
+  const [modulosContratados, setModulosContratados] = useState(
+    Array.isArray(tenant.modulosContratados) ? tenant.modulosContratados : []
+  );
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const toggleModulo = (key) => setModulosContratados((m) =>
+    m.includes(key) ? m.filter((x) => x !== key) : [...m, key]
+  );
 
   return (
     <div className="sa-modal-overlay" onClick={onCerrar}>
@@ -128,6 +162,47 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
           </div>
 
           <div className="sa-form-row">
+            <label>Módulos contratados</label>
+            <label className="sa-check">
+              <input type="checkbox" checked={modulosPersonalizados}
+                onChange={e => {
+                  const activo = e.target.checked;
+                  setModulosPersonalizados(activo);
+                  if (activo && modulosContratados.length === 0) {
+                    setModulosContratados(PRESETS_PLAN[form.plan] || []);
+                  }
+                }} />
+              Techo personalizado (independiente del plan)
+            </label>
+            <small className="sa-hint-block">
+              Desmarcado: el cliente ve los módulos del plan {PLAN_LABELS[form.plan]} (comportamiento
+              normal). Marcado: elige exactamente qué módulos ve este cliente, sin importar el plan
+              — para vender combos como "solo Contabilidad" o "solo Tributario + Buzón SRI".
+            </small>
+
+            {modulosPersonalizados && (
+              <div className="sa-modulos-grid">
+                <div className="sa-modulos-presets">
+                  <span className="sa-hint">Aplicar preset:</span>
+                  {['lite', 'medium', 'pro'].map((p) => (
+                    <button key={p} type="button" className="btn-secondary sa-btn-xs"
+                      onClick={() => setModulosContratados(PRESETS_PLAN[p])}>
+                      {PLAN_LABELS[p]}
+                    </button>
+                  ))}
+                </div>
+                {MODULOS_CATALOGO.map((m) => (
+                  <label key={m.key} className="sa-check sa-check--modulo">
+                    <input type="checkbox" checked={modulosContratados.includes(m.key)}
+                      onChange={() => toggleModulo(m.key)} />
+                    {m.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="sa-form-row">
             <label>Nombre contacto</label>
             <input type="text" value={form.nombreContacto}
               onChange={e => set('nombreContacto', e.target.value)} />
@@ -172,7 +247,10 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
 
         <div className="sa-modal-footer">
           <button className="btn-secondary" onClick={onCerrar}>Cancelar</button>
-          <button className="btn-primary" onClick={() => onGuardar(form)}>Guardar</button>
+          <button className="btn-primary" onClick={() => onGuardar({
+            ...form,
+            modulosContratados: modulosPersonalizados ? modulosContratados : null,
+          })}>Guardar</button>
         </div>
       </div>
     </div>
@@ -617,6 +695,11 @@ export default function PanelSuperAdmin() {
                       )}
                       {t.brandConfig?.apiKey && (
                         <div className="sa-api-badge" title={t.brandConfig.apiKey}>🔑 API activa</div>
+                      )}
+                      {Array.isArray(t.modulosContratados) && (
+                        <div className="sa-api-badge" title={t.modulosContratados.join(', ') || '(ninguno)'}>
+                          🧩 {t.modulosContratados.length} módulos
+                        </div>
                       )}
                     </td>
                     <td><Badge estado={t.estado} /></td>

@@ -405,6 +405,25 @@
   cursor: pointer;
 }
 
+.sa-modulos-grid {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.sa-modulos-presets {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.sa-check--modulo { font-weight: 400; font-size: 0.82rem; }
+
 /* ── Misc ─────────────────────────────────────────────────── */
 .sa-loading {
   padding: 40px;

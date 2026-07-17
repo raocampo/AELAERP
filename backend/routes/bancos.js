@@ -7,6 +7,7 @@ const express = require('express');
 const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
+const { requiereModulo } = require('../middleware/modulos');
 const { crearAsientoMovimientoBancario, siguienteNumeroGenerico } = require('../utils/contabilidad');
 
 // Prefijo de comprobante por categoría de movimiento — equivalente a los
@@ -21,6 +22,7 @@ const router = express.Router();
 
 router.use(proteger);
 router.use(soloMediumOPro);
+router.use(requiereModulo('bancosHabilitado'));
 
 // ============================================================
 // HELPERS

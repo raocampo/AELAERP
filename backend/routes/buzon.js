@@ -101,7 +101,7 @@ router.get('/sri/sync/:tokenId/estado', (req, res) => {
 });
 
 router.use(proteger);
-router.use(requiereModulo('comprasHabilitadas'));
+router.use(requiereModulo('buzonSriHabilitado'));
 router.use(autorizarPermiso('compras.gestionar'));
 
 // ── Crear sesión de sync (AUTENTICADO) ────────────────────────

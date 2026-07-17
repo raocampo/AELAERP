@@ -1,13 +1,24 @@
+export const MODULOS_TODOS = [
+  'cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado',
+  'comprasHabilitadas', 'buzonSriHabilitado',
+  'contabilidadHabilitada', 'retencionesHabilitadas', 'liquidacionesHabilitadas',
+  'atsHabilitado', 'tributarioHabilitado', 'bancosHabilitado',
+  'talentoHumanoHabilitado',
+];
+
 export const CAPACIDADES_PLAN = {
   lite: {
     cajaDiariaHabilitada: true,
     posHabilitado: true,
     inventarioHabilitado: true,
     comprasHabilitadas: false,
+    buzonSriHabilitado: false,
     contabilidadHabilitada: false,
     retencionesHabilitadas: false,
     liquidacionesHabilitadas: false,
     atsHabilitado: false,
+    tributarioHabilitado: false,
+    bancosHabilitado: false,
     talentoHumanoHabilitado: false,
   },
   medium: {
@@ -15,10 +26,13 @@ export const CAPACIDADES_PLAN = {
     posHabilitado: true,
     inventarioHabilitado: true,
     comprasHabilitadas: true,
+    buzonSriHabilitado: true,
     contabilidadHabilitada: false,
     retencionesHabilitadas: false,
     liquidacionesHabilitadas: false,
     atsHabilitado: false,
+    tributarioHabilitado: true,
+    bancosHabilitado: true,
     talentoHumanoHabilitado: true,
   },
   pro: {
@@ -26,13 +40,27 @@ export const CAPACIDADES_PLAN = {
     posHabilitado: true,
     inventarioHabilitado: true,
     comprasHabilitadas: true,
+    buzonSriHabilitado: true,
     contabilidadHabilitada: true,
     retencionesHabilitadas: true,
     liquidacionesHabilitadas: true,
     atsHabilitado: true,
+    tributarioHabilitado: true,
+    bancosHabilitado: true,
     talentoHumanoHabilitado: true,
   },
 };
+
+// Techo por tenant (módulos contratados) o, si no está seteado, techo legado por plan.
+// Espejo de capacidadesModulos() en backend/utils/configuracionSistema.js.
+export function capacidadesModulos(empresa = {}) {
+  const contratados = empresa?.modulosContratados;
+  if (Array.isArray(contratados)) {
+    const set = new Set(contratados);
+    return Object.fromEntries(MODULOS_TODOS.map((k) => [k, set.has(k)]));
+  }
+  return capacidadesPlan(empresa?.plan);
+}
 
 export function normalizarTipoSistema(value, fallback = 'pro') {
   const raw = String(value || fallback || 'pro').trim().toLowerCase();
@@ -55,26 +83,17 @@ export function construirSistemaFallback(empresaActual = null, {
   modoOperacion = 'monoempresa',
 } = {}) {
   const plan = normalizarTipoSistema(empresaActual?.plan || edition || 'pro');
-  const esPro = plan === 'pro';
-  const esMedium = plan === 'medium';
+  const caps = capacidadesModulos(empresaActual || { plan });
 
   return {
     tipoSistema: plan,
     modoOperacion: normalizarModoOperacion(modoOperacion),
     cajaNombre: 'Caja General',
-    cajaDiariaHabilitada: esPro || esMedium || plan === 'lite',
     cierreCajaObligatorio: false,
-    posHabilitado: esPro || esMedium || plan === 'lite',
     documentoPosDefault: plan === 'lite' ? 'nota_venta' : 'factura',
-    inventarioHabilitado: esPro || esMedium || plan === 'lite',
     permitirStockNegativo: false,
-    comprasHabilitadas: esPro || esMedium,
-    contabilidadHabilitada: esPro,
-    retencionesHabilitadas: esPro,
-    liquidacionesHabilitadas: esPro,
-    atsHabilitado: esPro,
-    talentoHumanoHabilitado: esPro || esMedium,
     sbuEcuador: 480.00,
+    ...caps,
   };
 }
 
@@ -119,10 +138,13 @@ export function obtenerModulosHabilitados(sistema) {
     inventario: Boolean(sistema?.inventarioHabilitado),
     caja: Boolean(sistema?.cajaDiariaHabilitada),
     compras: Boolean(sistema?.comprasHabilitadas),
+    buzonSri: Boolean(sistema?.buzonSriHabilitado),
     contabilidad: Boolean(sistema?.contabilidadHabilitada),
     retenciones: Boolean(sistema?.retencionesHabilitadas),
     liquidaciones: Boolean(sistema?.liquidacionesHabilitadas),
     ats: Boolean(sistema?.atsHabilitado),
+    tributario: Boolean(sistema?.tributarioHabilitado),
+    bancos: Boolean(sistema?.bancosHabilitado),
     talentoHumano: Boolean(sistema?.talentoHumanoHabilitado),
   };
 }

@@ -46,6 +46,12 @@ model tenants {
   tipoInstancia    String?   @default("monoempresa") @db.VarChar(20)
   // monoempresa → máx 1 empresa | multiempresa → N empresas ilimitadas
 
+  // Módulos contratados — techo explícito por tenant, independiente del plan.
+  // null = sin restricción explícita, se usa el techo legado derivado de `plan`
+  // (capacidadesModulos() en backend/utils/configuracionSistema.js).
+  // Array de claves de configuracion_sistema, ej: ["contabilidadHabilitada","atsHabilitado"]
+  modulosContratados Json?
+
   // Branding (white-label)
   brandConfig      Json?    // { dominio, logo, apiKey, ... }
 

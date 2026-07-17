@@ -25,10 +25,13 @@ test('capacidadesPlan aplica restricciones correctas por plan', () => {
     posHabilitado: false,
     inventarioHabilitado: false,
     comprasHabilitadas: false,
+    buzonSriHabilitado: false,
     contabilidadHabilitada: false,
     retencionesHabilitadas: false,
     liquidacionesHabilitadas: false,
     atsHabilitado: false,
+    tributarioHabilitado: false,
+    bancosHabilitado: false,
     talentoHumanoHabilitado: false,
   });
 
@@ -37,12 +40,39 @@ test('capacidadesPlan aplica restricciones correctas por plan', () => {
     posHabilitado: true,
     inventarioHabilitado: true,
     comprasHabilitadas: true,
+    buzonSriHabilitado: true,
     contabilidadHabilitada: false,
     retencionesHabilitadas: false,
     liquidacionesHabilitadas: false,
     atsHabilitado: false,
+    tributarioHabilitado: true,
+    bancosHabilitado: true,
     talentoHumanoHabilitado: true,
   });
+});
+
+test('capacidadesModulos usa el techo explícito por tenant cuando modulosContratados está seteado', () => {
+  const { capacidadesModulos } = require('../utils/configuracionSistema');
+
+  const soloContabilidad = capacidadesModulos({ plan: 'pro', modulosContratados: ['contabilidadHabilitada'] });
+  assert.equal(soloContabilidad.contabilidadHabilitada, true);
+  assert.equal(soloContabilidad.comprasHabilitadas, false);
+  assert.equal(soloContabilidad.buzonSriHabilitado, false);
+  assert.equal(soloContabilidad.tributarioHabilitado, false);
+
+  const tributarioYBuzon = capacidadesModulos({
+    plan: 'lite', // el techo por tenant ignora el plan cuando modulosContratados está seteado
+    modulosContratados: ['retencionesHabilitadas', 'atsHabilitado', 'tributarioHabilitado', 'buzonSriHabilitado'],
+  });
+  assert.equal(tributarioYBuzon.retencionesHabilitadas, true);
+  assert.equal(tributarioYBuzon.atsHabilitado, true);
+  assert.equal(tributarioYBuzon.buzonSriHabilitado, true);
+  assert.equal(tributarioYBuzon.contabilidadHabilitada, false);
+  assert.equal(tributarioYBuzon.comprasHabilitadas, false);
+
+  // Sin modulosContratados (null) — cae al techo legado por plan
+  const legado = capacidadesModulos({ plan: 'medium', modulosContratados: null });
+  assert.deepEqual(legado, capacidadesPlan('medium'));
 });
 
 test('construirPayloadConfiguracionSistema no permite activar módulos bloqueados por el plan', () => {

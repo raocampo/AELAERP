@@ -15,8 +15,10 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { requiereModulo } = require('../middleware/modulos');
 
 router.use(proteger);
+router.use(requiereModulo('tributarioHabilitado'));
 router.use(autorizarPermiso('tributario.reportes'));
 
 // ─── Helpers de rango de fechas ────────────────────────────────────────────────

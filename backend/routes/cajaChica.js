@@ -6,6 +6,8 @@
  */
 const express = require('express');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { soloMediumOPro } = require('../middleware/edition');
+const { requiereModulo } = require('../middleware/modulos');
 const {
   crearAsientoAperturaCajaChica,
   crearAsientoReposicionCajaChica,
@@ -18,6 +20,8 @@ const {
 
 const router = express.Router();
 router.use(proteger);
+router.use(soloMediumOPro);
+router.use(requiereModulo('contabilidadHabilitada'));
 
 function obtenerEmpresaId(req) {
   return req.empresa?.id ?? req.usuario?.empresaId ?? 1;

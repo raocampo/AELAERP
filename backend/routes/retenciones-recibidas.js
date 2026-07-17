@@ -8,6 +8,7 @@ const router  = express.Router();
 const multer  = require('multer');
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { requiereModulo } = require('../middleware/modulos');
 const { parsearRetencionRecibida } = require('../utils/buzon');
 const { leerExcel, validarFila, generarPlantilla } = require('../utils/importarRetencionesRecibidas');
 const { crearAsientoRetencionRecibida } = require('../utils/contabilidad');
@@ -16,6 +17,7 @@ const { registrarAuditoria } = require('../utils/auditoria');
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(proteger);
+router.use(requiereModulo('tributarioHabilitado'));
 router.use(autorizarPermiso('compras.gestionar'));
 
 // ─── Helper: where con filtros ────────────────────────────────

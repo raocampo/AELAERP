@@ -6,6 +6,9 @@ const MENSAJES = {
   retencionesHabilitadas: 'El modulo de retenciones esta deshabilitado en la configuracion del sistema',
   liquidacionesHabilitadas: 'El modulo de liquidaciones esta deshabilitado en la configuracion del sistema',
   atsHabilitado: 'El modulo de ATS esta deshabilitado en la configuracion del sistema',
+  buzonSriHabilitado: 'El modulo de Buzon SRI esta deshabilitado en la configuracion del sistema',
+  tributarioHabilitado: 'El modulo Tributario esta deshabilitado en la configuracion del sistema',
+  bancosHabilitado: 'El modulo de Bancos esta deshabilitado en la configuracion del sistema',
 };
 
 const requiereModulo = (campo, mensajePersonalizado = null) => async (req, res, next) => {

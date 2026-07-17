@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
-import { CAPACIDADES_PLAN } from '../../utils/sistema';
+import { capacidadesModulos } from '../../utils/sistema';
 import './ConfiguracionSistema.css';
 
 const PLANES = {
@@ -39,16 +39,19 @@ const FORM_INICIAL = {
   inventarioHabilitado: false,
   permitirStockNegativo: false,
   comprasHabilitadas: true,
+  buzonSriHabilitado: true,
   contabilidadHabilitada: true,
   retencionesHabilitadas: true,
   liquidacionesHabilitadas: true,
   atsHabilitado: true,
+  tributarioHabilitado: true,
+  bancosHabilitado: true,
   talentoHumanoHabilitado: false,
   sbuEcuador: '480.00',
 };
 
 export default function ConfiguracionSistema() {
-  const { sistema, setSistema, recargarSistema } = useAuth();
+  const { sistema, setSistema, recargarSistema, empresa } = useAuth();
   const [form, setForm] = useState(FORM_INICIAL);
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -114,17 +117,20 @@ export default function ConfiguracionSistema() {
 
   const planActual = form.tipoSistema || 'pro';
   const planInfo   = PLANES[planActual] || PLANES.pro;
-  const caps       = CAPACIDADES_PLAN[planActual] || CAPACIDADES_PLAN.pro;
+  const caps       = capacidadesModulos({ ...empresa, plan: planActual });
 
   const modulos = [
     { key: 'cajaDiariaHabilitada',     label: 'Caja Diaria' },
     { key: 'posHabilitado',            label: 'POS' },
     { key: 'inventarioHabilitado',     label: 'Inventario' },
     { key: 'comprasHabilitadas',       label: 'Compras' },
+    { key: 'buzonSriHabilitado',       label: 'Buzón SRI' },
     { key: 'contabilidadHabilitada',   label: 'Contabilidad' },
     { key: 'retencionesHabilitadas',   label: 'Retenciones' },
     { key: 'liquidacionesHabilitadas', label: 'Liquidaciones' },
     { key: 'atsHabilitado',            label: 'ATS' },
+    { key: 'tributarioHabilitado',     label: 'Tributario' },
+    { key: 'bancosHabilitado',         label: 'Bancos' },
     { key: 'talentoHumanoHabilitado',  label: 'Talento Humano' },
   ];
 
@@ -320,31 +326,49 @@ export default function ConfiguracionSistema() {
             <input type="checkbox" checked={form.comprasHabilitadas}
               onChange={(e) => actualizar('comprasHabilitadas', e.target.checked)}
               disabled={!caps.comprasHabilitadas} />
-            <span>Compras{!caps.comprasHabilitadas ? ' — requiere Medium o Pro' : ''}</span>
+            <span>Compras{!caps.comprasHabilitadas ? ' — no incluido en tu plan' : ''}</span>
+          </label>
+          <label className="syscfg-check">
+            <input type="checkbox" checked={form.buzonSriHabilitado}
+              onChange={(e) => actualizar('buzonSriHabilitado', e.target.checked)}
+              disabled={!caps.buzonSriHabilitado} />
+            <span>Buzón SRI{!caps.buzonSriHabilitado ? ' — no incluido en tu plan' : ''}</span>
           </label>
           <label className="syscfg-check">
             <input type="checkbox" checked={form.retencionesHabilitadas}
               onChange={(e) => actualizar('retencionesHabilitadas', e.target.checked)}
               disabled={!caps.retencionesHabilitadas} />
-            <span>Retenciones{!caps.retencionesHabilitadas ? ' — solo Pro' : ''}</span>
+            <span>Retenciones{!caps.retencionesHabilitadas ? ' — no incluido en tu plan' : ''}</span>
           </label>
           <label className="syscfg-check">
             <input type="checkbox" checked={form.liquidacionesHabilitadas}
               onChange={(e) => actualizar('liquidacionesHabilitadas', e.target.checked)}
               disabled={!caps.liquidacionesHabilitadas} />
-            <span>Liquidaciones de compra{!caps.liquidacionesHabilitadas ? ' — solo Pro' : ''}</span>
+            <span>Liquidaciones de compra{!caps.liquidacionesHabilitadas ? ' — no incluido en tu plan' : ''}</span>
           </label>
           <label className="syscfg-check">
             <input type="checkbox" checked={form.atsHabilitado}
               onChange={(e) => actualizar('atsHabilitado', e.target.checked)}
               disabled={!caps.atsHabilitado} />
-            <span>ATS{!caps.atsHabilitado ? ' — solo Pro' : ''}</span>
+            <span>ATS{!caps.atsHabilitado ? ' — no incluido en tu plan' : ''}</span>
+          </label>
+          <label className="syscfg-check">
+            <input type="checkbox" checked={form.tributarioHabilitado}
+              onChange={(e) => actualizar('tributarioHabilitado', e.target.checked)}
+              disabled={!caps.tributarioHabilitado} />
+            <span>Tributario (Declaraciones, Retenciones recibidas, Reportes){!caps.tributarioHabilitado ? ' — no incluido en tu plan' : ''}</span>
           </label>
           <label className="syscfg-check">
             <input type="checkbox" checked={form.contabilidadHabilitada}
               onChange={(e) => actualizar('contabilidadHabilitada', e.target.checked)}
               disabled={!caps.contabilidadHabilitada} />
-            <span>Contabilidad{!caps.contabilidadHabilitada ? ' — solo Pro' : ''}</span>
+            <span>Contabilidad (incluye CxC, CxP, Caja Chica){!caps.contabilidadHabilitada ? ' — no incluido en tu plan' : ''}</span>
+          </label>
+          <label className="syscfg-check">
+            <input type="checkbox" checked={form.bancosHabilitado}
+              onChange={(e) => actualizar('bancosHabilitado', e.target.checked)}
+              disabled={!caps.bancosHabilitado} />
+            <span>Bancos{!caps.bancosHabilitado ? ' — no incluido en tu plan' : ''}</span>
           </label>
         </section>
 
