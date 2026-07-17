@@ -384,13 +384,17 @@ router.get('/exportar', async (req, res) => {
       const baseGravada = r2((compra.subtotal5 || 0) + (compra.subtotal12 || 0) + (compra.subtotal15 || 0));
       const base0 = r2(compra.subtotal0 || 0);
       const baseNoObjeto = r2(compra.subtotalNoObjeto || 0);
+      const esNotaVenta = compra.tipoComprobante === 'NOTA_VENTA';
+      // Nota de Venta (proveedor RIMPE Negocio Popular): sin derecho a crédito
+      // tributario de IVA — codSustento 02 (Costo o Gasto), no 01.
+      const codSustento = esNotaVenta ? '02' : (compra.tipoGasto === 'ACTIVO_FIJO' ? '03' : '01');
 
       comprasXML += `
     <detalleCompras>
-      <codSustento>${compra.tipoGasto === 'ACTIVO_FIJO' ? '03' : '01'}</codSustento>
+      <codSustento>${codSustento}</codSustento>
       <tpIdProv>${tpId}</tpIdProv>
       <idProv>${compra.identificacionProveedor}</idProv>
-      <tipoComprobante>01</tipoComprobante>
+      <tipoComprobante>${esNotaVenta ? '02' : '01'}</tipoComprobante>
       <parteRel>NO</parteRel>
       <fechaRegistro>${fmtFecha(compra.createdAt || compra.fechaEmision)}</fechaRegistro>
       <establecimiento>${estab}</establecimiento>
@@ -535,17 +539,33 @@ router.get('/exportar/pdf', async (req, res) => {
     const vTotIva12 = vFact.iva12 + vLiq.iva12;
     const vTotIva15 = vFact.iva15 + vLiq.iva15 + vNcEm.iva15;
 
-    const cFact = { n: compras.length, b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, iva5: 0, iva12: 0, iva15: 0 };
-    compras.forEach(c => {
-      cFact.b0    += r2(c.subtotal0);
-      cFact.bt5   += r2(c.subtotal5 || 0);
-      cFact.bt12  += r2(c.subtotal12 || 0);
-      cFact.bt15  += r2(c.subtotal15);
-      cFact.noObj += r2(c.subtotalNoObjeto || 0);
-      cFact.iva5  += r2((c.subtotal5 || 0) * 0.05);
-      cFact.iva12 += r2((c.subtotal12 || 0) * 0.12);
-      cFact.iva15 += r2(c.subtotal15 * 0.15);
-    });
+    // Compras: separar Factura (01) de Nota de Venta (02, proveedor RIMPE
+    // Negocio Popular — sin crédito tributario de IVA).
+    const comprasFactura   = compras.filter(c => c.tipoComprobante !== 'NOTA_VENTA');
+    const comprasNotaVenta = compras.filter(c => c.tipoComprobante === 'NOTA_VENTA');
+    const sumarCompras = (arr) => arr.reduce((acc, c) => {
+      acc.n++;
+      acc.b0    += r2(c.subtotal0);
+      acc.bt5   += r2(c.subtotal5 || 0);
+      acc.bt12  += r2(c.subtotal12 || 0);
+      acc.bt15  += r2(c.subtotal15);
+      acc.noObj += r2(c.subtotalNoObjeto || 0);
+      acc.iva5  += r2((c.subtotal5 || 0) * 0.05);
+      acc.iva12 += r2((c.subtotal12 || 0) * 0.12);
+      acc.iva15 += r2(c.subtotal15 * 0.15);
+      return acc;
+    }, { n: 0, b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, iva5: 0, iva12: 0, iva15: 0 });
+    const cFact = sumarCompras(comprasFactura);
+    const cNV   = sumarCompras(comprasNotaVenta);
+    const cTotN    = cFact.n + cNV.n;
+    const cTotB0   = cFact.b0 + cNV.b0;
+    const cTotBt5  = cFact.bt5 + cNV.bt5;
+    const cTotBt12 = cFact.bt12 + cNV.bt12;
+    const cTotBt15 = cFact.bt15 + cNV.bt15;
+    const cTotNoObj = cFact.noObj + cNV.noObj;
+    const cTotIva5  = cFact.iva5 + cNV.iva5;
+    const cTotIva12 = cFact.iva12 + cNV.iva12;
+    const cTotIva15 = cFact.iva15 + cNV.iva15;
 
     // ── Retenciones IR por código SRI (303, 307, …) ───────────────────────────
     const retIrPorCod = {};
@@ -749,9 +769,11 @@ router.get('/exportar/pdf', async (req, res) => {
 
     secHdr('COMPRAS');
     colHdr(tc);
-    if (compras.length > 0)
-      dataRow(tc, ['01', 'FACTURA', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), n2(cFact.noObj), n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
-    totRow(tc,   ['TOTAL', '', compras.length, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), n2(cFact.noObj), n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
+    if (cFact.n > 0)
+      dataRow(tc, ['01', 'FACTURA', cFact.n, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), n2(cFact.noObj), n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
+    if (cNV.n > 0)
+      dataRow(tc, ['02', 'NOTA DE VENTA', cNV.n, n2(cNV.b0), n2(cNV.bt5), n2(cNV.bt12), n2(cNV.bt15), n2(cNV.noObj), n2(cNV.iva5), n2(cNV.iva12), n2(cNV.iva15)]);
+    totRow(tc,   ['TOTAL', '', cTotN, n2(cTotB0), n2(cTotBt5), n2(cTotBt12), n2(cTotBt15), n2(cTotNoObj), n2(cTotIva5), n2(cTotIva12), n2(cTotIva15)]);
     curY += 10;
 
     secHdr('VENTAS');

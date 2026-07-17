@@ -36,10 +36,10 @@ async function getColsCompra() {
       return false;
     }
   };
-  const [tipoGasto, anulada, motivoAnulacion, receptorEsRuc] = await Promise.all([
-    probar('tipoGasto'), probar('anulada'), probar('motivoAnulacion'), probar('receptorEsRuc'),
+  const [tipoGasto, anulada, motivoAnulacion, receptorEsRuc, tipoComprobante] = await Promise.all([
+    probar('tipoGasto'), probar('anulada'), probar('motivoAnulacion'), probar('receptorEsRuc'), probar('tipoComprobante'),
   ]);
-  _colsCompra = { tipoGasto, anulada, motivoAnulacion, receptorEsRuc };
+  _colsCompra = { tipoGasto, anulada, motivoAnulacion, receptorEsRuc, tipoComprobante };
   return _colsCompra;
 }
 
@@ -54,6 +54,12 @@ function limpiarTexto(valor) {
 
 function limpiarCodigo(valor) {
   return limpiarTexto(valor).toUpperCase();
+}
+
+const TIPOS_COMPROBANTE_COMPRA = new Set(['FACTURA', 'NOTA_VENTA']);
+function normalizarTipoComprobante(valor) {
+  const v = limpiarCodigo(valor);
+  return TIPOS_COMPROBANTE_COMPRA.has(v) ? v : 'FACTURA';
 }
 
 function toNumber(valor, fallback = 0) {
@@ -676,6 +682,7 @@ router.get('/', async (req, res) => {
       ...(cols.anulada ? { anulada: true } : {}),
       ...(cols.motivoAnulacion ? { motivoAnulacion: true } : {}),
       ...(cols.receptorEsRuc ? { receptorEsRuc: true } : {}),
+      ...(cols.tipoComprobante ? { tipoComprobante: true } : {}),
       createdAt: true,
     };
 
@@ -1181,6 +1188,7 @@ router.post('/', async (req, res) => {
       fechaEmision,
       observaciones,
       tipoGasto,
+      tipoComprobante,
       detalles,
       pagos,
       origenRegistro,
@@ -1284,6 +1292,7 @@ router.post('/', async (req, res) => {
           numeroFactura: normalizarNumeroFactura(numeroFactura),
           numeroAutorizacion: limpiarTexto(numeroAutorizacion) || null,
           claveAcceso: limpiarTexto(claveAcceso) || null,
+          tipoComprobante: normalizarTipoComprobante(tipoComprobante),
           fechaEmision: fechaDoc,
           subtotal0:  Number(totales.subtotal0.toFixed(2)),
           subtotal5:  Number((totales.subtotal5 || 0).toFixed(2)),
@@ -1517,7 +1526,7 @@ router.put('/:id', async (req, res) => {
     if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
     if (compra.anulada) return res.status(400).json({ success: false, mensaje: 'No se puede editar una compra anulada' });
 
-    const { observaciones, proveedorId, fechaEmision, tipoGasto,
+    const { observaciones, proveedorId, fechaEmision, tipoGasto, tipoComprobante,
             subtotal0, subtotal15, totalIva, cuentaGastoId,
             esGastoPersonal, categoriaGastoPersonal } = req.body || {};
 
@@ -1525,6 +1534,7 @@ router.put('/:id', async (req, res) => {
     if (observaciones !== undefined) data.observaciones = limpiarTexto(observaciones) || null;
     if (proveedorId !== undefined) data.proveedorId = proveedorId ? parseInt(proveedorId, 10) : null;
     if (tipoGasto !== undefined) data.tipoGasto = limpiarTexto(tipoGasto) || null;
+    if (tipoComprobante !== undefined) data.tipoComprobante = normalizarTipoComprobante(tipoComprobante);
     if (esGastoPersonal !== undefined) data.esGastoPersonal = toBoolean(esGastoPersonal, false);
     if (categoriaGastoPersonal !== undefined) data.categoriaGastoPersonal = limpiarTexto(categoriaGastoPersonal) || null;
 

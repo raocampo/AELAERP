@@ -260,12 +260,18 @@ function TabCompras({ data }) {
   const totTotal    = compras.reduce((s, c) => s + parseFloat(c.importeTotal || 0), 0);
   const totRetIR    = compras.reduce((s, c) => s + parseFloat(c.retencionRenta || 0), 0);
   const totRetIva   = compras.reduce((s, c) => s + parseFloat(c.retencionIVA || 0), 0);
+  const totNotasVentaRecibidas = compras.filter(c => c.tipoComprobante === 'NOTA_VENTA').length;
 
   return (
     <div className="ats-seccion">
       <h3 className="ats-seccion-titulo">
         Facturas de Compra registradas
         <span className="ats-sec-count">{compras.length}</span>
+        {totNotasVentaRecibidas > 0 && (
+          <span className="ats-sec-count" style={{ background: '#fef3c7', color: '#92400e' }}>
+            🧾 {totNotasVentaRecibidas} Nota{totNotasVentaRecibidas === 1 ? '' : 's'} de Venta (RIMPE)
+          </span>
+        )}
       </h3>
 
       {/* Resumen compras */}
@@ -299,6 +305,7 @@ function TabCompras({ data }) {
             <thead>
               <tr>
                 <th>Número factura</th>
+                <th>Tipo</th>
                 <th>Fecha</th>
                 <th>Proveedor</th>
                 <th>RUC / CI</th>
@@ -321,6 +328,7 @@ function TabCompras({ data }) {
                 return (
                   <tr key={c.id}>
                     <td className="ats-num">{c.numeroFactura}</td>
+                    <td>{c.tipoComprobante === 'NOTA_VENTA' ? '🧾 N. Venta' : '📄 Factura'}</td>
                     <td>{fmtFecha(c.fechaEmision)}</td>
                     <td className="ats-proveedor">{c.razonSocialProveedor}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{c.identificacionProveedor}</td>
@@ -342,7 +350,7 @@ function TabCompras({ data }) {
             </tbody>
             <tfoot>
               <tr className="ats-tfoot">
-                <td colSpan={5}><strong>TOTALES</strong></td>
+                <td colSpan={6}><strong>TOTALES</strong></td>
                 <td className="ats-money"><strong>{fmt(totBase0)}</strong></td>
                 <td className="ats-money"><strong>{fmt(totBase5)}</strong></td>
                 <td className="ats-money"><strong>{fmt(totBase12)}</strong></td>

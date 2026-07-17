@@ -82,6 +82,7 @@ export default function FormCompra() {
     numeroFactura: '',
     numeroAutorizacion: '',
     claveAcceso: '',
+    tipoComprobante: 'FACTURA',
     fechaEmision: hoy(),
     formaPago: '20',
     observaciones: '',
@@ -144,6 +145,7 @@ export default function FormCompra() {
       numeroFactura: '',
       numeroAutorizacion: '',
       claveAcceso: '',
+      tipoComprobante: 'FACTURA',
       fechaEmision: hoy(),
       formaPago: '20',
       observaciones: '',
@@ -405,6 +407,7 @@ export default function FormCompra() {
         numeroFactura: form.numeroFactura.trim(),
         numeroAutorizacion: form.numeroAutorizacion.trim(),
         claveAcceso: form.claveAcceso.trim(),
+        tipoComprobante: form.tipoComprobante,
         fechaEmision: form.fechaEmision,
         observaciones: form.observaciones.trim(),
         tipoGasto: form.tipoGasto || null,
@@ -622,6 +625,19 @@ export default function FormCompra() {
         <section className="compra-card">
           <h2>Comprobante</h2>
           <div className="compra-fields">
+            <label>
+              <span>Tipo de comprobante</span>
+              <select value={form.tipoComprobante} onChange={(e) => actualizarForm('tipoComprobante', e.target.value)}>
+                <option value="FACTURA">📄 Factura</option>
+                <option value="NOTA_VENTA">🧾 Nota de Venta (proveedor RIMPE Negocio Popular)</option>
+              </select>
+              {form.tipoComprobante === 'NOTA_VENTA' && (
+                <small className="compra-helper-text">
+                  Documento sin derecho a crédito tributario de IVA — se declara en el ATS
+                  como "02 Nota de Venta", no como factura.
+                </small>
+              )}
+            </label>
             <label>
               <span>Número de factura</span>
               <input value={form.numeroFactura} onChange={(e) => actualizarForm('numeroFactura', e.target.value)} placeholder="001-001-000000001" />

@@ -6,23 +6,36 @@ Todo lo de esta sesión ya está en `main` (commit `07b572b`), verificado localm
 `scfi_dev`, pero **nada de esto ha tocado producción todavía**. Orden sugerido:
 
 1. **Desplegar a Railway** (backend) — el deploy normal ya corre `prisma migrate deploy` +
-   `applySchemaFixes.js` al arrancar, así que la migración `subtotalNoObjeto` y el fix de
-   `negocioPopular` deberían aplicarse solos. Revisar logs de arranque en Railway para
-   confirmar que no hay `P2022` (columna faltante) en ninguna BD de tenant.
+   `applySchemaFixes.js` al arrancar, así que las migraciones `subtotalNoObjeto` y
+   `tipoComprobante`, y el fix de `negocioPopular`, deberían aplicarse solos. Revisar logs
+   de arranque en Railway para confirmar que no hay `P2022` (columna faltante) en ninguna
+   BD de tenant.
 2. **Desplegar frontend a Vercel** — cambios en `FormCompra.jsx` y `ATS.jsx`.
-3. **Preguntar al cliente dos cosas puntuales** (no se pudieron confirmar sin hablar con él):
+3. **Preguntar al cliente tres cosas puntuales** (no se pudieron confirmar sin hablar con él):
    - ¿Su reporte de "otras compras exentas/no objeto" era sobre **compras manuales**
      (`FormCompra`, ya cubierto) o sobre una **carga masiva/Excel histórica** (NO cubierto
      esta sesión — ver punto 1 de pendientes abajo)?
-   - ¿Tiene marcado **"Negocio Popular"** en Configuración SRI de su empresa? Si no, el
-     cambio de Notas de Venta en el ATS no le va a aparecer (es el gate intencional) y hay
-     que activarlo con él.
-4. **Probar en producción con datos reales del cliente**: registrar una compra con la nueva
-   opción "No objeto / Exento", generar el talón resumen ATS del mes y confirmar que la
-   columna "No Obj." ya no sale en 0.00. Si el cliente es Negocio Popular, generar el ATS
-   de un mes con notas de venta emitidas y confirmar que aparecen.
+   - ¿Tiene marcado **"Negocio Popular"** en Configuración SRI de su empresa? Si no, las
+     notas de venta que él **emite** no le van a aparecer en el ATS (es el gate
+     intencional) y hay que activarlo con él.
+   - ¿Tiene compras viejas ya registradas con una nota de venta de proveedor, que quedaron
+     mal clasificadas como factura antes de este fix? Si son pocas, se corrigen editándolas
+     una por una; si son muchas, avisar para armar un script puntual.
+4. **Probar en producción con datos reales del cliente**:
+   - Registrar una compra con la nueva opción de línea "No objeto / Exento", generar el
+     talón resumen ATS del mes y confirmar que la columna "No Obj." ya no sale en 0.00.
+   - Registrar una compra marcada como **"🧾 Nota de Venta (proveedor RIMPE)"** y confirmar
+     que en el talón resumen aparece como fila separada `02 NOTA DE VENTA` en COMPRAS.
+   - Si el cliente es Negocio Popular, generar el ATS de un mes con notas de venta
+     **emitidas** por él y confirmar que aparecen en VENTAS.
 5. Ver la sección **"🔴 Pendiente de verificar en producción"** al final de este documento
-   para el detalle completo de los 4 puntos abiertos.
+   para el detalle completo de los puntos abiertos.
+
+**Actualización misma noche**: el cliente aclaró que las notas de venta que le importan no
+son solo las que él emite (RIMPE Negocio Popular, Feature 2) sino también las que **recibe
+de sus proveedores** y registra como compra — esas también deben ir al ATS correctamente
+clasificadas. Ver **Feature 3** más abajo, ya implementada y verificada igual que las otras
+dos.
 
 ---
 
@@ -144,6 +157,37 @@ esta sesión, y no lo pidió el cliente.
   emitidas — RIMPE Negocio Popular" en el tab Ventas (condicional, solo si hay
   registros); contador de ventas y card de resumen actualizados.
 
+### Feature 3 — Notas de Venta recibidas de proveedores, clasificadas correctamente en compras
+
+Distinto de la Feature 2: acá el cliente **recibe** una nota de venta de un proveedor RIMPE
+Negocio Popular (que no puede emitir factura) y la registra como compra propia. Hasta ahora
+`facturas_compra` no tenía forma de distinguir el tipo de documento recibido — **toda compra
+se reportaba al SRI como "01 FACTURA"**, sin importar el documento real. Eso es incorrecto en
+dos campos del ATS:
+- `tipoComprobante` debía ser `02` (Nota o boleta de venta, Tabla 4 SRI), no `01`.
+- `codSustento` debía ser `02` (Costo o Gasto para IR) en vez de `01` (Crédito Tributario de
+  IVA) — una nota de venta de un Negocio Popular **no da derecho a crédito tributario de
+  IVA**, es solo deducible como gasto para Impuesto a la Renta.
+
+**Implementado:**
+- Nueva columna `tipoComprobante` (`'FACTURA'` default | `'NOTA_VENTA'`) en `facturas_compra`
+  — migración `20260717010000_tipo_comprobante_compras`, sin backfill (todo lo existente ya
+  se asumía y se seguía tratando como factura, no cambia comportamiento de nada histórico).
+- `frontend/src/components/Compras/FormCompra.jsx`: nuevo select **"Tipo de comprobante"**
+  (📄 Factura / 🧾 Nota de Venta) al inicio de la sección "Comprobante", con nota explicativa
+  cuando se elige Nota de Venta.
+- `backend/routes/compras.js`: acepta y persiste `tipoComprobante` en creación (POST `/`) y
+  edición (PUT `/:id`, para corregir compras ya registradas incorrectamente como factura).
+- `backend/routes/ats.js`:
+  - `/exportar` (XML): `codSustento` y `tipoComprobante` del `<detalleCompras>` ahora
+    dependen del tipo real del documento.
+  - `/exportar/pdf`: la sección COMPRAS del talón ahora separa **dos filas** —
+    `01 FACTURA` y `02 NOTA DE VENTA` — cada una con su propio desglose de bases/IVA, y el
+    `TOTAL` suma ambas.
+- `frontend/src/components/Facturacion/ATS.jsx`: columna "Tipo" con badge por fila en la
+  tabla de compras, badge de conteo "🧾 N Notas de Venta (RIMPE)" en el título de la sección
+  cuando aplica.
+
 ---
 
 ## Verificado (HTTP real contra `scfi_dev`, no solo `node -c`)
@@ -172,6 +216,11 @@ esta sesión, y no lo pidió el cliente.
    (`false`) al finalizar.
 8. `npx prisma validate`, `node -c` en los 4 archivos backend editados,
    `npx vite build` del frontend — todo limpio.
+9. `POST /api/compras` con `tipoComprobante: "NOTA_VENTA"` → persistió correctamente; el
+   listado (`GET /compras`) devuelve `tipoComprobante: "NOTA_VENTA"`; el XML del ATS generó
+   `<codSustento>02</codSustento>` y `<tipoComprobante>02</tipoComprobante>` reales; el PDF
+   del talón mostró la fila separada `02 NOTA DE VENTA` en la sección COMPRAS con el monto
+   correcto ($80.00). Datos y proveedores de prueba eliminados al terminar.
 
 ## 🔴 Pendiente de verificar en producción
 
@@ -184,11 +233,24 @@ esta sesión, y no lo pidió el cliente.
 2. Confirmar si el cliente que reportó RIMPE/notas de venta tiene
    `negocioPopular` marcado en Configuración SRI — si no, no verá el cambio
    (es el gate intencional).
-3. Migración `20260717000000_subtotal_no_objeto_compras` pendiente de aplicar en
-   Railway (`prisma migrate deploy`) y en BDs de tenants (`applySchemaFixes.js`
-   al arrancar) — confirmar sin error `P2022` en logs.
+3. Migraciones `20260717000000_subtotal_no_objeto_compras` y
+   `20260717010000_tipo_comprobante_compras` pendientes de aplicar en Railway
+   (`prisma migrate deploy`) y en BDs de tenants (`applySchemaFixes.js` al
+   arrancar) — confirmar sin error `P2022` en logs.
 4. Si las notas de venta de este cliente en la práctica sí venden productos
    gravados (no solo tarifa 0%), el tratamiento actual (todo a "Base 0%") es una
    simplificación deliberada — revisar con la contadora si es correcto para su
    caso o si se necesita captura de IVA por línea en notas de venta (cambio de
    alcance mayor).
+5. Las compras ya registradas **antes de hoy** con una nota de venta de
+   proveedor (si las hay) quedaron con `tipoComprobante = 'FACTURA'` por
+   default — no se puede backfillear automáticamente porque no hay forma de
+   distinguirlas retroactivamente. Si el cliente identifica compras viejas mal
+   clasificadas, se corrigen una por una editándolas (el PUT `/:id` ya acepta
+   `tipoComprobante`) o pidiendo un script puntual si son muchas.
+6. La importación masiva de compras históricas (Excel) y la importación desde
+   XML/autorización SRI **no** tienen forma de marcar `tipoComprobante =
+   NOTA_VENTA` — asumen siempre factura, correctamente (un XML autorizado por
+   el SRI siempre es un comprobante electrónico real). Si el cliente necesita
+   cargar notas de venta recibidas en lote, es un follow-up sobre el importador
+   Excel de compras históricas.

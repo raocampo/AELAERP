@@ -435,6 +435,9 @@ const FIXES = [
   // Compras "No objeto de IVA" / "Exentas de IVA" (2026-07-17) — categoría SRI
   // distinta de tarifa 0% (subtotal0). Sin backfill, ver migración para detalle.
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "subtotalNoObjeto" DECIMAL(14,2) NOT NULL DEFAULT 0`,
+  // Tipo de comprobante recibido del proveedor en compras (2026-07-17) —
+  // FACTURA (default) o NOTA_VENTA (proveedor RIMPE Negocio Popular).
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "tipoComprobante" VARCHAR(20) NOT NULL DEFAULT 'FACTURA'`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

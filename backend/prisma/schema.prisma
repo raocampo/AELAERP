@@ -542,6 +542,11 @@ model facturas_compra {
   razonSocialProveedor          String    @db.VarChar(300)
   nombreComercialProveedor      String?   @db.VarChar(300)
   direccionProveedor            String?   @db.VarChar(300)
+  // Tipo de documento recibido del proveedor: FACTURA (default, tabla 4 SRI
+  // código 01) o NOTA_VENTA (proveedor RIMPE Negocio Popular, código 02 — sin
+  // derecho a crédito tributario de IVA). Determina tipoComprobante y
+  // codSustento al reportar en el ATS (ver backend/routes/ats.js).
+  tipoComprobante                String    @default("FACTURA") @db.VarChar(20)
   numeroFactura                 String    @db.VarChar(17)
   numeroAutorizacion            String?   @db.VarChar(49)
   claveAcceso                   String?   @db.VarChar(49)

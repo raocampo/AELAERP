@@ -607,6 +607,23 @@ Negocio Popular) tampoco entraban jamás al ATS pese a ser tipo de comprobante `
   BD local (tablas ya existían, solo faltaba marcarlas completas). Detalle exhaustivo en
   `docs/pendientes-2026-07-17.md`.
 
+#### Feature — Notas de Venta *recibidas* de proveedores, clasificadas en compras (2026-07-17, misma noche)
+El cliente aclaró que también necesita esto para las notas de venta que **recibe** de sus
+propios proveedores RIMPE Negocio Popular (no las que él emite — eso ya quedó cubierto
+arriba) y registra como compra. Hasta ahora `facturas_compra` no distinguía el tipo de
+documento recibido — toda compra se reportaba al ATS como `01 FACTURA` con `codSustento 01`
+(crédito tributario de IVA), incorrecto para una nota de venta que no da ese derecho.
+- Nueva columna `tipoComprobante` (`'FACTURA'` default | `'NOTA_VENTA'`) en `facturas_compra`
+  (migración `20260717010000_tipo_comprobante_compras`, sin backfill).
+- `FormCompra.jsx`: select "Tipo de comprobante" (📄 Factura / 🧾 Nota de Venta) en la sección
+  Comprobante; `compras.js` lo acepta en creación y edición (PUT `/:id`, para corregir
+  compras ya mal registradas).
+- `ats.js`: XML con `codSustento`/`tipoComprobante` correctos (`02`/`02` para nota de venta);
+  PDF del talón con fila separada `02 NOTA DE VENTA` en la sección COMPRAS.
+- `ATS.jsx`: columna "Tipo" con badge por fila + contador en el título de la sección.
+- Verificado con HTTP real: compra `tipoComprobante: NOTA_VENTA` → XML con
+  `codSustento>02` y `tipoComprobante>02` reales, PDF con fila separada y monto correcto.
+
 #### Fix — `subtotal12` propagado a BDs de tenants (`9a8e2ca`)
 Las BDs de empresa (tenants) no reciben `prisma migrate deploy` — solo la BD principal.
 Se añadieron al array `FIXES` de `applySchemaFixes.js` los ALTER TABLE IF NOT EXISTS + backfill
@@ -995,19 +1012,25 @@ checklist completo. Implementado y verificado localmente contra `scfi_dev`, pero
 esto ha tocado producción todavía**:
 
 1. **Desplegar backend a Railway y frontend a Vercel** — el deploy normal ya corre
-   `prisma migrate deploy` + `applySchemaFixes.js`, así que la migración
-   `subtotalNoObjeto` debería aplicarse sola. Revisar logs de arranque en Railway,
-   confirmar que no hay `P2022` en ninguna BD de tenant.
+   `prisma migrate deploy` + `applySchemaFixes.js`, así que las migraciones
+   `subtotalNoObjeto` y `tipoComprobante` deberían aplicarse solas. Revisar logs de
+   arranque en Railway, confirmar que no hay `P2022` en ninguna BD de tenant.
 2. **Preguntar al cliente**: ¿su reporte de "otras compras exentas/no objeto" era sobre
    compras manuales (`FormCompra`, ya cubierto) o sobre carga masiva/Excel histórica (NO
    cubierto esta sesión)?
 3. **Preguntar al cliente**: ¿tiene marcado "Negocio Popular" en Configuración SRI? Si no,
-   las Notas de Venta no le van a aparecer en el ATS (es el gate intencional).
+   las Notas de Venta que él emite no le van a aparecer en el ATS (es el gate intencional).
 4. **Probar con datos reales**: registrar una compra con la nueva opción "No objeto /
    Exento" y generar el talón resumen ATS del mes — confirmar que la columna "No Obj." ya
    no sale en 0.00. Si el cliente es Negocio Popular, generar el ATS de un mes con notas
    de venta emitidas y confirmar que aparecen (tipo `02`, sección VENTAS).
-5. Si las notas de venta del cliente en la práctica venden productos gravados (no solo
+5. **Probar con datos reales**: registrar una compra marcada como "🧾 Nota de Venta
+   (proveedor RIMPE)" — confirmar que en el talón resumen COMPRAS aparece como fila
+   separada `02 NOTA DE VENTA`, no mezclada con "01 FACTURA".
+6. Si el cliente tiene compras viejas ya registradas con una nota de venta de proveedor
+   (mal clasificadas como factura antes de este fix), corregirlas una por una editándolas
+   (ya soportado) — no hay backfill automático posible.
+7. Si las notas de venta del cliente en la práctica venden productos gravados (no solo
    tarifa 0%), el tratamiento actual (todo a "Base 0%") es una simplificación deliberada
    que puede necesitar revisión con la contadora — ver detalle en el doc de la sesión.
 
