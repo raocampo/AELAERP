@@ -988,6 +988,29 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
    - Activar/suspender tenants
    - Ver logs de provisioning fallidos
 
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-17 — No objeto/Exento IVA + Notas de Venta RIMPE en ATS)
+
+Ver `docs/pendientes-2026-07-17.md` sección "PARA RETOMAR MAÑANA DESDE LA OFICINA" para el
+checklist completo. Implementado y verificado localmente contra `scfi_dev`, pero **nada de
+esto ha tocado producción todavía**:
+
+1. **Desplegar backend a Railway y frontend a Vercel** — el deploy normal ya corre
+   `prisma migrate deploy` + `applySchemaFixes.js`, así que la migración
+   `subtotalNoObjeto` debería aplicarse sola. Revisar logs de arranque en Railway,
+   confirmar que no hay `P2022` en ninguna BD de tenant.
+2. **Preguntar al cliente**: ¿su reporte de "otras compras exentas/no objeto" era sobre
+   compras manuales (`FormCompra`, ya cubierto) o sobre carga masiva/Excel histórica (NO
+   cubierto esta sesión)?
+3. **Preguntar al cliente**: ¿tiene marcado "Negocio Popular" en Configuración SRI? Si no,
+   las Notas de Venta no le van a aparecer en el ATS (es el gate intencional).
+4. **Probar con datos reales**: registrar una compra con la nueva opción "No objeto /
+   Exento" y generar el talón resumen ATS del mes — confirmar que la columna "No Obj." ya
+   no sale en 0.00. Si el cliente es Negocio Popular, generar el ATS de un mes con notas
+   de venta emitidas y confirmar que aparecen (tipo `02`, sección VENTAS).
+5. Si las notas de venta del cliente en la práctica venden productos gravados (no solo
+   tarifa 0%), el tratamiento actual (todo a "Base 0%") es una simplificación deliberada
+   que puede necesitar revisión con la contadora — ver detalle en el doc de la sesión.
+
 ### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-15 — IVA 12%)
 
 Ver `docs/pendientes-2026-07-15.md` sección "VERIFICAR EN PRODUCCIÓN". Requieren navegador

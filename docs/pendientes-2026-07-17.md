@@ -1,5 +1,31 @@
 # AELA ERP — Sesión 2026-07-17
 
+## 🟢 PARA RETOMAR MAÑANA DESDE LA OFICINA — checklist rápido
+
+Todo lo de esta sesión ya está en `main` (commit `07b572b`), verificado localmente contra
+`scfi_dev`, pero **nada de esto ha tocado producción todavía**. Orden sugerido:
+
+1. **Desplegar a Railway** (backend) — el deploy normal ya corre `prisma migrate deploy` +
+   `applySchemaFixes.js` al arrancar, así que la migración `subtotalNoObjeto` y el fix de
+   `negocioPopular` deberían aplicarse solos. Revisar logs de arranque en Railway para
+   confirmar que no hay `P2022` (columna faltante) en ninguna BD de tenant.
+2. **Desplegar frontend a Vercel** — cambios en `FormCompra.jsx` y `ATS.jsx`.
+3. **Preguntar al cliente dos cosas puntuales** (no se pudieron confirmar sin hablar con él):
+   - ¿Su reporte de "otras compras exentas/no objeto" era sobre **compras manuales**
+     (`FormCompra`, ya cubierto) o sobre una **carga masiva/Excel histórica** (NO cubierto
+     esta sesión — ver punto 1 de pendientes abajo)?
+   - ¿Tiene marcado **"Negocio Popular"** en Configuración SRI de su empresa? Si no, el
+     cambio de Notas de Venta en el ATS no le va a aparecer (es el gate intencional) y hay
+     que activarlo con él.
+4. **Probar en producción con datos reales del cliente**: registrar una compra con la nueva
+   opción "No objeto / Exento", generar el talón resumen ATS del mes y confirmar que la
+   columna "No Obj." ya no sale en 0.00. Si el cliente es Negocio Popular, generar el ATS
+   de un mes con notas de venta emitidas y confirmar que aparecen.
+5. Ver la sección **"🔴 Pendiente de verificar en producción"** al final de este documento
+   para el detalle completo de los 4 puntos abiertos.
+
+---
+
 ## Resumen ejecutivo
 
 Reporte del cliente: **"el sistema no clasifica las otras compras como exentas o no
