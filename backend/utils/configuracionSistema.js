@@ -10,6 +10,7 @@ const MODOS_OPERACION = ['monoempresa', 'multiempresa'];
 // Catálogo completo de flags de módulo — usado para validar `modulosContratados`
 // y para construir el techo explícito por tenant en capacidadesModulos().
 const MODULOS_TODOS = [
+  'facturacionHabilitada',
   'cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado',
   'comprasHabilitadas', 'buzonSriHabilitado',
   'contabilidadHabilitada', 'retencionesHabilitadas', 'liquidacionesHabilitadas',
@@ -36,11 +37,15 @@ function normalizarModoOperacion(value, fallback = 'monoempresa') {
 function capacidadesPlan(plan) {
   switch (plan) {
     case 'lite':
+      // Lite: Facturación, Notas de Venta, Caja, POS, Compras (solo ingreso
+      // manual — Buzón SRI e importación histórica quedan en Medium+) e
+      // Inventario (tope de 200 productos, ver LIMITE_PRODUCTOS_LITE).
       return {
-        cajaDiariaHabilitada:     false,
-        posHabilitado:            false,
-        inventarioHabilitado:     false,
-        comprasHabilitadas:       false,
+        facturacionHabilitada:    true,
+        cajaDiariaHabilitada:     true,
+        posHabilitado:            true,
+        inventarioHabilitado:     true,
+        comprasHabilitadas:       true,
         buzonSriHabilitado:       false,
         contabilidadHabilitada:   false,
         retencionesHabilitadas:   false,
@@ -52,6 +57,7 @@ function capacidadesPlan(plan) {
       };
     case 'medium':
       return {
+        facturacionHabilitada:    true,
         cajaDiariaHabilitada:     true,
         posHabilitado:            true,
         inventarioHabilitado:     true,
@@ -68,6 +74,7 @@ function capacidadesPlan(plan) {
     case 'pro':
     default:
       return {
+        facturacionHabilitada:    true,
         cajaDiariaHabilitada:     true,
         posHabilitado:            true,
         inventarioHabilitado:     true,
@@ -174,6 +181,7 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
     impresionAutoReciboPos:  Boolean(config?.impresionAutoReciboPos ?? false),
     impresoraKiosko:         String(config?.impresoraKiosko || '').trim(),
     // Forzar a false los módulos que el techo no permite
+    facturacionHabilitada:    caps.facturacionHabilitada    && Boolean(config?.facturacionHabilitada    ?? true),
     cajaDiariaHabilitada:     caps.cajaDiariaHabilitada     && Boolean(config?.cajaDiariaHabilitada     ?? true),
     posHabilitado:            caps.posHabilitado            && Boolean(config?.posHabilitado            ?? false),
     inventarioHabilitado:     caps.inventarioHabilitado     && Boolean(config?.inventarioHabilitado     ?? false),
@@ -217,6 +225,7 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
     tipoSistema,
     modoOperacion:            normalizarModoOperacion(reqBody.modoOperacion, actual.modoOperacion),
     cajaNombre:               reqBody.cajaNombre?.trim() || actual.cajaNombre || 'Caja General',
+    facturacionHabilitada:    flag('facturacionHabilitada', true),
     cajaDiariaHabilitada:     flag('cajaDiariaHabilitada', true),
     cierreCajaObligatorio:    Boolean(reqBody.cierreCajaObligatorio !== undefined ? reqBody.cierreCajaObligatorio : actual.cierreCajaObligatorio),
     posHabilitado:            flag('posHabilitado', false),

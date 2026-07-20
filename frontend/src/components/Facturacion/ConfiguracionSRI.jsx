@@ -226,6 +226,44 @@ const ConfiguracionSRI = () => {
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
+  const [consultandoSri, setConsultandoSri] = useState(false);
+
+  // Trae RIMPE / Contribuyente Especial / Negocio Popular / Obligado a
+  // contabilidad desde el catastro SRI (local si está precargado, si no la
+  // API en línea) — mismo endpoint que usa la creación de empresa. Solo
+  // actualiza el formulario; el admin revisa y guarda con el botón normal.
+  const consultarSri = async () => {
+    const rucLimpio = String(form.ruc || '').replace(/\D/g, '');
+    if (!/^\d{13}$/.test(rucLimpio)) {
+      return toast.error('Ingresa un RUC de 13 dígitos antes de consultar el SRI');
+    }
+    setConsultandoSri(true);
+    try {
+      const res = await api.get(`/empresas/consultar-sri/${rucLimpio}`);
+      if (res.data?.encontrado && res.data?.data) {
+        const s = res.data.data;
+        setForm(prev => ({
+          ...prev,
+          razonSocial:           s.razonSocial     || prev.razonSocial,
+          nombreComercial:       s.nombreComercial || prev.nombreComercial,
+          dirMatriz:             prev.dirMatriz    || s.direccion || prev.dirMatriz,
+          contribuyenteRimpe:    Boolean(s.contribuyenteRimpe),
+          contribuyenteEspecial: Boolean(s.contribuyenteEspecial),
+          negocioPopular:        Boolean(s.negocioPopular),
+          obligadoContabilidad:  Boolean(s.obligadoContabilidad),
+        }));
+        const fuente = res.data.fuente === 'local' ? 'catastro local' : 'SRI en línea';
+        toast.success(`Datos actualizados desde ${fuente}: ${s.razonSocial}`);
+      } else {
+        toast.error('No se encontró información en el catastro ni en el SRI para ese RUC');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo consultar el SRI');
+    } finally {
+      setConsultandoSri(false);
+    }
+  };
+
   const handleGuardar = async (e) => {
     if (e?.preventDefault) e.preventDefault();
     if (!form.ruc || !form.razonSocial || !form.dirMatriz) {
@@ -581,6 +619,14 @@ const ConfiguracionSRI = () => {
         {/* ─── Información Tributaria Adicional ─── */}
         <div className="sri-section">
           <h2>📋 Información Tributaria Adicional</h2>
+          <div style={{ marginBottom: 12 }}>
+            <button type="button" className="btn-secondary" onClick={consultarSri} disabled={consultandoSri}>
+              {consultandoSri ? '⏳ Consultando…' : '🔍 Consultar SRI'}
+            </button>
+            <span className="field-hint" style={{ marginLeft: 10 }}>
+              Trae RIMPE, Contribuyente Especial, Negocio Popular y Obligado a contabilidad desde el catastro del SRI usando el RUC de arriba
+            </span>
+          </div>
           <div className="sri-check-grid">
             <label className="sri-check-item">
               <input type="checkbox" name="contribuyenteRimpe"

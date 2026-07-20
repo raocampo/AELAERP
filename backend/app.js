@@ -94,9 +94,11 @@ app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/empresas', empresasRoutes);
 app.use('/api/configuracion-sistema', configuracionSistemaRoutes);
 app.use('/api/clientes', clientesRoutes);
-app.use('/api/proveedores', soloMediumOPro, proveedoresRoutes);
+// Compras/proveedores manuales disponibles desde Lite — la importación masiva
+// (histórica, Excel, Buzón SRI) sigue gateada por soloMediumOPro dentro de cada router.
+app.use('/api/proveedores', proveedoresRoutes);
 app.use('/api/productos', productosRoutes);
-app.use('/api/compras', soloMediumOPro, comprasRoutes);
+app.use('/api/compras', comprasRoutes);
 app.use('/api/inventario', inventarioRoutes);
 app.use('/api/impresora', impresoraRoutes);
 app.use('/api/caja', cajaRoutes);

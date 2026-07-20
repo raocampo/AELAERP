@@ -8,21 +8,21 @@ import './ConfiguracionSistema.css';
 const PLANES = {
   lite: {
     label: 'Lite', sublabel: 'Gratis', color: '#F9A825',
-    descripcion: 'Facturación electrónica básica para RIMPE Negocio Popular.',
-    limites: '100 comprobantes/año · 1 usuario',
-    modulos: ['Facturas electrónicas', 'Notas de Venta', 'Clientes / Productos'],
+    descripcion: 'Facturación, POS, Caja y Compras (ingreso manual) para RIMPE Negocio Popular.',
+    limites: '100 comprobantes/año · 1 usuario · 200 productos',
+    modulos: ['Facturas', 'Notas de Venta', 'Caja Diaria', 'POS', 'Compras (manual)', 'Inventario', 'Clientes / Productos'],
   },
   medium: {
     label: 'Medium', sublabel: 'Pyme', color: '#7C3AED',
-    descripcion: 'Facturación + operaciones de punto de venta e inventario.',
-    limites: '1.000 comprobantes/año · 3 usuarios',
-    modulos: ['Todo lo de Lite', 'Caja Diaria', 'POS', 'Inventario', 'Compras', 'Talento Humano'],
+    descripcion: 'Todo lo de Lite, sin tope de productos, más importación masiva y Talento Humano.',
+    limites: '1.000 comprobantes/año · 3 usuarios · productos ilimitados',
+    modulos: ['Todo lo de Lite', 'Buzón SRI', 'Importación masiva (compras/proveedores)', 'Talento Humano'],
   },
   pro: {
     label: 'Pro', sublabel: 'Empresarial', color: '#1976D2',
     descripcion: 'Suite completa con contabilidad, tributario y multiempresa opcional.',
     limites: 'Ilimitado · Usuarios ilimitados',
-    modulos: ['Todo lo de Medium', 'Retenciones', 'Liquidaciones de Compra', 'ATS', 'Reportes Tributarios', 'Contabilidad', 'Multiempresa (opcional)'],
+    modulos: ['Todo lo de Medium', 'Retenciones', 'Liquidaciones de Compra', 'ATS', 'Tributario', 'Bancos', 'Contabilidad', 'Multiempresa (opcional)'],
   },
 };
 
@@ -30,6 +30,7 @@ const FORM_INICIAL = {
   tipoSistema: 'pro',
   modoOperacion: 'monoempresa',
   cajaNombre: 'Caja General',
+  facturacionHabilitada: true,
   cajaDiariaHabilitada: true,
   cierreCajaObligatorio: false,
   posHabilitado: false,
@@ -120,6 +121,7 @@ export default function ConfiguracionSistema() {
   const caps       = capacidadesModulos({ ...empresa, plan: planActual });
 
   const modulos = [
+    { key: 'facturacionHabilitada',    label: 'Facturación' },
     { key: 'cajaDiariaHabilitada',     label: 'Caja Diaria' },
     { key: 'posHabilitado',            label: 'POS' },
     { key: 'inventarioHabilitado',     label: 'Inventario' },
@@ -234,7 +236,7 @@ export default function ConfiguracionSistema() {
               onChange={(e) => actualizar('cajaDiariaHabilitada', e.target.checked)}
               disabled={!caps.cajaDiariaHabilitada}
             />
-            <span>Habilitar caja diaria{!caps.cajaDiariaHabilitada ? ' — no disponible en Lite' : ''}</span>
+            <span>Habilitar caja diaria{!caps.cajaDiariaHabilitada ? ' — no incluido en tu plan' : ''}</span>
           </label>
           <label className="syscfg-check">
             <input
@@ -257,7 +259,7 @@ export default function ConfiguracionSistema() {
               onChange={(e) => actualizar('posHabilitado', e.target.checked)}
               disabled={!caps.posHabilitado}
             />
-            <span>Habilitar módulo POS{!caps.posHabilitado ? ' — requiere Medium o Pro' : ''}</span>
+            <span>Habilitar módulo POS{!caps.posHabilitado ? ' — no incluido en tu plan' : ''}</span>
           </label>
           <label className="syscfg-field">
             <span>Documento predeterminado en POS</span>
@@ -306,7 +308,7 @@ export default function ConfiguracionSistema() {
               onChange={(e) => actualizar('inventarioHabilitado', e.target.checked)}
               disabled={!caps.inventarioHabilitado}
             />
-            <span>Habilitar control de inventario{!caps.inventarioHabilitado ? ' — requiere Medium o Pro' : ''}</span>
+            <span>Habilitar control de inventario{!caps.inventarioHabilitado ? ' — no incluido en tu plan' : ''}</span>
           </label>
           <label className="syscfg-check">
             <input
@@ -322,6 +324,12 @@ export default function ConfiguracionSistema() {
         {/* ── Módulos avanzados ─────────────────────────────────────────── */}
         <section className="syscfg-card">
           <h2>Módulos avanzados</h2>
+          <label className="syscfg-check">
+            <input type="checkbox" checked={form.facturacionHabilitada}
+              onChange={(e) => actualizar('facturacionHabilitada', e.target.checked)}
+              disabled={!caps.facturacionHabilitada} />
+            <span>Facturación (Facturas, Notas de Venta, Notas de Débito, Guías de Remisión){!caps.facturacionHabilitada ? ' — no incluido en tu plan' : ''}</span>
+          </label>
           <label className="syscfg-check">
             <input type="checkbox" checked={form.comprasHabilitadas}
               onChange={(e) => actualizar('comprasHabilitadas', e.target.checked)}
@@ -384,7 +392,7 @@ export default function ConfiguracionSistema() {
             />
             <span>
               Habilitar Talento Humano (RRHH, Nómina, Ausencias)
-              {!caps.talentoHumanoHabilitado ? ' — requiere Medium o Pro' : ''}
+              {!caps.talentoHumanoHabilitado ? ' — no incluido en tu plan' : ''}
             </span>
           </label>
           <div className="syscfg-row" style={{ marginTop: '1rem' }}>

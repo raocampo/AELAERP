@@ -448,6 +448,8 @@ const FIXES = [
   // Techo de módulos contratados por tenant (2026-07-17) — null = usar el techo
   // legado derivado de `plan`, ver capacidadesModulos() en configuracionSistema.js.
   `ALTER TABLE "empresas" ADD COLUMN IF NOT EXISTS "modulosContratados" JSONB`,
+  // Facturación como módulo activable (2026-07-17) — antes siempre visible sin flag.
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "facturacionHabilitada" BOOLEAN NOT NULL DEFAULT true`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

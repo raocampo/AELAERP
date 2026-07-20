@@ -43,14 +43,15 @@ Internet
 
 | Plan       | Precio base    | Comprobantes/año | Usuarios | Módulos incluidos |
 |------------|---------------|-----------------|----------|-------------------|
-| **Lite**   | Gratis        | 100             | 3        | Facturas, Notas de Venta, Clientes, Productos (Admin, Facturador, Operador) |
-| **Medium** | Desde $15/mes | 1.000           | Ilimitados | + Caja, POS, Compras, Inventario, Talento Humano |
-| **Pro**    | Desde $30/mes | Ilimitados      | Ilimitados | + Retenciones, Liquidaciones, ATS, Contabilidad completa |
+| **Lite**   | Gratis        | 100             | 3        | Facturas, Notas de Venta, Clientes, Productos (200 máx), Caja, POS, Compras (ingreso manual) |
+| **Medium** | Desde $15/mes | 1.000           | Ilimitados | + Productos ilimitados, Buzón SRI, importación masiva (compras/proveedores/facturas históricas), Talento Humano |
+| **Pro**    | Desde $30/mes | Ilimitados      | Ilimitados | + Retenciones, Liquidaciones, ATS, Tributario, Bancos, Contabilidad completa |
 | **White-label** | Cotización | Ilimitados   | Ilimitados | Todo Pro + marca propia + container dedicado |
 
 ### Condiciones del plan Lite
 - Gratuito sin expiración mientras se mantenga dentro de los límites.
-- Límites: 100 comprobantes/año, **hasta 3 usuarios** (Administrador, Facturador, Operador), sin POS ni Caja.
+- Límites: 100 comprobantes/año, **hasta 3 usuarios** (Administrador, Facturador, Operador), catálogo de hasta 200 productos.
+- Incluye Caja, POS y Compras, pero **Compras solo admite ingreso manual** — Buzón SRI (descarga automática) e importación masiva (Excel, XML histórico) requieren Medium o Pro.
 - Al superar cualquier límite o necesitar módulos adicionales, el sistema ofrece actualizar al plan correspondiente.
 - Los módulos no incluidos **se muestran bloqueados** en el sidebar con candado (🔒) y al hacer click muestran el comparativo de planes.
 

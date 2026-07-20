@@ -44,9 +44,10 @@ async function getColsCompra() {
 }
 
 router.use(proteger);
-router.use(soloFull);
 router.use(requiereModulo('comprasHabilitadas'));
 router.use(autorizarPermiso('compras.gestionar'));
+// soloFull (Medium/Pro) NO va a nivel de router — Lite ya puede registrar
+// compras manualmente. Se aplica solo a las rutas de importación masiva abajo.
 
 function limpiarTexto(valor) {
   return String(valor || '').trim();
@@ -959,7 +960,7 @@ router.post('/backfill-receptor-ruc', async (req, res) => {
   }
 });
 
-router.post('/importar/xml', upload.single('archivo'), async (req, res) => {
+router.post('/importar/xml', soloFull, upload.single('archivo'), async (req, res) => {
   try {
     if (!req.file?.buffer) {
       return res.status(400).json({ success: false, mensaje: 'Debes adjuntar un archivo XML' });
@@ -979,7 +980,7 @@ router.post('/importar/xml', upload.single('archivo'), async (req, res) => {
   }
 });
 
-router.post('/importar/autorizacion', async (req, res) => {
+router.post('/importar/autorizacion', soloFull, async (req, res) => {
   try {
     const claveAcceso = limpiarTexto(req.body?.claveAcceso || req.body?.numeroAutorizacion || '');
     if (!claveAcceso) {
@@ -1010,7 +1011,7 @@ router.post('/importar/autorizacion', async (req, res) => {
 // ────────────────────────────────────────────────────────────────────────────
 
 // GET /api/compras/importar/plantilla — descarga la plantilla Excel
-router.get('/importar/plantilla', async (_req, res) => {
+router.get('/importar/plantilla', soloFull, async (_req, res) => {
   try {
     const buffer = generarPlantillaCompras();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1022,7 +1023,7 @@ router.get('/importar/plantilla', async (_req, res) => {
 });
 
 // POST /api/compras/importar/preview — valida el archivo sin importar
-router.post('/importar/preview', upload.single('archivo'), async (req, res) => {
+router.post('/importar/preview', soloFull, upload.single('archivo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, mensaje: 'No se recibió archivo' });
 
@@ -1044,7 +1045,7 @@ router.post('/importar/preview', upload.single('archivo'), async (req, res) => {
 });
 
 // POST /api/compras/importar/ejecutar — importa las filas válidas
-router.post('/importar/ejecutar', upload.single('archivo'), async (req, res) => {
+router.post('/importar/ejecutar', soloFull, upload.single('archivo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, mensaje: 'No se recibió archivo' });
 

@@ -14,6 +14,7 @@ const bwipjs      = require('bwip-js');
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { checkLimiteNotasVenta } = require('../middleware/edition');
+const { requiereModulo } = require('../middleware/modulos');
 const { registrarAuditoria }   = require('../utils/auditoria');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
@@ -25,6 +26,7 @@ const {
 } = require('../utils/contabilidad');
 
 router.use(proteger);
+router.use(requiereModulo('facturacionHabilitada'));
 router.use(autorizarPermiso('notasVenta.gestionar'));
 
 const DIR_NOTAS = path.join(__dirname, '..', 'uploads', 'notas_venta');

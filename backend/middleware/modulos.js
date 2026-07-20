@@ -1,6 +1,7 @@
 const { obtenerConfiguracionSistemaOperativa } = require('../utils/configuracionSistema');
 
 const MENSAJES = {
+  facturacionHabilitada: 'El modulo de facturacion esta deshabilitado en la configuracion del sistema',
   comprasHabilitadas: 'El modulo de compras esta deshabilitado en la configuracion del sistema',
   contabilidadHabilitada: 'El modulo de contabilidad esta deshabilitado en la configuracion del sistema',
   retencionesHabilitadas: 'El modulo de retenciones esta deshabilitado en la configuracion del sistema',

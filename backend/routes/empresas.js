@@ -7,7 +7,7 @@
 const express = require('express');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
-const { proteger, soloAdmin } = require('../middleware/auth');
+const { proteger, soloAdmin, adminOContador } = require('../middleware/auth');
 
 // Garantiza que req.prisma apunte a la BD del tenant activo (SaaS) o a la global (monoinstancia).
 router.use((req, _res, next) => { req.prisma = req.prisma || prisma; next(); });
@@ -155,7 +155,9 @@ router.get('/mi-empresa', proteger, async (req, res) => {
 });
 
 // GET /api/empresas/consultar-sri/:ruc — validar datos de empresa en SRI
-router.get('/consultar-sri/:ruc', proteger, soloAdmin, async (req, res) => {
+// admin: creación/edición de empresas. contador: botón "Consultar SRI" en
+// Configuración SRI (misma info que ya puede editar manualmente ahí).
+router.get('/consultar-sri/:ruc', proteger, adminOContador, async (req, res) => {
   try {
     const ruc = String(req.params.ruc || '').replace(/\D/g, '');
     if (!/^\d{13}$/.test(ruc)) {
@@ -174,6 +176,7 @@ router.get('/consultar-sri/:ruc', proteger, soloAdmin, async (req, res) => {
     res.json({
       success: true,
       encontrado: true,
+      fuente: empresaSri.fuenteLocal ? 'local' : 'sri',
       data: empresaSri,
     });
   } catch (err) {

@@ -56,8 +56,8 @@ const soloMono = (req, res, next) => {
   next();
 };
 
-// ─── checkLimiteProductos: máximo 100 ítems en catálogo para Lite ────────────
-const LIMITE_PRODUCTOS_LITE = 100;
+// ─── checkLimiteProductos: máximo 200 ítems en catálogo para Lite ────────────
+const LIMITE_PRODUCTOS_LITE = 200;
 
 const checkLimiteProductos = async (req, res, next) => {
   try {

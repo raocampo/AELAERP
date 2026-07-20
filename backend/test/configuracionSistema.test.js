@@ -21,10 +21,11 @@ test('normalizarModoOperacion resuelve alias multi y protege fallback', () => {
 
 test('capacidadesPlan aplica restricciones correctas por plan', () => {
   assert.deepEqual(capacidadesPlan('lite'), {
-    cajaDiariaHabilitada: false,
-    posHabilitado: false,
-    inventarioHabilitado: false,
-    comprasHabilitadas: false,
+    facturacionHabilitada: true,
+    cajaDiariaHabilitada: true,
+    posHabilitado: true,
+    inventarioHabilitado: true,
+    comprasHabilitadas: true,
     buzonSriHabilitado: false,
     contabilidadHabilitada: false,
     retencionesHabilitadas: false,
@@ -36,6 +37,7 @@ test('capacidadesPlan aplica restricciones correctas por plan', () => {
   });
 
   assert.deepEqual(capacidadesPlan('medium'), {
+    facturacionHabilitada: true,
     cajaDiariaHabilitada: true,
     posHabilitado: true,
     inventarioHabilitado: true,

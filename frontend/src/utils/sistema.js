@@ -1,4 +1,5 @@
 export const MODULOS_TODOS = [
+  'facturacionHabilitada',
   'cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado',
   'comprasHabilitadas', 'buzonSriHabilitado',
   'contabilidadHabilitada', 'retencionesHabilitadas', 'liquidacionesHabilitadas',
@@ -8,10 +9,11 @@ export const MODULOS_TODOS = [
 
 export const CAPACIDADES_PLAN = {
   lite: {
+    facturacionHabilitada: true,
     cajaDiariaHabilitada: true,
     posHabilitado: true,
     inventarioHabilitado: true,
-    comprasHabilitadas: false,
+    comprasHabilitadas: true,
     buzonSriHabilitado: false,
     contabilidadHabilitada: false,
     retencionesHabilitadas: false,
@@ -22,6 +24,7 @@ export const CAPACIDADES_PLAN = {
     talentoHumanoHabilitado: false,
   },
   medium: {
+    facturacionHabilitada: true,
     cajaDiariaHabilitada: true,
     posHabilitado: true,
     inventarioHabilitado: true,
@@ -36,6 +39,7 @@ export const CAPACIDADES_PLAN = {
     talentoHumanoHabilitado: true,
   },
   pro: {
+    facturacionHabilitada: true,
     cajaDiariaHabilitada: true,
     posHabilitado: true,
     inventarioHabilitado: true,
@@ -137,6 +141,7 @@ export function obtenerModulosHabilitados(sistema) {
     pos: Boolean(sistema?.posHabilitado),
     inventario: Boolean(sistema?.inventarioHabilitado),
     caja: Boolean(sistema?.cajaDiariaHabilitada),
+    facturacion: Boolean(sistema?.facturacionHabilitada),
     compras: Boolean(sistema?.comprasHabilitadas),
     buzonSri: Boolean(sistema?.buzonSriHabilitado),
     contabilidad: Boolean(sistema?.contabilidadHabilitada),

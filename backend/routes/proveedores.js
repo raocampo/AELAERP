@@ -4,6 +4,7 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
+const { soloFull } = require('../middleware/edition');
 const {
   consultarContribuyenteSri,
   verificarExistenciaContribuyenteSri,
@@ -433,8 +434,8 @@ router.get('/:id/compras', async (req, res) => {
   }
 });
 
-// POST /api/proveedores/importar-excel
-router.post('/importar-excel', proteger, upload.single('archivo'), async (req, res) => {
+// POST /api/proveedores/importar-excel — Medium/Pro (Lite es solo ingreso manual)
+router.post('/importar-excel', proteger, soloFull, upload.single('archivo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, mensaje: 'No se recibió ningún archivo' });

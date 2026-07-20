@@ -23,6 +23,7 @@ const TIPO_LABELS = { monoempresa: '1 empresa', multiempresa: 'Multi' };
 
 // Catálogo de módulos — espejo de MODULOS_TODOS en backend/utils/configuracionSistema.js
 const MODULOS_CATALOGO = [
+  { key: 'facturacionHabilitada',    label: 'Facturación (Facturas, Notas Venta/Débito, Guías Remisión)' },
   { key: 'cajaDiariaHabilitada',     label: 'Caja Diaria' },
   { key: 'posHabilitado',            label: 'POS' },
   { key: 'inventarioHabilitado',     label: 'Inventario' },
@@ -39,8 +40,8 @@ const MODULOS_CATALOGO = [
 
 // Presets rápidos — mismos módulos que capacidadesPlan() en el backend
 const PRESETS_PLAN = {
-  lite:   [],
-  medium: ['cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado', 'comprasHabilitadas', 'buzonSriHabilitado', 'tributarioHabilitado', 'bancosHabilitado', 'talentoHumanoHabilitado'],
+  lite:   ['facturacionHabilitada', 'cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado', 'comprasHabilitadas'],
+  medium: ['facturacionHabilitada', 'cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado', 'comprasHabilitadas', 'buzonSriHabilitado', 'tributarioHabilitado', 'bancosHabilitado', 'talentoHumanoHabilitado'],
   pro:    MODULOS_CATALOGO.map((m) => m.key),
 };
 

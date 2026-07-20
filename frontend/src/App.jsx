@@ -202,26 +202,26 @@ function App() {
                 <Route path="proformas/:id/editar" element={<PermissionRoute permission="proformas.gestionar"><FormProforma /></PermissionRoute>} />
 
                 {/* Facturas — requieren Medium o superior */}
-                <Route path="facturas"                   element={<MediumRoute><PermissionRoute permission="facturacion.ver"><ListaFacturas /></PermissionRoute></MediumRoute>} />
-                <Route path="facturas/nueva"             element={<MediumRoute><PermissionRoute permission="facturacion.emitir"><FormFactura /></PermissionRoute></MediumRoute>} />
-                <Route path="facturas/importar-historicas" element={<MediumRoute><PermissionRoute permission="facturacion.emitir"><ImportarFacturasHistoricas /></PermissionRoute></MediumRoute>} />
-                <Route path="facturas/:id"               element={<MediumRoute><PermissionRoute permission="facturacion.ver"><DetalleFactura /></PermissionRoute></MediumRoute>} />
+                <Route path="facturas"                   element={<MediumRoute><ModuleRoute moduleKey="facturacion"><PermissionRoute permission="facturacion.ver"><ListaFacturas /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="facturas/nueva"             element={<MediumRoute><ModuleRoute moduleKey="facturacion"><PermissionRoute permission="facturacion.emitir"><FormFactura /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="facturas/importar-historicas" element={<MediumRoute><ModuleRoute moduleKey="facturacion"><PermissionRoute permission="facturacion.emitir"><ImportarFacturasHistoricas /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="facturas/:id"               element={<MediumRoute><ModuleRoute moduleKey="facturacion"><PermissionRoute permission="facturacion.ver"><DetalleFactura /></PermissionRoute></ModuleRoute></MediumRoute>} />
 
                 {/* Clientes */}
                 <Route path="clientes" element={<PermissionRoute permission="clientes.gestionar"><GestionClientes /></PermissionRoute>} />
 
-                {/* Proveedores — Medium y Pro */}
-                <Route path="proveedores" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><GestionProveedores /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                {/* Proveedores — disponible desde Lite (ingreso manual) */}
+                <Route path="proveedores" element={<ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><GestionProveedores /></PermissionRoute></ModuleRoute>} />
 
                 {/* Productos / Inventario */}
                 <Route path="productos" element={<PermissionRoute permission="productos.ver"><GestionProductos initialTab="catalogo" /></PermissionRoute>} />
 
-                {/* Compras — Medium y Pro */}
-                <Route path="compras" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><ListaCompras /></PermissionRoute></ModuleRoute></MediumRoute>} />
-                <Route path="compras/nueva" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><FormCompra /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                {/* Compras — disponible desde Lite (ingreso manual); importación masiva sigue Medium/Pro */}
+                <Route path="compras" element={<ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><ListaCompras /></PermissionRoute></ModuleRoute>} />
+                <Route path="compras/nueva" element={<ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><FormCompra /></PermissionRoute></ModuleRoute>} />
                 <Route path="compras/importar-historicas" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><ImportarComprasHistoricas /></PermissionRoute></ModuleRoute></MediumRoute>} />
-                <Route path="compras/notas-credito" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><NotasCreditoRecibidas /></PermissionRoute></ModuleRoute></MediumRoute>} />
-                <Route path="compras/:id" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><DetalleCompra /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="compras/notas-credito" element={<ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><NotasCreditoRecibidas /></PermissionRoute></ModuleRoute>} />
+                <Route path="compras/:id" element={<ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><DetalleCompra /></PermissionRoute></ModuleRoute>} />
 
                 {/* Caja diaria — disponible desde Lite */}
                 <Route path="caja" element={<ModuleRoute moduleKey="caja"><PermissionRoute permission="caja.ver"><CajaDiaria /></PermissionRoute></ModuleRoute>} />
@@ -229,13 +229,13 @@ function App() {
                 {/* POS — disponible desde Lite */}
                 <Route path="pos" element={<ModuleRoute moduleKey="pos"><PermissionRoute permission="pos.usar"><PuntoVenta /></PermissionRoute></ModuleRoute>} />
 
-                {/* Inventario — disponible desde Lite (máx 100 productos) */}
+                {/* Inventario — disponible desde Lite (máx 200 productos) */}
                 <Route path="inventario" element={<ModuleRoute moduleKey="inventario"><PermissionRoute permission="inventario.ver"><GestionProductos initialTab="inventario" /></PermissionRoute></ModuleRoute>} />
 
                 {/* Notas de Venta — todos los planes */}
-                <Route path="notas-venta"         element={<PermissionRoute permission="notasVenta.gestionar"><ListaNotasVenta /></PermissionRoute>} />
-                <Route path="notas-venta/nueva"   element={<PermissionRoute permission="notasVenta.gestionar"><FormNotaVenta /></PermissionRoute>} />
-                <Route path="notas-venta/:id"     element={<PermissionRoute permission="notasVenta.gestionar"><DetalleNotaVenta /></PermissionRoute>} />
+                <Route path="notas-venta"         element={<ModuleRoute moduleKey="facturacion"><PermissionRoute permission="notasVenta.gestionar"><ListaNotasVenta /></PermissionRoute></ModuleRoute>} />
+                <Route path="notas-venta/nueva"   element={<ModuleRoute moduleKey="facturacion"><PermissionRoute permission="notasVenta.gestionar"><FormNotaVenta /></PermissionRoute></ModuleRoute>} />
+                <Route path="notas-venta/:id"     element={<ModuleRoute moduleKey="facturacion"><PermissionRoute permission="notasVenta.gestionar"><DetalleNotaVenta /></PermissionRoute></ModuleRoute>} />
 
                 {/* Retenciones — solo Pro */}
                 <Route path="retenciones"       element={<ProRoute><ModuleRoute moduleKey="retenciones"><PermissionRoute permission="retenciones.gestionar"><ListaRetenciones /></PermissionRoute></ModuleRoute></ProRoute>} />
@@ -249,16 +249,16 @@ function App() {
                 <Route path="liquidaciones/nueva" element={<ProRoute><ModuleRoute moduleKey="liquidaciones"><PermissionRoute permission="liquidaciones.gestionar"><FormLiquidacion /></PermissionRoute></ModuleRoute></ProRoute>} />
 
                 {/* Notas de Débito — solo Pro */}
-                <Route path="notas-debito"       element={<ProRoute><PermissionRoute permission="facturacion.emitir"><ListaNotasDebito /></PermissionRoute></ProRoute>} />
-                <Route path="notas-debito/nueva" element={<ProRoute><PermissionRoute permission="facturacion.emitir"><FormNotaDebito /></PermissionRoute></ProRoute>} />
+                <Route path="notas-debito"       element={<ProRoute><ModuleRoute moduleKey="facturacion"><PermissionRoute permission="facturacion.emitir"><ListaNotasDebito /></PermissionRoute></ModuleRoute></ProRoute>} />
+                <Route path="notas-debito/nueva" element={<ProRoute><ModuleRoute moduleKey="facturacion"><PermissionRoute permission="facturacion.emitir"><FormNotaDebito /></PermissionRoute></ModuleRoute></ProRoute>} />
 
                 {/* Buzón SRI — Medium y Pro */}
                 <Route path="buzon" element={<MediumRoute><ModuleRoute moduleKey="buzonSri"><PermissionRoute permission="compras.gestionar"><BuzonSRI /></PermissionRoute></ModuleRoute></MediumRoute>} />
 
                 {/* Guías de Remisión — Medium y Pro */}
-                <Route path="guias-remision"         element={<MediumRoute><PermissionRoute permission="facturacion.ver"><ListaGuiasRemision /></PermissionRoute></MediumRoute>} />
-                <Route path="guias-remision/nueva"   element={<MediumRoute><PermissionRoute permission="facturacion.emitir"><FormGuiaRemision /></PermissionRoute></MediumRoute>} />
-                <Route path="guias-remision/:id/editar" element={<MediumRoute><PermissionRoute permission="facturacion.emitir"><FormGuiaRemision /></PermissionRoute></MediumRoute>} />
+                <Route path="guias-remision"         element={<MediumRoute><ModuleRoute moduleKey="facturacion"><PermissionRoute permission="facturacion.ver"><ListaGuiasRemision /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="guias-remision/nueva"   element={<MediumRoute><ModuleRoute moduleKey="facturacion"><PermissionRoute permission="facturacion.emitir"><FormGuiaRemision /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="guias-remision/:id/editar" element={<MediumRoute><ModuleRoute moduleKey="facturacion"><PermissionRoute permission="facturacion.emitir"><FormGuiaRemision /></PermissionRoute></ModuleRoute></MediumRoute>} />
 
                 {/* Declaraciones tributarias — solo Pro */}
                 <Route path="declaraciones" element={<ProRoute><ModuleRoute moduleKey="tributario"><PermissionRoute permission="tributario.reportes"><Declaraciones /></PermissionRoute></ModuleRoute></ProRoute>} />

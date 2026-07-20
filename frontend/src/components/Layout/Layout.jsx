@@ -103,12 +103,12 @@ const GRUPOS_MENU = [
     icon: '📊',
     label: 'Ventas',
     items: [
-      { to: '/facturas',                    icon: '🧾', label: 'Facturas',              planMin: 'medium', permiso: 'facturacion.ver' },
-      { to: '/facturas/importar-historicas', icon: '📥', label: 'Importar históricas',   planMin: 'medium', permiso: 'facturacion.emitir' },
+      { to: '/facturas',                    icon: '🧾', label: 'Facturas',              planMin: 'medium', permiso: 'facturacion.ver', modulo: 'facturacionHabilitada' },
+      { to: '/facturas/importar-historicas', icon: '📥', label: 'Importar históricas',   planMin: 'medium', permiso: 'facturacion.emitir', modulo: 'facturacionHabilitada' },
       { to: '/proformas',                   icon: '📋', label: 'Proformas',             permiso: 'proformas.gestionar' },
-      { to: '/notas-venta',     icon: '🗒️', label: 'Notas de Venta',    permiso: 'notasVenta.gestionar' },
-      { to: '/notas-debito',    icon: '🔴', label: 'Notas de Débito',   planMin: 'pro',    permiso: 'facturacion.emitir' },
-      { to: '/guias-remision',  icon: '🚚', label: 'Guías de Remisión', planMin: 'medium', permiso: 'facturacion.ver' },
+      { to: '/notas-venta',     icon: '🗒️', label: 'Notas de Venta',    permiso: 'notasVenta.gestionar', modulo: 'facturacionHabilitada' },
+      { to: '/notas-debito',    icon: '🔴', label: 'Notas de Débito',   planMin: 'pro',    permiso: 'facturacion.emitir', modulo: 'facturacionHabilitada' },
+      { to: '/guias-remision',  icon: '🚚', label: 'Guías de Remisión', planMin: 'medium', permiso: 'facturacion.ver', modulo: 'facturacionHabilitada' },
       { to: '/caja',            icon: '💵', label: 'Caja Diaria',       permiso: 'caja.ver', modulo: 'cajaDiariaHabilitada' },
     ],
   },
@@ -117,7 +117,7 @@ const GRUPOS_MENU = [
     icon: '🛒',
     label: 'Compras',
     items: [
-      { to: '/compras',       icon: '🛒', label: 'Compras',       planMin: 'medium', permiso: 'compras.gestionar',       modulo: 'comprasHabilitadas' },
+      { to: '/compras',       icon: '🛒', label: 'Compras',       permiso: 'compras.gestionar',       modulo: 'comprasHabilitadas' },
       { to: '/compras/importar-historicas', icon: '📥', label: 'Importar históricas', planMin: 'medium', permiso: 'compras.gestionar', modulo: 'comprasHabilitadas' },
       { to: '/liquidaciones', icon: '📄', label: 'Liquidaciones', planMin: 'pro',    permiso: 'liquidaciones.gestionar', modulo: 'liquidacionesHabilitadas' },
       { to: '/buzon',         icon: '📥', label: 'Buzón SRI',     planMin: 'medium', permiso: 'compras.gestionar',       modulo: 'buzonSriHabilitado' },
@@ -138,7 +138,7 @@ const GRUPOS_MENU = [
     label: 'Clientes y Proveedores',
     items: [
       { to: '/clientes',    icon: '👤', label: 'Clientes',    permiso: 'clientes.gestionar' },
-      { to: '/proveedores', icon: '🏬', label: 'Proveedores', planMin: 'medium', permiso: 'compras.gestionar', modulo: 'comprasHabilitadas' },
+      { to: '/proveedores', icon: '🏬', label: 'Proveedores', permiso: 'compras.gestionar', modulo: 'comprasHabilitadas' },
     ],
   },
   {

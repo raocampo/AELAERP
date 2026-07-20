@@ -174,9 +174,15 @@ async function consultarCatastroLocal(identificacion) {
   }
 }
 
+// Mismo patrón que clientes.js/proveedores.js al buscar un contribuyente:
+// catastro local primero (instantáneo, funciona offline, ~6.8M RUCs precargados
+// desde CSVs del SRI), y solo si no está ahí se recurre a la API en vivo del SRI.
 async function obtenerEmpresaSri(ruc) {
   const rucLimpio = String(ruc || '').replace(/\D/g, '');
   if (!/^\d{13}$/.test(rucLimpio)) return null;
+
+  const catastroLocal = await consultarCatastroLocal(rucLimpio);
+  if (catastroLocal) return catastroLocal;
 
   const datos = await consultarContribuyenteSri(rucLimpio);
   return parsearContribuyenteSri(datos, rucLimpio);

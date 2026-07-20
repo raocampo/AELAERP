@@ -18,6 +18,7 @@ const {
   crearAsientoReversoFacturaAnulada,
 } = require('../utils/contabilidad');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { requiereModulo } = require('../middleware/modulos');
 const { construirConfiguracionSriBase } = require('../utils/sriContribuyente');
 const { siguienteSecuencial } = require('../utils/secuenciales');
 const { registrarMovimientoCaja } = require('../utils/caja');
@@ -700,7 +701,11 @@ router.delete('/configuracion/certificado', permitirConfigurarSri, async (req, r
 
 // ────────────────────────────────────────────────────────────────────────────
 // FACTURAS — CRUD
+// A partir de aquí requiere el módulo de Facturación — /configuracion* arriba
+// se deja sin gate porque configura certificado/firma/logo usados también por
+// retenciones, notas de crédito, etc., no solo por la emisión de facturas.
 // ────────────────────────────────────────────────────────────────────────────
+router.use(requiereModulo('facturacionHabilitada'));
 
 // GET /api/facturas  — lista con filtros opcionales
 // GET /api/facturas/exportar/pdf — PDF de ventas con PDFKit

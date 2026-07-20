@@ -10,12 +10,14 @@ const fs      = require('fs');
 const prisma  = require('../config/prisma');
 const sri     = require('../utils/sri');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { requiereModulo } = require('../middleware/modulos');
 const { esErrorConectividad } = require('../utils/colaSRI');
 const { construirConfiguracionSriBase } = require('../utils/sriContribuyente');
 const { getCertBuffer, tieneCertificado } = require('../utils/certUtils');
 const { enviarDocumentoFiscal } = require('../utils/email');
 
 router.use(proteger);
+router.use(requiereModulo('facturacionHabilitada'));
 router.use(autorizarPermiso('facturacion.emitir'));
 
 const DIR_NOTAS_DEBITO = path.join(__dirname, '..', 'uploads', 'notas_debito');

@@ -264,6 +264,7 @@ model configuracion_sistema {
   tipoSistema           String    @default("full") @db.VarChar(20)
   modoOperacion         String    @default("monoempresa") @db.VarChar(20)
   cajaNombre            String    @default("Caja General") @db.VarChar(80)
+  facturacionHabilitada Boolean   @default(true)
   cajaDiariaHabilitada  Boolean   @default(true)
   cierreCajaObligatorio Boolean   @default(false)
   posHabilitado         Boolean   @default(false)

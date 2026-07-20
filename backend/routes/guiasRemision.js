@@ -11,10 +11,12 @@ const fs      = require('fs');
 const prisma  = require('../config/prisma');
 const sri     = require('../utils/sri');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { requiereModulo } = require('../middleware/modulos');
 const { registrarAuditoria } = require('../utils/auditoria');
 const { getCertBuffer, tieneCertificado } = require('../utils/certUtils');
 
 router.use(proteger);
+router.use(requiereModulo('facturacionHabilitada'));
 router.use(autorizarPermiso('facturacion.ver'));
 
 // Carpeta para PDFs de guías
