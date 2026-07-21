@@ -249,7 +249,11 @@ function TabVentas({ data }) {
 // ─── Tab Compras ──────────────────────────────────────────────────────────────
 function TabCompras({ data }) {
   const compras = data.compras || [];
+  const ncsRecibidas = data.ncsRecibidas || [];
   const { slice, pagina, totalPaginas, setPagina } = usePagina(compras);
+
+  const totNcRecIva  = ncsRecibidas.reduce((s, n) => s + parseFloat(n.iva || 0), 0);
+  const totNcRecImp  = ncsRecibidas.reduce((s, n) => s + parseFloat(n.importeTotal || 0), 0);
 
   const totBase0    = compras.reduce((s, c) => s + parseFloat(c.subtotal0 || 0), 0);
   const totBase5    = compras.reduce((s, c) => s + parseFloat(c.subtotal5 || 0), 0);
@@ -272,6 +276,11 @@ function TabCompras({ data }) {
             🧾 {totNotasVentaRecibidas} Nota{totNotasVentaRecibidas === 1 ? '' : 's'} de Venta (RIMPE)
           </span>
         )}
+        {ncsRecibidas.length > 0 && (
+          <span className="ats-sec-count" style={{ background: '#fee2e2', color: '#991b1b' }}>
+            📄 {ncsRecibidas.length} Nota{ncsRecibidas.length === 1 ? '' : 's'} de Crédito (proveedores)
+          </span>
+        )}
       </h3>
 
       {/* Resumen compras */}
@@ -287,6 +296,7 @@ function TabCompras({ data }) {
             ['Total compras', totTotal],
             ['Ret. IR', totRetIR],
             ['Crédito trib. IVA', totRetIva],
+            ...(ncsRecibidas.length > 0 ? [['(-) IVA en NC recibidas', -totNcRecIva]] : []),
           ].map(([label, val]) => (
             <div key={label} className="ats-mini-card">
               <span className="ats-mini-label">{label}</span>
@@ -364,6 +374,46 @@ function TabCompras({ data }) {
               </tr>
             </tfoot>
           </table>
+        </div>
+      )}
+
+      {/* Notas de crédito RECIBIDAS de proveedores */}
+      {ncsRecibidas.length > 0 && (
+        <div className="ats-seccion" style={{ marginTop: 20 }}>
+          <h3 className="ats-seccion-titulo">
+            Notas de Crédito recibidas de proveedores (tipo 04)
+            <span className="ats-sec-count">{ncsRecibidas.length}</span>
+          </h3>
+          <div className="ats-tabla-wrap">
+            <table className="ats-tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th><th>Proveedor</th><th>RUC</th>
+                  <th className="text-right">Base</th><th className="text-right">IVA</th>
+                  <th className="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ncsRecibidas.map(n => (
+                  <tr key={n.id}>
+                    <td>{fmtFecha(n.fechaEmision)}</td>
+                    <td className="ats-proveedor">{n.razonSocialEmisor}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{n.rucEmisor}</td>
+                    <td className="ats-money">{fmt(n.baseImponible)}</td>
+                    <td className="ats-money">{fmt(n.iva)}</td>
+                    <td className="ats-money ats-money-total" style={{ color: '#dc2626' }}>({fmt(n.importeTotal)})</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="ats-tfoot">
+                  <td colSpan={4}><strong>TOTAL NC (descuenta del crédito fiscal)</strong></td>
+                  <td className="ats-money"><strong>{fmt(totNcRecIva)}</strong></td>
+                  <td className="ats-money ats-money-total" style={{ color: '#dc2626' }}><strong>({fmt(totNcRecImp)})</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -664,7 +714,12 @@ export default function ATS() {
               <div className="ats-card-titulo">Compras</div>
               <div className="ats-card-valor">{data.compras.length}</div>
               <div className="ats-card-sub">Total: {fmt(data.totales.totalCompras)}</div>
-              <div className="ats-card-nota">facturas de compra</div>
+              <div className="ats-card-nota">
+                facturas de compra
+                {(data.ncsRecibidas || []).length > 0
+                  ? ` · ${data.ncsRecibidas.length} NC recibida(s) (-${fmt(data.totales.totalNcRecibidasIva)} IVA)`
+                  : ''}
+              </div>
             </div>
             <div className="ats-card ats-card-ret">
               <div className="ats-card-icono">📋</div>

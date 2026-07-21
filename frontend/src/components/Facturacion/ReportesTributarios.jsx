@@ -83,6 +83,7 @@ export default function ReportesTributarios() {
       ['Total facturado (compras)', fmt(data.resumen.compras.importeTotal)],
       ['Notas de crédito recibidas', data.resumen.notasCreditoRecibidas.cantidad],
       ['Total NC recibidas', fmt(data.resumen.notasCreditoRecibidas.importeTotal)],
+      ['IVA en NC recibidas (reduce crédito fiscal)', fmt(data.resumen.notasCreditoRecibidas.iva)],
       ['Retenciones emitidas (F103)', data.resumen.retenciones.cantidad],
       ['Retención renta emitida', fmt(data.resumen.retenciones.retencionRentaCobrada)],
       ['Retención IVA emitida', fmt(data.resumen.retenciones.retencionIvaCobrada)],
@@ -351,6 +352,10 @@ export default function ReportesTributarios() {
               <div className="rep-card-titulo">Notas de Crédito Recibidas</div>
               <div className="rep-card-periodo">{data.periodo.label}</div>
               <div className="rep-card-rows">
+                <div className="rep-card-row rep-card-row-total">
+                  <span>IVA en NC (reduce crédito fiscal)</span>
+                  <strong>{fmt(data.resumen.notasCreditoRecibidas.iva)}</strong>
+                </div>
                 <div className="rep-card-row rep-card-row-subtotal">
                   <span>Total NC de proveedores</span>
                   <strong>{fmt(data.resumen.notasCreditoRecibidas.importeTotal)}</strong>
@@ -394,7 +399,17 @@ export default function ReportesTributarios() {
                   <span>- {fmt(data.resumen.notasCredito.totalIva)}</span>
                 </div>
                 <div className="rep-formula-row rep-formula-menos">
-                  <span>(-) Crédito fiscal de compras{data.resumen.compras.liquidaciones.cantidad > 0 ? ' + liquidaciones' : ''}</span>
+                  <span>Crédito fiscal de compras{data.resumen.compras.liquidaciones.cantidad > 0 ? ' + liquidaciones' : ''} (bruto)</span>
+                  <span>{fmt(data.resumen.compras.totalIva + data.resumen.compras.liquidaciones.totalIva)}</span>
+                </div>
+                {data.resumen.notasCreditoRecibidas.iva > 0 && (
+                  <div className="rep-formula-row rep-formula-menos">
+                    <span>(-) IVA en NC recibidas de proveedores</span>
+                    <span>- {fmt(data.resumen.notasCreditoRecibidas.iva)}</span>
+                  </div>
+                )}
+                <div className="rep-formula-row rep-formula-menos">
+                  <span>(-) Crédito fiscal neto de compras</span>
                   <span>- {fmt(data.resumen.ivaCreditoFiscal)}</span>
                 </div>
                 <div className="rep-formula-row rep-formula-menos">

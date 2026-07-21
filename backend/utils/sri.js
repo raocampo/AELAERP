@@ -105,6 +105,67 @@ const IVA_TARIFA = {
   15: 0.15,
 };
 
+// ─── Parseo de Nota de Crédito RECIBIDA (docs_recibidos_otros.xmlAutorizado) ────
+// Extrae bases/IVA por tarifa y la referencia al documento original (codDocModificado
+// + numDocModificado "EEE-PPP-SSSSSSSSS") para poder reportar la NC en el ATS
+// (detalleCompras, tipoComprobante '04') y restarla del crédito fiscal de IVA.
+// Estructura confirmada contra XMLs autorizados reales (esquema notaCredito
+// v1.0.0/1.1.0 del SRI) y contra el XSD oficial (docModificado/numDocModificado).
+function parsearNotaCreditoRecibidaXml(xmlAutorizado) {
+  const vacio = {
+    estab: '001', ptoEmi: '001', secuencial: '000000001', claveAcceso: '',
+    codDocModificado: '01', numDocModificado: '',
+    baseNoObjeto: 0, base0: 0, base5: 0, base12: 0, base15: 0, baseGravada: 0,
+    iva: 0,
+  };
+  if (!xmlAutorizado) return vacio;
+
+  const bloqueTrib = xmlAutorizado.match(/<infoTributaria>[\s\S]*?<\/infoTributaria>/);
+  const bloqueInfo = xmlAutorizado.match(/<infoNotaCredito>[\s\S]*?<\/infoNotaCredito>/);
+  const uno = (bloque, tag) => {
+    if (!bloque) return '';
+    const m = bloque[0].match(new RegExp(`<${tag}>([^<]*)<\\/${tag}>`));
+    return m ? m[1].trim() : '';
+  };
+
+  const estab      = uno(bloqueTrib, 'estab');
+  const ptoEmi     = uno(bloqueTrib, 'ptoEmi');
+  const secuencial = uno(bloqueTrib, 'secuencial');
+
+  // codigoPorcentaje: 0=0%, 5=5%, 2=12%, 4=15%, 6/7=no objeto/exento (misma
+  // tabla que IVA_CODIGO más arriba, en sentido inverso).
+  let baseNoObjeto = 0, base0 = 0, base5 = 0, base12 = 0, base15 = 0, iva = 0;
+  const bloques = xmlAutorizado.match(/<totalImpuesto>[\s\S]*?<\/totalImpuesto>/g) || [];
+  bloques.forEach((b) => {
+    if (!/<codigo>2<\/codigo>/.test(b)) return; // solo IVA, ignorar ICE (código 3)
+    const pct   = (b.match(/<codigoPorcentaje>(\d+)<\/codigoPorcentaje>/) || [])[1] || '0';
+    const base  = parseFloat((b.match(/<baseImponible>([\d.]+)<\/baseImponible>/) || [])[1] || 0);
+    const valor = parseFloat((b.match(/<valor>([\d.]+)<\/valor>/) || [])[1] || 0);
+    if (pct === '6' || pct === '7') baseNoObjeto += base;
+    else if (pct === '0') base0 += base;
+    else if (pct === '5') base5 += base;
+    else if (pct === '2') base12 += base;
+    else base15 += base; // '4' (vigente) o cualquier otro código de tarifa >0%
+    iva += valor;
+  });
+
+  return {
+    estab:      estab.padStart(3, '0') || '001',
+    ptoEmi:     ptoEmi.padStart(3, '0') || '001',
+    secuencial: secuencial.padStart(9, '0') || '000000001',
+    claveAcceso: uno(bloqueTrib, 'claveAcceso'),
+    codDocModificado: uno(bloqueInfo, 'codDocModificado') || '01',
+    numDocModificado: uno(bloqueInfo, 'numDocModificado'),
+    baseNoObjeto: parseFloat(baseNoObjeto.toFixed(2)),
+    base0:        parseFloat(base0.toFixed(2)),
+    base5:        parseFloat(base5.toFixed(2)),
+    base12:       parseFloat(base12.toFixed(2)),
+    base15:       parseFloat(base15.toFixed(2)),
+    baseGravada:  parseFloat((base5 + base12 + base15).toFixed(2)),
+    iva:          parseFloat(iva.toFixed(2)),
+  };
+}
+
 // ─── 1. CLAVE DE ACCESO ──────────────────────────────────────────────────────
 
 /**
@@ -2703,4 +2764,5 @@ module.exports = {
   CODIGOS_RETENCION_IVA,
   IVA_CODIGO,
   IVA_TARIFA,
+  parsearNotaCreditoRecibidaXml,
 };

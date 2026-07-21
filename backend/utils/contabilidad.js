@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const { CONCEPTOS_NOMINA } = require('./catalogosCuentasReferencia');
+const { parsearNotaCreditoRecibidaXml } = require('./sri');
 
 const round2 = (n) => Number((Number(n || 0)).toFixed(2));
 
@@ -1499,9 +1500,14 @@ async function crearAsientoDocRecibidoOtro({ docRecibidoId, usuarioId, fecha = n
 
   // '04' Nota de Crédito recibida → reduce lo que le debemos al proveedor.
   // '05' Nota de Débito recibida → aumenta lo que le debemos.
-  // No hay detalle de línea (docs_recibidos_otros no lo guarda) — se contabiliza
-  // el ajuste completo contra la cuenta de gasto/compras configurada, igual que
-  // una compra sin inventario (reutiliza configuracion_contable, sin campos nuevos).
+  // docs_recibidos_otros no guarda detalle de línea, pero para la NC (04) sí
+  // guarda el xmlAutorizado completo — se parsea para separar el IVA en la
+  // cuenta de crédito tributario en vez de contabilizar el ajuste íntegro
+  // contra Gasto (que sobreestimaría la reducción de gasto y dejaría el saldo
+  // de IVA Crédito Tributario Compras desalineado con el ATS/Declaraciones,
+  // que sí restan solo el IVA real). Sin XML parseable (ND, o NC ingresada
+  // manualmente sin importar), se conserva el comportamiento anterior:
+  // ajuste íntegro contra Gasto.
   const esNotaCredito = doc.tipoDocumento === '04';
   const config = await obtenerConfiguracionContable(doc.empresaId, db);
 
@@ -1518,15 +1524,33 @@ async function crearAsientoDocRecibidoOtro({ docRecibidoId, usuarioId, fecha = n
     tx: db,
   });
 
-  const detalles = esNotaCredito
-    ? [
-        { cuentaId: cuentaCxP.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: total, haber: 0 },
-        { cuentaId: cuentaGasto.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: 0, haber: total },
-      ]
-    : [
-        { cuentaId: cuentaGasto.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: total, haber: 0 },
-        { cuentaId: cuentaCxP.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: 0, haber: total },
-      ];
+  const ivaNC = esNotaCredito ? round2(parsearNotaCreditoRecibidaXml(doc.xmlAutorizado).iva) : 0;
+  const baseNC = round2(total - ivaNC);
+
+  let detalles;
+  if (esNotaCredito && ivaNC > 0 && baseNC >= 0) {
+    const cuentaIvaCompras = await _resolverCuenta({
+      empresaId: doc.empresaId,
+      codigoConfigurado: config?.codigoCuentaIvaCompras,
+      codigoDefault: '1.1.05.001', nombreDefault: 'IVA Credito Tributario Compras', tipoDefault: 'ACTIVO', naturalezaDefault: 'DEBITO',
+      tx: db,
+    });
+    detalles = [
+      { cuentaId: cuentaCxP.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: total, haber: 0 },
+      { cuentaId: cuentaGasto.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: 0, haber: baseNC },
+      { cuentaId: cuentaIvaCompras.id, descripcion: `IVA en ${doc.tipoDescripcion.toLowerCase()} de ${doc.razonSocialEmisor}`, debe: 0, haber: ivaNC },
+    ].filter((d) => d.debe > 0 || d.haber > 0);
+  } else if (esNotaCredito) {
+    detalles = [
+      { cuentaId: cuentaCxP.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: total, haber: 0 },
+      { cuentaId: cuentaGasto.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: 0, haber: total },
+    ];
+  } else {
+    detalles = [
+      { cuentaId: cuentaGasto.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: total, haber: 0 },
+      { cuentaId: cuentaCxP.id, descripcion: `${doc.tipoDescripcion} de ${doc.razonSocialEmisor}`, debe: 0, haber: total },
+    ];
+  }
 
   const asiento = await crearAsientoContable({
     empresaId: doc.empresaId,

@@ -1814,7 +1814,7 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
       where: { empresaId, tipoDocumento: '04', fechaEmision: filtroFecha },
       select: {
         id: true, fechaEmision: true, razonSocialEmisor: true, rucEmisor: true,
-        claveAcceso: true, importeTotal: true,
+        claveAcceso: true, importeTotal: true, xmlAutorizado: true,
       },
       orderBy: { fechaEmision: 'asc' },
     });
@@ -1861,9 +1861,17 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
       totalIva:   acc.totalIva   + d(l.totalIva),
     }), { subtotal0: 0, subtotal12: 0, subtotal15: 0, totalIva: 0 });
 
-    const totNCRecibidas = notasCreditoRecibidas.reduce((acc, nc) => ({
-      importeTotal: acc.importeTotal + d(nc.importeTotal),
-    }), { importeTotal: 0 });
+    // El IVA de cada NC recibida se extrae de su propio xmlAutorizado (mismo
+    // patrón que declaraciones.js /f104) — docs_recibidos_otros solo guarda el
+    // importeTotal bruto, no el desglose base/IVA.
+    const totNCRecibidas = notasCreditoRecibidas.reduce((acc, nc) => {
+      const parsed = sri.parsearNotaCreditoRecibidaXml(nc.xmlAutorizado);
+      return {
+        importeTotal: acc.importeTotal + d(nc.importeTotal),
+        iva:          acc.iva          + parsed.iva,
+      };
+    }, { importeTotal: 0, iva: 0 });
+    totNCRecibidas.iva = parseFloat(totNCRecibidas.iva.toFixed(2));
 
     // Retención IVA/Renta emitida a proveedores (impuestos: [{codigo, valorRetenido}])
     let retencionIvaEmitida = 0;
@@ -1881,11 +1889,12 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
 
     // ── IVA a pagar/crédito, igual fórmula que Declaraciones → F104:
     //    IVA en ventas (neto de NC emitidas) - crédito fiscal de compras
-    //    (compras + liquidaciones) - retenciones de IVA que los CLIENTES le
-    //    practicaron a la empresa. Las retenciones EMITIDAS a proveedores son
-    //    obligación del F103, no reducen este cálculo.
+    //    (compras + liquidaciones, neto de NC recibidas de proveedores) -
+    //    retenciones de IVA que los CLIENTES le practicaron a la empresa. Las
+    //    retenciones EMITIDAS a proveedores son obligación del F103, no
+    //    reducen este cálculo.
     const ivaVentasNeto     = parseFloat((totVentas.totalIva - totNC.totalIva).toFixed(2));
-    const ivaCreditoFiscal  = parseFloat((totCompras.totalIva + totLiq.totalIva).toFixed(2));
+    const ivaCreditoFiscal  = parseFloat((totCompras.totalIva + totLiq.totalIva - totNCRecibidas.iva).toFixed(2));
     const ivaNeto = parseFloat((ivaVentasNeto - ivaCreditoFiscal - retencionIvaRecibida).toFixed(2));
 
     res.json({
@@ -1933,6 +1942,7 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
           },
           notasCreditoRecibidas: {
             importeTotal: parseFloat(totNCRecibidas.importeTotal.toFixed(2)),
+            iva:          totNCRecibidas.iva,
             cantidad:     notasCreditoRecibidas.length,
           },
           retenciones: {

@@ -11,7 +11,7 @@ const PDFDocument = require('pdfkit');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
-const { CODIGOS_RETENCION_RENTA } = require('../utils/sri');
+const { CODIGOS_RETENCION_RENTA, parsearNotaCreditoRecibidaXml } = require('../utils/sri');
 
 const LOGO_SRI = path.join(__dirname, '../assets/LogoSRI.png');
 
@@ -90,7 +90,7 @@ router.get('/preview', async (req, res) => {
     const config = await prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
 
     const periodoWhere = { fechaEmision: { gte: desde, lte: hasta } };
-    const [facturas, liquidaciones, retenciones, compras, ncs, anuladosFacturas, retencionesRecibidas, notasVenta] = await Promise.all([
+    const [facturas, liquidaciones, retenciones, compras, ncs, anuladosFacturas, retencionesRecibidas, notasVenta, ncsRecibidas] = await Promise.all([
       // Ventas: facturas emitidas autorizadas
       prisma.facturas.findMany({
         where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere },
@@ -182,9 +182,26 @@ router.get('/preview', async (req, res) => {
             orderBy: { secuencial: 'asc' },
           })
         : Promise.resolve([]),
+      // Notas de crédito RECIBIDAS de proveedores (tipo SRI 04, vía Buzón SRI) —
+      // reducen el crédito fiscal de IVA y deben reportarse en <detalleCompras>.
+      prisma.docs_recibidos_otros.findMany({
+        where: { empresaId, tipoDocumento: '04', ...periodoWhere },
+        select: {
+          id: true, fechaEmision: true, razonSocialEmisor: true, rucEmisor: true,
+          claveAcceso: true, importeTotal: true, xmlAutorizado: true,
+        },
+        orderBy: { fechaEmision: 'asc' },
+      }),
     ]);
 
     const sumar = (arr, campo) => arr.reduce((s, r) => s + r2(r[campo]), 0);
+    // No enviar xmlAutorizado (crudo, pesado) al frontend — solo el desglose
+    // ya parseado que necesita para mostrar la tabla.
+    const ncsRecibidasVista = ncsRecibidas.map(({ xmlAutorizado, ...nc }) => {
+      const p = parsearNotaCreditoRecibidaXml(xmlAutorizado);
+      return { ...nc, iva: p.iva, baseImponible: p.base0 + p.base5 + p.base12 + p.base15 + p.baseNoObjeto };
+    });
+    const totalNcRecibidasIva = ncsRecibidasVista.reduce((s, nc) => s + nc.iva, 0);
 
     const totales = {
       totalVentasFacturas:       sumar(facturas, 'importeTotal'),
@@ -202,6 +219,9 @@ router.get('/preview', async (req, res) => {
       totalRetIvaRecibida:       sumar(retencionesRecibidas, 'totalRetencionIva'),
       totalRetIrRecibida:        sumar(retencionesRecibidas, 'totalRetencionRenta'),
       docRetencionesRecibidas:   retencionesRecibidas.length,
+      totalNcRecibidas:          sumar(ncsRecibidas, 'importeTotal'),
+      totalNcRecibidasIva:       parseFloat(totalNcRecibidasIva.toFixed(2)),
+      docNcRecibidas:            ncsRecibidas.length,
     };
 
     res.json({
@@ -211,6 +231,7 @@ router.get('/preview', async (req, res) => {
         facturas, liquidaciones, retenciones, compras, ncs, notasVenta,
         anulados: anuladosFacturas,
         retencionesRecibidas,
+        ncsRecibidas: ncsRecibidasVista,
         totales,
       },
     });
@@ -232,7 +253,7 @@ router.get('/exportar', async (req, res) => {
 
     const periodoWhere = { fechaEmision: { gte: desde, lte: hasta } };
 
-    const [facturas, liquidaciones, compras, ncs, anuladosFacturas, notasVenta] = await Promise.all([
+    const [facturas, liquidaciones, compras, ncs, anuladosFacturas, notasVenta, ncsRecibidas] = await Promise.all([
       prisma.facturas.findMany({
         where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere },
         orderBy: { secuencial: 'asc' },
@@ -265,6 +286,12 @@ router.get('/exportar', async (req, res) => {
             orderBy: { secuencial: 'asc' },
           })
         : Promise.resolve([]),
+      // Notas de crédito RECIBIDAS de proveedores (tipo SRI 04) — se reportan
+      // como su propia entrada en <detalleCompras> (tipoComprobante 04).
+      prisma.docs_recibidos_otros.findMany({
+        where: { empresaId, tipoDocumento: '04', ...periodoWhere },
+        orderBy: { fechaEmision: 'asc' },
+      }),
     ]);
 
     // ── totalVentas ───────────────────────────────────────────────────────────
@@ -307,9 +334,11 @@ router.get('/exportar', async (req, res) => {
       }
       const e = ventasMap.get(key);
       e.count++;
-      // NC es negativo para ventas
-      e.baseImpGrav -= r2(n.totalSinImpuestos || 0);
-      e.montoIva    -= r2(n.totalIva || 0);
+      // Nota: valores SIEMPRE positivos — monedaType del XSD del SRI exige
+      // minInclusive 0.0. El signo/efecto de la NC lo determina el SRI a
+      // partir de tipoComprobante='04', no un valor negativo en el campo.
+      e.baseImpGrav += r2(n.totalSinImpuestos || 0);
+      e.montoIva    += r2(n.totalIva || 0);
     });
 
     let ventasXML = '';
@@ -318,8 +347,8 @@ router.get('/exportar', async (req, res) => {
     <detalleVentas>
       <tpIdCliente>${v.tpIdCliente}</tpIdCliente>
       <idCliente>${v.idCliente}</idCliente>
-      <parteRel>NO</parteRel>
-      <tipoCli>01</tipoCli>
+      <parteRelVtas>NO</parteRelVtas>
+      <tipoCliente>01</tipoCliente>
       <tipoComprobante>${v.tipoComprobante}</tipoComprobante>
       <tipoEmision>E</tipoEmision>
       <numeroComprobantes>${v.count}</numeroComprobantes>
@@ -400,11 +429,12 @@ router.get('/exportar', async (req, res) => {
       <establecimiento>${estab}</establecimiento>
       <puntoEmision>${pto}</puntoEmision>
       <secuencial>${sec}</secuencial>
-      <fechaEmisionDoc>${fmtFecha(compra.fechaEmision)}</fechaEmisionDoc>
+      <fechaEmision>${fmtFecha(compra.fechaEmision)}</fechaEmision>
       <autorizacion>${auth}</autorizacion>
       <baseNoGraIva>${baseNoObjeto.toFixed(2)}</baseNoGraIva>
       <baseImponible>${base0.toFixed(2)}</baseImponible>
       <baseImpGrav>${baseGravada.toFixed(2)}</baseImpGrav>
+      <baseImpExe>0.00</baseImpExe>
       <montoIce>0.00</montoIce>
       <montoIva>${r2(compra.totalIva).toFixed(2)}</montoIva>
       <valRetBien10>${retIva.valRetBien10.toFixed(2)}</valRetBien10>
@@ -427,6 +457,51 @@ router.get('/exportar', async (req, res) => {
     </detalleCompras>`;
     });
 
+    // ── <compras> — notas de crédito RECIBIDAS de proveedores (tipo 04) ──────
+    // Cada NC es su propia entrada en detalleCompras, con valores SIEMPRE
+    // positivos (monedaType del XSD exige minInclusive 0.0) y referenciando el
+    // documento original vía docModificado/estabModificado/ptoEmiModificado/
+    // secModificado — confirmado contra el XSD oficial del SRI (ats.xsd,
+    // detalleComprasType). autModificado se omite: el XML de la NC recibida
+    // solo trae el establecimiento-punto-secuencial del original
+    // (numDocModificado), no su clave de acceso de 49 dígitos — el campo es
+    // opcional (minOccurs=0) en el XSD.
+    ncsRecibidas.forEach((nc) => {
+      const p = parsearNotaCreditoRecibidaXml(nc.xmlAutorizado);
+      const modif = parseNumero(p.numDocModificado);
+      comprasXML += `
+    <detalleCompras>
+      <codSustento>01</codSustento>
+      <tpIdProv>04</tpIdProv>
+      <idProv>${nc.rucEmisor}</idProv>
+      <tipoComprobante>04</tipoComprobante>
+      <parteRel>NO</parteRel>
+      <fechaRegistro>${fmtFecha(nc.createdAt || nc.fechaEmision)}</fechaRegistro>
+      <establecimiento>${p.estab}</establecimiento>
+      <puntoEmision>${p.ptoEmi}</puntoEmision>
+      <secuencial>${p.secuencial}</secuencial>
+      <fechaEmision>${fmtFecha(nc.fechaEmision)}</fechaEmision>
+      <autorizacion>${p.claveAcceso || nc.claveAcceso || ''}</autorizacion>
+      <baseNoGraIva>${p.baseNoObjeto.toFixed(2)}</baseNoGraIva>
+      <baseImponible>${p.base0.toFixed(2)}</baseImponible>
+      <baseImpGrav>${p.baseGravada.toFixed(2)}</baseImpGrav>
+      <baseImpExe>0.00</baseImpExe>
+      <montoIce>0.00</montoIce>
+      <montoIva>${p.iva.toFixed(2)}</montoIva>
+      <valRetBien10>0.00</valRetBien10>
+      <valRetServ20>0.00</valRetServ20>
+      <valorRetBienes>0.00</valorRetBienes>
+      <valRetServ50>0.00</valRetServ50>
+      <valorRetServicios>0.00</valorRetServicios>
+      <valRetServ100>0.00</valRetServ100>
+      <totbasesImpReemb>0.00</totbasesImpReemb>
+      <docModificado>${p.codDocModificado}</docModificado>
+      <estabModificado>${modif.estab}</estabModificado>
+      <ptoEmiModificado>${modif.pto}</ptoEmiModificado>
+      <secModificado>${modif.sec}</secModificado>
+    </detalleCompras>`;
+    });
+
     // ── <anulados> ────────────────────────────────────────────────────────────
     let anuladosXML = '';
     anuladosFacturas.forEach(f => {
@@ -442,8 +517,11 @@ router.get('/exportar', async (req, res) => {
     </detalleAnulados>`;
     });
 
+    // Elemento raíz correcto según el XSD oficial del SRI (ats.xsd): declara
+    // globalmente <xsd:element name="iva" type="ivaType" /> — NO "<ats>".
+    // Confirmado validando este XML contra el XSD real antes de este fix.
     const xmlATS = `<?xml version="1.0" encoding="UTF-8"?>
-<ats>
+<iva>
   <TipoIDInformante>R</TipoIDInformante>
   <IdInformante>${config.ruc}</IdInformante>
   <razonSocial>${config.razonSocial}</razonSocial>
@@ -458,7 +536,7 @@ router.get('/exportar', async (req, res) => {
   </ventas>
   <anulados>${anuladosXML}
   </anulados>
-</ats>`;
+</iva>`;
 
     const filename = `ats_${config.ruc}_${anio}${mesPad}.xml`;
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
@@ -483,7 +561,7 @@ router.get('/exportar/pdf', async (req, res) => {
 
     const periodoWhere = { fechaEmision: { gte: desde, lte: hasta } };
 
-    const [facturas, liquidaciones, compras, ncs, retenciones, anuladosFacturas, retencionesRecibidas, notasVenta] = await Promise.all([
+    const [facturas, liquidaciones, compras, ncs, retenciones, anuladosFacturas, retencionesRecibidas, notasVenta, ncsRecibidas] = await Promise.all([
       prisma.facturas.findMany({ where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere } }),
       prisma.liquidaciones_compra.findMany({ where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere } }),
       prisma.facturas_compra.findMany({
@@ -502,6 +580,8 @@ router.get('/exportar/pdf', async (req, res) => {
       config?.negocioPopular
         ? prisma.notas_venta.findMany({ where: { empresaId, anulada: false, ...periodoWhere } })
         : Promise.resolve([]),
+      // Notas de crédito RECIBIDAS de proveedores (tipo SRI 04).
+      prisma.docs_recibidos_otros.findMany({ where: { empresaId, tipoDocumento: '04', ...periodoWhere } }),
     ]);
 
     // ── Totales por tipo de comprobante (separando 5%, 12% y 15%) ────────────
@@ -557,15 +637,39 @@ router.get('/exportar/pdf', async (req, res) => {
     }, { n: 0, b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, iva5: 0, iva12: 0, iva15: 0 });
     const cFact = sumarCompras(comprasFactura);
     const cNV   = sumarCompras(comprasNotaVenta);
-    const cTotN    = cFact.n + cNV.n;
-    const cTotB0   = cFact.b0 + cNV.b0;
-    const cTotBt5  = cFact.bt5 + cNV.bt5;
-    const cTotBt12 = cFact.bt12 + cNV.bt12;
-    const cTotBt15 = cFact.bt15 + cNV.bt15;
-    const cTotNoObj = cFact.noObj + cNV.noObj;
-    const cTotIva5  = cFact.iva5 + cNV.iva5;
-    const cTotIva12 = cFact.iva12 + cNV.iva12;
-    const cTotIva15 = cFact.iva15 + cNV.iva15;
+
+    // Notas de crédito RECIBIDAS de proveedores — fila propia '04 NOTA DE
+    // CRÉDITO', restada del total de COMPRAS (misma convención ya usada para
+    // notas de crédito EMITIDAS en la sección VENTAS más abajo). El XML del
+    // ATS (/exportar) sí reporta esta NC con valores positivos, como exige el
+    // XSD del SRI — esta resta es solo para que el TOTAL del talón refleje el
+    // neto real a declarar.
+    // Nota: acumulados en NEGATIVO a propósito (misma convención que vNcEm más
+    // abajo) para que la fila se muestre como resta y el TOTAL se calcule
+    // simplemente sumando todas las filas de la sección.
+    const cNcRec = ncsRecibidas.reduce((acc, nc) => {
+      const p = parsearNotaCreditoRecibidaXml(nc.xmlAutorizado);
+      acc.n++;
+      acc.b0    -= p.base0;
+      acc.bt5   -= p.base5;
+      acc.bt12  -= p.base12;
+      acc.bt15  -= p.base15;
+      acc.noObj -= p.baseNoObjeto;
+      acc.iva5  -= p.base5 * 0.05;
+      acc.iva12 -= p.base12 * 0.12;
+      acc.iva15 -= p.base15 * 0.15;
+      return acc;
+    }, { n: 0, b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, iva5: 0, iva12: 0, iva15: 0 });
+
+    const cTotN    = cFact.n + cNV.n + cNcRec.n;
+    const cTotB0   = cFact.b0 + cNV.b0 + cNcRec.b0;
+    const cTotBt5  = cFact.bt5 + cNV.bt5 + cNcRec.bt5;
+    const cTotBt12 = cFact.bt12 + cNV.bt12 + cNcRec.bt12;
+    const cTotBt15 = cFact.bt15 + cNV.bt15 + cNcRec.bt15;
+    const cTotNoObj = cFact.noObj + cNV.noObj + cNcRec.noObj;
+    const cTotIva5  = cFact.iva5 + cNV.iva5 + cNcRec.iva5;
+    const cTotIva12 = cFact.iva12 + cNV.iva12 + cNcRec.iva12;
+    const cTotIva15 = cFact.iva15 + cNV.iva15 + cNcRec.iva15;
 
     // ── Retenciones IR por código SRI (303, 307, …) ───────────────────────────
     const retIrPorCod = {};
@@ -773,6 +877,8 @@ router.get('/exportar/pdf', async (req, res) => {
       dataRow(tc, ['01', 'FACTURA', cFact.n, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), n2(cFact.noObj), n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
     if (cNV.n > 0)
       dataRow(tc, ['02', 'NOTA DE VENTA', cNV.n, n2(cNV.b0), n2(cNV.bt5), n2(cNV.bt12), n2(cNV.bt15), n2(cNV.noObj), n2(cNV.iva5), n2(cNV.iva12), n2(cNV.iva15)]);
+    if (cNcRec.n > 0)
+      dataRow(tc, ['04', 'NOTA DE CRÉDITO', cNcRec.n, n2(cNcRec.b0), n2(cNcRec.bt5), n2(cNcRec.bt12), n2(cNcRec.bt15), n2(cNcRec.noObj), n2(cNcRec.iva5), n2(cNcRec.iva12), n2(cNcRec.iva15)]);
     totRow(tc,   ['TOTAL', '', cTotN, n2(cTotB0), n2(cTotBt5), n2(cTotBt12), n2(cTotBt15), n2(cTotNoObj), n2(cTotIva5), n2(cTotIva12), n2(cTotIva15)]);
     curY += 10;
 
