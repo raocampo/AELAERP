@@ -169,3 +169,82 @@ verificar en producción, no son tareas de código:
    cliente (compra "No objeto/Exento", nota de venta de proveedor RIMPE, ATS de
    negocio popular) — **nada de la sesión del 07-17 ha tocado producción
    todavía**, según el propio checklist de ese día.
+
+---
+
+## Limpieza de datos de prueba en producción — tenant "Comercial S&S" (slug `sys`)
+
+Más tarde en la misma sesión, el cliente **Comercial S&S** (RUC 1105863839001,
+DIANA FERNANDA SUCUNUTA ALBAN) — tenant nuevo que arrancó desde cero en AELA sin
+migración de contabilidad atrasada (ver `docs/pendientes-2026-07-14.md` para la
+aclaración de que este cliente no tiene relación con la carga de Puchaicela) —
+pidió borrar los datos que ingresó como prueba antes de empezar a usar el
+sistema en serio.
+
+### Identificación del tenant
+
+- Slug `sys` → BD `aela_sys` en el mismo Postgres de Railway que aloja `railway`
+  (principal), `aela_lsac` y `aela_mprq`.
+- Credencial de conexión pública de Railway pegada temporalmente por el usuario
+  en `.env.local` (raíz del repo, en `.gitignore`, nunca se commiteó) — queda
+  ahí a propósito por si se repite una operación similar con otro cliente.
+- Confirmado antes de tocar nada: `empresas.nombreComercial = "Comercial S&S"`,
+  RUC coincide.
+
+### Backup previo (obligatorio antes de cualquier borrado)
+
+`npm run db:backup` (herramienta ya existente en `backend/scripts/dbMaintenance.js`,
+apuntada a la BD de producción vía `DATABASE_URL` de esa sola ejecución, sin
+tocar ningún `.env` del repo) →
+`backups/aela_aela_sys_20260720_174821.sql` (283 KB, carpeta `backups/` en
+`.gitignore`).
+
+### Alcance acordado con el usuario
+
+Solo datos **transaccionales** — se conservan usuarios, configuración del
+sistema/SRI, plan de cuentas y catálogos (clientes/proveedores/productos).
+
+**Borrado** (transacción única, orden respetando FKs):
+
+| Tabla | Filas borradas |
+|---|---|
+| `asientos_contables_detalle` | 21 |
+| `asientos_contables` | 8 |
+| `caja_movimientos` | 1 |
+| `cajas_diarias` | 1 |
+| `facturas` | 1 |
+| `facturas_compra` | 4 |
+| `movimientos_inventario` | 13 |
+| `docs_recibidos_otros` | 2 |
+| `auditoria` | 10 (a pedido explícito del usuario — el log solo referenciaba los documentos de prueba ya eliminados) |
+
+**Efecto secundario aplicado**: `productos_servicios.stockActual` reseteado a
+`0` para los 11 productos del catálogo — quedaría inconsistente (stock de
+prueba sin movimientos que lo respalden) si no se reseteaba, ya que
+`stockActual` es un campo cacheado independiente de la tabla de movimientos.
+
+**Conservado intacto**: `empresas` (1), `usuarios` (3), `configuracion_sistema`,
+`configuracion_sri`, `plan_cuentas` (86 cuentas), `clientes` (1), `proveedores`
+(2), `productos_servicios` (11, solo con stock reseteado).
+
+### Verificado después del borrado
+
+Conteo de filas por tabla confirmado en producción tras el `COMMIT` — coincide
+exactamente con lo esperado (solo quedan las 8 tablas de la lista de
+"conservado"). `productos_servicios.stockActual` confirmado en `0.000` para los
+11 productos.
+
+### Notas para el futuro
+
+- El próximo comprobante que emita este cliente tomará su numeración desde el
+  secuencial configurado en Puntos de Emisión — no quedó ningún contador
+  atascado por la factura/compra de prueba borrada (`siguienteSecuencial()` en
+  `backend/utils/secuenciales.js` calcula `MAX(numeroSecuencial en BD)`, y con
+  la tabla vacía usa el secuencial inicial configurado).
+- No existe un script reutilizable para este tipo de limpieza — se hizo con
+  consultas SQL ad-hoc vía `pg` directo a la BD de producción, verificando FKs
+  con `information_schema` antes de borrar. Si esto se vuelve una operación
+  recurrente (nuevos clientes que prueban antes de salir en vivo), valdría la
+  pena convertirlo en un script formal (`backend/scripts/limpiarDatosPrueba.js`)
+  con el mismo patrón de "solo transaccionales, backup automático antes,
+  confirmación explícita del alcance".
