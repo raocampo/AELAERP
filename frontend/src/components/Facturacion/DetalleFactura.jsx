@@ -8,6 +8,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaLarga, formatFechaHora } from '../../utils/fecha';
+import { abrirBlobEnNuevaPestana, descargarXml } from '../../utils/exportCsv';
 import './DetalleFactura.css';
 // ─── Timeline de estado SRI ───────────────────────────────────────────────────
 const PASOS_SRI = [
@@ -77,27 +78,11 @@ const DetalleFactura = () => {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const abrirPDF = async (endpoint, nombreArchivo) => {
+  const abrirPDF = async (endpoint) => {
     try {
-      const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-      const base  = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
-      const res   = await fetch(`${base}/api${endpoint}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) { toast.error('No se pudo generar el documento'); return; }
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.target   = '_blank';
-      a.rel      = 'noopener noreferrer';
-      if (nombreArchivo) a.download = nombreArchivo;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      await abrirBlobEnNuevaPestana(api, endpoint);
     } catch {
-      toast.error('Error al abrir el documento');
+      toast.error('No se pudo generar el documento');
     }
   };
 
@@ -105,17 +90,11 @@ const DetalleFactura = () => {
   const imprimirRecibo = () => abrirPDF(`/facturas/${id}/recibo`);
 
   const descargarXML = async () => {
-    const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
-    const res   = await fetch(`${base}/api/facturas/${id}/xml`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) { toast.error('Sin XML disponible'); return; }
-    const blob = await res.blob();
-    const a    = document.createElement('a');
-    a.href     = URL.createObjectURL(blob);
-    a.download = `factura-${factura.numeroFactura}.xml`;
-    a.click();
+    try {
+      await descargarXml(api, `/facturas/${id}/xml`, {}, `factura-${factura.numeroFactura}.xml`);
+    } catch {
+      toast.error('Sin XML disponible');
+    }
   };
 
   const reenviar = async () => {

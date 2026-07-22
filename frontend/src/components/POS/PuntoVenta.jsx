@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
+import { abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
 import './PuntoVenta.css';
 
 const TIPOS_ID = [
@@ -255,19 +256,13 @@ export default function PuntoVenta() {
   };
 
   const imprimirReciboDoc = async (id, tipo) => {
-    const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
     const endpoint = tipo === 'nota_venta'
-      ? `${base}/api/notas-venta/${id}/recibo`
-      : `${base}/api/facturas/${id}/recibo`;
+      ? `/notas-venta/${id}/recibo`
+      : `/facturas/${id}/recibo`;
     try {
-      const r = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) { toast.error('No se pudo generar el recibo'); return; }
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      await abrirBlobEnNuevaPestana(api, endpoint);
     } catch {
-      toast.error('Error al abrir el recibo');
+      toast.error('No se pudo generar el recibo');
     }
   };
 

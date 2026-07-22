@@ -5,11 +5,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import { IcVer, IcEditar, IcReenviar, IcAnular } from '../../utils/icons';
 import './GuiasRemision.css';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 
 const ESTADO_BADGE = {
   NO_ENVIADA: { label: 'No enviada', cls: 'badge-muted' },
@@ -39,23 +38,19 @@ export default function ListaGuiasRemision() {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-      const params = new URLSearchParams({ page, limit: 50 });
-      if (filtros.busqueda)   params.set('busqueda',   filtros.busqueda);
-      if (filtros.fechaDesde) params.set('fechaDesde', filtros.fechaDesde);
-      if (filtros.fechaHasta) params.set('fechaHasta', filtros.fechaHasta);
-      if (filtros.estado !== 'TODOS') params.set('estado', filtros.estado);
+      const params = { page, limit: 50 };
+      if (filtros.busqueda)   params.busqueda   = filtros.busqueda;
+      if (filtros.fechaDesde) params.fechaDesde = filtros.fechaDesde;
+      if (filtros.fechaHasta) params.fechaHasta = filtros.fechaHasta;
+      if (filtros.estado !== 'TODOS') params.estado = filtros.estado;
 
-      const res  = await fetch(`${API_URL}/guias-remision?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.mensaje || 'Error al cargar guías');
+      const res  = await api.get('/guias-remision', { params });
+      const data = res.data;
       setGuias(data.guias || []);
       setTotal(data.total  || 0);
       setPagina(page);
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.mensaje || 'Error al cargar guías');
     } finally {
       setLoading(false);
     }
@@ -70,33 +65,21 @@ export default function ListaGuiasRemision() {
   const handleAnular = async (id, numero) => {
     if (!window.confirm(`¿Anular la guía ${numero}? Esta acción no se puede deshacer.`)) return;
     try {
-      const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-      const res   = await fetch(`${API_URL}/guias-remision/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.mensaje);
+      await api.delete(`/guias-remision/${id}`);
       cargar(pagina);
     } catch (err) {
-      alert('Error: ' + err.message);
+      alert('Error: ' + (err.response?.data?.mensaje || err.message));
     }
   };
 
   const handleEnviarSRI = async (id, numero) => {
     if (!window.confirm(`¿Enviar la guía ${numero} al SRI?`)) return;
     try {
-      const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-      const res   = await fetch(`${API_URL}/guias-remision/${id}/enviar-sri`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.mensaje);
-      alert(`Resultado: ${data.mensaje}`);
+      const res = await api.post(`/guias-remision/${id}/enviar-sri`);
+      alert(`Resultado: ${res.data.mensaje}`);
       cargar(pagina);
     } catch (err) {
-      alert('Error: ' + err.message);
+      alert('Error: ' + (err.response?.data?.mensaje || err.message));
     }
   };
 

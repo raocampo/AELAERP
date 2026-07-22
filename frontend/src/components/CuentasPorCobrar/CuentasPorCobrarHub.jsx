@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
+import { abrirBlobEnNuevaPestana, descargarExcel } from '../../utils/exportCsv';
 import '../Bancos/Bancos.css';
 
 const METODOS_PAGO = ['efectivo', 'transferencia', 'cheque', 'tarjeta'];
@@ -12,22 +13,7 @@ function formatMoney(v) {
 // ─── Abrir PDF (recibo) en nueva pestaña, con auth ────────────────────────────
 async function abrirRecibo(cobroId) {
   try {
-    const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
-    const res = await fetch(`${base}/api/cxc/cobros/${cobroId}/recibo`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) { alert('No se pudo generar el recibo'); return; }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    await abrirBlobEnNuevaPestana(api, `/cxc/cobros/${cobroId}/recibo`);
   } catch {
     alert('No se pudo generar el recibo');
   }
@@ -285,19 +271,10 @@ function TabProximamente({ nombre }) {
 // ─── Tab Importar Cobros ────────────────────────────────────────
 async function _descargarPlantillaCobros() {
   try {
-    const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
-    const res = await fetch(`${base}/api/cxc/cobros/importar/plantilla`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) { alert('No se pudo descargar la plantilla'); return; }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'plantilla-cobros.xlsx';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  } catch { alert('No se pudo descargar la plantilla'); }
+    await descargarExcel(api, '/cxc/cobros/importar/plantilla', {}, 'plantilla-cobros.xlsx');
+  } catch {
+    alert('No se pudo descargar la plantilla');
+  }
 }
 
 function TabImportarCobros() {

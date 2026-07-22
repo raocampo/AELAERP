@@ -28,11 +28,19 @@ function _slugDesdeJwt(token) {
   }
 }
 
-export function inyectarTokenEnConfig(config, storage = globalThis.localStorage) {
-  if (!config.headers) config.headers = {};
+// Arma Authorization + X-Tenant-Slug para un fetch() hecho a mano — usar
+// SIEMPRE que no se pueda pasar por el axios `api` de abajo (ej. descargas de
+// blob con <a download>, Service Worker, cola offline). Reutilizada por
+// inyectarTokenEnConfig para no duplicar la lógica del slug en dos sitios.
+// Un fetch() sin este header resuelve al tenant por defecto en el backend en
+// vez del tenant del usuario, y la validación de sesión lo rechaza con
+// TENANT_MISMATCH — este fue el bug real detrás de varios botones de
+// PDF/XML/recibo que fallaban solo para empresas de un tenant multi-empresa.
+export function headersConTenant(extra = {}, storage = globalThis.localStorage) {
+  const headers = { ...extra };
   const token = storage?.getItem('aela_token') || storage?.getItem('token');
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
     // Derivar el slug DESDE el JWT para que siempre coincida con el tenant
     // con el que el usuario inició sesión, independientemente de lo que tenga
     // localStorage. Esto evita que un slug residual de otro tenant provoque
@@ -40,12 +48,17 @@ export function inyectarTokenEnConfig(config, storage = globalThis.localStorage)
     const slugDelJwt = _slugDesdeJwt(token);
     const slugFallback = storage?.getItem('aela_tenant_slug');
     const slugEfectivo = slugDelJwt ?? slugFallback;
-    if (slugEfectivo) config.headers['X-Tenant-Slug'] = slugEfectivo;
+    if (slugEfectivo) headers['X-Tenant-Slug'] = slugEfectivo;
   } else {
     // Sin token (login, registro) → usar slug de localStorage para resolver tenant
     const tenantSlug = storage?.getItem('aela_tenant_slug');
-    if (tenantSlug) config.headers['X-Tenant-Slug'] = tenantSlug;
+    if (tenantSlug) headers['X-Tenant-Slug'] = tenantSlug;
   }
+  return headers;
+}
+
+export function inyectarTokenEnConfig(config, storage = globalThis.localStorage) {
+  config.headers = headersConTenant(config.headers, storage);
   return config;
 }
 

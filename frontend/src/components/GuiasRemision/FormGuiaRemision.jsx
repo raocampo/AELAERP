@@ -9,8 +9,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
 import './GuiasRemision.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
-
 const DETALLE_VACIO = { codigoInterno: '', descripcion: '', cantidad: 1 };
 
 function hoy() {
@@ -79,11 +77,8 @@ export default function FormGuiaRemision() {
   // ── Cargar datos en modo edición ──
   useEffect(() => {
     if (!esEdicion) return;
-    const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-    fetch(`${API_URL}/guias-remision/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
+    api.get(`/guias-remision/${id}`)
+      .then((r) => r.data)
       .then((data) => {
         if (!data.ok) throw new Error(data.mensaje);
         const g = data.guia;
@@ -111,7 +106,7 @@ export default function FormGuiaRemision() {
           fechaEmisionDocSustento: g.fechaEmisionDocSustento?.split('T')[0] || hoy(),
         });
       })
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(err.response?.data?.mensaje || err.message))
       .finally(() => setLoading(false));
   }, [id, esEdicion]);
 
@@ -139,20 +134,11 @@ export default function FormGuiaRemision() {
     setSaving(true);
     setError('');
     try {
-      const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-      const url    = esEdicion ? `${API_URL}/guias-remision/${id}` : `${API_URL}/guias-remision`;
-      const method = esEdicion ? 'PATCH' : 'POST';
-
-      const res  = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.mensaje || 'Error al guardar');
+      if (esEdicion) {
+        await api.patch(`/guias-remision/${id}`, form);
+      } else {
+        await api.post('/guias-remision', form);
+      }
 
       // Guarda/actualiza el transportista en el catálogo para autocompletar la
       // próxima guía — no bloqueante, si falla (ej. ya existe) no interrumpe.
@@ -166,7 +152,7 @@ export default function FormGuiaRemision() {
 
       navigate('/guias-remision');
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.mensaje || err.message || 'Error al guardar');
     } finally {
       setSaving(false);
     }

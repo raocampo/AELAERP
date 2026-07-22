@@ -19,6 +19,7 @@ import {
   guardarEnCache,
   leerDeCache,
 } from './offlineDB';
+import { headersConTenant } from '../services/api';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 
@@ -60,12 +61,7 @@ export async function apiOffline(url, {
   respuestaOptimista = null,
 } = {}) {
   const urlCompleta = url.startsWith('http') ? url : `${API_BASE}${url}`;
-  const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const headers = headersConTenant({ 'Content-Type': 'application/json' });
 
   // Si hay conexión → petición normal
   if (_estaOnline) {
@@ -84,12 +80,13 @@ export async function apiOffline(url, {
     }
   }
 
-  // Sin conexión → encolar
+  // Sin conexión → encolar (con el mismo X-Tenant-Slug ya resuelto, para que
+  // procesarCola() lo reenvíe tal cual cuando vuelva la red).
   const pendienteId = await encolarOperacion({
     url: urlCompleta,
     method,
     body,
-    headers: { 'Content-Type': 'application/json', Authorization: headers.Authorization },
+    headers,
     entidad,
     descripcion,
   });
@@ -118,12 +115,7 @@ export async function apiOffline(url, {
  */
 export async function apiGet(url, { clave = null, ttl = 300 } = {}) {
   const urlCompleta = url.startsWith('http') ? url : `${API_BASE}${url}`;
-  const token = localStorage.getItem('aela_token') || localStorage.getItem('token');
-
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const headers = headersConTenant({ 'Content-Type': 'application/json' });
 
   try {
     const resp = await fetch(urlCompleta, { headers });
