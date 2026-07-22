@@ -161,6 +161,35 @@
 }
 .rep-formula-menos span:first-child { color: #64748b; }
 .rep-formula-menos span:last-child  { color: #dc2626; }
+
+/* Separador sutil entre el bloque de ventas y el de compras de la fórmula */
+.rep-formula-sep {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 4px 0;
+}
+
+/* Desglose del crédito fiscal (bruto → NC recibidas) anidado visualmente
+   bajo su propio subtotal — evita que se lea como una lista plana de líneas
+   sueltas sin relación entre sí. */
+.rep-formula-detalle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 2px 10px;
+  padding-left: 10px;
+  border-left: 2px solid #e2e8f0;
+}
+.rep-formula-detalle-row { font-size: 0.75rem; padding: 1px 0; }
+.rep-formula-detalle-row span:first-child { color: #94a3b8; }
+.rep-formula-detalle-row.rep-formula-menos span:last-child { color: #f87171; }
+
+.rep-formula-subtotal {
+  font-weight: 600;
+  color: #1a1a2e;
+}
+.rep-formula-subtotal span:first-child { color: #475569; }
+
 .rep-formula-total {
   display: flex;
   justify-content: space-between;

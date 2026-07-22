@@ -394,28 +394,48 @@ export default function ReportesTributarios() {
                   <span>IVA cobrado en ventas</span>
                   <span>{fmt(data.resumen.ventas.totalIva)}</span>
                 </div>
-                <div className="rep-formula-row rep-formula-menos">
-                  <span>(-) IVA en NC emitidas</span>
-                  <span>- {fmt(data.resumen.notasCredito.totalIva)}</span>
-                </div>
-                <div className="rep-formula-row rep-formula-menos">
-                  <span>Crédito fiscal de compras{data.resumen.compras.liquidaciones.cantidad > 0 ? ' + liquidaciones' : ''} (bruto)</span>
-                  <span>{fmt(data.resumen.compras.totalIva + data.resumen.compras.liquidaciones.totalIva)}</span>
-                </div>
-                {data.resumen.notasCreditoRecibidas.iva > 0 && (
+                {data.resumen.notasCredito.totalIva > 0 && (
                   <div className="rep-formula-row rep-formula-menos">
-                    <span>(-) IVA en NC recibidas de proveedores</span>
-                    <span>- {fmt(data.resumen.notasCreditoRecibidas.iva)}</span>
+                    <span>(-) IVA en NC emitidas</span>
+                    <span>-{fmt(data.resumen.notasCredito.totalIva)}</span>
                   </div>
                 )}
-                <div className="rep-formula-row rep-formula-menos">
-                  <span>(-) Crédito fiscal neto de compras</span>
-                  <span>- {fmt(data.resumen.ivaCreditoFiscal)}</span>
-                </div>
-                <div className="rep-formula-row rep-formula-menos">
-                  <span>(-) Ret. IVA que le hicieron sus clientes</span>
-                  <span>- {fmt(data.resumen.retencionesRecibidas.retencionIva)}</span>
-                </div>
+
+                <div className="rep-formula-sep" />
+
+                {data.resumen.notasCreditoRecibidas.iva > 0 ? (
+                  <>
+                    {/* Desglose del crédito fiscal solo cuando hay NC recibidas
+                        que lo reducen — evita mostrar bruto/neto redundantes
+                        cuando son el mismo número. */}
+                    <div className="rep-formula-detalle">
+                      <div className="rep-formula-row rep-formula-detalle-row">
+                        <span>Crédito fiscal de compras{data.resumen.compras.liquidaciones.cantidad > 0 ? ' + liquidaciones' : ''}</span>
+                        <span>{fmt(data.resumen.compras.totalIva + data.resumen.compras.liquidaciones.totalIva)}</span>
+                      </div>
+                      <div className="rep-formula-row rep-formula-detalle-row rep-formula-menos">
+                        <span>(-) IVA en NC recibidas de proveedores</span>
+                        <span>-{fmt(data.resumen.notasCreditoRecibidas.iva)}</span>
+                      </div>
+                    </div>
+                    <div className="rep-formula-row rep-formula-menos rep-formula-subtotal">
+                      <span>(-) Crédito fiscal neto de compras</span>
+                      <span>-{fmt(data.resumen.ivaCreditoFiscal)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rep-formula-row rep-formula-menos">
+                    <span>(-) Crédito fiscal de compras{data.resumen.compras.liquidaciones.cantidad > 0 ? ' + liquidaciones' : ''}</span>
+                    <span>-{fmt(data.resumen.ivaCreditoFiscal)}</span>
+                  </div>
+                )}
+
+                {data.resumen.retencionesRecibidas.retencionIva > 0 && (
+                  <div className="rep-formula-row rep-formula-menos">
+                    <span>(-) Ret. IVA que le hicieron sus clientes</span>
+                    <span>-{fmt(data.resumen.retencionesRecibidas.retencionIva)}</span>
+                  </div>
+                )}
                 <div className="rep-formula-total">
                   <span>IVA NETO</span>
                   <strong className={data.resumen.ivaNeto >= 0 ? 'iva-positivo' : 'iva-negativo'}>
