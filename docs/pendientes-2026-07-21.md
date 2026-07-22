@@ -295,10 +295,32 @@ del SRI tras todos los cambios de esta segunda parte.
 
 ### Pendiente — no implementado hoy
 
-- El mismo problema de "no objeto" y "exenta" combinados en un solo campo
-  existe también del lado de **ventas** (`facturas.subtotalNoObjetoIva`,
-  usado en `utils/importarFacturasVentaXML.js`) — no se tocó, el pedido de hoy
-  fue específicamente sobre compras.
+- ~~El mismo problema de "no objeto" y "exenta" combinados en un solo campo
+  existe también del lado de **ventas**~~ — **Verificado y descartado** (ver
+  sección siguiente): el XSD oficial no pide esa separación en ventas.
+
+---
+
+## Continuación (sesión siguiente) — verificado: ventas NO necesita el mismo split que compras
+
+Antes de replicar el fix de "no objeto"/"exenta" al lado de ventas
+(`facturas.subtotalNoObjetoIva`, usado en `utils/importarFacturasVentaXML.js`),
+se descargó de nuevo el XSD oficial (`descargas.sri.gob.ec/download/anexos/ats/ats.xsd`)
+y se inspeccionó `detalleVentasType` línea por línea.
+
+**Resultado: `detalleVentasType` solo tiene `baseNoGraIva` — no existe ningún
+`baseImpExe` (ni equivalente) para ventas en el XSD.** El campo `baseImpExe`
+existe únicamente en `detalleComprasType` (línea 743 del XSD) y en
+`detalleReembolsoType` (`baseImpExeReemb`, reembolsos de gastos por
+intermediario — estructura no relacionada). Es decir: el fix del 2026-07-21
+era específico de compras porque el XSD exige el campo ahí; en ventas el SRI
+nunca pidió esa separación, así que el campo combinado
+`subtotalNoObjetoIva` actual **ya es correcto** para efectos de ATS — no hay
+nada que corregir.
+
+Se cierra este punto de la lista de pendientes sin tocar código, tras
+verificar contra la fuente oficial en vez de asumir que aplicaba el mismo
+patrón que compras.
 
 ---
 
