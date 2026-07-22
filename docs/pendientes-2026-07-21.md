@@ -190,19 +190,116 @@ alcance de "reportes/declaraciones/ATS" que ya se corrigió:
   pública de Railway ya usada en la sesión anterior para la limpieza de
   Comercial S&S, guardada en `.env.local`, gitignored).
 
-## Pendiente de decidir con el usuario
+## Pendiente de decidir con el usuario (estado al cierre de la sesión)
 
-1. ¿Corregir retroactivamente los 2 asientos contables de NC recibida ya
-   posteados en producción (LSAC), o dejarlos como están y que el fix aplique
-   solo hacia adelante?
-2. ¿Priorizar el fix de saldo en CxC/CxP para que descuenten las notas de
-   crédito? (CxC es simple — ya tiene el FK. CxP requiere diseñar el cruce por
-   número de documento.)
+1. ~~¿Corregir retroactivamente los 2 asientos contables de NC recibida ya
+   posteados en producción (LSAC)?~~ — **EN ESPERA de respuesta del cliente**,
+   por indicación explícita del usuario. No tocar los asientos ya posteados
+   hasta entonces.
+2. ~~¿Priorizar el fix de saldo en CxC/CxP?~~ — **IMPLEMENTADO** (ver sección
+   siguiente).
 3. ¿Alguna vez un cliente tuvo que corregir manualmente el XML del ATS antes de
-   subirlo al SRI? Ayudaría a confirmar el impacto real de los bugs del XSD
-   (raíz `<ats>` en vez de `<iva>`, campos con nombre incorrecto) que llevaban
-   tiempo sin detectarse.
-4. ¿Implementar la categoría "exenta de IVA" (`baseImpExe`) como campo propio
-   en compras, similar a como se hizo con "no objeto de IVA" el 2026-07-17?
-5. Desplegar estos cambios a producción (commit + push a `main`) — no se ha
-   hecho todavía, pendiente de confirmación del usuario.
+   subirlo al SRI? — **Sigue pendiente**, es una pregunta para el cliente, no
+   algo que se pueda resolver con código.
+4. ~~¿Implementar la categoría "exenta de IVA" (`baseImpExe`)?~~ —
+   **IMPLEMENTADO** (ver sección siguiente).
+5. ~~Desplegar a producción~~ — el commit `646148f` (fixes de NC recibidas +
+   XSD) ya se desplegó. Los cambios de esta segunda parte (CxC/CxP + exenta de
+   IVA) se despliegan al cierre de este documento.
+
+---
+
+## Segunda parte de la sesión — CxC/CxP descuentan notas de crédito + categoría "Exenta de IVA"
+
+### CxC (`backend/routes/cxc.js`) — el saldo pendiente ahora descuenta NC emitidas
+
+Antes: `saldoPendiente = importeTotal - cobrado`, ignorando por completo
+`notas_credito` aunque `facturaId` ya era una FK directa desde siempre. Nuevo
+helper `obtenerNotasCreditoPorFactura()` (agrupa `notas_credito` por
+`facturaId`, autorizadas y no anuladas) aplicado en los 7 puntos donde se
+calculaba saldo: `/vigentes`, `/canceladas` (ahora también detecta facturas
+saldadas solo por NC sin ningún cobro real), el PDF del recibo, `POST /cobros`
+(valida contra el saldo real antes de aceptar un cobro), `/reporte/antiguedad`,
+`/reporte/estado-cuenta` (agregado y detalle), y la importación masiva de
+cobros por Excel.
+
+**Verificado con datos reales de producción** (`railway`, empresaId=1, 2 NC
+emitidas reales vinculadas a sus facturas): ambas dejan el saldo en `$0.00`
+exacto — antes aparecían como si se debiera el monto completo de la factura
+pese a estar ya saldadas por la nota de crédito.
+
+Frontend (`CuentasPorCobrarHub.jsx`): nueva columna "N. Créd." en las 3 tablas
+(vigentes/canceladas, antigüedad, estado de cuenta) mostrando el monto restado.
+
+### CxP (`backend/routes/cxp.js`) — cruce sin FK directa por proveedor + número de documento
+
+`docs_recibidos_otros` (NC recibida) no tiene FK a `facturas_compra` — el
+cruce se hace por `identificacionProveedor + numeroFactura` contra el
+`numDocModificado` que trae el XML de cada NC (mismo parser de la primera
+parte de la sesión). Nuevo helper `obtenerNotasCreditoPorCompra()` aplicado en
+los mismos 6 puntos equivalentes de `cxp.js`.
+
+**Verificado con datos reales**: de las 10 NC recibidas reales en producción,
+**8 encontraron su factura original** en el sistema (80%) — las 2 que no
+coinciden son de un proveedor cuyas facturas originales nunca se registraron
+en AELA, así que quedan sin vincular (comportamiento esperado, no hay con qué
+cruzarlas). Para las 2 compras de LSAC empresaId=10 usadas como caso de prueba
+en toda la sesión: una queda con saldo `$0.00` (NC cubre el 100%) y otra con
+saldo `$17.97` (NC parcial sobre una compra de $35.94) — ambos verificados
+contra los montos reales.
+
+Frontend (`CuentasPorPagarHub.jsx`): misma columna "N. Créd." agregada en las
+3 tablas equivalentes.
+
+### Categoría "Exenta de IVA" en compras — separada de "No objeto de IVA"
+
+Al escribir la sección de NC recibidas se encontró que `subtotalNoObjeto`
+(agregado el 2026-07-17) en realidad combinaba **dos casilleros legales
+distintos del SRI** (tabla 17: código 6 "No objeto" y código 7 "Exenta"), con
+un comentario explícito en el código que decía *"ATS reporta ambas bajo el
+mismo campo baseNoGraIva"* — afirmación que el XSD oficial contradice
+directamente: `baseNoGraIva` (no objeto) y `baseImpExe` (exenta) son 2 campos
+obligatorios separados en `detalleCompras`. La confusión venía de una lectura
+con columnas mal alineadas del PDF de la ficha técnica.
+
+Implementado exactamente con el mismo patrón que "no objeto" del 07-17:
+- Migración `20260721000000_subtotal_exento_compras` — nueva columna
+  `facturas_compra.subtotalExento`, sin backfill (mismo motivo: imposible
+  distinguir retroactivamente qué parte de `subtotalNoObjeto` era en realidad
+  "exenta").
+- `backend/routes/compras.js`: nuevo flag `esExentoIva` por línea de detalle,
+  independiente de `esNoObjetoIva`, en los 2 endpoints de creación (manual y
+  Excel).
+- `frontend/.../FormCompra.jsx`: el select por línea ahora tiene **dos**
+  opciones separadas ("No objeto de IVA" / "Exenta de IVA") en vez de una
+  combinada; el resumen muestra ambos totales por separado si son > 0.
+- `backend/routes/declaraciones.js` (F104): `compras.subtotalExento` agregado
+  al desglose de respuesta, igual que `subtotalNoObjeto`.
+- `backend/routes/ats.js`: el XML (`/exportar`) ya usa el valor real de
+  `subtotalExento` en `<baseImpExe>` de cada compra (antes era literalmente
+  `0.00` fijo, incluso después del fix de NC de esta misma sesión). El PDF
+  del talón combina "No objeto" + "Exenta" en la columna "No Obj." existente
+  por espacio — el XML sí las reporta separadas, que es lo que de verdad
+  procesa el SRI.
+- `backend/utils/sri.js` (`parsearNotaCreditoRecibidaXml`): también se separó
+  `baseNoObjeto`/`baseExenta` ahí (antes combinadas igual que en compras), para
+  que una NC recibida algún día con código 7 se reporte correctamente en
+  `baseImpExe` en vez de sumarse a `baseNoGraIva`. Ningún dato real actual usa
+  código 7 todavía — cambio hecho por consistencia, sin poder probarse contra
+  un caso real.
+
+**Verificado**: 29/29 tests backend, build frontend limpio, `prisma validate`
+limpio, migración aplicada localmente sin error, y el XML regenerado con datos
+reales de producción sigue validando con **0 errores** contra el XSD oficial
+del SRI tras todos los cambios de esta segunda parte.
+
+### Pendiente — no implementado hoy
+
+- No se agregó un flag `esExentoIva` a la plantilla de importación masiva de
+  compras históricas (Excel) — ese importador nunca distinguió "no
+  objeto"/"exenta"/tarifa 0% entre sí (todo cae en "sin IVA" genérico), es una
+  limitación preexistente, no una regresión de hoy.
+- El mismo problema de "no objeto" y "exenta" combinados en un solo campo
+  existe también del lado de **ventas** (`facturas.subtotalNoObjetoIva`,
+  usado en `utils/importarFacturasVentaXML.js`) — no se tocó, el pedido de hoy
+  fue específicamente sobre compras.

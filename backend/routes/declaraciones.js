@@ -105,7 +105,8 @@ router.get('/f104', async (req, res) => {
         OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }],
       },
       select: {
-        subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, subtotalNoObjeto: true,
+        subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
+        subtotalNoObjeto: true, subtotalExento: true,
         totalIva: true, importeTotal: true, retencionIVA: true,
       },
     });
@@ -120,6 +121,7 @@ router.get('/f104', async (req, res) => {
     let comprasSubtotal12 = 0;
     let comprasSubtotal15 = 0;
     let comprasSubtotalNoObjeto = 0;
+    let comprasSubtotalExento = 0;
     let ivaCompras        = 0;
     let retencionIvaCompras = 0;
 
@@ -129,6 +131,7 @@ router.get('/f104', async (req, res) => {
       comprasSubtotal12 += d(c.subtotal12);
       comprasSubtotal15 += d(c.subtotal15);
       comprasSubtotalNoObjeto += d(c.subtotalNoObjeto);
+      comprasSubtotalExento += d(c.subtotalExento);
       ivaCompras        += d(c.totalIva);
       retencionIvaCompras += d(c.retencionIVA);
     });
@@ -247,6 +250,7 @@ router.get('/f104', async (req, res) => {
         subtotal12:          parseFloat(comprasSubtotal12.toFixed(2)),
         subtotal15:          parseFloat(comprasSubtotal15.toFixed(2)),
         subtotalNoObjeto:    parseFloat(comprasSubtotalNoObjeto.toFixed(2)),
+        subtotalExento:      parseFloat(comprasSubtotalExento.toFixed(2)),
         ivaCompras:          parseFloat(ivaCompras.toFixed(2)),
         liquidaciones:       { subtotal0: parseFloat(liqSubtotal0.toFixed(2)), subtotal5: parseFloat(liqSubtotal5.toFixed(2)), subtotal12: parseFloat(liqSubtotal12.toFixed(2)), subtotal15: parseFloat(liqSubtotal15.toFixed(2)), iva: parseFloat(liqIva.toFixed(2)) },
         ncRecibidas:         { subtotal: ncReciSubtotal, iva: ncReciIva, cantidad: ncReci.length },

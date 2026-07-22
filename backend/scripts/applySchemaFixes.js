@@ -432,9 +432,13 @@ const FIXES = [
   // el formulario solo permitía elegir 0%/15% y el cálculo de IVA ignoraba 5%,
   // así que no hace falta backfill (no puede haber datos previos en 5%).
   `ALTER TABLE "liquidaciones_compra" ADD COLUMN IF NOT EXISTS "subtotal5" DECIMAL(14,2) NOT NULL DEFAULT 0`,
-  // Compras "No objeto de IVA" / "Exentas de IVA" (2026-07-17) — categoría SRI
-  // distinta de tarifa 0% (subtotal0). Sin backfill, ver migración para detalle.
+  // Compras "No objeto de IVA" (2026-07-17) — categoría SRI distinta de
+  // tarifa 0% (subtotal0). Sin backfill, ver migración para detalle.
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "subtotalNoObjeto" DECIMAL(14,2) NOT NULL DEFAULT 0`,
+  // Compras "Exenta de IVA" (2026-07-21) — categoría SRI propia, distinta de
+  // "No objeto" pese a haberse combinado con ella desde el 07-17 (ver
+  // migración para el detalle de por qué eran el mismo campo hasta ahora).
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "subtotalExento" DECIMAL(14,2) NOT NULL DEFAULT 0`,
   // Tipo de comprobante recibido del proveedor en compras (2026-07-17) —
   // FACTURA (default) o NOTA_VENTA (proveedor RIMPE Negocio Popular).
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "tipoComprobante" VARCHAR(20) NOT NULL DEFAULT 'FACTURA'`,

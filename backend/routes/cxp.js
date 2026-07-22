@@ -14,6 +14,7 @@ const {
   siguienteNumeroGenerico,
   round2,
 } = require('../utils/contabilidad');
+const { parsearNotaCreditoRecibidaXml } = require('../utils/sri');
 
 const router = express.Router();
 
@@ -42,6 +43,44 @@ async function obtenerPagadoPorCompra(db, empresaId, compraIds) {
   return new Map(agrupado.map((g) => [g.compraId, round2(g._sum.monto || 0)]));
 }
 
+// Notas de crédito RECIBIDAS de proveedores (docs_recibidos_otros tipo 04) que
+// afectan una compra específica. No hay FK directa — se cruza por proveedor +
+// número de documento original, extraído del XML de la propia NC
+// (numDocModificado, formato EEE-PPP-SSSSSSSSS, igual al de numeroFactura).
+// Las NC cuyo documento original no está registrado en el sistema (factura
+// nunca importada) quedan sin efecto aquí — no hay con qué compra vincularlas.
+async function obtenerNotasCreditoPorCompra(db, empresaId, compras) {
+  if (compras.length === 0) return new Map();
+  const ncs = await db.docs_recibidos_otros.findMany({
+    where: { empresaId, tipoDocumento: '04' },
+    select: { rucEmisor: true, importeTotal: true, xmlAutorizado: true },
+  });
+  if (ncs.length === 0) return new Map();
+
+  const porDocumento = new Map(); // "ruc|numeroDoc" -> monto acumulado
+  ncs.forEach((nc) => {
+    const { numDocModificado } = parsearNotaCreditoRecibidaXml(nc.xmlAutorizado);
+    if (!numDocModificado) return;
+    const key = `${nc.rucEmisor}|${numDocModificado}`;
+    porDocumento.set(key, round2((porDocumento.get(key) || 0) + parseFloat(nc.importeTotal || 0)));
+  });
+
+  const resultado = new Map();
+  compras.forEach((c) => {
+    const key = `${c.identificacionProveedor}|${c.numeroFactura}`;
+    const monto = porDocumento.get(key);
+    if (monto) resultado.set(c.id, monto);
+  });
+  return resultado;
+}
+
+// Saldo pendiente real: total de la compra menos lo pagado menos las NC
+// recibidas vinculadas. Antes solo restaba pagos — una compra con una NC ya
+// recibida del proveedor seguía apareciendo como si se debiera el monto completo.
+function calcularSaldoConNC(importeTotal, pagado, notaCredito) {
+  return round2(importeTotal - (pagado || 0) - (notaCredito || 0));
+}
+
 // GET /api/cxp/vigentes — compras no anuladas con saldo pendiente > 0
 router.get('/vigentes', autorizarPermiso('cxp.ver'), async (req, res) => {
   try {
@@ -57,9 +96,17 @@ router.get('/vigentes', autorizarPermiso('cxp.ver'), async (req, res) => {
       orderBy: { fechaEmision: 'desc' },
     });
 
-    const pagado = await obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id));
+    const [pagado, notaCredito] = await Promise.all([
+      obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id)),
+      obtenerNotasCreditoPorCompra(db, empresaId, compras),
+    ]);
     const vigentes = compras
-      .map((c) => ({ ...c, pagado: pagado.get(c.id) || 0, saldoPendiente: round2(c.importeTotal - (pagado.get(c.id) || 0)) }))
+      .map((c) => ({
+        ...c,
+        pagado: pagado.get(c.id) || 0,
+        notaCredito: notaCredito.get(c.id) || 0,
+        saldoPendiente: calcularSaldoConNC(c.importeTotal, pagado.get(c.id), notaCredito.get(c.id)),
+      }))
       .filter((c) => c.saldoPendiente > 0.009);
 
     res.json({ success: true, data: vigentes });
@@ -84,10 +131,19 @@ router.get('/canceladas', autorizarPermiso('cxp.ver'), async (req, res) => {
       orderBy: { fechaEmision: 'desc' },
     });
 
-    const pagado = await obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id));
+    const [pagado, notaCredito] = await Promise.all([
+      obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id)),
+      obtenerNotasCreditoPorCompra(db, empresaId, compras),
+    ]);
     const canceladas = compras
-      .map((c) => ({ ...c, pagado: pagado.get(c.id) || 0, saldoPendiente: round2(c.importeTotal - (pagado.get(c.id) || 0)) }))
-      .filter((c) => c.pagado > 0 && c.saldoPendiente <= 0.009);
+      .map((c) => ({
+        ...c,
+        pagado: pagado.get(c.id) || 0,
+        notaCredito: notaCredito.get(c.id) || 0,
+        saldoPendiente: calcularSaldoConNC(c.importeTotal, pagado.get(c.id), notaCredito.get(c.id)),
+      }))
+      // Cancelada = saldo en 0, ya sea por pago real, por NC, o combinación de ambos.
+      .filter((c) => (c.pagado > 0 || c.notaCredito > 0) && c.saldoPendiente <= 0.009);
 
     res.json({ success: true, data: canceladas });
   } catch (error) {
@@ -173,11 +229,14 @@ router.post('/pagos', autorizarPermiso('cxp.gestionar'), async (req, res) => {
       if (!compra) throw Object.assign(new Error('Compra no encontrada'), { status: 404 });
       if (compra.anulada) throw Object.assign(new Error('La compra está anulada'), { status: 400 });
 
-      const agregados = await tx.pagos_proveedor.aggregate({
-        where: { empresaId, compraId: compraIdNum, anulado: false },
-        _sum: { monto: true },
-      });
-      const saldoPendiente = round2(compra.importeTotal - (agregados._sum.monto || 0));
+      const [agregados, notaCredito] = await Promise.all([
+        tx.pagos_proveedor.aggregate({
+          where: { empresaId, compraId: compraIdNum, anulado: false },
+          _sum: { monto: true },
+        }),
+        obtenerNotasCreditoPorCompra(tx, empresaId, [compra]),
+      ]);
+      const saldoPendiente = calcularSaldoConNC(compra.importeTotal, agregados._sum.monto, notaCredito.get(compra.id));
       if (montoNum > saldoPendiente + 0.01) {
         throw Object.assign(new Error(`El monto excede el saldo pendiente (${saldoPendiente.toFixed(2)})`), { status: 409 });
       }
@@ -218,9 +277,17 @@ router.get('/reporte/antiguedad', autorizarPermiso('cxp.ver'), async (req, res) 
       select: { id: true, numeroFactura: true, fechaEmision: true, importeTotal: true, razonSocialProveedor: true, identificacionProveedor: true, proveedorId: true },
     });
 
-    const pagado = await obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id));
+    const [pagado, notaCredito] = await Promise.all([
+      obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id)),
+      obtenerNotasCreditoPorCompra(db, empresaId, compras),
+    ]);
     const vigentes = compras
-      .map((c) => ({ ...c, pagado: pagado.get(c.id) || 0, saldoPendiente: round2(c.importeTotal - (pagado.get(c.id) || 0)) }))
+      .map((c) => ({
+        ...c,
+        pagado: pagado.get(c.id) || 0,
+        notaCredito: notaCredito.get(c.id) || 0,
+        saldoPendiente: calcularSaldoConNC(c.importeTotal, pagado.get(c.id), notaCredito.get(c.id)),
+      }))
       .filter((c) => c.saldoPendiente > 0.009);
 
     const totales = { d0_30: 0, d31_60: 0, d61_90: 0, d91_mas: 0 };
@@ -249,12 +316,15 @@ router.get('/reporte/estado-cuenta', autorizarPermiso('cxp.ver'), async (req, re
     if (!proveedorId) {
       const compras = await db.facturas_compra.findMany({
         where: { empresaId, anulada: false },
-        select: { id: true, proveedorId: true, importeTotal: true, razonSocialProveedor: true, identificacionProveedor: true },
+        select: { id: true, numeroFactura: true, proveedorId: true, importeTotal: true, razonSocialProveedor: true, identificacionProveedor: true },
       });
-      const pagado = await obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id));
+      const [pagado, notaCredito] = await Promise.all([
+        obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id)),
+        obtenerNotasCreditoPorCompra(db, empresaId, compras),
+      ]);
       const proveedoresMap = new Map();
       compras.forEach((c) => {
-        const saldo = round2(c.importeTotal - (pagado.get(c.id) || 0));
+        const saldo = calcularSaldoConNC(c.importeTotal, pagado.get(c.id), notaCredito.get(c.id));
         if (saldo > 0.009) {
           const key = c.identificacionProveedor || `noid-${c.id}`;
           if (!proveedoresMap.has(key)) proveedoresMap.set(key, { razonSocial: c.razonSocialProveedor, identificacion: c.identificacionProveedor, proveedorId: c.proveedorId, saldoTotal: 0 });
@@ -267,7 +337,7 @@ router.get('/reporte/estado-cuenta', autorizarPermiso('cxp.ver'), async (req, re
     const [compras, pagos] = await Promise.all([
       db.facturas_compra.findMany({
         where: { empresaId, proveedorId, anulada: false },
-        select: { id: true, numeroFactura: true, fechaEmision: true, importeTotal: true },
+        select: { id: true, numeroFactura: true, fechaEmision: true, importeTotal: true, identificacionProveedor: true },
         orderBy: { fechaEmision: 'asc' },
       }),
       db.pagos_proveedor.findMany({
@@ -276,12 +346,20 @@ router.get('/reporte/estado-cuenta', autorizarPermiso('cxp.ver'), async (req, re
         orderBy: { fecha: 'asc' },
       }),
     ]);
-    const pagado = await obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id));
+    const [pagado, notaCredito] = await Promise.all([
+      obtenerPagadoPorCompra(db, empresaId, compras.map((c) => c.id)),
+      obtenerNotasCreditoPorCompra(db, empresaId, compras),
+    ]);
 
     res.json({
       success: true,
       data: {
-        compras: compras.map((c) => ({ ...c, pagado: pagado.get(c.id) || 0, saldoPendiente: round2(c.importeTotal - (pagado.get(c.id) || 0)) })),
+        compras: compras.map((c) => ({
+          ...c,
+          pagado: pagado.get(c.id) || 0,
+          notaCredito: notaCredito.get(c.id) || 0,
+          saldoPendiente: calcularSaldoConNC(c.importeTotal, pagado.get(c.id), notaCredito.get(c.id)),
+        })),
         pagos,
       },
     });

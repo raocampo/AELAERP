@@ -413,6 +413,7 @@ router.get('/exportar', async (req, res) => {
       const baseGravada = r2((compra.subtotal5 || 0) + (compra.subtotal12 || 0) + (compra.subtotal15 || 0));
       const base0 = r2(compra.subtotal0 || 0);
       const baseNoObjeto = r2(compra.subtotalNoObjeto || 0);
+      const baseExenta = r2(compra.subtotalExento || 0);
       const esNotaVenta = compra.tipoComprobante === 'NOTA_VENTA';
       // Nota de Venta (proveedor RIMPE Negocio Popular): sin derecho a crédito
       // tributario de IVA — codSustento 02 (Costo o Gasto), no 01.
@@ -434,7 +435,7 @@ router.get('/exportar', async (req, res) => {
       <baseNoGraIva>${baseNoObjeto.toFixed(2)}</baseNoGraIva>
       <baseImponible>${base0.toFixed(2)}</baseImponible>
       <baseImpGrav>${baseGravada.toFixed(2)}</baseImpGrav>
-      <baseImpExe>0.00</baseImpExe>
+      <baseImpExe>${baseExenta.toFixed(2)}</baseImpExe>
       <montoIce>0.00</montoIce>
       <montoIva>${r2(compra.totalIva).toFixed(2)}</montoIva>
       <valRetBien10>${retIva.valRetBien10.toFixed(2)}</valRetBien10>
@@ -485,7 +486,7 @@ router.get('/exportar', async (req, res) => {
       <baseNoGraIva>${p.baseNoObjeto.toFixed(2)}</baseNoGraIva>
       <baseImponible>${p.base0.toFixed(2)}</baseImponible>
       <baseImpGrav>${p.baseGravada.toFixed(2)}</baseImpGrav>
-      <baseImpExe>0.00</baseImpExe>
+      <baseImpExe>${p.baseExenta.toFixed(2)}</baseImpExe>
       <montoIce>0.00</montoIce>
       <montoIva>${p.iva.toFixed(2)}</montoIva>
       <valRetBien10>0.00</valRetBien10>
@@ -623,13 +624,16 @@ router.get('/exportar/pdf', async (req, res) => {
     // Negocio Popular — sin crédito tributario de IVA).
     const comprasFactura   = compras.filter(c => c.tipoComprobante !== 'NOTA_VENTA');
     const comprasNotaVenta = compras.filter(c => c.tipoComprobante === 'NOTA_VENTA');
+    // "No Obj." del talón combina No objeto + Exenta (dos casilleros legales
+    // distintos, ver subtotalExento) por espacio de columna en el PDF — el XML
+    // real (/exportar) sí las reporta por separado en baseNoGraIva/baseImpExe.
     const sumarCompras = (arr) => arr.reduce((acc, c) => {
       acc.n++;
       acc.b0    += r2(c.subtotal0);
       acc.bt5   += r2(c.subtotal5 || 0);
       acc.bt12  += r2(c.subtotal12 || 0);
       acc.bt15  += r2(c.subtotal15);
-      acc.noObj += r2(c.subtotalNoObjeto || 0);
+      acc.noObj += r2(c.subtotalNoObjeto || 0) + r2(c.subtotalExento || 0);
       acc.iva5  += r2((c.subtotal5 || 0) * 0.05);
       acc.iva12 += r2((c.subtotal12 || 0) * 0.12);
       acc.iva15 += r2(c.subtotal15 * 0.15);
@@ -654,7 +658,7 @@ router.get('/exportar/pdf', async (req, res) => {
       acc.bt5   -= p.base5;
       acc.bt12  -= p.base12;
       acc.bt15  -= p.base15;
-      acc.noObj -= p.baseNoObjeto;
+      acc.noObj -= (p.baseNoObjeto + p.baseExenta);
       acc.iva5  -= p.base5 * 0.05;
       acc.iva12 -= p.base12 * 0.12;
       acc.iva15 -= p.base15 * 0.15;

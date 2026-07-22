@@ -30,6 +30,7 @@ const detalleVacio = () => ({
   utilidadPct: '',
   porcentajeIva: 15,
   esNoObjetoIva: false,
+  esExentoIva: false,
   descuento: '0',
   inventariable: true,
 });
@@ -45,7 +46,7 @@ function calcularLinea(detalle) {
   const precioUnitario = parseFloat(detalle.precioUnitario) || 0;
   const descuento = parseFloat(detalle.descuento) || 0;
   const subtotal = Math.max((cantidad * precioUnitario) - descuento, 0);
-  const iva = (!detalle.esNoObjetoIva && detalle.porcentajeIva > 0) ? subtotal * (detalle.porcentajeIva / 100) : 0;
+  const iva = (!detalle.esNoObjetoIva && !detalle.esExentoIva && detalle.porcentajeIva > 0) ? subtotal * (detalle.porcentajeIva / 100) : 0;
   return {
     subtotal,
     iva,
@@ -266,8 +267,9 @@ export default function FormCompra() {
   const actualizarIva = (index, valor) => {
     setDetalles((prev) => prev.map((item, idx) => {
       if (idx !== index) return item;
-      if (valor === 'NO_OBJETO') return { ...item, esNoObjetoIva: true, porcentajeIva: 0 };
-      return { ...item, esNoObjetoIva: false, porcentajeIva: Number(valor) };
+      if (valor === 'NO_OBJETO') return { ...item, esNoObjetoIva: true, esExentoIva: false, porcentajeIva: 0 };
+      if (valor === 'EXENTO')    return { ...item, esNoObjetoIva: false, esExentoIva: true, porcentajeIva: 0 };
+      return { ...item, esNoObjetoIva: false, esExentoIva: false, porcentajeIva: Number(valor) };
     }));
   };
 
@@ -358,6 +360,7 @@ export default function FormCompra() {
     const calc = calcularLinea(detalle);
     const pct = Number(detalle.porcentajeIva);
     if (detalle.esNoObjetoIva) acc.subtotalNoObjeto += calc.subtotal;
+    else if (detalle.esExentoIva) acc.subtotalExento += calc.subtotal;
     else if (pct === 5) acc.subtotal5 += calc.subtotal;
     else if (pct === 12) acc.subtotal12 += calc.subtotal;
     else if (pct === 15) acc.subtotal15 += calc.subtotal;
@@ -372,6 +375,7 @@ export default function FormCompra() {
     subtotal12: 0,
     subtotal15: 0,
     subtotalNoObjeto: 0,
+    subtotalExento: 0,
     totalIva: 0,
     total: 0,
     totalDescuento: 0,
@@ -431,6 +435,7 @@ export default function FormCompra() {
           utilidadPct: detalle.utilidadPct !== '' ? parseFloat(detalle.utilidadPct) : null,
           porcentajeIva: detalle.porcentajeIva,
           esNoObjetoIva: detalle.esNoObjetoIva,
+          esExentoIva: detalle.esExentoIva,
           descuento: detalle.descuento,
           inventariable: detalle.inventariable,
         })),
@@ -742,14 +747,15 @@ export default function FormCompra() {
                       </td>
                       <td>
                         <select
-                          value={detalle.esNoObjetoIva ? 'NO_OBJETO' : detalle.porcentajeIva}
+                          value={detalle.esNoObjetoIva ? 'NO_OBJETO' : detalle.esExentoIva ? 'EXENTO' : detalle.porcentajeIva}
                           onChange={(e) => actualizarIva(index, e.target.value)}
                         >
                           <option value={0}>0%</option>
                           <option value={5}>5%</option>
                           <option value={12}>12%</option>
                           <option value={15}>15%</option>
-                          <option value="NO_OBJETO">No objeto / Exento</option>
+                          <option value="NO_OBJETO">No objeto de IVA</option>
+                          <option value="EXENTO">Exenta de IVA</option>
                         </select>
                       </td>
                       <td><input type="number" step="0.01" min="0" value={detalle.descuento} onChange={(e) => actualizarDetalle(index, 'descuento', e.target.value)} /></td>
@@ -828,8 +834,14 @@ export default function FormCompra() {
           </div>
           {resumen.subtotalNoObjeto > 0 && (
             <div className="compra-total-row">
-              <span>No objeto / Exento</span>
+              <span>No objeto de IVA</span>
               <strong>{resumen.subtotalNoObjeto.toFixed(2)}</strong>
+            </div>
+          )}
+          {resumen.subtotalExento > 0 && (
+            <div className="compra-total-row">
+              <span>Exenta de IVA</span>
+              <strong>{resumen.subtotalExento.toFixed(2)}</strong>
             </div>
           )}
           <div className="compra-total-row">

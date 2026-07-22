@@ -164,6 +164,7 @@ function TabFacturas({ estado, onCobrar }) {
                 <th>Fecha</th>
                 <th style={{ textAlign: 'right' }}>Total</th>
                 <th style={{ textAlign: 'right' }}>Cobrado</th>
+                <th style={{ textAlign: 'right' }}>N. Créd.</th>
                 <th style={{ textAlign: 'right' }}>Saldo</th>
                 {estado === 'vigentes' && <th>Acciones</th>}
               </tr>
@@ -176,6 +177,9 @@ function TabFacturas({ estado, onCobrar }) {
                   <td>{formatFechaCorta(f.fechaEmision)}</td>
                   <td style={{ textAlign: 'right' }}>${formatMoney(f.importeTotal)}</td>
                   <td style={{ textAlign: 'right' }}>${formatMoney(f.cobrado)}</td>
+                  <td style={{ textAlign: 'right', color: parseFloat(f.notaCredito || 0) > 0 ? '#dc2626' : undefined }}>
+                    {parseFloat(f.notaCredito || 0) > 0 ? `-$${formatMoney(f.notaCredito)}` : '—'}
+                  </td>
                   <td style={{ textAlign: 'right', fontWeight: 600 }}>${formatMoney(f.saldoPendiente)}</td>
                   {estado === 'vigentes' && (
                     <td>
@@ -768,6 +772,7 @@ function TabReportesCxC() {
                           <th>Factura</th><th>Cliente</th><th>Fecha emisión</th><th>Días</th>
                           <th style={{ textAlign: 'right' }}>Total</th>
                           <th style={{ textAlign: 'right' }}>Cobrado</th>
+                          <th style={{ textAlign: 'right' }}>N. Créd.</th>
                           <th style={{ textAlign: 'right' }}>Saldo</th>
                         </tr>
                       </thead>
@@ -780,6 +785,7 @@ function TabReportesCxC() {
                             <td style={{ textAlign: 'center', fontWeight: 600, color: r.key === 'd91_mas' ? '#dc2626' : 'inherit' }}>{f.diasVencidos}</td>
                             <td style={{ textAlign: 'right' }}>${parseFloat(f.importeTotal).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td style={{ textAlign: 'right' }}>${parseFloat(f.cobrado).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td style={{ textAlign: 'right' }}>{parseFloat(f.notaCredito || 0) > 0 ? `-$${parseFloat(f.notaCredito).toFixed(2)}` : '—'}</td>
                             <td style={{ textAlign: 'right', fontWeight: 700 }}>${parseFloat(f.saldoPendiente).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           </tr>
                         ))}
@@ -841,6 +847,7 @@ function TabReportesCxC() {
                           <th>Factura</th><th>Fecha</th>
                           <th style={{ textAlign: 'right' }}>Total</th>
                           <th style={{ textAlign: 'right' }}>Cobrado</th>
+                          <th style={{ textAlign: 'right' }}>N. Créd.</th>
                           <th style={{ textAlign: 'right' }}>Saldo</th>
                         </tr>
                       </thead>
@@ -851,6 +858,7 @@ function TabReportesCxC() {
                             <td>{formatFechaCorta(f.fechaEmision)}</td>
                             <td style={{ textAlign: 'right' }}>${parseFloat(f.importeTotal).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td style={{ textAlign: 'right' }}>${parseFloat(f.cobrado).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td style={{ textAlign: 'right' }}>{parseFloat(f.notaCredito || 0) > 0 ? `-$${parseFloat(f.notaCredito).toFixed(2)}` : '—'}</td>
                             <td style={{ textAlign: 'right', fontWeight: 700, color: f.saldoPendiente > 0 ? '#2563eb' : '#16a34a' }}>
                               ${parseFloat(f.saldoPendiente).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>

@@ -162,6 +162,25 @@ async function obtenerCobradoPorFactura(db, empresaId, facturaIds) {
   return new Map(agrupado.map((g) => [g.facturaId, round2(g._sum.monto || 0)]));
 }
 
+// Suma de notas de crédito emitidas (autorizadas, no anuladas) por factura —
+// reducen el saldo pendiente igual que un cobro, pero sin ser un cobro real.
+async function obtenerNotasCreditoPorFactura(db, empresaId, facturaIds) {
+  if (facturaIds.length === 0) return new Map();
+  const agrupado = await db.notas_credito.groupBy({
+    by: ['facturaId'],
+    where: { empresaId, facturaId: { in: facturaIds }, estadoSri: 'AUTORIZADO', anulada: false },
+    _sum: { importeTotal: true },
+  });
+  return new Map(agrupado.filter((g) => g.facturaId != null).map((g) => [g.facturaId, round2(g._sum.importeTotal || 0)]));
+}
+
+// Saldo pendiente real: total de la factura menos lo cobrado menos las NC
+// emitidas sobre ella. Antes solo restaba cobros — una factura con una NC ya
+// emitida seguía apareciendo como si se debiera el monto completo.
+function calcularSaldoConNC(importeTotal, cobrado, notaCredito) {
+  return round2(importeTotal - (cobrado || 0) - (notaCredito || 0));
+}
+
 // GET /api/cxc/vigentes — facturas autorizadas, no anuladas, con saldo pendiente > 0
 router.get('/vigentes', autorizarPermiso('cxc.ver'), async (req, res) => {
   try {
@@ -177,9 +196,17 @@ router.get('/vigentes', autorizarPermiso('cxc.ver'), async (req, res) => {
       orderBy: { fechaEmision: 'desc' },
     });
 
-    const cobrado = await obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id));
+    const [cobrado, notaCredito] = await Promise.all([
+      obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id)),
+      obtenerNotasCreditoPorFactura(db, empresaId, facturas.map((f) => f.id)),
+    ]);
     const vigentes = facturas
-      .map((f) => ({ ...f, cobrado: cobrado.get(f.id) || 0, saldoPendiente: round2(f.importeTotal - (cobrado.get(f.id) || 0)) }))
+      .map((f) => ({
+        ...f,
+        cobrado: cobrado.get(f.id) || 0,
+        notaCredito: notaCredito.get(f.id) || 0,
+        saldoPendiente: calcularSaldoConNC(f.importeTotal, cobrado.get(f.id), notaCredito.get(f.id)),
+      }))
       .filter((f) => f.saldoPendiente > 0.009);
 
     res.json({ success: true, data: vigentes });
@@ -204,10 +231,19 @@ router.get('/canceladas', autorizarPermiso('cxc.ver'), async (req, res) => {
       orderBy: { fechaEmision: 'desc' },
     });
 
-    const cobrado = await obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id));
+    const [cobrado, notaCredito] = await Promise.all([
+      obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id)),
+      obtenerNotasCreditoPorFactura(db, empresaId, facturas.map((f) => f.id)),
+    ]);
     const canceladas = facturas
-      .map((f) => ({ ...f, cobrado: cobrado.get(f.id) || 0, saldoPendiente: round2(f.importeTotal - (cobrado.get(f.id) || 0)) }))
-      .filter((f) => f.cobrado > 0 && f.saldoPendiente <= 0.009);
+      .map((f) => ({
+        ...f,
+        cobrado: cobrado.get(f.id) || 0,
+        notaCredito: notaCredito.get(f.id) || 0,
+        saldoPendiente: calcularSaldoConNC(f.importeTotal, cobrado.get(f.id), notaCredito.get(f.id)),
+      }))
+      // Cancelada = saldo en 0, ya sea por cobro real, por NC, o combinación de ambos.
+      .filter((f) => (f.cobrado > 0 || f.notaCredito > 0) && f.saldoPendiente <= 0.009);
 
     res.json({ success: true, data: canceladas });
   } catch (error) {
@@ -290,8 +326,11 @@ router.get('/cobros/:id/recibo', autorizarPermiso('cxc.ver'), async (req, res) =
     if (!cobro) return res.status(404).json({ success: false, mensaje: 'Cobro no encontrado' });
 
     const importeTotal = round2(cobro.factura?.importeTotal || 0);
-    const cobrado = await obtenerCobradoPorFactura(db, empresaId, [cobro.facturaId]);
-    const saldoPendiente = round2(importeTotal - (cobrado.get(cobro.facturaId) || 0));
+    const [cobrado, notaCredito] = await Promise.all([
+      obtenerCobradoPorFactura(db, empresaId, [cobro.facturaId]),
+      obtenerNotasCreditoPorFactura(db, empresaId, [cobro.facturaId]),
+    ]);
+    const saldoPendiente = calcularSaldoConNC(importeTotal, cobrado.get(cobro.facturaId), notaCredito.get(cobro.facturaId));
     const saldoFactura = { importeTotal, saldoPendiente, esTotal: saldoPendiente <= 0.009 };
 
     const configSri = await db.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
@@ -337,11 +376,17 @@ router.post('/cobros', autorizarPermiso('cxc.gestionar'), async (req, res) => {
       if (factura.anulada) throw Object.assign(new Error('La factura está anulada'), { status: 400 });
       if (factura.estadoSri !== 'AUTORIZADO') throw Object.assign(new Error('La factura no está autorizada por el SRI'), { status: 400 });
 
-      const agregados = await tx.cobros_cliente.aggregate({
-        where: { empresaId, facturaId: facturaIdNum, anulado: false },
-        _sum: { monto: true },
-      });
-      const saldoPendiente = round2(factura.importeTotal - (agregados._sum.monto || 0));
+      const [agregados, agregadoNC] = await Promise.all([
+        tx.cobros_cliente.aggregate({
+          where: { empresaId, facturaId: facturaIdNum, anulado: false },
+          _sum: { monto: true },
+        }),
+        tx.notas_credito.aggregate({
+          where: { empresaId, facturaId: facturaIdNum, estadoSri: 'AUTORIZADO', anulada: false },
+          _sum: { importeTotal: true },
+        }),
+      ]);
+      const saldoPendiente = calcularSaldoConNC(factura.importeTotal, agregados._sum.monto, agregadoNC._sum.importeTotal);
       if (montoNum > saldoPendiente + 0.01) {
         throw Object.assign(new Error(`El monto excede el saldo pendiente (${saldoPendiente.toFixed(2)})`), { status: 409 });
       }
@@ -382,9 +427,17 @@ router.get('/reporte/antiguedad', autorizarPermiso('cxc.ver'), async (req, res) 
       select: { id: true, numeroFactura: true, fechaEmision: true, importeTotal: true, razonSocialComprador: true, identificacionComprador: true, clienteId: true },
     });
 
-    const cobrado = await obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id));
+    const [cobrado, notaCredito] = await Promise.all([
+      obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id)),
+      obtenerNotasCreditoPorFactura(db, empresaId, facturas.map((f) => f.id)),
+    ]);
     const vigentes = facturas
-      .map((f) => ({ ...f, cobrado: cobrado.get(f.id) || 0, saldoPendiente: round2(f.importeTotal - (cobrado.get(f.id) || 0)) }))
+      .map((f) => ({
+        ...f,
+        cobrado: cobrado.get(f.id) || 0,
+        notaCredito: notaCredito.get(f.id) || 0,
+        saldoPendiente: calcularSaldoConNC(f.importeTotal, cobrado.get(f.id), notaCredito.get(f.id)),
+      }))
       .filter((f) => f.saldoPendiente > 0.009);
 
     const totales = { d0_30: 0, d31_60: 0, d61_90: 0, d91_mas: 0 };
@@ -415,10 +468,13 @@ router.get('/reporte/estado-cuenta', autorizarPermiso('cxc.ver'), async (req, re
         where: { empresaId, anulada: false, estadoSri: 'AUTORIZADO' },
         select: { id: true, clienteId: true, importeTotal: true, razonSocialComprador: true, identificacionComprador: true },
       });
-      const cobrado = await obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id));
+      const [cobrado, notaCredito] = await Promise.all([
+        obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id)),
+        obtenerNotasCreditoPorFactura(db, empresaId, facturas.map((f) => f.id)),
+      ]);
       const clientesMap = new Map();
       facturas.forEach((f) => {
-        const saldo = round2(f.importeTotal - (cobrado.get(f.id) || 0));
+        const saldo = calcularSaldoConNC(f.importeTotal, cobrado.get(f.id), notaCredito.get(f.id));
         if (saldo > 0.009) {
           const key = f.identificacionComprador || `noid-${f.id}`;
           if (!clientesMap.has(key)) clientesMap.set(key, { razonSocial: f.razonSocialComprador, identificacion: f.identificacionComprador, clienteId: f.clienteId, saldoTotal: 0 });
@@ -440,12 +496,20 @@ router.get('/reporte/estado-cuenta', autorizarPermiso('cxc.ver'), async (req, re
         orderBy: { fecha: 'asc' },
       }),
     ]);
-    const cobrado = await obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id));
+    const [cobrado, notaCredito] = await Promise.all([
+      obtenerCobradoPorFactura(db, empresaId, facturas.map((f) => f.id)),
+      obtenerNotasCreditoPorFactura(db, empresaId, facturas.map((f) => f.id)),
+    ]);
 
     res.json({
       success: true,
       data: {
-        facturas: facturas.map((f) => ({ ...f, cobrado: cobrado.get(f.id) || 0, saldoPendiente: round2(f.importeTotal - (cobrado.get(f.id) || 0)) })),
+        facturas: facturas.map((f) => ({
+          ...f,
+          cobrado: cobrado.get(f.id) || 0,
+          notaCredito: notaCredito.get(f.id) || 0,
+          saldoPendiente: calcularSaldoConNC(f.importeTotal, cobrado.get(f.id), notaCredito.get(f.id)),
+        })),
         cobros,
       },
     });
@@ -676,11 +740,17 @@ router.post('/cobros/importar', autorizarPermiso('cxc.gestionar'), _upload.singl
 
           await tx.$queryRaw`SELECT id FROM facturas WHERE id = ${factura.id} FOR UPDATE`;
 
-          const agg = await tx.cobros_cliente.aggregate({
-            where: { empresaId, facturaId: factura.id, anulado: false },
-            _sum: { monto: true },
-          });
-          const saldo = round2(factura.importeTotal - (agg._sum.monto || 0));
+          const [agg, aggNC] = await Promise.all([
+            tx.cobros_cliente.aggregate({
+              where: { empresaId, facturaId: factura.id, anulado: false },
+              _sum: { monto: true },
+            }),
+            tx.notas_credito.aggregate({
+              where: { empresaId, facturaId: factura.id, estadoSri: 'AUTORIZADO', anulada: false },
+              _sum: { importeTotal: true },
+            }),
+          ]);
+          const saldo = calcularSaldoConNC(factura.importeTotal, agg._sum.monto, aggNC._sum.importeTotal);
           if (montoNum > saldo + 0.01) throw new Error(`Monto excede el saldo pendiente ($${saldo.toFixed(2)})`);
 
           const numero = await siguienteNumeroGenerico({ modelo: 'cobros_cliente', prefijo: 'REC', empresaId, fecha: fechaObj, tx });

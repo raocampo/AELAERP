@@ -115,7 +115,7 @@ function parsearNotaCreditoRecibidaXml(xmlAutorizado) {
   const vacio = {
     estab: '001', ptoEmi: '001', secuencial: '000000001', claveAcceso: '',
     codDocModificado: '01', numDocModificado: '',
-    baseNoObjeto: 0, base0: 0, base5: 0, base12: 0, base15: 0, baseGravada: 0,
+    baseNoObjeto: 0, baseExenta: 0, base0: 0, base5: 0, base12: 0, base15: 0, baseGravada: 0,
     iva: 0,
   };
   if (!xmlAutorizado) return vacio;
@@ -132,16 +132,18 @@ function parsearNotaCreditoRecibidaXml(xmlAutorizado) {
   const ptoEmi     = uno(bloqueTrib, 'ptoEmi');
   const secuencial = uno(bloqueTrib, 'secuencial');
 
-  // codigoPorcentaje: 0=0%, 5=5%, 2=12%, 4=15%, 6/7=no objeto/exento (misma
-  // tabla que IVA_CODIGO más arriba, en sentido inverso).
-  let baseNoObjeto = 0, base0 = 0, base5 = 0, base12 = 0, base15 = 0, iva = 0;
+  // codigoPorcentaje: 0=0%, 5=5%, 2=12%, 4=15%, 6=no objeto, 7=exenta (misma
+  // tabla que IVA_CODIGO más arriba, en sentido inverso). No objeto y exenta
+  // son categorías legales distintas del SRI, aunque ambas queden sin IVA.
+  let baseNoObjeto = 0, baseExenta = 0, base0 = 0, base5 = 0, base12 = 0, base15 = 0, iva = 0;
   const bloques = xmlAutorizado.match(/<totalImpuesto>[\s\S]*?<\/totalImpuesto>/g) || [];
   bloques.forEach((b) => {
     if (!/<codigo>2<\/codigo>/.test(b)) return; // solo IVA, ignorar ICE (código 3)
     const pct   = (b.match(/<codigoPorcentaje>(\d+)<\/codigoPorcentaje>/) || [])[1] || '0';
     const base  = parseFloat((b.match(/<baseImponible>([\d.]+)<\/baseImponible>/) || [])[1] || 0);
     const valor = parseFloat((b.match(/<valor>([\d.]+)<\/valor>/) || [])[1] || 0);
-    if (pct === '6' || pct === '7') baseNoObjeto += base;
+    if (pct === '6') baseNoObjeto += base;
+    else if (pct === '7') baseExenta += base;
     else if (pct === '0') base0 += base;
     else if (pct === '5') base5 += base;
     else if (pct === '2') base12 += base;
@@ -157,6 +159,7 @@ function parsearNotaCreditoRecibidaXml(xmlAutorizado) {
     codDocModificado: uno(bloqueInfo, 'codDocModificado') || '01',
     numDocModificado: uno(bloqueInfo, 'numDocModificado'),
     baseNoObjeto: parseFloat(baseNoObjeto.toFixed(2)),
+    baseExenta:   parseFloat(baseExenta.toFixed(2)),
     base0:        parseFloat(base0.toFixed(2)),
     base5:        parseFloat(base5.toFixed(2)),
     base12:       parseFloat(base12.toFixed(2)),

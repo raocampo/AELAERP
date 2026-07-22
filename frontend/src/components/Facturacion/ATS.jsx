@@ -260,6 +260,7 @@ function TabCompras({ data }) {
   const totBase12   = compras.reduce((s, c) => s + parseFloat(c.subtotal12 || 0), 0);
   const totBase15   = compras.reduce((s, c) => s + parseFloat(c.subtotal15 || 0), 0);
   const totNoObjeto = compras.reduce((s, c) => s + parseFloat(c.subtotalNoObjeto || 0), 0);
+  const totExento   = compras.reduce((s, c) => s + parseFloat(c.subtotalExento || 0), 0);
   const totIva      = compras.reduce((s, c) => s + parseFloat(c.totalIva || 0), 0);
   const totTotal    = compras.reduce((s, c) => s + parseFloat(c.importeTotal || 0), 0);
   const totRetIR    = compras.reduce((s, c) => s + parseFloat(c.retencionRenta || 0), 0);
@@ -291,7 +292,8 @@ function TabCompras({ data }) {
             ...(totBase5 > 0  ? [['Base 5%',  totBase5]]  : []),
             ...(totBase12 > 0 ? [['Base 12%', totBase12]] : []),
             ...(totBase15 > 0 ? [['Base 15%', totBase15]] : []),
-            ...(totNoObjeto > 0 ? [['No objeto / Exento', totNoObjeto]] : []),
+            ...(totNoObjeto > 0 ? [['No objeto de IVA', totNoObjeto]] : []),
+            ...(totExento > 0 ? [['Exenta de IVA', totExento]] : []),
             ['IVA pagado', totIva],
             ['Total compras', totTotal],
             ['Ret. IR', totRetIR],
@@ -324,7 +326,8 @@ function TabCompras({ data }) {
                 <th className="text-right">Base 5%</th>
                 <th className="text-right">Base 12%</th>
                 <th className="text-right">Base 15%</th>
-                <th className="text-right">No objeto / Exento</th>
+                <th className="text-right">No objeto</th>
+                <th className="text-right">Exenta</th>
                 <th className="text-right">IVA</th>
                 <th className="text-right">Total</th>
                 <th className="text-right">Ret. IR</th>
@@ -349,6 +352,7 @@ function TabCompras({ data }) {
                     <td className="ats-money">{fmt(c.subtotal12 || 0)}</td>
                     <td className="ats-money">{fmt(c.subtotal15)}</td>
                     <td className="ats-money">{fmt(c.subtotalNoObjeto || 0)}</td>
+                    <td className="ats-money">{fmt(c.subtotalExento || 0)}</td>
                     <td className="ats-money">{fmt(c.totalIva)}</td>
                     <td className="ats-money ats-money-total">{fmt(c.importeTotal)}</td>
                     <td className="ats-money">{fmt(c.retencionRenta)}</td>
