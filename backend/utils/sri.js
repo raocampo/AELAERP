@@ -1328,31 +1328,37 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     y += TH_H;
 
     detalles.forEach((det, idx) => {
-      const cant   = parseFloat(det.cantidad)       || 0;
-      const prec   = parseFloat(det.precioUnitario)  || 0;
-      const desc   = parseFloat(det.descuento)      || 0;
-      const ivaPct = parseInt(det.ivaPorcentaje)    || 0;
-      const tot    = (cant * prec - desc);
-      const ROW_H  = 13;
+      const cant     = parseFloat(det.cantidad)       || 0;
+      const prec     = parseFloat(det.precioUnitario)  || 0;
+      const desc     = parseFloat(det.descuento)      || 0;
+      const ivaPct   = parseInt(det.ivaPorcentaje)    || 0;
+      const tot      = (cant * prec - desc);
+      const descTexto = det.descripcion || '';
 
-      if (y > PH - 160) { doc.addPage(); y = 30; }
+      // Alto dinámico: la Descripción puede tener bastante texto (concepto largo,
+      // ej. contratos/planillas) y no debe solaparse con la fila siguiente.
+      doc.fontSize(6.5).font('Helvetica');
+      const descH = doc.heightOfString(descTexto, { width: COLS[2].w - 4 });
+      const ROW_H = Math.max(13, descH + 6);
+
+      if (y + ROW_H > PH - 30) { doc.addPage(); y = 30; }
 
       doc.rect(ML, y, W, ROW_H).fill(idx % 2 === 0 ? BLANCO : BG_ALT);
       doc.rect(ML, y, W, ROW_H).lineWidth(0.2).stroke('#DDDDDD');
 
       const vals = [
-        { v: det.codigoPrincipal || '', al: 'left'  },
-        { v: cant.toFixed(2),           al: 'right' },
-        { v: det.descripcion    || '', al: 'left'  },
-        { v: prec.toFixed(2),           al: 'right' },
-        { v: desc.toFixed(2),           al: 'right' },
-        { v: `${ivaPct}%`,              al: 'right' },
-        { v: tot.toFixed(2),            al: 'right' },
+        { v: det.codigoPrincipal || '', al: 'left',  wrap: false },
+        { v: cant.toFixed(2),           al: 'right', wrap: false },
+        { v: descTexto,                 al: 'left',  wrap: true  },
+        { v: prec.toFixed(2),           al: 'right', wrap: false },
+        { v: desc.toFixed(2),           al: 'right', wrap: false },
+        { v: `${ivaPct}%`,              al: 'right', wrap: false },
+        { v: tot.toFixed(2),            al: 'right', wrap: false },
       ];
       cx = ML;
       vals.forEach((v, vi) => {
         doc.fontSize(6.5).font('Helvetica').fillColor(NEGRO)
-           .text(v.v, cx + 2, y + 3, { width: COLS[vi].w - 4, align: v.al, lineBreak: false });
+           .text(v.v, cx + 2, y + 3, { width: COLS[vi].w - 4, align: v.al, lineBreak: v.wrap });
         cx += COLS[vi].w;
       });
       y += ROW_H;
@@ -1365,8 +1371,6 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     const TOT_X = ML + FP_W + 4;
     const TOT_W = W - FP_W - 4;
 
-    let yLeft = y;
-
     // ── Información Adicional ─────────────────────────────────────────────────
     // Datos del comprador (correo, teléfono, dirección) + vendedor + observaciones
     const camposIA = [];
@@ -1376,15 +1380,39 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     if (factura.vendedor)           camposIA.push({ n: 'Vendedor',    v: factura.vendedor });
     if (factura.observaciones)      camposIA.push({ n: 'Observación', v: factura.observaciones });
 
+    const IA_H    = 12;
+    const LABEL_W = FP_W * 0.30;
+    const VAL_W   = FP_W - LABEL_W;
+    const PG_H    = 13;
+    const PG_WS   = [FP_W * 0.65, FP_W * 0.35];
+
+    // Alto dinámico por fila: la Observación (u otro campo) puede traer bastante
+    // texto y no debe solaparse con la fila/sección siguiente.
+    doc.fontSize(6.5).font('Helvetica');
+    const iaRows = camposIA.map((campo) => ({
+      ...campo,
+      h: Math.max(IA_H, doc.heightOfString(campo.v || '', { width: VAL_W - 6 }) + 4),
+    }));
+    const iaTotalH = camposIA.length > 0 ? (11 + IA_H + iaRows.reduce((s, r) => s + r.h, 0) + 4) : 0;
+
+    const TR_H      = 13;
+    const TOT_ROWS_N = 10; // filas fijas de la caja de totales SRI
+    const TOT_BOX_H  = TOT_ROWS_N * TR_H + 4;
+
+    const footerLeftH  = iaTotalH + 11 + PG_H * (1 + pagos.length);
+    const footerNeedH  = Math.max(footerLeftH, TOT_BOX_H);
+
+    // Si el footer (Información Adicional + Forma de pago + Totales) no cabe
+    // en lo que queda de la página, se pasa a una nueva en vez de solaparse
+    // con el pie de página — así la factura "crece" en A4 en vez de recortar texto.
+    if (y + footerNeedH > PH - 30) { doc.addPage(); y = 30; }
+
+    let yLeft = y;
+
     if (camposIA.length > 0) {
       doc.fontSize(7).font('Helvetica-Bold').fillColor(AZUL)
          .text('INFORMACIÓN ADICIONAL', ML, yLeft, { lineBreak: false });
       yLeft += 11;
-
-      // Cabecera de la tabla
-      const IA_H    = 12;
-      const LABEL_W = FP_W * 0.30;
-      const VAL_W   = FP_W - LABEL_W;
 
       doc.rect(ML, yLeft, FP_W, IA_H).fill(AZUL);
       doc.fontSize(6).font('Helvetica-Bold').fillColor(BLANCO)
@@ -1393,15 +1421,15 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
          .text('Valor', ML + LABEL_W + 3, yLeft + 3, { width: VAL_W - 6, lineBreak: false });
       yLeft += IA_H;
 
-      camposIA.forEach((campo, idx) => {
-        doc.rect(ML, yLeft, FP_W, IA_H).fill(idx % 2 === 0 ? BLANCO : BG_ALT);
-        doc.rect(ML, yLeft, FP_W, IA_H).lineWidth(0.2).stroke('#DDDDDD');
-        doc.rect(ML + LABEL_W, yLeft, 0, IA_H).lineWidth(0.2).stroke('#DDDDDD');
+      iaRows.forEach((campo, idx) => {
+        doc.rect(ML, yLeft, FP_W, campo.h).fill(idx % 2 === 0 ? BLANCO : BG_ALT);
+        doc.rect(ML, yLeft, FP_W, campo.h).lineWidth(0.2).stroke('#DDDDDD');
+        doc.moveTo(ML + LABEL_W, yLeft).lineTo(ML + LABEL_W, yLeft + campo.h).lineWidth(0.2).stroke('#DDDDDD');
         doc.fontSize(6.5).font('Helvetica-Bold').fillColor(GRIS)
            .text(campo.n, ML + 3, yLeft + 2, { width: LABEL_W - 6, lineBreak: false });
         doc.fontSize(6.5).font('Helvetica').fillColor(NEGRO)
-           .text(campo.v, ML + LABEL_W + 3, yLeft + 2, { width: VAL_W - 6, lineBreak: false });
-        yLeft += IA_H;
+           .text(campo.v, ML + LABEL_W + 3, yLeft + 2, { width: VAL_W - 6 });
+        yLeft += campo.h;
       });
       yLeft += 4;
     }
@@ -1410,9 +1438,6 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     doc.fontSize(7).font('Helvetica-Bold').fillColor(AZUL)
        .text('Forma de pago', ML, yLeft, { lineBreak: false });
     yLeft += 11;
-
-    const PG_H  = 13;
-    const PG_WS = [FP_W * 0.65, FP_W * 0.35];
 
     doc.rect(ML, yLeft, FP_W, PG_H).fill(AZUL);
     let px = ML;
@@ -1466,8 +1491,6 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
       { l: 'VALOR TOTAL',               v: total, bold: true      },
     ];
 
-    const TR_H = 13;
-    const TOT_BOX_H = TOT_ROWS.length * TR_H + 4;
     doc.rect(TOT_X, y, TOT_W, TOT_BOX_H).lineWidth(0.5).stroke('#AAAAAA');
 
     let yT = y + 2;

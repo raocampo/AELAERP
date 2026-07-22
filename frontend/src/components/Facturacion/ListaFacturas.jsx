@@ -9,11 +9,8 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaCorta } from '../../utils/fecha';
 import { IcVer, IcPDF, IcDescargar, IcReenviar, IcAnular } from '../../utils/icons';
-import { descargarExcel, descargarPdf } from '../../utils/exportCsv';
+import { descargarExcel, descargarPdf, descargarXml, abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
 import './ListaFacturas.css';
-
-// Base URL del servidor sin /api al final (para fetch directo con Authorization header)
-const SERVER_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5600/api').replace(/\/api$/, '');
 
 // ─── Badge de estado SRI ─────────────────────────────────────────────────────
 const BadgeEstado = ({ estado }) => {
@@ -75,13 +72,7 @@ const TabFacturas = ({ navigate, onIrNC }) => {
 
   const descargarPDF = async (factura) => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${SERVER_BASE}/api/facturas/${factura.id}/pdf`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      await abrirBlobEnNuevaPestana(api, `/facturas/${factura.id}/pdf`);
     } catch {
       toast.error('Error al generar PDF');
     }
@@ -89,19 +80,9 @@ const TabFacturas = ({ navigate, onIrNC }) => {
 
   const descargarXML = async (factura) => {
     try {
-      const token = localStorage.getItem('token');
-      const res   = await fetch(`${SERVER_BASE}/api/facturas/${factura.id}/xml`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) { toast.error('Sin XML disponible aún'); return; }
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `factura-${factura.numeroFactura}.xml`;
-      a.click();
+      await descargarXml(api, `/facturas/${factura.id}/xml`, {}, `factura-${factura.numeroFactura}.xml`);
     } catch {
-      toast.error('Error al descargar XML');
+      toast.error('Sin XML disponible aún');
     }
   };
 
@@ -436,12 +417,11 @@ const TabNotasCredito = ({ navigate }) => {
   useEffect(() => { recargar(); }, []);
 
   const descargarPDFnc = async (nc) => {
-    const token = localStorage.getItem('token');
-    const res   = await fetch(`${SERVER_BASE}/api/facturas/notas-credito/${nc.id}/pdf`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const blob = await res.blob();
-    window.open(URL.createObjectURL(blob), '_blank');
+    try {
+      await abrirBlobEnNuevaPestana(api, `/facturas/notas-credito/${nc.id}/pdf`);
+    } catch {
+      toast.error('Error al generar PDF');
+    }
   };
 
   const enviarSRI = async (nc) => {
