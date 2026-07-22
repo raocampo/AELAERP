@@ -295,11 +295,38 @@ del SRI tras todos los cambios de esta segunda parte.
 
 ### Pendiente — no implementado hoy
 
-- No se agregó un flag `esExentoIva` a la plantilla de importación masiva de
-  compras históricas (Excel) — ese importador nunca distinguió "no
-  objeto"/"exenta"/tarifa 0% entre sí (todo cae en "sin IVA" genérico), es una
-  limitación preexistente, no una regresión de hoy.
 - El mismo problema de "no objeto" y "exenta" combinados en un solo campo
   existe también del lado de **ventas** (`facturas.subtotalNoObjetoIva`,
   usado en `utils/importarFacturasVentaXML.js`) — no se tocó, el pedido de hoy
   fue específicamente sobre compras.
+
+---
+
+## Continuación (sesión siguiente) — `tipo_sin_iva` en importación masiva de compras
+
+Resuelto el primer punto pendiente de arriba: `backend/utils/importarComprasHistoricas.js`
+ahora distingue "no objeto"/"exenta"/tarifa 0% en la importación masiva
+(Excel) de compras históricas, con el mismo criterio legal (tabla 17 del SRI)
+usado en la captura manual el 2026-07-21.
+
+- Nueva columna opcional `tipo_sin_iva` (alias `clasificacion_sin_iva`,
+  `tipo_0`) junto a `subtotal_sin_iva`: vacío/`0` = tarifa 0% (default,
+  compatible con plantillas ya en uso), `NO_OBJETO` o `EXENTA`. Fila inválida
+  si el valor no coincide con ninguno de esos tres.
+- `construirDetallesCompra()` marca `esNoObjetoIva`/`esExentoIva` en la línea
+  de detalle según la clasificación — de ahí en adelante reutiliza el mismo
+  pipeline (`normalizarDetalle`, agregación de `subtotalNoObjeto`/
+  `subtotalExento`, asiento contable) que ya usa la captura manual y el ATS
+  desde antes de este cambio.
+- Plantilla Excel (`generarPlantillaCompras()`): columna, 2 filas de ejemplo
+  (una `NO_OBJETO`, una `EXENTA`) y nota en instrucciones.
+- No se tocó el importador del lado de **ventas** — sigue como el otro punto
+  pendiente de esta lista, mismo alcance que "no objeto/compras" del 07-17
+  antes de ampliarse a compras.
+
+**Verificado**: `node --test` (29/29), `npx vite build` limpio, y prueba
+manual de `validarFilaCompra`/`construirDetallesCompra` con filas
+`NO_OBJETO`, `EXENTA`, sin la columna (default tarifa 0%) y con un valor
+inválido — los 4 casos se comportan como se espera. No se probó contra
+producción ni se aplicó ninguna migración (esta columna no toca el schema,
+solo el parser del Excel).
