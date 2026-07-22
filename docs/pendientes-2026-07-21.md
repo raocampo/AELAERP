@@ -1,5 +1,54 @@
 # AELA ERP — Sesión 2026-07-21 — Notas de Crédito RECIBIDAS: reporte, ATS y contabilidad
 
+## 🟢 PARA RETOMAR MAÑANA (2026-07-22) DESDE LA OFICINA — checklist rápido
+
+**Código**: todo ya está en `main` y pusheado — commits `646148f`, `9ed0e32`,
+`6706a45` (sesión de oficina), más `6e16fa2` y `1332918` (continuación de esta
+noche: `tipo_sin_iva` en importación Excel de compras, y verificación de que
+ventas no necesita el mismo split). Nada sin commitear, nada sin pushear.
+
+1. **Confirmar despliegue en Railway** — revisar logs de arranque y verificar
+   que no aparece `P2022` (columna faltante) en ninguna BD de tenant, en
+   particular por la migración nueva `20260721000000_subtotal_exento_compras`.
+   Ninguna migración de hoy tiene `DROP`/`DELETE`, todas son `ADD COLUMN` con
+   default — bajo riesgo, pero falta la confirmación visual en los logs.
+2. **Hacer las 5 preguntas a los clientes** (preparadas hoy, ninguna es de
+   código — ver detalle abajo en cada sección):
+   - Al cliente de "no objeto/exento" + RIMPE (sesión 07-17): si su reporte
+     era sobre compras manuales o carga masiva; si tiene "Negocio Popular"
+     marcado en Configuración SRI; si tiene compras viejas mal clasificadas
+     como factura.
+   - Al cliente de LSAC empresaId=10 (NC recibidas, sesión 07-21): si alguna
+     vez tuvo que corregir manualmente el XML del ATS antes de subirlo; y la
+     decisión sobre corregir retroactivamente los 2 asientos de NC recibida
+     ya posteados (ver punto 3).
+3. **Decisión pendiente, NO tocar hasta respuesta del cliente**: los 2
+   asientos contables de NC recibida de LSAC (junio 2026) quedaron con la
+   lógica vieja (IVA sin separar). El fix de contabilidad solo aplica a NC
+   nuevas de ahora en adelante — no se corrigió nada retroactivo en
+   producción todavía.
+4. **Probar en producción con datos reales** (hasta ahora todo verificado
+   solo localmente o con lecturas de producción, nada probado end-to-end en
+   vivo):
+   - Columna "N. Créd." nueva en CxC/CxP (`CuentasPorCobrarHub.jsx` /
+     `CuentasPorPagarHub.jsx`) contra un cliente/proveedor real con NC.
+   - Compra con "Exenta de IVA" (nueva opción, distinta de "No objeto") desde
+     el formulario manual, y confirmar `<baseImpExe>` en el XML del ATS.
+   - Importación Excel de compras históricas con la columna nueva
+     `tipo_sin_iva` (`NO_OBJETO`/`EXENTA`) — implementada y probada con
+     `node -e` esta noche, pero nunca contra un archivo real subido por un
+     usuario.
+5. **Deuda técnica anotada, sin implementar (no urgente, requiere decisión o
+   pedido explícito antes de tocarla)**:
+   - Inventario: ni las NC emitidas ni las recibidas generan reversa de stock
+     — decidir con el usuario si es bug o diseño deliberado.
+   - La importación masiva (Excel e histórica desde XML/autorización SRI) de
+     compras sigue sin poder marcar `tipoComprobante = 'NOTA_VENTA'` — asume
+     siempre factura. Follow-up solo si un cliente necesita cargar notas de
+     venta recibidas en lote.
+
+---
+
 ## Reporte del cliente
 
 Con 3 capturas de un mismo período (junio 2026, empresa LSAC empresaId=10, 2 notas
