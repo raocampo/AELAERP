@@ -454,6 +454,34 @@ const FIXES = [
   `ALTER TABLE "empresas" ADD COLUMN IF NOT EXISTS "modulosContratados" JSONB`,
   // Facturación como módulo activable (2026-07-17) — antes siempre visible sin flag.
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "facturacionHabilitada" BOOLEAN NOT NULL DEFAULT true`,
+  // Regalos/combos de proveedor en compras (2026-07-23) — prefijos configurables
+  // (ej. "P-", "OBQ-") para sumar ítems a $0.00 al producto real en vez de crear
+  // uno huérfano, y tabla de ítems sin match para resolución manual.
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "prefijosRegaloCompras" TEXT`,
+  `CREATE TABLE IF NOT EXISTS "items_compra_pendientes" (
+    "id"                     SERIAL PRIMARY KEY,
+    "empresaId"              INTEGER NOT NULL,
+    "compraId"               INTEGER NOT NULL,
+    "codigoPrincipal"        VARCHAR(50) NOT NULL,
+    "codigoAuxiliar"         VARCHAR(50),
+    "descripcion"            VARCHAR(300) NOT NULL,
+    "cantidad"               DECIMAL(14,3) NOT NULL,
+    "prefijoDetectado"       VARCHAR(20),
+    "estado"                 VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    "productoAsignadoId"     INTEGER,
+    "usuarioResuelveId"      INTEGER,
+    "movimientoInventarioId" INTEGER,
+    "resueltoEn"             TIMESTAMP(3),
+    "createdAt"              TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"              TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "items_compra_pendientes_compraId_fkey" FOREIGN KEY ("compraId") REFERENCES "facturas_compra"("id") ON DELETE CASCADE,
+    CONSTRAINT "items_compra_pendientes_productoAsignadoId_fkey" FOREIGN KEY ("productoAsignadoId") REFERENCES "productos_servicios"("id") ON DELETE SET NULL,
+    CONSTRAINT "items_compra_pendientes_usuarioResuelveId_fkey" FOREIGN KEY ("usuarioResuelveId") REFERENCES "usuarios"("id") ON DELETE SET NULL,
+    CONSTRAINT "items_compra_pendientes_movimientoInventarioId_fkey" FOREIGN KEY ("movimientoInventarioId") REFERENCES "movimientos_inventario"("id") ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS "items_compra_pendientes_empresaId_idx" ON "items_compra_pendientes"("empresaId")`,
+  `CREATE INDEX IF NOT EXISTS "items_compra_pendientes_compraId_idx" ON "items_compra_pendientes"("compraId")`,
+  `CREATE INDEX IF NOT EXISTS "items_compra_pendientes_estado_idx" ON "items_compra_pendientes"("estado")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {
