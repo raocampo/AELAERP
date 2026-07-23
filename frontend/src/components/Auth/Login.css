@@ -38,6 +38,21 @@
   line-height: 1.1;
 }
 
+/* Razón social larga (sin nombre comercial corto configurado) — reducir
+   tamaño progresivamente en vez de desbordar la tarjeta de login. */
+.login-logo-sigla--sm {
+  font-size: 26px;
+  letter-spacing: 1px;
+  max-width: 340px;
+}
+
+.login-logo-sigla--xs {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  max-width: 340px;
+}
+
 .login-logo-sub {
   font-size: 12px;
   color: #64748b;

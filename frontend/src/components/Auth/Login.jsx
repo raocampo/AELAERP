@@ -10,6 +10,18 @@ import api, { SESSION_STORAGE_KEYS } from '../../services/api';
 import toast from 'react-hot-toast';
 import './Login.css';
 
+// El nombre del tenant se muestra grande (estilo "logo") cuando no hay logo
+// propio. Para razones sociales largas (ej. "LABORATORIO CLINICA SAN JOSE
+// RUIZ Y GUARICELA Y CIA") el tamaño fijo original hacía que el texto
+// ocupara toda la tarjeta de login — se reduce progresivamente según el
+// largo del nombre en vez de un tamaño único para todos los casos.
+function claseSiglaPorLargo(nombre) {
+  const largo = (nombre || 'AELA').length;
+  if (largo > 30) return 'login-logo-sigla--xs';
+  if (largo > 18) return 'login-logo-sigla--sm';
+  return '';
+}
+
 export default function Login() {
   const { login, bootstrap } = useAuth();
   const navigate         = useNavigate();
@@ -227,7 +239,7 @@ export default function Login() {
               <circle cx="32" cy="29" r="4.5" fill="white"/>
             </svg>
           )}
-          <span className="login-logo-sigla">
+          <span className={`login-logo-sigla ${claseSiglaPorLargo(branding.nombre)}`}>
             {branding.nombre || 'AELA'}
           </span>
           <span className="login-logo-sub">AELA ERP Ecuador · by CorpSimtelec</span>
