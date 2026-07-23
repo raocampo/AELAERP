@@ -4,8 +4,34 @@
 
 **Código**: todo commiteado y pusheado a `main` — commits `83d89e7` (TENANT_MISMATCH
 en ListaFacturas.jsx + RIDE dinámico), `d180385` (commit vacío para forzar
-redeploy tras un hiccup de infraestructura de Railway) y el commit de esta
-documentación (regalos/combos + etiquetas + fix SRI). Nada sin commitear.
+redeploy tras un hiccup de infraestructura de Railway), `e7e0ba0` (regalos/combos
++ etiquetas + fix SRI) y `0c536ac` (fix del incidente de producción descrito
+abajo). Nada sin commitear.
+
+**⚠️ Incidente de producción tras el deploy de `e7e0ba0`** — al crear un tenant
+nuevo (ej. "labsanjose") en Railway, `POST /auth/bootstrap` falló con
+`P2022: The column configuracion_sistema.prefijosRegaloCompras does not
+exist`. Causa: **cada tenant tiene su propia base de datos física separada**
+(no son solo schemas dentro de una BD compartida), y esas bases NO se
+actualizan con `prisma migrate deploy` (que solo corre contra la BD
+`DATABASE_URL` principal) — se actualizan con
+`backend/scripts/applySchemaFixes.js`, un script de SQL idempotente
+(`ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS`) que corre en cada
+arranque contra la BD principal, la BD master y la de **cada tenant activo**.
+La migración de `items_compra_pendientes` + `prefijosRegaloCompras` se agregó
+al `schema.prisma` y a `prisma/migrations/`, pero se olvidó agregar también a
+`applySchemaFixes.js` — por eso nunca llegó a ninguna BD de tenant en
+producción. **Corregido en `0c536ac`**: agregado el `ALTER TABLE` y el
+`CREATE TABLE` (con FKs) al arreglo `FIXES` de ese script.
+
+**Lección para toda migración futura de schema**: en este proyecto, un cambio
+de schema en producción requiere **2 pasos, no 1** — (1) migración de Prisma
+normal (`schema.prisma` + `prisma/migrations/...`) para que el cliente
+Prisma y la BD principal queden sincronizados, **y** (2) agregar el mismo
+`ALTER TABLE`/`CREATE TABLE` idempotente al arreglo `FIXES` de
+`backend/scripts/applySchemaFixes.js`, o el cambio nunca llegará a ninguna
+base de datos de tenant existente ni a las que se creen después. Verificar
+esto ANTES de dar por cerrada cualquier tarea que toque `schema.prisma`.
 
 1. **Probar en producción con datos reales** (todo lo de esta sesión se probó
    local/con scripts ad-hoc, nada probado end-to-end en vivo por un usuario
