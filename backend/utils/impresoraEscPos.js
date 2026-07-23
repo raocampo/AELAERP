@@ -150,6 +150,58 @@ function generarRecibo(doc, emp, ancho = 80, abrirCajon = false) {
   return Buffer.concat(parts);
 }
 
+// ── Etiquetas de producto con código de barras ─────────────────
+/**
+ * Genera el bloque ESC/POS de un código de barras Code128 nativo (comando
+ * GS k, subset B — soporta ASCII completo). La impresora lo rasteriza ella
+ * misma; no requiere generar ni enviar una imagen.
+ * @param {string} data - valor a codificar (codigoAuxiliar o codigoPrincipal del producto)
+ * @param {object} opciones - { alturaPx, anchoModulo (2-6), mostrarTexto }
+ */
+function generarBarcode128(data, { alturaPx = 80, anchoModulo = 2, mostrarTexto = true } = {}) {
+  const texto = String(data || '').trim();
+  if (!texto) return Buffer.alloc(0);
+
+  // Subset B de Code128 vía selector "{B" — soporta letras, números y símbolos ASCII.
+  const datos = Buffer.concat([Buffer.from([0x7B, 0x42]), Buffer.from(texto, 'ascii')]);
+
+  return Buffer.concat([
+    Buffer.from([GS, 0x68, Math.max(1, Math.min(255, alturaPx))]),  // GS h n — altura del barcode
+    Buffer.from([GS, 0x77, Math.max(2, Math.min(6, anchoModulo))]), // GS w n — ancho de módulo
+    Buffer.from([GS, 0x48, mostrarTexto ? 0x02 : 0x00]),            // GS H n — HRI (texto legible) debajo
+    Buffer.from([GS, 0x6B, 0x49, datos.length]),                    // GS k m n — Code128 (m=73), n bytes de datos
+    datos,
+  ]);
+}
+
+/**
+ * Genera el ticket de etiqueta de un producto (nombre + precio + barcode),
+ * repetido `copias` veces con corte de papel entre cada una.
+ * @param {object} producto - { codigoPrincipal, codigoAuxiliar, nombre, precioUnitario }
+ * @param {object} opciones - { ancho: 58|80, copias }
+ */
+function generarEtiquetaProducto(producto, { ancho = 58, copias = 1 } = {}) {
+  const chars  = ancho === 58 ? 32 : 42;
+  const codigo = producto.codigoAuxiliar || producto.codigoPrincipal;
+  const parts  = [];
+
+  for (let i = 0; i < Math.max(1, copias); i++) {
+    parts.push(
+      CMD.INIT,
+      CMD.ALIGN_CENTER,
+      CMD.BOLD_ON,
+      linea(truncar(producto.nombre || '', chars)),
+      CMD.BOLD_OFF,
+      linea(`$${Number(producto.precioUnitario || 0).toFixed(2)}`),
+      generarBarcode128(codigo, { alturaPx: ancho === 58 ? 50 : 70, anchoModulo: 2 }),
+      CMD.FEED_3,
+      CMD.CUT_FULL,
+    );
+  }
+
+  return Buffer.concat(parts);
+}
+
 // ── Envío TCP ─────────────────────────────────────────────────
 /**
  * Envía un buffer ESC/POS a la impresora por TCP.
@@ -212,4 +264,16 @@ async function probarConexion(ip, puerto = 9100) {
   await enviarTCP(ip, puerto, buf, 5000);
 }
 
-module.exports = { imprimirRecibo, abrirCajon, probarConexion, generarRecibo };
+/**
+ * Envía un buffer ESC/POS ya armado a la impresora (uso genérico —
+ * etiquetas de producto, o cualquier ticket que no sea un recibo de venta).
+ */
+async function imprimirBuffer(ip, puerto = 9100, buffer) {
+  if (!ip) throw new Error('IP de impresora no configurada');
+  await enviarTCP(ip, puerto, buffer);
+}
+
+module.exports = {
+  imprimirRecibo, abrirCajon, probarConexion, generarRecibo,
+  generarBarcode128, generarEtiquetaProducto, imprimirBuffer,
+};

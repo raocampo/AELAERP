@@ -103,6 +103,8 @@ Items bloqueados por plan o modulo desactivado muestran un candado visual. El gr
 - importacion desde Excel o archivos compatibles
 - importacion desde XML de compra
 - importacion desde clave de acceso / autorizacion SRI cuando el XML autorizado este disponible
+- etiquetas de producto con codigo de barras (Code128), impresion en la termica ESC/POS ya configurada
+- lectura de codigo de barras (pistola) en POS, Facturacion y Compras
 
 ## Compras
 
@@ -118,6 +120,8 @@ Items bloqueados por plan o modulo desactivado muestran un candado visual. El gr
 - entrada opcional a inventario desde la compra
 - egreso opcional de caja desde la compra
 - restriccion en AELA Lite desde frontend y backend
+- items de regalo/combo del proveedor a $0.00 (prefijo configurable, ej. "P-", "OBQ-") se suman al stock del producto real en vez de crear uno nuevo
+- si el item a $0.00 no matchea con ningun producto de la misma factura, queda en "Obsequios pendientes" para asignar, ignorar o crear el producto manualmente
 
 ## Proveedores
 

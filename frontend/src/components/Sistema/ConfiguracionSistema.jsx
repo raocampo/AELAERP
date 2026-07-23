@@ -39,6 +39,7 @@ const FORM_INICIAL = {
   impresoraKiosko: '',
   inventarioHabilitado: false,
   permitirStockNegativo: false,
+  prefijosRegaloCompras: ['P-', 'M-', 'OBQ-', 'COMBO-', 'REGALO-', 'BONI-'],
   comprasHabilitadas: true,
   buzonSriHabilitado: true,
   contabilidadHabilitada: true,
@@ -58,6 +59,7 @@ export default function ConfiguracionSistema() {
   const [cargando, setCargando] = useState(true);
   const [probandoSmtp, setProbandoSmtp] = useState(false);
   const [smtpAbierto, setSmtpAbierto] = useState(false);
+  const [nuevoPrefijo, setNuevoPrefijo] = useState('');
 
   useEffect(() => {
     let ignore = false;
@@ -86,6 +88,18 @@ export default function ConfiguracionSistema() {
   }, [sistema]);
 
   const actualizar = (campo, valor) => setForm((prev) => ({ ...prev, [campo]: valor }));
+
+  const agregarPrefijo = () => {
+    const p = nuevoPrefijo.trim().toUpperCase();
+    if (!p) return;
+    if ((form.prefijosRegaloCompras || []).includes(p)) { setNuevoPrefijo(''); return; }
+    actualizar('prefijosRegaloCompras', [...(form.prefijosRegaloCompras || []), p]);
+    setNuevoPrefijo('');
+  };
+
+  const quitarPrefijo = (p) => {
+    actualizar('prefijosRegaloCompras', (form.prefijosRegaloCompras || []).filter((x) => x !== p));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -319,6 +333,39 @@ export default function ConfiguracionSistema() {
             />
             <span>Permitir ventas con stock negativo</span>
           </label>
+
+          <label style={{ display: 'block', marginTop: '0.75rem' }}>
+            Prefijos de regalo/combo en compras
+            <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.4rem' }}>
+              Ítems facturados a $0.00 con un código que empieza con alguno de estos prefijos
+              (ej. "P-1043664" ligado al producto real "1043664") suman su cantidad al producto
+              real en vez de crear uno nuevo. Si el prefijo no coincide con ninguno de la lista,
+              el ítem queda en "Obsequios pendientes" para asignarlo manualmente.
+            </div>
+          </label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.5rem' }}>
+            {(form.prefijosRegaloCompras || []).map((p) => (
+              <span key={p} style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 999,
+                padding: '0.2rem 0.6rem', fontSize: '0.85rem',
+              }}>
+                {p}
+                <button type="button" onClick={() => quitarPrefijo(p)} style={{
+                  border: 'none', background: 'transparent', cursor: 'pointer', color: '#6366f1', fontWeight: 'bold',
+                }}>×</button>
+              </span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              placeholder="Nuevo prefijo, ej. OFERTA-"
+              value={nuevoPrefijo}
+              onChange={(e) => setNuevoPrefijo(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregarPrefijo(); } }}
+            />
+            <button type="button" className="btn-secondary" onClick={agregarPrefijo}>Agregar</button>
+          </div>
         </section>
 
         {/* ── Módulos avanzados ─────────────────────────────────────────── */}

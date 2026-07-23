@@ -66,6 +66,8 @@ const FormCompra = lazy(() => import('./components/Compras/FormCompra'));
 const DetalleCompra = lazy(() => import('./components/Compras/DetalleCompra'));
 const ImportarComprasHistoricas = lazy(() => import('./components/Compras/ImportarComprasHistoricas'));
 const NotasCreditoRecibidas = lazy(() => import('./components/Compras/NotasCreditoRecibidas'));
+const ObsequiosPendientes = lazy(() => import('./components/Compras/ObsequiosPendientes'));
+const EtiquetasProductos = lazy(() => import('./components/Productos/EtiquetasProductos'));
 const CajaDiaria = lazy(() => import('./components/Caja/CajaDiaria'));
 const PuntoVenta = lazy(() => import('./components/POS/PuntoVenta'));
 const ConfiguracionSistema = lazy(() => import('./components/Sistema/ConfiguracionSistema'));
@@ -215,12 +217,14 @@ function App() {
 
                 {/* Productos / Inventario */}
                 <Route path="productos" element={<PermissionRoute permission="productos.ver"><GestionProductos initialTab="catalogo" /></PermissionRoute>} />
+                <Route path="productos/etiquetas" element={<PermissionRoute permission="productos.ver"><EtiquetasProductos /></PermissionRoute>} />
 
                 {/* Compras — disponible desde Lite (ingreso manual); importación masiva sigue Medium/Pro */}
                 <Route path="compras" element={<ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><ListaCompras /></PermissionRoute></ModuleRoute>} />
                 <Route path="compras/nueva" element={<ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><FormCompra /></PermissionRoute></ModuleRoute>} />
                 <Route path="compras/importar-historicas" element={<MediumRoute><ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><ImportarComprasHistoricas /></PermissionRoute></ModuleRoute></MediumRoute>} />
                 <Route path="compras/notas-credito" element={<ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><NotasCreditoRecibidas /></PermissionRoute></ModuleRoute>} />
+                <Route path="compras/obsequios-pendientes" element={<ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><ObsequiosPendientes /></PermissionRoute></ModuleRoute>} />
                 <Route path="compras/:id" element={<ModuleRoute moduleKey="compras"><PermissionRoute permission="compras.gestionar"><DetalleCompra /></PermissionRoute></ModuleRoute>} />
 
                 {/* Caja diaria — disponible desde Lite */}

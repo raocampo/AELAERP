@@ -57,6 +57,28 @@
   margin-bottom: 1rem;
 }
 
+.compra-scanner-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.compra-scanner-bar span {
+  white-space: nowrap;
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.compra-scanner-bar input {
+  flex: 1;
+  min-width: 180px;
+}
+
 .compra-import-grid {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.3fr);

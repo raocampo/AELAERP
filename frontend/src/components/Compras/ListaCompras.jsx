@@ -463,6 +463,9 @@ export default function ListaCompras() {
           <button className="btn-secondary" onClick={() => navigate('/compras/notas-credito')} title="Ver notas de crédito emitidas por proveedores (tipo 04 del SRI)">
             📋 NC Proveedores
           </button>
+          <button className="btn-secondary" onClick={() => navigate('/compras/obsequios-pendientes')} title="Ítems de regalo/combo a $0.00 que no se pudieron emparejar automáticamente con un producto">
+            🎁 Obsequios pendientes
+          </button>
           <button className="btn-primary" onClick={() => navigate('/compras/nueva')}>Nueva compra</button>
         </div>
       </div>

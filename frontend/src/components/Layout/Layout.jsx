@@ -121,6 +121,7 @@ const GRUPOS_MENU = [
       { to: '/compras/importar-historicas', icon: '📥', label: 'Importar históricas', planMin: 'medium', permiso: 'compras.gestionar', modulo: 'comprasHabilitadas' },
       { to: '/liquidaciones', icon: '📄', label: 'Liquidaciones', planMin: 'pro',    permiso: 'liquidaciones.gestionar', modulo: 'liquidacionesHabilitadas' },
       { to: '/buzon',         icon: '📥', label: 'Buzón SRI',     planMin: 'medium', permiso: 'compras.gestionar',       modulo: 'buzonSriHabilitado' },
+      { to: '/compras/obsequios-pendientes', icon: '🎁', label: 'Obsequios pendientes', permiso: 'compras.gestionar', modulo: 'comprasHabilitadas' },
     ],
   },
   {
@@ -130,6 +131,7 @@ const GRUPOS_MENU = [
     items: [
       { to: '/productos',  icon: '📦', label: 'Productos',  permiso: 'productos.ver' },
       { to: '/inventario', icon: '📚', label: 'Inventario', permiso: 'inventario.ver', modulo: 'inventarioHabilitado' },
+      { to: '/productos/etiquetas', icon: '🏷️', label: 'Etiquetas de Productos', permiso: 'productos.ver' },
     ],
   },
   {

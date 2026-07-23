@@ -7,6 +7,11 @@ const prisma = require('../config/prisma');
 const TIPOS_SISTEMA   = ['lite', 'medium', 'pro'];
 const MODOS_OPERACION = ['monoempresa', 'multiempresa'];
 
+// Prefijos que identifican ítems de regalo/combo del proveedor en compras
+// (ej. "P-1043664" ligado al producto real "1043664"). Configurable por
+// empresa vía configuracion_sistema.prefijosRegaloCompras (JSON en texto).
+const PREFIJOS_REGALO_DEFAULT = ['P-', 'M-', 'OBQ-', 'COMBO-', 'REGALO-', 'BONI-'];
+
 // Catálogo completo de flags de módulo — usado para validar `modulosContratados`
 // y para construir el techo explícito por tenant en capacidadesModulos().
 const MODULOS_TODOS = [
@@ -17,6 +22,31 @@ const MODULOS_TODOS = [
   'atsHabilitado', 'tributarioHabilitado', 'bancosHabilitado',
   'talentoHumanoHabilitado',
 ];
+
+// ─── Normalizar prefijos de regalo/combo (JSON en texto -> array) ────────────
+function normalizarPrefijosRegalo(value, fallback = PREFIJOS_REGALO_DEFAULT) {
+  let lista = null;
+  if (Array.isArray(value)) {
+    lista = value;
+  } else if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) lista = parsed;
+    } catch {
+      // JSON inválido → usar fallback
+    }
+  }
+
+  if (!lista) return [...fallback];
+
+  const normalizada = [...new Set(
+    lista
+      .map((p) => String(p || '').trim().toUpperCase())
+      .filter(Boolean)
+  )];
+
+  return normalizada.length > 0 ? normalizada : [...fallback];
+}
 
 // ─── Normalizar plan ──────────────────────────────────────────────────────────
 function normalizarTipoSistema(value, fallback = 'pro') {
@@ -131,6 +161,7 @@ function construirConfiguracionSistemaBase(empresa = {}) {
     impresionAutoReciboPos:  false,
     impresoraKiosko:         '',
     permitirStockNegativo:   false,
+    prefijosRegaloCompras:   JSON.stringify(PREFIJOS_REGALO_DEFAULT),
     sbuEcuador:              480.00,
     ...caps,
   };
@@ -180,6 +211,7 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
     modoOperacion: normalizarModoOperacion(config?.modoOperacion || await obtenerModoOperacionGlobal(tx)),
     impresionAutoReciboPos:  Boolean(config?.impresionAutoReciboPos ?? false),
     impresoraKiosko:         String(config?.impresoraKiosko || '').trim(),
+    prefijosRegaloCompras:   normalizarPrefijosRegalo(config?.prefijosRegaloCompras),
     // Forzar a false los módulos que el techo no permite
     facturacionHabilitada:    caps.facturacionHabilitada    && Boolean(config?.facturacionHabilitada    ?? true),
     cajaDiariaHabilitada:     caps.cajaDiariaHabilitada     && Boolean(config?.cajaDiariaHabilitada     ?? true),
@@ -236,6 +268,9 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
     impresoraKiosko:          reqBody.impresoraKiosko?.trim() || actual.impresoraKiosko || '',
     inventarioHabilitado:     flag('inventarioHabilitado', false),
     permitirStockNegativo:    Boolean(reqBody.permitirStockNegativo !== undefined ? reqBody.permitirStockNegativo : actual.permitirStockNegativo),
+    prefijosRegaloCompras:    JSON.stringify(normalizarPrefijosRegalo(
+                                reqBody.prefijosRegaloCompras !== undefined ? reqBody.prefijosRegaloCompras : actual.prefijosRegaloCompras
+                              )),
     comprasHabilitadas:       flag('comprasHabilitadas', true),
     buzonSriHabilitado:       flag('buzonSriHabilitado', true),
     contabilidadHabilitada:   flag('contabilidadHabilitada', true),
@@ -255,6 +290,8 @@ module.exports = {
   TIPOS_SISTEMA,
   MODOS_OPERACION,
   MODULOS_TODOS,
+  PREFIJOS_REGALO_DEFAULT,
+  normalizarPrefijosRegalo,
   normalizarTipoSistema,
   normalizarModoOperacion,
   capacidadesPlan,

@@ -23,23 +23,46 @@ function requestSri(url) {
   });
 }
 
+// El SRI descontinuó `obtenerPorNumeroRuc` (devuelve 404 desde ~2026) sin aviso
+// público. El endpoint vigente es `obtenerPorNumerosRuc` (con "s", nótese el
+// plural) con el parámetro `ruc` (no `numeroRuc`), y responde un ARRAY (no un
+// objeto suelto). Ya no incluye dirección ni nombre comercial — esos datos
+// ahora viven en el endpoint separado `Establecimiento/consultarPorNumeroRuc`,
+// que se consulta en paralelo y se combina en un solo objeto compatible con
+// parsearContribuyenteSri() (verificado empíricamente 2026-07-23 contra RUCs reales).
 async function consultarContribuyenteSri(ruc) {
-  const endpoints = [
-    `https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest/ConsolidadoContribuyente/obtenerPorNumeroRuc?numeroRuc=${ruc}`,
-    `https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest/ConsolidadoContribuyente/obtenerPorNumerRuc?numeroRuc=${ruc}`,
-  ];
+  const [consolidadoResp, establecimientoResp] = await Promise.all([
+    requestSri(`https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest/ConsolidadoContribuyente/obtenerPorNumerosRuc?&ruc=${ruc}`),
+    requestSri(`https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest/Establecimiento/consultarPorNumeroRuc?numeroRuc=${ruc}`),
+  ]);
 
-  for (const url of endpoints) {
-    const respuesta = await requestSri(url);
-    if (!respuesta?.ok || !respuesta.data) continue;
+  let consolidado = null;
+  if (consolidadoResp?.ok && consolidadoResp.data) {
     try {
-      return JSON.parse(respuesta.data);
+      const lista = JSON.parse(consolidadoResp.data);
+      consolidado = Array.isArray(lista) ? (lista[0] || null) : lista;
     } catch {
-      continue;
+      consolidado = null;
     }
   }
+  if (!consolidado) return null;
 
-  return null;
+  let establecimientos = [];
+  if (establecimientoResp?.ok && establecimientoResp.data) {
+    try {
+      const lista = JSON.parse(establecimientoResp.data);
+      establecimientos = Array.isArray(lista) ? lista : [];
+    } catch {
+      establecimientos = [];
+    }
+  }
+  const matriz = establecimientos.find((e) => String(e.matriz || '').toUpperCase() === 'SI') || establecimientos[0] || null;
+
+  return {
+    ...consolidado,
+    nombreComercial: matriz?.nombreFantasiaComercial || null,
+    direcciones: matriz?.direccionCompleta ? [{ direccionCompleta: matriz.direccionCompleta }] : [],
+  };
 }
 
 async function verificarExistenciaContribuyenteSri(ruc) {
@@ -87,7 +110,7 @@ function parsearContribuyenteSri(datos, identificacionOriginal) {
     razonSocial: contribuyente.razonSocial?.trim().toUpperCase() || '',
     nombreComercial: contribuyente.nombreComercial?.trim() || null,
     direccion,
-    estado: contribuyente.estadoContribuyente || null,
+    estado: contribuyente.estadoContribuyente || contribuyente.estadoContribuyenteRuc || null,
     contribuyenteEspecial:
       contribuyente.contribuyenteEspecial ||
       contribuyente.numResolucionContribuyenteEspecial ||

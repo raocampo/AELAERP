@@ -8,6 +8,8 @@ const { registrarAuditoria } = require('../utils/auditoria');
 const { aplicarMovimientoInventario } = require('../utils/inventario');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { crearAsientoFacturaCompraRegistrada, crearAsientoReversoCompraAnulada } = require('../utils/contabilidad');
+const { resolverOMarcarPendiente, registrarItemCompraPendiente } = require('../utils/comprasInventario');
+const { obtenerConfiguracionSistemaOperativa } = require('../utils/configuracionSistema');
 const {
   parsearFacturaCompraDesdeXml,
   obtenerXmlDesdeAutorizacion,
@@ -48,6 +50,10 @@ router.use(requiereModulo('comprasHabilitadas'));
 router.use(autorizarPermiso('compras.gestionar'));
 // soloFull (Medium/Pro) NO va a nivel de router — Lite ya puede registrar
 // compras manualmente. Se aplica solo a las rutas de importación masiva abajo.
+
+// Montado ANTES de cualquier ruta '/:id' para que Express no confunda
+// "pendientes" con un id de compra.
+router.use('/pendientes', require('./comprasPendientes'));
 
 function limpiarTexto(valor) {
   return String(valor || '').trim();
@@ -212,85 +218,6 @@ function normalizarDetalle(detalle, index = 0) {
     precioVentaReferencial: Number(toNumber(detalle?.precioVentaReferencial, precioUnitario).toFixed(4)),
     utilidadPct: detalle?.utilidadPct != null ? Number(toNumber(detalle.utilidadPct, 0).toFixed(2)) : null,
   };
-}
-
-async function buscarProductoCoincidente(tx, empresaId, detalle) {
-  if (detalle.productoId) {
-    const porId = await tx.productos_servicios.findFirst({
-      where: { id: detalle.productoId, empresaId },
-    });
-    if (porId) return porId;
-  }
-
-  if (detalle.codigoPrincipal) {
-    const porCodigo = await tx.productos_servicios.findFirst({
-      where: { empresaId, codigoPrincipal: detalle.codigoPrincipal },
-    });
-    if (porCodigo) return porCodigo;
-  }
-
-  if (detalle.codigoAuxiliar) {
-    return tx.productos_servicios.findFirst({
-      where: { empresaId, codigoAuxiliar: detalle.codigoAuxiliar },
-    });
-  }
-
-  return null;
-}
-
-async function resolverProductoCompra({
-  tx,
-  empresaId,
-  detalle,
-  crearProductosFaltantes = false,
-  actualizarProductosExistentes = true,
-}) {
-  let producto = await buscarProductoCoincidente(tx, empresaId, detalle);
-
-  if (!producto && !crearProductosFaltantes) return null;
-
-  if (!producto) {
-    producto = await tx.productos_servicios.create({
-      data: {
-        empresaId,
-        codigoPrincipal: detalle.codigoPrincipal,
-        codigoAuxiliar: detalle.codigoAuxiliar || null,
-        nombre: detalle.descripcion,
-        precioUnitario: detalle.precioVentaReferencial,
-        costoUnitario: detalle.precioUnitario,
-        tarifaIva: detalle.porcentajeIva,
-        unidadMedida: 'UND',
-        inventariable: Boolean(detalle.inventariable),
-        stockActual: 0,
-        stockMinimo: 0,
-        activo: true,
-        infoAdicional: 'Creado automaticamente desde factura de compra',
-      },
-    });
-    return { producto, creado: true, actualizado: false };
-  }
-
-  if (!actualizarProductosExistentes) {
-    return { producto, creado: false, actualizado: false };
-  }
-
-  const actualizado = await tx.productos_servicios.update({
-    where: { id: producto.id },
-    data: {
-      codigoAuxiliar: detalle.codigoAuxiliar || producto.codigoAuxiliar,
-      nombre: producto.nombre || detalle.descripcion,
-      costoUnitario: detalle.precioUnitario,
-      tarifaIva: detalle.porcentajeIva,
-      inventariable: producto.inventariable || Boolean(detalle.inventariable),
-      // Si se especificó utilidad explícitamente en la importación, actualizar PVP siempre.
-      // Si no, solo actualizar cuando el PVP actual es 0.
-      ...(detalle.utilidadPct != null || Number(producto.precioUnitario || 0) <= 0
-        ? { precioUnitario: detalle.precioVentaReferencial }
-        : {}),
-    },
-  });
-
-  return { producto: actualizado, creado: false, actualizado: true };
 }
 
 // GET /api/compras/exportar/csv — descarga CSV con los mismos filtros que el listado
@@ -1266,26 +1193,34 @@ router.post('/', async (req, res) => {
         direccionProveedor,
       });
 
+      const configOperativa = await obtenerConfiguracionSistemaOperativa(req.empresa.id, tx);
+      const prefijosRegalo = configOperativa?.prefijosRegaloCompras;
+
       const detallesProcesados = [];
       let productosCreados = 0;
       let productosActualizados = 0;
+      const pendientes = []; // { detalle, prefijoDetectado } — se registran tras crear la compra
 
       for (const detalle of detallesNormalizados) {
-        const resolucion = await resolverProductoCompra({
+        const resolucion = await resolverOMarcarPendiente({
           tx,
           empresaId: req.empresa.id,
           detalle,
+          detallesTodos: detallesNormalizados,
           crearProductosFaltantes: toBoolean(crearProductosFaltantes, false),
           actualizarProductosExistentes: toBoolean(actualizarProductosExistentes, true),
+          prefijosRegalo,
         });
 
         if (resolucion?.creado) productosCreados += 1;
         if (resolucion?.actualizado) productosActualizados += 1;
+        if (resolucion?.pendiente) pendientes.push({ detalle, prefijoDetectado: resolucion.prefijoDetectado });
 
         detallesProcesados.push({
           ...detalle,
           productoId: resolucion?.producto?.id || null,
           inventariable: resolucion?.producto?.inventariable ?? detalle.inventariable,
+          esRegaloMatcheado: Boolean(resolucion?.esRegaloMatcheado),
         });
       }
 
@@ -1326,6 +1261,12 @@ router.post('/', async (req, res) => {
         },
       });
 
+      for (const { detalle, prefijoDetectado } of pendientes) {
+        await registrarItemCompraPendiente({
+          tx, empresaId: req.empresa.id, compraId: creada.id, detalle, prefijoDetectado,
+        });
+      }
+
       let movimientosInventario = 0;
       if (toBoolean(registrarInventario, false)) {
         for (const detalle of detallesProcesados) {
@@ -1339,9 +1280,14 @@ router.post('/', async (req, res) => {
             tipo: 'ENTRADA',
             deltaCantidad: detalle.cantidad,
             referencia: normalizarNumeroFactura(numeroFactura),
-            observacion: `Entrada por factura de compra ${normalizarNumeroFactura(numeroFactura)}`,
+            observacion: detalle.esRegaloMatcheado
+              ? `Entrada por regalo/combo de factura ${normalizarNumeroFactura(numeroFactura)}`
+              : `Entrada por factura de compra ${normalizarNumeroFactura(numeroFactura)}`,
             metadata: { compraId: creada.id, tipo: 'FACTURA_COMPRA' },
-            costoUnitario: detalle.precioUnitario,
+            // Ítem regalo/combo emparejado (costo $0): NO pasar costoUnitario
+            // para no sobreescribir el costo real del producto con $0
+            // (aplicarMovimientoInventario sobreescribe, no promedia).
+            ...(detalle.esRegaloMatcheado ? {} : { costoUnitario: detalle.precioUnitario }),
           });
 
           if (movimiento?.movimiento) movimientosInventario += 1;
@@ -1382,6 +1328,7 @@ router.post('/', async (req, res) => {
           productosActualizados,
           movimientosInventario,
           egresoCajaRegistrado,
+          itemsPendientes: pendientes.length,
         },
       };
     });
@@ -1409,11 +1356,14 @@ router.post('/', async (req, res) => {
       console.error('Asiento contable de compra:', contErr.message);
     }
 
+    const itemsPendientes = compra.resumen.itemsPendientes || 0;
     res.status(201).json({
       success: true,
       data: compra.compra,
       resumen: compra.resumen,
-      mensaje: 'Factura de compra registrada correctamente',
+      mensaje: itemsPendientes > 0
+        ? `Factura de compra registrada correctamente. ${itemsPendientes} ítem(s) de regalo/combo sin match enviado(s) a Obsequios pendientes.`
+        : 'Factura de compra registrada correctamente',
     });
   } catch (error) {
     console.error('POST /compras:', error);
@@ -1778,39 +1728,38 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
 
     let movimientosRegistrados = 0;
     let productosCreados = 0;
+    let itemsPendientes = 0;
     const errores = [];
 
     await prisma.$transaction(async (tx) => {
+      const configOperativa = await obtenerConfiguracionSistemaOperativa(empresaId, tx);
+      const prefijosRegalo = configOperativa?.prefijosRegaloCompras;
+
       for (const det of detalles) {
         if (!det.productoId && !det.codigoPrincipal) continue;
 
-        // Buscar el producto
-        let prod = det.productoId
-          ? await tx.productos_servicios.findFirst({ where: { id: det.productoId, empresaId } })
-          : await tx.productos_servicios.findFirst({ where: { codigoPrincipal: det.codigoPrincipal, empresaId } });
+        const resolucion = await resolverOMarcarPendiente({
+          tx,
+          empresaId,
+          detalle: det,
+          detallesTodos: detalles,
+          crearProductosFaltantes: Boolean(crearSiNoExiste),
+          actualizarProductosExistentes: false, // este endpoint históricamente no actualiza productos ya existentes
+          prefijosRegalo,
+        });
 
+        if (resolucion.creado) productosCreados++;
+
+        if (resolucion.pendiente) {
+          await registrarItemCompraPendiente({ tx, empresaId, compraId, detalle: det, prefijoDetectado: resolucion.prefijoDetectado });
+          itemsPendientes++;
+          continue;
+        }
+
+        const prod = resolucion.producto;
         if (!prod) {
-          if (crearSiNoExiste && (det.codigoPrincipal || det.descripcion)) {
-            const codigo = det.codigoPrincipal || `PROD-${Date.now()}`;
-            prod = await tx.productos_servicios.create({
-              data: {
-                empresaId,
-                codigoPrincipal:  codigo,
-                codigoAuxiliar:   det.codigoAuxiliar || null,
-                nombre:           det.descripcion || codigo,
-                precioUnitario:   Number(det.precioUnitario || 0),
-                costoUnitario:    Number(det.precioUnitario || 0),
-                tarifaIva:        Number(det.porcentajeIva || 15),
-                unidadMedida:     'UND',
-                inventariable:    true,
-                activo:           true,
-              },
-            });
-            productosCreados++;
-          } else {
-            errores.push(`Producto "${det.codigoPrincipal || det.descripcion || det.productoId}" no encontrado en catálogo`);
-            continue;
-          }
+          errores.push(`Producto "${det.codigoPrincipal || det.descripcion || det.productoId}" no encontrado en catálogo`);
+          continue;
         }
 
         if (!prod.inventariable) {
@@ -1828,12 +1777,16 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
           tipo: 'ENTRADA',
           deltaCantidad: cantidad,
           referencia: compra.numeroFactura,
-          observacion: `Entrada manual — compra ${compra.numeroFactura}`,
-          costoUnitario: det.precioUnitario || 0,
+          observacion: resolucion.esRegaloMatcheado
+            ? `Entrada por regalo/combo — compra ${compra.numeroFactura}`
+            : `Entrada manual — compra ${compra.numeroFactura}`,
           metadata: { compraId, tipo: 'REGISTRO_MANUAL' },
+          // Ítem regalo/combo emparejado (costo $0): NO pasar costoUnitario
+          // para no sobreescribir el costo real del producto con $0.
+          ...(resolucion.esRegaloMatcheado ? {} : { costoUnitario: det.precioUnitario || 0 }),
         });
 
-        if (usarPvpAuto && Number(det.precioUnitario || 0) > 0) {
+        if (!resolucion.esRegaloMatcheado && usarPvpAuto && Number(det.precioUnitario || 0) > 0) {
           const nuevoPvp = Number((det.precioUnitario * (1 + Number(margenPct) / 100)).toFixed(4));
           await tx.productos_servicios.update({
             where: { id: prod.id },
@@ -1855,11 +1808,13 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
     const partes = [];
     if (movimientosRegistrados > 0) partes.push(`${movimientosRegistrados} movimiento(s) de inventario registrado(s)`);
     if (productosCreados > 0) partes.push(`${productosCreados} producto(s) creado(s) en catálogo`);
+    if (itemsPendientes > 0) partes.push(`${itemsPendientes} ítem(s) de regalo/combo enviado(s) a Obsequios pendientes`);
 
     res.json({
       success: true,
       movimientosRegistrados,
       productosCreados,
+      itemsPendientes,
       errores,
       mensaje: partes.length > 0
         ? partes.join(' y ')

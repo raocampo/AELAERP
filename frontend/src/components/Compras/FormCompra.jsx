@@ -96,6 +96,7 @@ export default function FormCompra() {
     registrarEgresoCaja: false,
   });
   const [detalles, setDetalles] = useState([detalleVacio()]);
+  const [codigoScanner, setCodigoScanner] = useState('');
 
   useEffect(() => {
     let ignore = false;
@@ -275,6 +276,51 @@ export default function FormCompra() {
 
   const agregarLinea = () => setDetalles((prev) => [...prev, detalleVacio()]);
   const eliminarLinea = (index) => setDetalles((prev) => prev.filter((_, idx) => idx !== index));
+
+  // Pistola de código de barras: agrega una línea de detalle ya poblada desde
+  // el catálogo. A diferencia de Facturación (que usa precioUnitario del
+  // producto como PVP), aquí el campo relevante es el COSTO del producto.
+  const agregarLineaDesdeProducto = (prod) => {
+    setDetalles((prev) => {
+      const base = prev.length === 1 && !prev[0].codigoPrincipal && !prev[0].descripcion
+        ? prev.slice(0, -1) // reemplaza la única línea vacía inicial
+        : prev;
+      return [...base, {
+        codigoPrincipal: prod.codigoPrincipal,
+        codigoAuxiliar:  prod.codigoAuxiliar || '',
+        descripcion:     prod.nombre,
+        cantidad:        '1',
+        precioUnitario:  String(prod.costoUnitario || 0),
+        precioVentaReferencial: String(prod.precioUnitario || 0),
+        utilidadPct:     '',
+        porcentajeIva:   prod.tarifaIva ?? 15,
+        esNoObjetoIva:   false,
+        esExentoIva:     false,
+        descuento:       '0',
+        inventariable:   prod.inventariable ?? true,
+      }];
+    });
+    setCodigoScanner('');
+  };
+
+  const buscarPorScanner = async () => {
+    const codigo = codigoScanner.trim();
+    if (!codigo) return;
+    try {
+      const res = await api.get('/productos/buscar', { params: { q: codigo } });
+      const items = res.data?.data || [];
+      const exacto = items.find((p) =>
+        String(p.codigoPrincipal || '').trim().toUpperCase() === codigo.toUpperCase() ||
+        String(p.codigoAuxiliar || '').trim().toUpperCase() === codigo.toUpperCase()
+      );
+      if (exacto) { agregarLineaDesdeProducto(exacto); return; }
+      if (items.length === 1) { agregarLineaDesdeProducto(items[0]); return; }
+      if (items.length > 1) { toast('Varios productos coinciden — usa un código más específico'); return; }
+      toast.error('No se encontró un producto con ese código');
+    } catch {
+      toast.error('Error al buscar el producto');
+    }
+  };
 
   const aplicarImportacion = (data, origen = 'XML') => {
     const proveedor = data?.proveedor || {};
@@ -696,6 +742,17 @@ export default function FormCompra() {
               <p>Cada línea puede crear o enlazar productos existentes para alimentar inventario.</p>
             </div>
             <button type="button" className="btn-secondary" onClick={agregarLinea}>Agregar línea</button>
+          </div>
+
+          <div className="compra-scanner-bar">
+            <span>Escanear código de barras:</span>
+            <input
+              value={codigoScanner}
+              onChange={(e) => setCodigoScanner(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarPorScanner(); } }}
+              placeholder="Código de barras o código interno del producto..."
+            />
+            <button type="button" className="btn-secondary" onClick={buscarPorScanner}>Agregar por código</button>
           </div>
 
           <div className="compra-table-wrap">

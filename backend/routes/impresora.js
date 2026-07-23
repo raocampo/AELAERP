@@ -9,7 +9,7 @@
 const express = require('express');
 const router  = express.Router();
 const { proteger } = require('../middleware/auth');
-const { imprimirRecibo, abrirCajon, probarConexion } = require('../utils/impresoraEscPos');
+const { imprimirRecibo, abrirCajon, probarConexion, generarEtiquetaProducto, imprimirBuffer } = require('../utils/impresoraEscPos');
 
 // Todos los endpoints requieren sesión válida
 router.use(proteger);
@@ -182,6 +182,94 @@ router.post('/cajon', async (req, res) => {
   } catch (err) {
     console.error('POST /impresora/cajon:', err);
     res.status(500).json({ success: false, mensaje: err.message || 'Error al abrir el cajón' });
+  }
+});
+
+// ── POST /api/impresora/etiquetas/preview ─────────────────────
+// No imprime — devuelve los datos ya resueltos (nombre, código usado, precio)
+// para que el frontend renderice una vista previa en HTML/CSS.
+router.post('/etiquetas/preview', async (req, res) => {
+  try {
+    const { productos = [] } = req.body || {};
+    if (!Array.isArray(productos) || productos.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'Debes indicar al menos un producto' });
+    }
+
+    const ids = productos.map((p) => parseInt(p.productoId, 10)).filter(Boolean);
+    const encontrados = await req.prisma.productos_servicios.findMany({
+      where: { id: { in: ids }, empresaId: req.empresa.id },
+      select: { id: true, codigoPrincipal: true, codigoAuxiliar: true, nombre: true, precioUnitario: true },
+    });
+    const porId = new Map(encontrados.map((p) => [p.id, p]));
+
+    const data = productos.map((p) => {
+      const prod = porId.get(parseInt(p.productoId, 10));
+      if (!prod) return null;
+      return {
+        productoId: prod.id,
+        codigoUsado: prod.codigoAuxiliar || prod.codigoPrincipal,
+        nombre: prod.nombre,
+        precioUnitario: Number(prod.precioUnitario || 0),
+        cantidad: Math.max(1, parseInt(p.cantidad, 10) || 1),
+      };
+    }).filter(Boolean);
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('POST /impresora/etiquetas/preview:', err);
+    res.status(500).json({ success: false, mensaje: 'Error al generar la vista previa' });
+  }
+});
+
+// ── POST /api/impresora/etiquetas/imprimir ────────────────────
+router.post('/etiquetas/imprimir', async (req, res) => {
+  try {
+    const { productos = [], ancho } = req.body || {};
+    if (!Array.isArray(productos) || productos.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'Debes indicar al menos un producto' });
+    }
+
+    const cfg = await req.prisma.configuracion_sistema.findUnique({
+      where: { empresaId: req.empresa.id },
+      select: { impresoraHabilitada: true, impresoraIp: true, impresoraPuerto: true, impresoraAncho: true },
+    });
+
+    if (!cfg?.impresoraHabilitada || !cfg?.impresoraIp) {
+      return res.status(400).json({
+        success: false,
+        mensaje: 'Impresora no configurada. Ve a Configuración → Impresora.',
+      });
+    }
+
+    const anchoFinal = parseInt(ancho, 10) || cfg.impresoraAncho || 80;
+
+    const ids = productos.map((p) => parseInt(p.productoId, 10)).filter(Boolean);
+    const encontrados = await req.prisma.productos_servicios.findMany({
+      where: { id: { in: ids }, empresaId: req.empresa.id },
+      select: { id: true, codigoPrincipal: true, codigoAuxiliar: true, nombre: true, precioUnitario: true },
+    });
+    const porId = new Map(encontrados.map((p) => [p.id, p]));
+
+    const buffers = [];
+    let totalEtiquetas = 0;
+    for (const p of productos) {
+      const prod = porId.get(parseInt(p.productoId, 10));
+      if (!prod) continue;
+      const cantidad = Math.max(1, parseInt(p.cantidad, 10) || 1);
+      buffers.push(generarEtiquetaProducto(prod, { ancho: anchoFinal, copias: cantidad }));
+      totalEtiquetas += cantidad;
+    }
+
+    if (buffers.length === 0) {
+      return res.status(404).json({ success: false, mensaje: 'Ninguno de los productos indicados existe' });
+    }
+
+    await imprimirBuffer(cfg.impresoraIp, cfg.impresoraPuerto || 9100, Buffer.concat(buffers));
+
+    res.json({ success: true, mensaje: `${totalEtiquetas} etiqueta(s) enviada(s) a la impresora` });
+  } catch (err) {
+    console.error('POST /impresora/etiquetas/imprimir:', err);
+    res.status(500).json({ success: false, mensaje: err.message || 'Error al imprimir las etiquetas' });
   }
 });
 

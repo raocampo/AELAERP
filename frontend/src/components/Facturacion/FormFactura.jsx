@@ -433,6 +433,26 @@ const FormFactura = () => {
     } catch { /* ignore */ }
   };
 
+  // Pistola de código de barras: al presionar Enter, busca match exacto por
+  // codigoPrincipal/codigoAuxiliar y agrega la línea directo (mismo patrón que
+  // PuntoVenta.jsx). Si hay varios resultados, deja el dropdown abierto para elegir.
+  const buscarPorScanner = async () => {
+    const codigo = busqProd.trim();
+    if (!codigo) return;
+    try {
+      const res = await api.get('/productos/buscar', { params: { q: codigo } });
+      const items = res.data?.data || [];
+      const exacto = items.find((p) =>
+        String(p.codigoPrincipal || '').trim().toUpperCase() === codigo.toUpperCase() ||
+        String(p.codigoAuxiliar || '').trim().toUpperCase() === codigo.toUpperCase()
+      );
+      if (exacto) { agregarDesdeProducto(exacto); return; }
+      if (items.length === 1) { agregarDesdeProducto(items[0]); return; }
+      setProdResults(items);
+      setProdDropOpen(items.length > 0);
+    } catch { /* ignore */ }
+  };
+
   const agregarDesdeProducto = (prod) => {
     setDetalles(prev => [...prev, {
       codigoPrincipal: prod.codigoPrincipal,
@@ -691,7 +711,8 @@ const FormFactura = () => {
                 type="text"
                 value={busqProd}
                 onChange={e => buscarProducto(e.target.value)}
-                placeholder="Escriba una letra o palabra, después seleccione el producto"
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buscarPorScanner(); } }}
+                placeholder="Escriba una letra o palabra, o escanee un código de barras"
                 className="fact-busq-input"
               />
               {prodDropOpen && prodResults.length > 0 && (

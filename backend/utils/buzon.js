@@ -337,31 +337,30 @@ async function importarDocumentoRecibido({
     let movimientosInventario = 0;
 
     if ((registraInventario || creaProductos) && datos.detalles?.length) {
-      const { importarProductos } = require('./importacionProductos');
       const { aplicarMovimientoInventario } = require('./inventario');
+      const { resolverOMarcarPendiente, registrarItemCompraPendiente } = require('./comprasInventario');
+      const { obtenerConfiguracionSistemaOperativa } = require('./configuracionSistema');
+
+      const configOperativa = await obtenerConfiguracionSistemaOperativa(empresaId, tx);
+      const prefijosRegalo = configOperativa?.prefijosRegaloCompras;
 
       for (const det of datos.detalles) {
-        let prod = await tx.productos_servicios.findFirst({
-          where: { empresaId, codigoPrincipal: det.codigoPrincipal },
-          select: { id: true, inventariable: true },
+        const resolucion = await resolverOMarcarPendiente({
+          tx,
+          empresaId,
+          detalle: det,
+          detallesTodos: datos.detalles,
+          crearProductosFaltantes: creaProductos,
+          actualizarProductosExistentes: false, // comportamiento histórico: este flujo no actualizaba productos ya existentes
+          prefijosRegalo,
         });
 
-        if (!prod && creaProductos) {
-          prod = await tx.productos_servicios.create({
-            data: {
-              empresaId,
-              codigoPrincipal: det.codigoPrincipal,
-              nombre: det.descripcion,
-              precioUnitario: det.precioUnitario || 0,
-              costoUnitario: det.precioUnitario || 0,
-              tarifaIva: det.porcentajeIva || 0,
-              inventariable: true,
-              stockActual: 0,
-              stockMinimo: 0,
-            },
-          });
+        if (resolucion.pendiente) {
+          await registrarItemCompraPendiente({ tx, empresaId, compraId: nuevaCompra.id, detalle: det, prefijoDetectado: resolucion.prefijoDetectado });
+          continue;
         }
 
+        const prod = resolucion.producto;
         if (prod && registraInventario && prod.inventariable !== false) {
           await aplicarMovimientoInventario({
             tx,
@@ -371,8 +370,12 @@ async function importarDocumentoRecibido({
             tipo: 'ENTRADA',
             deltaCantidad: toNum(det.cantidad, 0),
             referencia: `BUZON-${nuevaCompra.id}`,
-            observacion: `Entrada por Buzón SRI: ${datos.comprobante.numeroFactura}`,
-            costoUnitario: det.precioUnitario || 0,
+            observacion: resolucion.esRegaloMatcheado
+              ? `Entrada por regalo/combo — Buzón SRI: ${datos.comprobante.numeroFactura}`
+              : `Entrada por Buzón SRI: ${datos.comprobante.numeroFactura}`,
+            // Ítem regalo/combo emparejado (costo $0): NO pasar costoUnitario
+            // para no sobreescribir el costo real del producto con $0.
+            ...(resolucion.esRegaloMatcheado ? {} : { costoUnitario: det.precioUnitario || 0 }),
           });
           movimientosInventario += 1;
         }
