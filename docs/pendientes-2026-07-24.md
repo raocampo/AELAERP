@@ -1,4 +1,4 @@
-# AELA ERP — Sesión 2026-07-24 — Sucursales y Puntos de Venta (multi-caja), Fase 0+1
+# AELA ERP — Sesión 2026-07-24 — Sucursales y Puntos de Venta (multi-caja) + Rediseño de planes en landing
 
 ## 🟢 PARA RETOMAR — checklist rápido
 
@@ -37,6 +37,12 @@
    - Fase 3: Stock por sucursal (hoy el inventario sigue siendo global por
      empresa, no por sucursal — dos sucursales comparten el mismo stock).
    - Fase 4: Reportes/filtros por sucursal.
+4. **Landing page** (ver detalle completo más abajo): revisar en el
+   navegador real (no solo capturas de Playwright) que los links de
+   WhatsApp abren con el mensaje prellenado correcto en móvil y desktop,
+   y que el formulario de registro (`registro.html`) sigue funcionando
+   igual para Lite/Medium/Pro (no se tocó, pero confirmar de todos modos
+   ya que comparten `style.css`).
 
 ---
 
@@ -215,8 +221,91 @@ sesión), caja, e inventario (probablemente requiere agregar `sucursalId` a
 
 ---
 
-## Cola de tareas de la sesión (sin empezar todavía)
+## Landing page — rediseño de la sección de Planes (implementado)
 
-- Rediseñar/actualizar la landing page con los planes nuevos (cards de
-  precios compartidas por el usuario, estilo "593 Sistemas" como
-  referencia) — pedido explícitamente para después de esta feature.
+### Contexto
+
+Pedido explícito del usuario, para después de terminar Sucursales. Compartió
+capturas de las tarjetas de planes de otra empresa (593 Sistemas) y luego de
+un anuncio de un competidor puntual (FICON Auditores: "Sistema SRI → Excel",
+$24.99/año, multiempresa, para despachos contables) — ambas como *referencia
+visual/de posicionamiento*, no para copiar nombres/precios ajenos.
+
+Se aclaró con varias preguntas de por medio (la landing muestra precios
+públicos, así que no había que asumir):
+- Los planes nuevos se arman **por combinación de módulos reales del
+  sistema** (`modulosContratados`, ya soportado por el backend desde antes
+  de esta sesión — "módulos activables por cliente, independiente del plan
+  lite/medium/pro"), no planes inventados sin relación con lo que el
+  sistema ya sabe hacer.
+- **Lite, Medium y Pro (los 3 planes originales) debían mantenerse tal cual
+  estaban** — el usuario corrigió explícitamente cuando la primera versión
+  del rediseño los había reemplazado por error. Quedaron reposicionados al
+  final de la grilla, sin tocar su contenido, precios ("Consultar") ni
+  enlaces (`registro.html?plan=medium|pro`, self-service con 15 días de
+  prueba).
+- Los planes **nuevos** (Esencial, Negocio, Completo, Plan Contador
+  Directo) no tienen aprovisionamiento automático — sus botones abren
+  **WhatsApp** (mismo número ya usado en todo el sitio,
+  `wa.me/5930978893520`) con un mensaje prellenado mencionando el plan y
+  precio, para que el asesor comercial atienda y cierre el negocio
+  manualmente.
+- El badge "⭐ Más popular" se quitó de ambas tarjetas que lo tenían
+  (Negocio y Medium) porque quedaba duplicado — pedido explícito de dejarlo
+  sin ninguna tarjeta destacada así por ahora.
+
+### Estructura final (6 tarjetas + 1 banner)
+
+1. **Lite** — Gratis. Se corrigió además un copy desactualizado: antes decía
+   que Lite no incluía facturación electrónica, cuando el plan Lite actual
+   del sistema sí la tiene (confirmado con el usuario).
+2. **Esencial** — $25/mes: Facturación + Declaraciones (F104) + ATS + Buzón
+   SRI. CTA → WhatsApp.
+3. **Negocio** — $45/mes: + POS, Inventario, Guías de remisión. CTA →
+   WhatsApp. (Antes tenía el badge "Más popular", ya quitado.)
+4. **Completo** — $75/mes: + Compras, Retenciones, Liquidaciones,
+   Contabilidad, Bancos, Talento Humano, Multiempresa. CTA → WhatsApp.
+5. **Medium** (sin cambios) — "Consultar", `registro.html?plan=medium`.
+   (Tenía el badge "Más popular" heredado de antes de esta sesión, también
+   quitado.)
+6. **Pro** (sin cambios) — "Consultar", `registro.html?plan=pro`.
+7. **Plan Contador Directo** — banner aparte (no es una tarjeta de la
+   grilla), $35/año, estilo visual distinto (fondo oscuro/dorado en vez del
+   violeta de las demás) para diferenciarlo como oferta especializada:
+   Buzón SRI (descarga automática de XML) + Declaraciones + ATS directo sin
+   pasar por Excel manual, multiempresa sin límite. Pensado para despachos
+   contables — posicionado explícitamente como superior al competidor
+   FICON (que solo entrega un Excel; AELA además arma la Declaración/ATS
+   lista). CTA → WhatsApp.
+
+Todos los planes de pago (2-7) incluyen la línea "🛠️ Instalación y
+configuración incluida" — el usuario notó que esto faltaba mencionarse en
+la landing original.
+
+### Archivos tocados
+
+`landing/index.html` (sección `#planes` reescrita, badge hero "3 Planes" →
+"Desde $0 · Planes por módulos", `<select id="plan">` del formulario de
+demo con las 5 opciones nuevas), `landing/style.css` (`.plan-cta-banner*`
+nuevo para el Plan Contador Directo, `.plans-grid` ajustado a
+`minmax(250px,1fr)` para que quepan 4 tarjetas por fila en vez de 3+1).
+
+### Verificación realizada
+
+- Renderizado real con Playwright (`playwright-core` + Microsoft Edge ya
+  instalado en el equipo, sin descargar Chromium) en desktop (1300px) y
+  mobile (390px) — capturas revisadas visualmente, sin quedar en texto.
+- Confirmado por inspección del DOM que el href del botón "Esencial" abre
+  el link de WhatsApp correcto con el texto prellenado bien codificado
+  (`encodeURIComponent`-style manual).
+- `registro.html` no se tocó — se confirmó que el `<select>` de plan ahí
+  sigue teniendo solo `lite`/`medium`/`pro` (self-service real), separado
+  del `<select>` de "plan de interés" del formulario de demo (que sí se
+  amplió a 5 opciones, pero ese formulario es `mailto:`, sin validación de
+  backend que se pudiera romper).
+- **Nota dejada pendiente para el usuario, no resuelta unilateralmente**:
+  con el badge quitado, Negocio y Medium siguen teniendo el estilo
+  visual "featured" (borde/fondo violeta) sin ninguna etiqueta que explique
+  por qué se ven distintas a las demás — se dejó así a propósito porque no
+  se pidió quitar el estilo, solo el badge de texto. Si en algún momento se
+  quiere destacar un solo plan (o ninguno visualmente), avisar.
