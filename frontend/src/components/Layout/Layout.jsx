@@ -187,6 +187,7 @@ const GRUPOS_MENU = [
       { to: '/configuracion-sri',          icon: '⚙️', label: 'Config SRI',    permiso: 'sri.configurar' },
       { to: '/configuracion-sistema',      icon: '🛠️', label: 'Config Sistema', permiso: 'sistema.configurar' },
       { to: '/configuracion/utilidades',   icon: '📊', label: 'Utilidades',     permiso: 'sistema.configurar' },
+      { to: '/configuracion/sucursales',   icon: '🏬', label: 'Sucursales y Puntos de Venta', permiso: 'sucursales.gestionar' },
       { to: '/suscripcion',               icon: '💳', label: 'Mi Suscripción',  permiso: 'sistema.configurar' },
     ],
   },

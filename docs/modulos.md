@@ -60,10 +60,19 @@ El sidebar usa un diseño de grupos colapsables:
 - **Tributario**: Retenciones, Liquidaciones, ATS, Declaraciones, Reportes Tributarios
 - **Contabilidad**: Contabilidad, Bancos
 - **Talento Humano**: Resumen, Empleados, Departamentos, Cargos, Nomina, Ausencias
-- **Configuracion**: Config SRI, Config Sistema
+- **Configuracion**: Config SRI, Config Sistema, Utilidades, Sucursales y Puntos de Venta
 - **Administracion**: Usuarios, Empresas
 
 Items bloqueados por plan o modulo desactivado muestran un candado visual. El grupo activo se abre automaticamente al navegar.
+
+## Sucursales y Puntos de Venta
+
+- Sucursal = local fisico de la empresa (establecimiento SRI, ej. "001", "002")
+- Punto de Venta/Caja = caja registradora dentro de una sucursal (punto de emision SRI)
+- CRUD en Configuracion > Sucursales y Puntos de Venta (permiso `sucursales.gestionar`)
+- selector de punto de venta activo en POS, Facturacion y Guias de Remision (oculto si la empresa solo tiene 1)
+- cada documento SRI (facturas, NC, ND, retenciones, liquidaciones) numera de forma independiente por establecimiento+puntoEmision
+- pendiente (fases futuras): caja diaria independiente por punto de venta, stock independiente por sucursal, reportes por sucursal — ver `docs/pendientes-2026-07-24.md`
 
 ## Facturacion
 

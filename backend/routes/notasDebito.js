@@ -175,6 +175,8 @@ router.post('/', async (req, res) => {
       motivos,
       ivaPorcentaje = 15,
       observaciones,
+      establecimiento: establecimientoBody,
+      puntoEmision: puntoEmisionBody,
     } = req.body;
 
     if (!motivos?.length) {
@@ -186,16 +188,21 @@ router.post('/', async (req, res) => {
 
     const config = await getConfigSRI(req.empresa.id);
 
-    // Calcular secuencial (respeta secuencial inicial configurado)
+    const establecimiento = String(establecimientoBody || config.establecimiento || '001').padStart(3, '0');
+    const puntoEmision = String(puntoEmisionBody || config.puntoEmision || '001').padStart(3, '0');
+
+    // Calcular secuencial (respeta secuencial inicial configurado), filtrado
+    // por establecimiento+puntoEmision para no pisar la numeración entre
+    // puntos de venta.
     const lastND = await prisma.notas_debito.findFirst({
-      where: { empresaId: req.empresa.id },
+      where: { empresaId: req.empresa.id, establecimiento, puntoEmision },
       orderBy: { secuencial: 'desc' },
       select: { secuencial: true },
     });
     const maxEnBD_nd = lastND ? (parseInt(lastND.secuencial, 10) || 0) : 0;
     const { siguienteSecuencial: nextSec_nd } = require('../utils/secuenciales');
     const secuencialNum_nd = await nextSec_nd(
-      prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+      prisma, req.empresa.id, establecimiento, puntoEmision,
       maxEnBD_nd, 'secInicialNotaDebito'
     );
     const secuencial = String(secuencialNum_nd).padStart(9, '0');
@@ -206,12 +213,12 @@ router.post('/', async (req, res) => {
       tipoCod:    sri.TIPO_COMPROBANTE.NOTA_DEBITO,
       ruc:        config.ruc,
       ambiente:   config.ambiente,
-      estab:      config.establecimiento,
-      ptoEmi:     config.puntoEmision,
+      estab:      establecimiento,
+      ptoEmi:     puntoEmision,
       secuencial,
     });
 
-    const numero = `${String(config.establecimiento).padStart(3,'0')}-${String(config.puntoEmision).padStart(3,'0')}-${secuencial}`;
+    const numero = `${establecimiento}-${puntoEmision}-${secuencial}`;
 
     // Calcular totales
     const totalSinImpuestos = parseFloat(
@@ -242,6 +249,8 @@ router.post('/', async (req, res) => {
         claveAcceso,
         numero,
         secuencial,
+        establecimiento,
+        puntoEmision,
         rucEmisor:                  config.ruc,
         codDocSustento,
         numeroDocSustento,

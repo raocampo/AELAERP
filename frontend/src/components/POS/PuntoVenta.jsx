@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import { abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
+import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
 import './PuntoVenta.css';
 
 const TIPOS_ID = [
@@ -49,6 +50,7 @@ export default function PuntoVenta() {
   const [clienteOriginal, setClienteOriginal] = useState({ direccion: '', email: '', telefono: '' });
   const [docEmitido, setDocEmitido] = useState(null); // { id, tipo, numero, total }
   const [showModalCliente, setShowModalCliente] = useState(false);
+  const [puntoVenta, setPuntoVenta] = useState(null);
   const dropRef = useRef(null);
 
   useEffect(() => {
@@ -331,6 +333,7 @@ export default function PuntoVenta() {
             precioUnitario: Number(item.precioUnitario || 0),
             descuento: 0,
           })),
+          ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
         });
         setCarrito([]);
         setDocEmitido({
@@ -369,6 +372,7 @@ export default function PuntoVenta() {
               ...(pagoRefFactura && { referencia: pagoRefFactura }),
             },
           ],
+          ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
         });
         setCarrito([]);
         setDocEmitido({
@@ -404,6 +408,8 @@ export default function PuntoVenta() {
           <input type="date" value={fechaEmision} onChange={(e) => setFechaEmision(e.target.value)} />
         </div>
       </div>
+
+      <SelectorPuntoVenta onChange={setPuntoVenta} />
 
       <div className="pos-grid">
         <section className="pos-card">

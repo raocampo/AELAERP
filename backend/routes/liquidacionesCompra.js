@@ -192,21 +192,28 @@ router.post('/', async (req, res) => {
       pagos,
       observaciones,
       fechaEmision,
+      establecimiento: establecimientoBody,
+      puntoEmision: puntoEmisionBody,
     } = req.body;
 
     if (!identificacionProveedor?.trim()) return res.status(400).json({ error: 'Identificación del proveedor es requerida' });
     if (!razonSocialProveedor?.trim())    return res.status(400).json({ error: 'Nombre del proveedor es requerido' });
     if (!detalles || !detalles.length)   return res.status(400).json({ error: 'Debe agregar al menos un detalle' });
 
-    // Calcular secuencial (respeta secuencial inicial configurado)
+    const establecimiento = String(establecimientoBody || config.establecimiento || '001').padStart(3, '0');
+    const puntoEmision = String(puntoEmisionBody || config.puntoEmision || '001').padStart(3, '0');
+
+    // Calcular secuencial (respeta secuencial inicial configurado), filtrado
+    // por establecimiento+puntoEmision para no pisar la numeración entre
+    // puntos de venta.
     const maxSeq = await prisma.liquidaciones_compra.aggregate({
       _max: { secuencial: true },
-      where: { rucEmisor: config.ruc },
+      where: { empresaId: req.empresa.id, rucEmisor: config.ruc, establecimiento, puntoEmision },
     });
     const maxEnBD_lc = maxSeq._max.secuencial || 0;
     const { siguienteSecuencial: nextSec_lc } = require('../utils/secuenciales');
     const secuencial = await nextSec_lc(
-      prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+      prisma, req.empresa.id, establecimiento, puntoEmision,
       maxEnBD_lc, 'secInicialLiquidacion'
     );
 
@@ -217,12 +224,12 @@ router.post('/', async (req, res) => {
       tipoCod:    sri.TIPO_COMPROBANTE.LIQUIDACION_COMPRA,
       ruc:        config.ruc,
       ambiente:   config.ambiente,
-      estab:      config.establecimiento,
-      ptoEmi:     config.puntoEmision,
+      estab:      establecimiento,
+      ptoEmi:     puntoEmision,
       secuencial,
     });
 
-    const numeroLiquidacion = sri.formatearNumeroFactura(config.establecimiento, config.puntoEmision, secuencial);
+    const numeroLiquidacion = sri.formatearNumeroFactura(establecimiento, puntoEmision, secuencial);
 
     const { xml: xmlGenerado, totales } = sri.generarXMLLiquidacionCompra(
       {
@@ -246,6 +253,8 @@ router.post('/', async (req, res) => {
         claveAcceso,
         numeroLiquidacion,
         secuencial,
+        establecimiento,
+        puntoEmision,
         rucEmisor:                  config.ruc,
         tipoIdentificacionProveedor,
         identificacionProveedor,

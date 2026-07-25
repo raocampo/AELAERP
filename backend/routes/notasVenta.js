@@ -587,7 +587,16 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
     const {
       tipoIdentificacion, identificacion, razonSocial, direccion, email, telefono,
       detalles, formaPago, fechaEmision, observaciones, clienteId,
+      establecimiento: establecimientoBody, puntoEmision: puntoEmisionBody,
     } = req.body;
+
+    // Nota: el secuencial de notas_venta sigue siendo único GLOBAL por
+    // empresa (no es comprobante electrónico SRI, @@unique([empresaId,
+    // secuencial]) — deuda técnica documentada), así que establecimiento/
+    // puntoEmision aquí son solo para reporting/trazabilidad del punto de
+    // venta que la emitió, no afectan el cálculo del secuencial.
+    const establecimiento = String(establecimientoBody || config.establecimiento || '001').padStart(3, '0');
+    const puntoEmision = String(puntoEmisionBody || config.puntoEmision || '001').padStart(3, '0');
 
     if (!tipoIdentificacion || !identificacion || !razonSocial) {
       return res.status(400).json({ success: false, mensaje: 'Faltan datos del destinatario' });
@@ -620,7 +629,7 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
       prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
       maxEnBD_nv, 'secInicialNotaVenta'
     );
-    const numeroNota = `${config.establecimiento}-${config.puntoEmision}-${String(secuencial).padStart(9, '0')}`;
+    const numeroNota = `${establecimiento}-${puntoEmision}-${String(secuencial).padStart(9, '0')}`;
 
     const fechaDoc = fechaEmision ? new Date(fechaEmision) : new Date();
     const nota = await prisma.$transaction(async (tx) => {
@@ -629,6 +638,8 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
           empresaId: req.empresa.id,
           numeroNota,
           secuencial,
+          establecimiento,
+          puntoEmision,
           rucEmisor: config.ruc,
           razonSocialEmisor: config.razonSocial,
           tipoIdentificacion,

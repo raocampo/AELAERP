@@ -72,6 +72,7 @@ const CajaDiaria = lazy(() => import('./components/Caja/CajaDiaria'));
 const PuntoVenta = lazy(() => import('./components/POS/PuntoVenta'));
 const ConfiguracionSistema = lazy(() => import('./components/Sistema/ConfiguracionSistema'));
 const TablaUtilidades      = lazy(() => import('./components/Configuracion/TablaUtilidades'));
+const Sucursales           = lazy(() => import('./components/Configuracion/Sucursales'));
 const ListaFacturas = lazy(() => import('./components/Facturacion/ListaFacturas'));
 const FormFactura = lazy(() => import('./components/Facturacion/FormFactura'));
 const DetalleFactura = lazy(() => import('./components/Facturacion/DetalleFactura'));
@@ -282,6 +283,7 @@ function App() {
                 <Route path="configuracion-sri" element={<PermissionRoute permission="sri.configurar"><ConfiguracionSRI /></PermissionRoute>} />
                 <Route path="configuracion-sistema" element={<PermissionRoute permission="sistema.configurar"><ConfiguracionSistema /></PermissionRoute>} />
                 <Route path="configuracion/utilidades" element={<PermissionRoute permission="sistema.configurar"><TablaUtilidades /></PermissionRoute>} />
+                <Route path="configuracion/sucursales" element={<PermissionRoute permission="sucursales.gestionar"><Sucursales /></PermissionRoute>} />
                 <Route path="suscripcion" element={<PagarSuscripcion />} />
 
                 {/* Hub financiero — Medium y Pro */}

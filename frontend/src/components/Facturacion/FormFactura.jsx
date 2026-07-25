@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { fmtLinea } from '../../utils/formato';
+import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
 import './FormFactura.css';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -289,6 +290,7 @@ const FormFactura = () => {
   const [fechaEmision,  setFecha]      = useState(format(new Date(), 'yyyy-MM-dd'));
   const [observaciones, setObs]        = useState('');
   const [submitting,    setSubmitting] = useState(false);
+  const [puntoVenta,    setPuntoVenta] = useState(null);
 
   const totales = calcularTotales(detalles);
 
@@ -558,6 +560,7 @@ const FormFactura = () => {
         observaciones: observaciones || undefined,
         fechaEmision,
         clienteId: clienteId || undefined,
+        ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
       });
 
       if (res.data?.data?.id) {
@@ -611,6 +614,8 @@ const FormFactura = () => {
           📋 Convirtiendo proforma a factura — los datos han sido pre-llenados. Revisa y completa la forma de pago.
         </div>
       )}
+
+      <SelectorPuntoVenta onChange={setPuntoVenta} />
 
       <form onSubmit={handleSubmit}>
 

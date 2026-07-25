@@ -27,6 +27,7 @@ const PERMISSIONS = {
   'empresas.gestionar': ['admin'],
   'sri.configurar':     ['admin', 'contador'],
   'sistema.configurar': ['admin', 'contador'],
+  'sucursales.gestionar': ['admin', 'contador'],
 
   'facturacion.ver':    ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],
   'facturacion.emitir': ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],

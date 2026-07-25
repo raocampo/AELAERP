@@ -82,6 +82,7 @@ model empresas {
   declaracionesCreditoIva          declaraciones_credito_iva[]
   guiasRemision                    guias_remision[]
   puntosEmision                    puntos_emision[]
+  sucursales                       sucursales[]
   bancos                           bancos[]
   cheques                          cheques[]
   departamentos                    departamentos[]
@@ -525,6 +526,11 @@ model facturas {
   claveAcceso                 String    @unique @db.VarChar(49)
   numeroFactura               String    @db.VarChar(17)
   secuencial                  String    @db.VarChar(9)
+  // Punto de venta/sucursal que emitió el documento — usado para calcular el
+  // siguiente secuencial por par establecimiento-puntoEmision (antes se
+  // calculaba solo por empresaId, lo que pisaría la numeración entre cajas).
+  establecimiento             String    @default("001") @db.VarChar(3)
+  puntoEmision                String    @default("001") @db.VarChar(3)
   rucEmisor                   String    @db.VarChar(13)
   razonSocialEmisor           String    @db.VarChar(300)
   tipoIdentificacionComprador String    @db.VarChar(2)
@@ -579,6 +585,7 @@ model facturas {
   @@index([estadoSri])
   @@index([fechaEmision])
   @@index([identificacionComprador])
+  @@index([empresaId, establecimiento, puntoEmision])
   @@map("facturas")
 }
 
@@ -754,6 +761,8 @@ model notas_credito {
   claveAcceso                 String    @unique @db.VarChar(49)
   numeroNC                    String    @db.VarChar(17)
   secuencial                  String    @db.VarChar(9)
+  establecimiento             String    @default("001") @db.VarChar(3)
+  puntoEmision                String    @default("001") @db.VarChar(3)
   facturaId                   Int?
   numeroFacturaAfectada       String    @db.VarChar(17)
   claveAccesoFacturaAfectada  String?   @db.VarChar(49)
@@ -787,6 +796,7 @@ model notas_credito {
 
   @@index([empresaId])
   @@index([estadoSri])
+  @@index([empresaId, establecimiento, puntoEmision])
   @@map("notas_credito")
 }
 
@@ -800,6 +810,8 @@ model retenciones {
   claveAcceso                 String    @unique @db.VarChar(49)
   numeroRetencion             String    @db.VarChar(17)
   secuencial                  String    @db.VarChar(9)
+  establecimiento             String    @default("001") @db.VarChar(3)
+  puntoEmision                String    @default("001") @db.VarChar(3)
   rucEmisor                   String    @db.VarChar(13)
   periodoFiscal               String    @db.VarChar(7)
   tipoIdentificacionProveedor String    @db.VarChar(2)
@@ -833,6 +845,7 @@ model retenciones {
   @@index([compraId])
   @@index([estadoSri])
   @@index([fechaEmision])
+  @@index([empresaId, establecimiento, puntoEmision])
   @@map("retenciones")
 }
 
@@ -845,6 +858,8 @@ model liquidaciones_compra {
   claveAcceso                 String    @unique @db.VarChar(49)
   numeroLiquidacion           String    @db.VarChar(17)
   secuencial                  String    @db.VarChar(9)
+  establecimiento             String    @default("001") @db.VarChar(3)
+  puntoEmision                String    @default("001") @db.VarChar(3)
   rucEmisor                   String    @db.VarChar(13)
   tipoIdentificacionProveedor String    @db.VarChar(2)
   identificacionProveedor     String    @db.VarChar(20)
@@ -881,6 +896,7 @@ model liquidaciones_compra {
   @@index([empresaId])
   @@index([estadoSri])
   @@index([fechaEmision])
+  @@index([empresaId, establecimiento, puntoEmision])
   @@map("liquidaciones_compra")
 }
 
@@ -894,6 +910,8 @@ model notas_debito {
   numero                      String    @db.VarChar(17)
   // formato: 001-001-000000001
   secuencial                  String    @db.VarChar(9)
+  establecimiento             String    @default("001") @db.VarChar(3)
+  puntoEmision                String    @default("001") @db.VarChar(3)
   rucEmisor                   String    @db.VarChar(13)
   // Documento sustento
   codDocSustento              String    @default("01") @db.VarChar(2)
@@ -933,6 +951,7 @@ model notas_debito {
   @@index([empresaId])
   @@index([estadoSri])
   @@index([fechaEmision])
+  @@index([empresaId, establecimiento, puntoEmision])
   @@map("notas_debito")
 }
 
@@ -947,6 +966,12 @@ model notas_venta {
   numeroNota          String   @db.VarChar(17)
   // formato: 001-001-000000001
   secuencial          Int
+  // Nota: el secuencial sigue siendo único GLOBAL por empresa (no por punto
+  // de venta) — no es comprobante electrónico SRI, menor riesgo de
+  // incumplimiento. establecimiento/puntoEmision se guardan igual para
+  // reporting y para que el punto de venta activo se refleje en el documento.
+  establecimiento     String   @default("001") @db.VarChar(3)
+  puntoEmision        String   @default("001") @db.VarChar(3)
   rucEmisor           String   @db.VarChar(13)
   razonSocialEmisor   String   @db.VarChar(300)
   // Datos comprador
@@ -1270,9 +1295,37 @@ model declaraciones_credito_iva {
 // Permite configurar el número inicial de cada tipo para empresas
 // que ya tienen documentos emitidos en otro sistema.
 // ====================================
+// ====================================
+// SUCURSALES — locales físicos de la empresa (concepto SRI "establecimiento").
+// Cada sucursal agrupa uno o más puntos_emision (cajas/puntos de venta físicos,
+// concepto SRI "punto de emisión"). establecimiento vive aquí como fuente de
+// verdad; puntos_emision.establecimiento se sincroniza desde esta tabla al
+// crear/editar un punto de venta (ver backend/routes/puntosEmision.js).
+// ====================================
+model sucursales {
+  id              Int      @id @default(autoincrement())
+  empresaId       Int
+  nombre          String   @db.VarChar(150)
+  establecimiento String   @db.VarChar(3)
+  direccion       String?  @db.VarChar(300)
+  telefono        String?  @db.VarChar(20)
+  esMatriz        Boolean  @default(false)
+  activo          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  empresa       empresas         @relation(fields: [empresaId], references: [id])
+  puntosEmision puntos_emision[]
+
+  @@unique([empresaId, establecimiento])
+  @@index([empresaId])
+  @@map("sucursales")
+}
+
 model puntos_emision {
   id              Int     @id @default(autoincrement())
   empresaId       Int
+  sucursalId      Int?
   establecimiento String  @default("001") @db.VarChar(3)
   puntoEmision    String  @default("001") @db.VarChar(3)
   descripcion     String? @db.VarChar(100)
@@ -1291,10 +1344,12 @@ model puntos_emision {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  empresa empresas @relation(fields: [empresaId], references: [id])
+  empresa  empresas    @relation(fields: [empresaId], references: [id])
+  sucursal sucursales? @relation(fields: [sucursalId], references: [id])
 
   @@unique([empresaId, establecimiento, puntoEmision])
   @@index([empresaId])
+  @@index([sucursalId])
   @@map("puntos_emision")
 }
 

@@ -482,6 +482,56 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "items_compra_pendientes_empresaId_idx" ON "items_compra_pendientes"("empresaId")`,
   `CREATE INDEX IF NOT EXISTS "items_compra_pendientes_compraId_idx" ON "items_compra_pendientes"("compraId")`,
   `CREATE INDEX IF NOT EXISTS "items_compra_pendientes_estado_idx" ON "items_compra_pendientes"("estado")`,
+  // Sucursales y Puntos de Venta multi-caja (2026-07-24) — Sucursal = local
+  // físico (establecimiento SRI); Punto de Venta/Caja = caja registradora
+  // dentro de una sucursal (punto de emisión SRI). Se agregan
+  // establecimiento/puntoEmision a los documentos SRI que hoy calculaban su
+  // secuencial sin filtrar por punto de venta (bug: dos cajas se pisarían
+  // la numeración) — mismo patrón que ya tenía guias_remision.
+  `CREATE TABLE IF NOT EXISTS "sucursales" (
+    "id"              SERIAL PRIMARY KEY,
+    "empresaId"       INTEGER NOT NULL,
+    "nombre"          VARCHAR(150) NOT NULL,
+    "establecimiento" VARCHAR(3) NOT NULL,
+    "direccion"       VARCHAR(300),
+    "telefono"        VARCHAR(20),
+    "esMatriz"        BOOLEAN NOT NULL DEFAULT false,
+    "activo"          BOOLEAN NOT NULL DEFAULT true,
+    "createdAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "sucursales_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "empresas"("id")
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "sucursales_empresaId_establecimiento_key" ON "sucursales"("empresaId", "establecimiento")`,
+  `CREATE INDEX IF NOT EXISTS "sucursales_empresaId_idx" ON "sucursales"("empresaId")`,
+  `ALTER TABLE "puntos_emision" ADD COLUMN IF NOT EXISTS "sucursalId" INTEGER`,
+  `CREATE INDEX IF NOT EXISTS "puntos_emision_sucursalId_idx" ON "puntos_emision"("sucursalId")`,
+  `ALTER TABLE "facturas" ADD COLUMN IF NOT EXISTS "establecimiento" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `ALTER TABLE "facturas" ADD COLUMN IF NOT EXISTS "puntoEmision" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `CREATE INDEX IF NOT EXISTS "facturas_empresaId_establecimiento_puntoEmision_idx" ON "facturas"("empresaId", "establecimiento", "puntoEmision")`,
+  `ALTER TABLE "notas_credito" ADD COLUMN IF NOT EXISTS "establecimiento" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `ALTER TABLE "notas_credito" ADD COLUMN IF NOT EXISTS "puntoEmision" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `CREATE INDEX IF NOT EXISTS "notas_credito_empresaId_establecimiento_puntoEmision_idx" ON "notas_credito"("empresaId", "establecimiento", "puntoEmision")`,
+  `ALTER TABLE "notas_debito" ADD COLUMN IF NOT EXISTS "establecimiento" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `ALTER TABLE "notas_debito" ADD COLUMN IF NOT EXISTS "puntoEmision" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `CREATE INDEX IF NOT EXISTS "notas_debito_empresaId_establecimiento_puntoEmision_idx" ON "notas_debito"("empresaId", "establecimiento", "puntoEmision")`,
+  `ALTER TABLE "retenciones" ADD COLUMN IF NOT EXISTS "establecimiento" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `ALTER TABLE "retenciones" ADD COLUMN IF NOT EXISTS "puntoEmision" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `CREATE INDEX IF NOT EXISTS "retenciones_empresaId_establecimiento_puntoEmision_idx" ON "retenciones"("empresaId", "establecimiento", "puntoEmision")`,
+  `ALTER TABLE "liquidaciones_compra" ADD COLUMN IF NOT EXISTS "establecimiento" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `ALTER TABLE "liquidaciones_compra" ADD COLUMN IF NOT EXISTS "puntoEmision" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `CREATE INDEX IF NOT EXISTS "liquidaciones_compra_empresaId_establecimiento_puntoEmision_idx" ON "liquidaciones_compra"("empresaId", "establecimiento", "puntoEmision")`,
+  `ALTER TABLE "notas_venta" ADD COLUMN IF NOT EXISTS "establecimiento" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  `ALTER TABLE "notas_venta" ADD COLUMN IF NOT EXISTS "puntoEmision" VARCHAR(3) NOT NULL DEFAULT '001'`,
+  // Backfill: derivar establecimiento/puntoEmision del número ya formateado
+  // en vez de dejar el default '001' parejo — algunos tenants (ej.
+  // importaciones históricas) tienen documentos de otro establecimiento/punto.
+  // Reversible/idempotente: si ya coincide, el UPDATE no cambia nada.
+  `UPDATE "facturas" SET "establecimiento" = SUBSTRING("numeroFactura" FROM 1 FOR 3), "puntoEmision" = SUBSTRING("numeroFactura" FROM 5 FOR 3) WHERE "numeroFactura" ~ '^[0-9]{3}-[0-9]{3}-[0-9]{9}$'`,
+  `UPDATE "notas_credito" SET "establecimiento" = SUBSTRING("numeroNC" FROM 1 FOR 3), "puntoEmision" = SUBSTRING("numeroNC" FROM 5 FOR 3) WHERE "numeroNC" ~ '^[0-9]{3}-[0-9]{3}-[0-9]{9}$'`,
+  `UPDATE "notas_debito" SET "establecimiento" = SUBSTRING("numero" FROM 1 FOR 3), "puntoEmision" = SUBSTRING("numero" FROM 5 FOR 3) WHERE "numero" ~ '^[0-9]{3}-[0-9]{3}-[0-9]{9}$'`,
+  `UPDATE "retenciones" SET "establecimiento" = SUBSTRING("numeroRetencion" FROM 1 FOR 3), "puntoEmision" = SUBSTRING("numeroRetencion" FROM 5 FOR 3) WHERE "numeroRetencion" ~ '^[0-9]{3}-[0-9]{3}-[0-9]{9}$'`,
+  `UPDATE "liquidaciones_compra" SET "establecimiento" = SUBSTRING("numeroLiquidacion" FROM 1 FOR 3), "puntoEmision" = SUBSTRING("numeroLiquidacion" FROM 5 FOR 3) WHERE "numeroLiquidacion" ~ '^[0-9]{3}-[0-9]{3}-[0-9]{9}$'`,
+  `UPDATE "notas_venta" SET "establecimiento" = SUBSTRING("numeroNota" FROM 1 FOR 3), "puntoEmision" = SUBSTRING("numeroNota" FROM 5 FOR 3) WHERE "numeroNota" ~ '^[0-9]{3}-[0-9]{3}-[0-9]{9}$'`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

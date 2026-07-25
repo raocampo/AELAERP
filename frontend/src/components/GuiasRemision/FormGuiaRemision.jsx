@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
+import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
 import './GuiasRemision.css';
 
 const DETALLE_VACIO = { codigoInterno: '', descripcion: '', cantidad: 1 };
@@ -180,20 +181,27 @@ export default function FormGuiaRemision() {
         {/* ── Sección: Establecimiento y fechas ── */}
         <div className="gr-section">
           <h2 className="gr-section-title">Datos de Transporte</h2>
-          <div className="gr-grid-3">
-            <div className="gr-field">
-              <label>Establecimiento</label>
-              <input type="text" maxLength={3} value={form.establecimiento}
-                onChange={(e) => set('establecimiento', e.target.value.replace(/\D/g,'').padStart(3,'0').slice(-3))}
-                className="gr-input" />
+          {esEdicion ? (
+            <div className="gr-grid-3">
+              <div className="gr-field">
+                <label>Establecimiento</label>
+                <input type="text" maxLength={3} value={form.establecimiento}
+                  onChange={(e) => set('establecimiento', e.target.value.replace(/\D/g,'').padStart(3,'0').slice(-3))}
+                  className="gr-input" />
+              </div>
+              <div className="gr-field">
+                <label>Punto Emisión</label>
+                <input type="text" maxLength={3} value={form.puntoEmision}
+                  onChange={(e) => set('puntoEmision', e.target.value.replace(/\D/g,'').padStart(3,'0').slice(-3))}
+                  className="gr-input" />
+              </div>
             </div>
-            <div className="gr-field">
-              <label>Punto Emisión</label>
-              <input type="text" maxLength={3} value={form.puntoEmision}
-                onChange={(e) => set('puntoEmision', e.target.value.replace(/\D/g,'').padStart(3,'0').slice(-3))}
-                className="gr-input" />
-            </div>
-          </div>
+          ) : (
+            <SelectorPuntoVenta
+              label="Sucursal / Punto de venta:"
+              onChange={(p) => { set('establecimiento', p.establecimiento); set('puntoEmision', p.puntoEmision); }}
+            />
+          )}
           <div className="gr-grid-3">
             <div className="gr-field">
               <label>Fecha Inicio Transporte *</label>

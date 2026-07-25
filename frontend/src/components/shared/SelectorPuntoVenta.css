@@ -1,0 +1,27 @@
+.selector-punto-venta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  width: fit-content;
+}
+
+.selector-punto-venta label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #4338ca;
+  white-space: nowrap;
+}
+
+.selector-punto-venta select {
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  background: #fff;
+  color: #1e293b;
+}

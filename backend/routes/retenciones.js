@@ -517,6 +517,8 @@ router.post('/', async (req, res) => {
       fechaEmisionDocSustento,
       impuestos = [],
       observaciones,
+      establecimiento: establecimientoBody,
+      puntoEmision: puntoEmisionBody,
     } = req.body;
 
     const compra = compraId
@@ -541,15 +543,20 @@ router.post('/', async (req, res) => {
     if (!fechaEmisionDocSustentoFinal) return res.status(400).json({ ok: false, error: 'fechaEmisionDocSustento requerida' });
     if (!impuestos || impuestos.length === 0) return res.status(400).json({ ok: false, error: 'Debe ingresar al menos un impuesto retenido' });
 
-    // Calcular secuencial (respeta secuencial inicial configurado)
+    const establecimiento = String(establecimientoBody || config.establecimiento || '001').padStart(3, '0');
+    const puntoEmision = String(puntoEmisionBody || config.puntoEmision || '001').padStart(3, '0');
+
+    // Calcular secuencial (respeta secuencial inicial configurado), filtrado
+    // por establecimiento+puntoEmision para no pisar la numeración entre
+    // puntos de venta.
     const maxSec = await prisma.retenciones.aggregate({
       _max: { secuencial: true },
-      where: { empresaId: req.empresa.id, rucEmisor: config.ruc },
+      where: { empresaId: req.empresa.id, rucEmisor: config.ruc, establecimiento, puntoEmision },
     });
     const maxEnBD = parseInt(maxSec._max.secuencial || '0', 10) || 0;
     const { siguienteSecuencial: nextSec } = require('../utils/secuenciales');
     const secuencial = await nextSec(
-      prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+      prisma, req.empresa.id, establecimiento, puntoEmision,
       maxEnBD, 'secInicialRetencion'
     );
 
@@ -560,12 +567,12 @@ router.post('/', async (req, res) => {
       tipoCod:  sri.TIPO_COMPROBANTE.COMPROBANTE_RETENCION,
       ruc:      config.ruc,
       ambiente: config.ambiente,
-      estab:    config.establecimiento,
-      ptoEmi:   config.puntoEmision,
+      estab:    establecimiento,
+      ptoEmi:   puntoEmision,
       secuencial,
     });
 
-    const numeroRetencion = sri.formatearNumeroFactura(config.establecimiento, config.puntoEmision, secuencial);
+    const numeroRetencion = sri.formatearNumeroFactura(establecimiento, puntoEmision, secuencial);
 
     // Calcular total retenido
     const totalRetenido = impuestos.reduce((s, i) => s + parseFloat(i.valorRetenido || 0), 0);
@@ -595,6 +602,8 @@ router.post('/', async (req, res) => {
           claveAcceso,
           numeroRetencion,
           secuencial: String(secuencial),
+          establecimiento,
+          puntoEmision,
           rucEmisor: config.ruc,
           periodoFiscal,
           tipoIdentificacionProveedor: tipoIdentificacionFinal,

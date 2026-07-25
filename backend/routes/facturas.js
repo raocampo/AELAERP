@@ -993,6 +993,8 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       observaciones,
       clienteId,
       fechaEmision,
+      establecimiento: establecimientoBody,
+      puntoEmision: puntoEmisionBody,
     } = req.body;
 
     // Validaciones mínimas
@@ -1005,14 +1007,23 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
 
     const detallesFinales = detalles;
 
+    // Punto de venta que emite el documento — si no viene en el body (ej.
+    // integraciones que no seleccionan punto de venta), cae al único
+    // establecimiento/puntoEmision configurado en configuracion_sri.
+    const establecimiento = String(establecimientoBody || config.establecimiento || '001').padStart(3, '0');
+    const puntoEmision = String(puntoEmisionBody || config.puntoEmision || '001').padStart(3, '0');
+
     // Siguiente secuencial (respeta secuencial inicial si la empresa migró desde otro sistema)
+    // Filtrado por establecimiento+puntoEmision — si no, dos puntos de venta
+    // activos se pisarían la numeración entre sí (cada par SRI debe llevar su
+    // propia secuencia consecutiva, no una compartida por toda la empresa).
     const lastFact = await prisma.facturas.findFirst({
-      where: { empresaId: req.empresa.id, rucEmisor: config.ruc },
+      where: { empresaId: req.empresa.id, rucEmisor: config.ruc, establecimiento, puntoEmision },
       orderBy: { secuencial: 'desc' },
     });
     const maxEnBD = lastFact ? (parseInt(String(lastFact.secuencial), 10) || 0) : 0;
     const secuencialNum = await siguienteSecuencial(
-      prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+      prisma, req.empresa.id, establecimiento, puntoEmision,
       maxEnBD, 'secInicialFactura'
     );
     const secuencial = String(secuencialNum).padStart(9, '0');
@@ -1025,12 +1036,12 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       tipoCod:    '01',
       ruc:        config.ruc,
       ambiente:   config.ambiente,
-      estab:      config.establecimiento,
-      ptoEmi:     config.puntoEmision,
+      estab:      establecimiento,
+      ptoEmi:     puntoEmision,
       secuencial,
     });
 
-    const numeroFactura = sri.formatearNumeroFactura(config.establecimiento, config.puntoEmision, secuencial);
+    const numeroFactura = sri.formatearNumeroFactura(establecimiento, puntoEmision, secuencial);
 
     // Generar XML
     const { xml, totales } = sri.generarXMLFactura({
@@ -1050,6 +1061,8 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
           claveAcceso,
           numeroFactura,
           secuencial,
+          establecimiento,
+          puntoEmision,
           rucEmisor: config.ruc,
           razonSocialEmisor: config.razonSocial,
           tipoIdentificacionComprador,
@@ -1227,14 +1240,21 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
         return res.status(400).json({ ok: false, error: 'La factura no tiene detalles para incluir en la Nota de Crédito' });
       }
 
-      // Siguiente secuencial de NC
+      // NC de anulación automática: se numera bajo el MISMO punto de venta que
+      // emitió la factura original (corrección de ese documento específico),
+      // no el punto activo de quien la anula.
+      const establecimiento = factura.establecimiento || config.establecimiento;
+      const puntoEmision = factura.puntoEmision || config.puntoEmision;
+
+      // Siguiente secuencial de NC — filtrado por establecimiento+puntoEmision
+      // (ver nota de POST / arriba sobre por qué no puede ser solo por empresaId).
       const lastNC = await prisma.notas_credito.findFirst({
-        where: { empresaId: req.empresa.id },
+        where: { empresaId: req.empresa.id, establecimiento, puntoEmision },
         orderBy: { secuencial: 'desc' },
       });
       const maxEnBD_nc = lastNC ? (parseInt(String(lastNC.secuencial), 10) || 0) : 0;
       const secuencialNum_nc = await siguienteSecuencial(
-        prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+        prisma, req.empresa.id, establecimiento, puntoEmision,
         maxEnBD_nc, 'secInicialNotaCredito'
       );
       const secuencial = String(secuencialNum_nc).padStart(9, '0');
@@ -1245,11 +1265,11 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
         tipoCod:    '04',
         ruc:        config.ruc,
         ambiente:   config.ambiente,
-        estab:      config.establecimiento,
-        ptoEmi:     config.puntoEmision,
+        estab:      establecimiento,
+        ptoEmi:     puntoEmision,
         secuencial,
       });
-      const numeroNC = sri.formatearNumeroFactura(config.establecimiento, config.puntoEmision, secuencial);
+      const numeroNC = sri.formatearNumeroFactura(establecimiento, puntoEmision, secuencial);
 
       const { xml, totales } = sri.generarXMLNotaCredito({
         claveAcceso, secuencial, fechaEmision: fecha,
@@ -1266,6 +1286,7 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
         data: {
           empresaId:                   req.empresa.id,
           claveAcceso, numeroNC, secuencial,
+          establecimiento, puntoEmision,
           tipoIdentificacionComprador: factura.tipoIdentificacionComprador,
           identificacionComprador:     factura.identificacionComprador,
           razonSocialComprador:        factura.razonSocialComprador,
@@ -1584,6 +1605,8 @@ router.post('/notas-credito', permitirEmitirFacturacion, async (req, res) => {
       facturaId,
       motivoModificacion,
       detalles,
+      establecimiento: establecimientoBody,
+      puntoEmision: puntoEmisionBody,
     } = req.body;
 
     if (!facturaId || !motivoModificacion || !detalles?.length) {
@@ -1598,14 +1621,20 @@ router.post('/notas-credito', permitirEmitirFacturacion, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'No se puede emitir Nota de Crédito sobre una factura anulada' });
     }
 
-    // Siguiente secuencial de NC (respeta secuencial inicial configurado)
+    // Punto de venta: el elegido explícitamente, o por defecto el mismo de la
+    // factura original que se está corrigiendo.
+    const establecimiento = String(establecimientoBody || factura.establecimiento || config.establecimiento || '001').padStart(3, '0');
+    const puntoEmision = String(puntoEmisionBody || factura.puntoEmision || config.puntoEmision || '001').padStart(3, '0');
+
+    // Siguiente secuencial de NC (respeta secuencial inicial configurado),
+    // filtrado por establecimiento+puntoEmision.
     const lastNC = await prisma.notas_credito.findFirst({
-      where: { empresaId: req.empresa.id },
+      where: { empresaId: req.empresa.id, establecimiento, puntoEmision },
       orderBy: { secuencial: 'desc' },
     });
     const maxEnBD_nc = lastNC ? (parseInt(String(lastNC.secuencial), 10) || 0) : 0;
     const secuencialNum_nc = await siguienteSecuencial(
-      prisma, req.empresa.id, config.establecimiento, config.puntoEmision,
+      prisma, req.empresa.id, establecimiento, puntoEmision,
       maxEnBD_nc, 'secInicialNotaCredito'
     );
     const secuencial = String(secuencialNum_nc).padStart(9, '0');
@@ -1616,11 +1645,11 @@ router.post('/notas-credito', permitirEmitirFacturacion, async (req, res) => {
       tipoCod:    '04',
       ruc:        config.ruc,
       ambiente:   config.ambiente,
-      estab:      config.establecimiento,
-      ptoEmi:     config.puntoEmision,
+      estab:      establecimiento,
+      ptoEmi:     puntoEmision,
       secuencial,
     });
-    const numeroNC = sri.formatearNumeroFactura(config.establecimiento, config.puntoEmision, secuencial);
+    const numeroNC = sri.formatearNumeroFactura(establecimiento, puntoEmision, secuencial);
 
     const { xml, totales } = sri.generarXMLNotaCredito({
       claveAcceso, secuencial, fechaEmision: fecha,
@@ -1637,6 +1666,7 @@ router.post('/notas-credito', permitirEmitirFacturacion, async (req, res) => {
       data: {
         empresaId: req.empresa.id,
         claveAcceso, numeroNC, secuencial,
+        establecimiento, puntoEmision,
         tipoIdentificacionComprador: factura.tipoIdentificacionComprador,
         identificacionComprador:     factura.identificacionComprador,
         razonSocialComprador:        factura.razonSocialComprador,

@@ -61,6 +61,7 @@ const anticiposRoutes = require('./routes/anticipos');
 const transportistasRoutes = require('./routes/transportistas');
 const talentoHumanoRoutes = require('./routes/talentoHumano');
 const puntosEmisionRoutes = require('./routes/puntosEmision');
+const sucursalesRoutes = require('./routes/sucursales');
 const superAdminRoutes    = require('./routes/superAdmin');
 const impresoraRoutes     = require('./routes/impresora');
 const utilidadesRoutes    = require('./routes/utilidades');
@@ -124,6 +125,7 @@ app.use('/api/caja-chica', cajaChicaRoutes);
 app.use('/api/anticipos', anticiposRoutes);
 app.use('/api/talento-humano', soloMediumOPro, talentoHumanoRoutes);
 app.use('/api/puntos-emision', puntosEmisionRoutes);
+app.use('/api/sucursales', sucursalesRoutes);
 app.use('/api/super-admin',   superAdminRoutes);
 app.use('/api/ext/v1',        externalRoutes);        // WebService externo — autenticación por API key
 app.use('/api/suscripcion-pago', suscripcionPagoRoutes); // Pagos de suscripción (PayPhone, transferencia, etc.)
