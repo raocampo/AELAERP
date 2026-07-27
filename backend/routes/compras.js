@@ -566,6 +566,7 @@ router.get('/', async (req, res) => {
       fechaDesde, fechaHasta,
       proveedor, busqueda,
       tipoGasto, origenRegistro,
+      pendienteRevisionCedula,
     } = req.query;
     const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const where = { empresaId: req.empresa.id };
@@ -592,6 +593,12 @@ router.get('/', async (req, res) => {
     // Filtro por origen (MANUAL, BUZON_SRI, XML_IMPORTADO, etc.)
     if (origenRegistro) where.origenRegistro = origenRegistro;
 
+    // Facturadas a cédula que el contador todavía no ha revisado/aprobado
+    if (pendienteRevisionCedula === 'true') {
+      where.receptorEsRuc = false;
+      where.aprobadaPorContador = false;
+    }
+
     // ─── Cache de columnas disponibles ──────────────────────────
     const cols = await getColsCompra();
     const usarTipoGasto = cols.tipoGasto;
@@ -614,7 +621,7 @@ router.get('/', async (req, res) => {
       ...(cols.tipoGasto ? { tipoGasto: true } : {}),
       ...(cols.anulada ? { anulada: true } : {}),
       ...(cols.motivoAnulacion ? { motivoAnulacion: true } : {}),
-      ...(cols.receptorEsRuc ? { receptorEsRuc: true } : {}),
+      ...(cols.receptorEsRuc ? { receptorEsRuc: true, aprobadaPorContador: true } : {}),
       ...(cols.tipoComprobante ? { tipoComprobante: true } : {}),
       createdAt: true,
     };
@@ -1489,7 +1496,7 @@ router.put('/:id', async (req, res) => {
 
     const { observaciones, proveedorId, fechaEmision, tipoGasto, tipoComprobante,
             subtotal0, subtotal15, totalIva, cuentaGastoId,
-            esGastoPersonal, categoriaGastoPersonal } = req.body || {};
+            esGastoPersonal, categoriaGastoPersonal, aprobadaPorContador } = req.body || {};
 
     const data = {};
     if (observaciones !== undefined) data.observaciones = limpiarTexto(observaciones) || null;
@@ -1498,6 +1505,9 @@ router.put('/:id', async (req, res) => {
     if (tipoComprobante !== undefined) data.tipoComprobante = normalizarTipoComprobante(tipoComprobante);
     if (esGastoPersonal !== undefined) data.esGastoPersonal = toBoolean(esGastoPersonal, false);
     if (categoriaGastoPersonal !== undefined) data.categoriaGastoPersonal = limpiarTexto(categoriaGastoPersonal) || null;
+    // Revisión del contador: compra facturada a cédula que sí corresponde a la
+    // actividad económica — que cuente en el crédito tributario de IVA (F104/F101).
+    if (aprobadaPorContador !== undefined) data.aprobadaPorContador = toBoolean(aprobadaPorContador, false);
 
     if (cuentaGastoId !== undefined) {
       if (!cuentaGastoId) {

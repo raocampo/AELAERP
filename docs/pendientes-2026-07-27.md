@@ -254,3 +254,69 @@ regularmente hay más de 50 archivos, y el sistema los rechaza.
   navegador disponible aquí) ni un lote realmente grande (cientos de
   archivos) — la lógica es la misma que ya corre en producción para el
   scraper, solo se verificó con 1-2 archivos por request.
+
+## Parte 6 (misma sesión nueva) — Compras a cédula: el contador puede aprobarlas para que cuenten en declaraciones
+
+El usuario reportó que "se restringió importar facturas de compra con
+cédula" y que un contador cliente pidió poder incluirlas cuando sí
+corresponden a la actividad económica, marcándolas con un check tras
+revisarlas.
+
+**Investigación previa (importante)**: no existía ningún bloqueo de
+importación — las facturas a cédula ya se importaban con normalidad (se
+vio en la sesión del 2026-07-12, `docs/pendientes-2026-07-12.md` parte 5,
+a pedido del mismo cliente: "solo sirven las facturas... con RUC, no con
+cédula"). Lo que sí pasaba es que quedaban **excluidas sin excepción** del
+crédito tributario de IVA (F104) y del F101, sin ningún mecanismo para
+revertirlo caso por caso. Eso es lo que el contador ahora pide poder hacer.
+
+### Implementado
+- Columna nueva `aprobadaPorContador` (Boolean, default `false`) en
+  `facturas_compra` — agregada a `schema.prisma`, migración
+  `20260727010000_compras_aprobada_contador` y `applySchemaFixes.js` (las
+  3 partes, por la regla de oro de este proyecto: sin `applySchemaFixes.js`
+  la columna nunca llega a las BDs de los tenants en producción).
+- `PUT /compras/:id` acepta `aprobadaPorContador` en el body (mismo patrón
+  ya usado por `esGastoPersonal`, sin gate de rol adicional — consistente
+  con cómo ya funciona ese campo).
+- Los 3 filtros que excluían duro por `receptorEsRuc === false` ahora
+  respetan la aprobación: `declaraciones.js` (F104 y F101) y
+  `facturas.js` (`GET /reportes/tributario`) agregan `aprobadaPorContador:
+  true` al `OR` de inclusión. El filtro `esGastoPersonal` sigue mandando
+  igual — si está marcada como gasto personal, se excluye aunque el
+  contador la haya aprobado (son dos motivos distintos).
+- Nuevo filtro `pendienteRevisionCedula=true` en `GET /compras` — para que
+  el contador encuentre rápido las facturas a cédula que aún no revisó.
+  Botón "🪪 A revisar (cédula)" en `ListaCompras.jsx`, mismo patrón visual
+  que el botón "📥 Buzón SRI" que ya existía.
+- `DetalleCompra.jsx`: nuevo checkbox en el modal "Editar" — "Revisado por
+  contador — sí corresponde a la actividad" — visible solo cuando
+  `receptorEsRuc === false` (es el único caso donde tiene efecto). El badge
+  de solo lectura que antes decía siempre "⚠️ Facturado a cédula, no
+  deducible" ahora muestra "✅ Facturado a cédula — aprobado por contador"
+  cuando corresponde.
+- Mensaje de aviso en `Declaraciones.jsx` (F104) actualizado para explicar
+  la opción nueva en vez de solo pedir que el proveedor reemita el
+  comprobante.
+
+### Verificación realizada
+- `node --test`: 29/29. `npx vite build`: limpio.
+- Migración aplicada contra `scfi_dev` real vía `applySchemaFixes.js`
+  (columna confirmada con `information_schema.columns`).
+- **Probado end-to-end contra `scfi_dev` real**, servidor propio en puerto
+  5601: creé una `facturas_compra` de prueba con `receptorEsRuc: false`,
+  confirmé que el F104 la excluía (`comprasExcluidasCedula: 1`,
+  `cantidadCompras: 0`), la aprobé vía `PUT /compras/:id`
+  (`aprobadaPorContador: true`), y confirmé que el F104 pasó a incluirla
+  (`comprasExcluidasCedula: 0`, `cantidadCompras: 1`, `ivaCreditoFiscal:
+  1.5` con el IVA de la factura de prueba). También verifiqué que
+  `GET /compras` devuelve el campo nuevo y que el filtro
+  `pendienteRevisionCedula=true` deja de mostrarla tras aprobarla. Registro
+  de prueba eliminado de la base al terminar.
+- **Pendiente para el usuario**: reiniciar el backend de desarrollo (puerto
+  5600) para que tome el cliente Prisma regenerado con la columna nueva —
+  mientras el proceso viejo siga corriendo, no reconoce `aprobadaPorContador`
+  y cualquier request que la use fallaría con "Unknown argument". En
+  Railway esto no aplica: el deploy siempre arranca un proceso nuevo.
+- **No probado**: el checkbox y el badge en un navegador real (no hay
+  entorno de navegador disponible aquí).

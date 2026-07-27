@@ -93,8 +93,11 @@ router.get('/f104', async (req, res) => {
 
     // ── COMPRAS ─────────────────────────────────────────────────────────────────
     // Reglas de inclusión en el F104:
-    //   1. Excluir si receptorEsRuc === false (facturadas a cédula personal, no al RUC)
-    //   2. Excluir si esGastoPersonal === true (alimentación, salud, etc. — persona natural)
+    //   1. Excluir si receptorEsRuc === false (facturadas a cédula personal, no al
+    //      RUC) — salvo que el contador la haya revisado y marcado aprobadaPorContador
+    //      (sí corresponde a la actividad económica, aunque llegó a cédula).
+    //   2. Excluir si esGastoPersonal === true (alimentación, salud, etc. — persona
+    //      natural) — esto manda incluso si aprobadaPorContador está marcado.
     //   3. receptorEsRuc null (compras manuales/históricas sin XML) SÍ se incluye.
     const compras = await db.facturas_compra.findMany({
       where: {
@@ -102,7 +105,7 @@ router.get('/f104', async (req, res) => {
         fechaEmision:    filtroFecha,
         anulada:         false,
         esGastoPersonal: { not: true },
-        OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }],
+        OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }, { aprobadaPorContador: true }],
       },
       select: {
         subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
@@ -152,7 +155,7 @@ router.get('/f104', async (req, res) => {
     });
 
     const comprasExcluidasCedula = await db.facturas_compra.count({
-      where: { empresaId, fechaEmision: filtroFecha, anulada: false, receptorEsRuc: false },
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, receptorEsRuc: false, aprobadaPorContador: false },
     });
 
     // ── RETENCIONES DE IVA QUE LE HAN SIDO EFECTUADAS (recibidas de clientes) ───
@@ -438,7 +441,7 @@ router.get('/f101', async (req, res) => {
         _count: { id: true },
       }),
       db.facturas_compra.aggregate({
-        where: { empresaId, fechaEmision: filtroFecha, anulada: false, OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }] },
+        where: { empresaId, fechaEmision: filtroFecha, anulada: false, OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }, { aprobadaPorContador: true }] },
         _sum:   { importeTotal: true, totalIva: true },
         _count: { id: true },
       }),

@@ -581,6 +581,10 @@ const FIXES = [
   // (TCP, ya existente) | 'usb' (WebUSB desde el navegador — el backend en
   // la nube no puede alcanzar un puerto USB del cliente).
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "impresoraModo" VARCHAR(10) NOT NULL DEFAULT 'ninguna'`,
+  // El contador puede revisar una compra facturada a cédula (receptorEsRuc=
+  // false) y aprobarla como gasto de la actividad económica, para que sí
+  // cuente en el crédito tributario de IVA (F104) y en el F101 (2026-07-27).
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "aprobadaPorContador" BOOLEAN NOT NULL DEFAULT false`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

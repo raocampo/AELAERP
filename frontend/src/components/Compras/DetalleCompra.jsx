@@ -64,6 +64,7 @@ export default function DetalleCompra() {
   const [editTotalIva, setEditTotalIva] = useState('');
   const [editEsGastoPersonal, setEditEsGastoPersonal] = useState(false);
   const [editCategoriaGastoPersonal, setEditCategoriaGastoPersonal] = useState('');
+  const [editAprobadaPorContador, setEditAprobadaPorContador] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   // Modal anular
@@ -164,6 +165,7 @@ export default function DetalleCompra() {
     setEditTotalIva(String(compra?.totalIva ?? ''));
     setEditEsGastoPersonal(!!compra?.esGastoPersonal);
     setEditCategoriaGastoPersonal(compra?.categoriaGastoPersonal || '');
+    setEditAprobadaPorContador(!!compra?.aprobadaPorContador);
     setModalEditar(true);
   };
 
@@ -175,6 +177,7 @@ export default function DetalleCompra() {
         tipoGasto: editTipoGasto || null,
         esGastoPersonal: editEsGastoPersonal,
         categoriaGastoPersonal: editEsGastoPersonal ? (editCategoriaGastoPersonal || null) : null,
+        aprobadaPorContador: editAprobadaPorContador,
       };
       // Solo enviar subtotales si el usuario los modificó (no vacíos)
       if (editSubtotal0 !== '') body.subtotal0  = parseFloat(editSubtotal0)  || 0;
@@ -371,6 +374,19 @@ export default function DetalleCompra() {
         <div className="dc-modal-overlay">
           <div className="dc-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Editar compra {compra.numeroFactura}</h3>
+            {/* Facturada a cédula: el contador puede revisarla y aprobarla como gasto
+                de la actividad económica para que sí cuente en el F104/F101 */}
+            {compra.receptorEsRuc === false && (
+              <label className="dc-modal-label" style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={editAprobadaPorContador}
+                  onChange={(e) => setEditAprobadaPorContador(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: '#16a34a' }}
+                />
+                <span>Revisado por contador — sí corresponde a la actividad (incluir en declaración IVA aunque esté facturada a cédula)</span>
+              </label>
+            )}
             {/* Gasto personal — excluye esta factura de la declaración IVA */}
             <label className="dc-modal-label" style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem', cursor: 'pointer' }}>
               <input
@@ -825,9 +841,15 @@ export default function DetalleCompra() {
           {compra.receptorEsRuc === false && (
             <div className="detalle-compra-row">
               <span>Declaraciones</span>
-              <span className="detalle-compra-badge detalle-compra-badge-alert" title="Este comprobante llegó dirigido a una cédula personal, no al RUC de la empresa — no cuenta para el F104/F101">
-                ⚠️ Facturado a cédula, no deducible
-              </span>
+              {compra.aprobadaPorContador ? (
+                <span className="detalle-compra-badge" style={{ background: '#dcfce7', color: '#15803d' }} title="Facturado a cédula, pero el contador la revisó y confirmó que corresponde a la actividad económica — sí cuenta para el F104/F101">
+                  ✅ Facturado a cédula — aprobado por contador
+                </span>
+              ) : (
+                <span className="detalle-compra-badge detalle-compra-badge-alert" title="Este comprobante llegó dirigido a una cédula personal, no al RUC de la empresa — no cuenta para el F104/F101 salvo que el contador la apruebe (botón Editar)">
+                  ⚠️ Facturado a cédula, no deducible
+                </span>
+              )}
             </div>
           )}
         </article>

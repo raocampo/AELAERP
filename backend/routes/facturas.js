@@ -1829,14 +1829,15 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
     });
 
     // ── Compras del período — mismos filtros que el F104 real ─────────────────
-    // Excluye receptorEsRuc===false (facturado a cédula personal) y
+    // Excluye receptorEsRuc===false (facturado a cédula personal) salvo que el
+    // contador la haya aprobado (aprobadaPorContador), y excluye siempre
     // esGastoPersonal===true; receptorEsRuc null (compras manuales/históricas
     // sin XML) sí se incluye. Ver declaraciones.js /f104 para el detalle.
     const compras = await db.facturas_compra.findMany({
       where: {
         empresaId, fechaEmision: filtroFecha, anulada: false,
         esGastoPersonal: { not: true },
-        OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }],
+        OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }, { aprobadaPorContador: true }],
       },
       select: {
         id: true, numeroFactura: true, fechaEmision: true,

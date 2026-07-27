@@ -14,6 +14,7 @@ const FILTROS_INICIALES = {
   fechaHasta: '',
   tipoGasto: '',
   origenRegistro: '',
+  pendienteRevisionCedula: '',
   page: 1,
 };
 
@@ -83,7 +84,7 @@ function InfoOps({ item }) {
     setAbierto((v) => !v);
   };
 
-  const tieneAviso = item.receptorEsRuc === false;
+  const tieneAviso = item.receptorEsRuc === false && !item.aprobadaPorContador;
 
   return (
     <>
@@ -114,6 +115,11 @@ function InfoOps({ item }) {
           {tieneAviso && (
             <div className="compras-info-fila compras-info-aviso">
               ⚠️ Facturado a cédula personal, no al RUC de la empresa — no cuenta para declaraciones.
+            </div>
+          )}
+          {item.receptorEsRuc === false && item.aprobadaPorContador && (
+            <div className="compras-info-fila" style={{ color: '#15803d' }}>
+              ✅ Facturado a cédula — aprobado por contador, cuenta para declaraciones.
             </div>
           )}
         </div>,
@@ -532,6 +538,13 @@ export default function ListaCompras() {
           title="Mostrar solo facturas importadas desde el Buzón SRI"
         >
           {filtros.origenRegistro === 'BUZON_SRI' ? '✅ Buzón SRI' : '📥 Buzón SRI'}
+        </button>
+        <button
+          className={`btn-${filtros.pendienteRevisionCedula === 'true' ? 'primary' : 'secondary'}`}
+          onClick={() => actualizarFiltro('pendienteRevisionCedula', filtros.pendienteRevisionCedula === 'true' ? '' : 'true')}
+          title="Mostrar solo facturas a cédula que el contador todavía no revisó"
+        >
+          {filtros.pendienteRevisionCedula === 'true' ? '✅ A revisar (cédula)' : '🪪 A revisar (cédula)'}
         </button>
         <button className="btn-secondary" onClick={() => setFiltros(FILTROS_INICIALES)}>Limpiar</button>
       </section>
