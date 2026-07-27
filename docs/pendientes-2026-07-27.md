@@ -1,9 +1,15 @@
-# AELA ERP — Sesión 2026-07-27 — Auditoría WebServices/AVALAB + Modo offline del POS
+# AELA ERP — Sesión 2026-07-27 — Auditoría WebServices/AVALAB + Modo offline del POS + Libro Mayor
 
 ## 🟢 PARA RETOMAR — checklist rápido
 
-**Código**: commiteado y pusheado a `main` (commits `123a5ae`, `2430ce5`, `6209ef9`).
+**Código**: commiteado y pusheado a `main` (commits `123a5ae`, `2430ce5`, `6209ef9`, `1b7edd8`).
 Nada sin commitear.
+
+0. **Libro Mayor**: probar en el navegador real (no solo el PDF, ya
+   verificado) — Contabilidad → Libro Mayor, escribir "ret" (o cualquier
+   parte de un nombre de cuenta) en el nuevo buscador y confirmar que
+   filtra bien; con una cuenta de muchos movimientos confirmar que aparece
+   el paginador "Página X de Y" en vez de listar todo de una vez.
 
 1. **Probar en producción con datos reales**:
    - Confirmar `[schema-fix]` en logs de Railway para `facturas.idempotencyKey`
@@ -102,3 +108,51 @@ sincronizar.
 - **No probado**: el flujo completo en un navegador real simulando
   desconexión (Service Worker + IndexedDB + reconexión) — no hay entorno de
   navegador disponible aquí. Ver checklist al inicio de este documento.
+
+## Parte 3 — Libro Mayor: PDF real, paginación y selector de cuenta buscable
+
+El usuario compartió el PDF que genera "Libro Mayor" y confirmó que estaba
+mal. Causa: `GET /contabilidad/reportes/mayor?formato=pdf`
+(`backend/routes/contabilidad.js`) armaba el PDF con `doc.text(...)` línea
+por línea separada por `|` — sin tabla, sin encabezado, y siempre anexaba
+la mayorización de TODAS las cuentas aunque se hubiera filtrado una sola.
+
+**Nota aparte, no corregida en código**: el PDF compartido mostraba cuentas
+con 2 formatos de código distintos (`1.1.03.001` con puntos vs `1010505`
+sin puntos) — es un problema de **datos** del plan de cuentas de ese tenant
+puntual (probablemente de una importación NIIF/Excel, sesión 07-03), no un
+bug del reporte. Pendiente de decidir con el usuario si vale la pena
+limpiar esos códigos duplicados en ese tenant.
+
+### Implementado
+- Nueva función `dibujarTablaPdf()` en `contabilidad.js` — tabla real con
+  PDFKit (encabezado con fondo, filas alternadas, salto de página repitiendo
+  encabezado, texto largo recortado con "…" según ancho real vía
+  `ellipsis: true` de PDFKit, no un límite de caracteres adivinado) — mismo
+  lenguaje visual que ya usa el talón resumen del ATS.
+- Si se filtra una cuenta (`cuentaId`), el PDF trae solo su detalle: ya no
+  anexa la mayorización completa de todas las demás cuentas.
+- Paginación cliente-side (mismo patrón `usePagina`/`Paginador` de
+  `ATS.jsx`, 50 registros/página) en las 2 tablas en pantalla que antes
+  listaban todo sin paginar: movimientos de una cuenta y mayorización por
+  lote.
+- `SelectorCuentaBuscable` (nuevo, local a `ContabilidadHub.jsx`): reemplaza
+  el `<select>` plano de "Consulta de libro mayor" — input + lista filtrada
+  por substring de código+nombre, sin acentos ni mayúsculas (mismo patrón
+  del buscador de productos en `EtiquetasProductos.jsx`). Alcance: solo ese
+  selector — los otros 2 usos de la misma lista de cuentas (dentro de filas
+  de tabla del formulario de asiento manual) se dejaron como estaban, no
+  fue lo pedido.
+
+### Verificación realizada
+- `node --test`: 29/29.
+- **PDF generado 2 veces contra `scfi_dev` real** (con y sin `cuentaId`) vía
+  HTTP con JWT firmado manualmente, y revisado visualmente: tabla con
+  bordes/encabezado, sin mayorización completa cuando se filtró una cuenta,
+  texto largo recortado con "…" en una sola línea sin desbordar la fila
+  (se encontró y corrigió este problema durante la propia verificación:
+  la primera versión sí desbordaba a 2 líneas y tapaba la fila siguiente).
+- `npx vite build`: limpio.
+- **No probado**: el selector de búsqueda y el paginador en un navegador
+  real (no hay entorno de navegador disponible aquí) — la lógica de
+  filtrado se verificó por separado con Node (`normalizarTexto('Retención').includes('ret')` → true).
