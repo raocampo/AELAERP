@@ -156,3 +156,13 @@ limpiar esos códigos duplicados en ese tenant.
 - **No probado**: el selector de búsqueda y el paginador en un navegador
   real (no hay entorno de navegador disponible aquí) — la lógica de
   filtrado se verificó por separado con Node (`normalizarTexto('Retención').includes('ret')` → true).
+
+### Addendum mismo día (commit `30700f6`) — encabezado corporativo
+El usuario comparó contra el mayor de "Sofía" (competencia) y pidió mejor
+estética con logo/datos de la empresa en una esquina. Nuevo
+`dibujarEncabezadoContable()`: logo de Configuración SRI (mismo campo que ya
+usa el RIDE de factura, `utils/sri.js`) si la empresa tiene uno cargado,
+razón social/RUC/dirección/teléfono centrados, título, línea divisoria en
+el morado de marca. Verificado con un PDF real (empresa sin logo cargado —
+se ve bien igual, esa sección simplemente no se dibuja). Falta probar con
+una empresa que sí tenga logo cargado.
