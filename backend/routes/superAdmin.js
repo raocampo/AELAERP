@@ -8,7 +8,7 @@
 const express = require('express');
 const router  = express.Router();
 const { getPrismaMaster } = require('../config/prismaMaster');
-const { actualizarModulosContratadosTenant } = require('../utils/provisionarTenant');
+const { actualizarModulosContratadosTenant, actualizarLimitesTenant } = require('../utils/provisionarTenant');
 const { MODULOS_TODOS } = require('../utils/configuracionSistema');
 
 // ─── Middleware: verificar clave de super-admin ───────────────────────────────
@@ -140,6 +140,19 @@ router.put('/tenants/:id', verificarSuperAdmin, async (req, res) => {
       const tenantActual = await master.tenants.findUnique({ where: { id: parseInt(req.params.id, 10) } });
       if (!tenantActual) return res.status(404).json({ success: false, mensaje: 'Tenant no encontrado' });
       await actualizarModulosContratadosTenant(tenantActual.slug, modulos);
+    }
+
+    // Límites de sucursales/cajas — techo por tenant, independiente del plan.
+    // Sincroniza master + BD del tenant (empresas.maxSucursales/maxCajas) vía
+    // el helper dedicado, mismo patrón que modulosContratados.
+    if (req.body.maxSucursales !== undefined || req.body.maxCajas !== undefined) {
+      const tenantActual = await master.tenants.findUnique({ where: { id: parseInt(req.params.id, 10) } });
+      if (!tenantActual) return res.status(404).json({ success: false, mensaje: 'Tenant no encontrado' });
+      const aNumOrNull = (v) => (v === null || v === '' || v === undefined ? null : parseInt(v, 10));
+      await actualizarLimitesTenant(tenantActual.slug, {
+        ...(req.body.maxSucursales !== undefined ? { maxSucursales: aNumOrNull(req.body.maxSucursales) } : {}),
+        ...(req.body.maxCajas !== undefined ? { maxCajas: aNumOrNull(req.body.maxCajas) } : {}),
+      });
     }
 
     // Dominio personalizado (marca blanca) — se guarda dentro de brandConfig.dominio

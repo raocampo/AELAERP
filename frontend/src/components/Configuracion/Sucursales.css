@@ -46,15 +46,7 @@
 }
 .suc-badge--inactiva { background: #fee2e2; color: #ef4444; }
 
-.suc-puntos { margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9; }
-
-.suc-puntos-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-bottom: 10px; }
-.suc-puntos-table thead th {
-  text-align: left; font-size: 0.72rem; font-weight: 700; color: #94a3b8;
-  text-transform: uppercase; letter-spacing: .5px; padding: 6px 8px;
-}
-.suc-puntos-table tbody td { padding: 8px; border-top: 1px solid #f1f5f9; }
-.suc-puntos-actions { text-align: right; }
+.suc-puntos { margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9; display: grid; gap: 10px; }
 
 .suc-puntos-empty { color: #94a3b8; font-size: 0.85rem; padding: 8px 0; }
 
@@ -70,6 +62,33 @@
   font-size: 0.88rem; flex: 1; min-width: 120px;
 }
 .suc-punto-form input:focus { border-color: #7C3AED; outline: none; }
+
+/* Punto de emisión — tarjeta con sus cajas físicas anidadas */
+.suc-punto-card {
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px;
+}
+.suc-punto-card-header { display: flex; align-items: center; gap: 10px; }
+.suc-punto-descripcion { flex: 1; font-size: 0.88rem; color: #475569; }
+
+.suc-cajas { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
+.suc-cajas-lista { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.suc-caja-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #ecfdf5; color: #047857; font-weight: 600;
+  padding: 4px 6px 4px 10px; border-radius: 999px; font-size: 0.82rem;
+}
+.suc-caja-chip-x {
+  background: none; border: none; cursor: pointer; color: #047857;
+  font-size: 0.8rem; padding: 2px 4px; line-height: 1;
+}
+.suc-caja-chip-x:hover { color: #ef4444; }
+
+.suc-caja-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.suc-caja-form input {
+  border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px;
+  font-size: 0.88rem; flex: 1; min-width: 160px;
+}
+.suc-caja-form input:focus { border-color: #7C3AED; outline: none; }
 
 .suc-loading { padding: 40px; text-align: center; color: #64748b; }
 

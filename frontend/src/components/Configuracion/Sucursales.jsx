@@ -5,6 +5,7 @@ import './Sucursales.css';
 
 const FORM_SUCURSAL_VACIO = { nombre: '', establecimiento: '', direccion: '', telefono: '' };
 const FORM_PUNTO_VACIO = { puntoEmision: '', descripcion: '' };
+const FORM_CAJA_VACIO = { nombre: '' };
 
 export default function Sucursales() {
   const [sucursales, setSucursales] = useState([]);
@@ -14,6 +15,8 @@ export default function Sucursales() {
   const [confirmarEliminar, setConfirmarEliminar] = useState(null); // sucursal a eliminar
   const [formsPunto, setFormsPunto] = useState({}); // { [sucursalId]: { puntoEmision, descripcion } }
   const [guardandoPunto, setGuardandoPunto] = useState(null); // sucursalId en progreso
+  const [formsCaja, setFormsCaja] = useState({}); // { [puntoEmisionId]: { nombre } }
+  const [guardandoCaja, setGuardandoCaja] = useState(null); // puntoEmisionId en progreso
 
   const cargar = async () => {
     try {
@@ -104,6 +107,36 @@ export default function Sucursales() {
     }
   };
 
+  const actualizarFormCaja = (puntoEmisionId, valor) => {
+    setFormsCaja((prev) => ({ ...prev, [puntoEmisionId]: { nombre: valor } }));
+  };
+
+  const crearCaja = async (puntoEmisionId) => {
+    const form = formsCaja[puntoEmisionId] || FORM_CAJA_VACIO;
+    if (!form.nombre.trim()) { toast.error('El nombre de la caja es requerido'); return; }
+    setGuardandoCaja(puntoEmisionId);
+    try {
+      await api.post('/cajas', { puntoEmisionId, nombre: form.nombre.trim() });
+      toast.success('Caja creada correctamente');
+      setFormsCaja((prev) => ({ ...prev, [puntoEmisionId]: FORM_CAJA_VACIO }));
+      await cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al crear la caja');
+    } finally {
+      setGuardandoCaja(null);
+    }
+  };
+
+  const desactivarCaja = async (id) => {
+    try {
+      await api.delete(`/cajas/${id}`);
+      toast.success('Caja desactivada');
+      await cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo desactivar la caja');
+    }
+  };
+
   if (cargando) return <div className="suc-loading">Cargando sucursales...</div>;
 
   return (
@@ -113,8 +146,9 @@ export default function Sucursales() {
           <h1>Sucursales y Puntos de Venta</h1>
           <p>
             Cada <strong>sucursal</strong> es un local físico (establecimiento SRI). Cada sucursal
-            puede tener varios <strong>puntos de venta/cajas</strong> (punto de emisión SRI) — por
-            ejemplo, las 4 cajas registradoras de un supermercado.
+            tiene uno o más <strong>puntos de emisión</strong> (secuencia SRI), y cada punto de
+            emisión puede tener varias <strong>cajas</strong> físicas — por ejemplo, las 4 cajas
+            registradoras de un supermercado que emiten bajo la misma secuencia.
           </p>
         </div>
       </div>
@@ -196,27 +230,51 @@ export default function Sucursales() {
               )}
             </div>
 
-            {/* Puntos de venta de esta sucursal */}
+            {/* Puntos de emisión de esta sucursal, con sus cajas físicas anidadas */}
             <div className="suc-puntos">
               {sucursal.puntosEmision?.length > 0 ? (
-                <table className="suc-puntos-table">
-                  <thead>
-                    <tr><th>Código</th><th>Descripción</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {sucursal.puntosEmision.map((punto) => (
-                      <tr key={punto.id}>
-                        <td><span className="suc-pct-chip">{sucursal.establecimiento}-{punto.puntoEmision}</span></td>
-                        <td>{punto.descripcion || '—'}</td>
-                        <td className="suc-puntos-actions">
-                          <button className="btn-icon btn-icon--danger" onClick={() => desactivarPunto(punto.id)} title="Desactivar">🗑️</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                sucursal.puntosEmision.map((punto) => (
+                  <div key={punto.id} className="suc-punto-card">
+                    <div className="suc-punto-card-header">
+                      <span className="suc-pct-chip">{sucursal.establecimiento}-{punto.puntoEmision}</span>
+                      <span className="suc-punto-descripcion">{punto.descripcion || 'Punto de emisión'}</span>
+                      <button className="btn-icon btn-icon--danger" onClick={() => desactivarPunto(punto.id)} title="Desactivar punto de emisión">🗑️</button>
+                    </div>
+
+                    {/* Cajas físicas que emiten bajo este punto de emisión */}
+                    <div className="suc-cajas">
+                      {punto.cajas?.length > 0 ? (
+                        <div className="suc-cajas-lista">
+                          {punto.cajas.map((caja) => (
+                            <span key={caja.id} className="suc-caja-chip">
+                              🖥️ {caja.nombre}
+                              <button className="suc-caja-chip-x" onClick={() => desactivarCaja(caja.id)} title="Desactivar caja">✕</button>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="suc-puntos-empty">Este punto de emisión todavía no tiene cajas.</div>
+                      )}
+                      <div className="suc-caja-form">
+                        <input
+                          placeholder="Nombre de la caja (ej. Caja 2)"
+                          value={formsCaja[punto.id]?.nombre || ''}
+                          onChange={(e) => actualizarFormCaja(punto.id, e.target.value)}
+                          maxLength={100}
+                        />
+                        <button
+                          className="btn-secondary"
+                          onClick={() => crearCaja(punto.id)}
+                          disabled={guardandoCaja === punto.id}
+                        >
+                          {guardandoCaja === punto.id ? 'Agregando...' : '+ Agregar caja'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
               ) : (
-                <div className="suc-puntos-empty">Esta sucursal todavía no tiene puntos de venta/cajas.</div>
+                <div className="suc-puntos-empty">Esta sucursal todavía no tiene puntos de emisión.</div>
               )}
 
               <div className="suc-punto-form">

@@ -52,6 +52,12 @@ model tenants {
   // Array de claves de configuracion_sistema, ej: ["contabilidadHabilitada","atsHabilitado"]
   modulosContratados Json?
 
+  // Límites explícitos por tenant, independientes del plan — null = sin
+  // restricción explícita. Mismo patrón que modulosContratados: se setean
+  // solo desde el panel SuperAdmin, nunca desde el propio tenant.
+  maxSucursales    Int?
+  maxCajas         Int?
+
   // Branding (white-label)
   brandConfig      Json?    // { dominio, logo, apiKey, ... }
 

@@ -100,6 +100,8 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
     esTrial:             tenant.esTrial      || false,
     autoRenovar:         tenant.autoRenovar  || false,
     dominioPersonalizado: (tenant.brandConfig?.dominio) || '',
+    maxSucursales:       tenant.maxSucursales ?? '',
+    maxCajas:            tenant.maxCajas      ?? '',
   });
   // Módulos contratados: null = usar el techo derivado del plan (comportamiento
   // legado); array = techo personalizado, independiente del plan.
@@ -204,6 +206,25 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
           </div>
 
           <div className="sa-form-row">
+            <label>Límite de sucursales / cajas <span className="sa-hint">(independiente del plan)</span></label>
+            <div className="sa-form-row--checks">
+              <input type="number" min="0" style={{ maxWidth: 100 }}
+                placeholder="Ilimitado" value={form.maxSucursales}
+                onChange={e => set('maxSucursales', e.target.value)} />
+              <span className="sa-hint">sucursales</span>
+              <input type="number" min="0" style={{ maxWidth: 100 }}
+                placeholder="Ilimitado" value={form.maxCajas}
+                onChange={e => set('maxCajas', e.target.value)} />
+              <span className="sa-hint">cajas</span>
+            </div>
+            <small className="sa-hint-block">
+              Vacío = ilimitado (comportamiento normal). Setear un número bloquea que el cliente cree
+              más sucursales/cajas de las contratadas — usar para diferenciar planes que incluyan
+              multi-caja (ej. "Negocio: hasta 2 sucursales / 4 cajas").
+            </small>
+          </div>
+
+          <div className="sa-form-row">
             <label>Nombre contacto</label>
             <input type="text" value={form.nombreContacto}
               onChange={e => set('nombreContacto', e.target.value)} />
@@ -251,6 +272,8 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
           <button className="btn-primary" onClick={() => onGuardar({
             ...form,
             modulosContratados: modulosPersonalizados ? modulosContratados : null,
+            maxSucursales: form.maxSucursales === '' ? null : parseInt(form.maxSucursales, 10),
+            maxCajas:      form.maxCajas      === '' ? null : parseInt(form.maxCajas, 10),
           })}>Guardar</button>
         </div>
       </div>
@@ -700,6 +723,11 @@ export default function PanelSuperAdmin() {
                       {Array.isArray(t.modulosContratados) && (
                         <div className="sa-api-badge" title={t.modulosContratados.join(', ') || '(ninguno)'}>
                           🧩 {t.modulosContratados.length} módulos
+                        </div>
+                      )}
+                      {(t.maxSucursales != null || t.maxCajas != null) && (
+                        <div className="sa-api-badge" title="Límite de sucursales/cajas seteado desde SuperAdmin">
+                          🏬 {t.maxSucursales ?? '∞'} suc. / 🖥️ {t.maxCajas ?? '∞'} cajas
                         </div>
                       )}
                     </td>

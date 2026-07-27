@@ -351,10 +351,47 @@ async function actualizarModulosContratadosTenant(slug, modulos) {
   return tenantActualizado;
 }
 
+// ─── Cambiar límites de sucursales/cajas de un tenant existente ─────────────
+/**
+ * Fija el techo explícito de sucursales/cajas de un tenant (independiente del
+ * plan) en la BD master Y en su propia BD (empresa) — mismo patrón que
+ * actualizarModulosContratadosTenant. `null` en cualquiera de los 2 = sin
+ * restricción explícita para ese recurso.
+ *
+ * @param {string} slug
+ * @param {{ maxSucursales?: number|null, maxCajas?: number|null }} limites
+ */
+async function actualizarLimitesTenant(slug, { maxSucursales, maxCajas } = {}) {
+  const master = getPrismaMaster();
+
+  const tenant = await master.tenants.findUnique({ where: { slug } });
+  if (!tenant) throw new Error(`Tenant '${slug}' no encontrado`);
+
+  const data = {};
+  if (maxSucursales !== undefined) data.maxSucursales = maxSucursales === null ? null : parseInt(maxSucursales, 10);
+  if (maxCajas !== undefined) data.maxCajas = maxCajas === null ? null : parseInt(maxCajas, 10);
+
+  const tenantActualizado = await master.tenants.update({ where: { id: tenant.id }, data });
+
+  try {
+    const prismaT = await getTenantPrisma(tenant);
+    await prismaT.empresas.updateMany({ data });
+  } catch (err) {
+    console.warn(`[limites] No se pudo actualizar la BD del tenant '${slug}':`, err.message);
+  }
+
+  const { invalidarCacheTenant } = require('../middleware/tenant');
+  invalidarCacheTenant(slug);
+
+  console.log(`[limites] Tenant '${slug}' actualizado — maxSucursales=${'maxSucursales' in data ? data.maxSucursales : '(sin cambio)'} maxCajas=${'maxCajas' in data ? data.maxCajas : '(sin cambio)'}`);
+  return tenantActualizado;
+}
+
 module.exports = {
   provisionarTenant,
   actualizarPlanTenant,
   actualizarModulosContratadosTenant,
+  actualizarLimitesTenant,
   generarSlug,
   generarSlugUnico,
 };

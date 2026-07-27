@@ -26,7 +26,13 @@ router.get('/', async (req, res) => {
   try {
     const sucursales = await prisma.sucursales.findMany({
       where: { empresaId: req.empresa.id },
-      include: { puntosEmision: { where: { activo: true }, orderBy: { puntoEmision: 'asc' } } },
+      include: {
+        puntosEmision: {
+          where: { activo: true },
+          orderBy: { puntoEmision: 'asc' },
+          include: { cajas: { where: { activo: true }, orderBy: { nombre: 'asc' } } },
+        },
+      },
       orderBy: [{ esMatriz: 'desc' }, { establecimiento: 'asc' }],
     });
     res.json({ success: true, data: sucursales });
@@ -53,6 +59,17 @@ router.post('/', async (req, res) => {
     const existente = await prisma.sucursales.findFirst({ where: { empresaId, establecimiento } });
     if (existente) {
       return res.status(409).json({ success: false, mensaje: `Ya existe una sucursal con el establecimiento ${establecimiento}` });
+    }
+
+    if (req.empresa.maxSucursales !== null && req.empresa.maxSucursales !== undefined) {
+      const totalSucursales = await prisma.sucursales.count({ where: { empresaId, activo: true } });
+      if (totalSucursales >= req.empresa.maxSucursales) {
+        return res.status(403).json({
+          success: false,
+          mensaje: `Tu plan permite un máximo de ${req.empresa.maxSucursales} sucursal(es) activa(s). Contacta a soporte para ampliar el límite.`,
+          limite: req.empresa.maxSucursales,
+        });
+      }
     }
 
     const creada = await prisma.sucursales.create({

@@ -532,6 +532,38 @@ const FIXES = [
   `UPDATE "retenciones" SET "establecimiento" = SUBSTRING("numeroRetencion" FROM 1 FOR 3), "puntoEmision" = SUBSTRING("numeroRetencion" FROM 5 FOR 3) WHERE "numeroRetencion" ~ '^[0-9]{3}-[0-9]{3}-[0-9]{9}$'`,
   `UPDATE "liquidaciones_compra" SET "establecimiento" = SUBSTRING("numeroLiquidacion" FROM 1 FOR 3), "puntoEmision" = SUBSTRING("numeroLiquidacion" FROM 5 FOR 3) WHERE "numeroLiquidacion" ~ '^[0-9]{3}-[0-9]{3}-[0-9]{9}$'`,
   `UPDATE "notas_venta" SET "establecimiento" = SUBSTRING("numeroNota" FROM 1 FOR 3), "puntoEmision" = SUBSTRING("numeroNota" FROM 5 FOR 3) WHERE "numeroNota" ~ '^[0-9]{3}-[0-9]{3}-[0-9]{9}$'`,
+  // Cajas físicas por Punto de Emisión (2026-07-26) — varias cajas
+  // registradoras pueden compartir un mismo punto de emisión SRI (el punto de
+  // emisión es un código autoasignado, sin costo/límite del SRI, a diferencia
+  // del establecimiento). Se agrega un contador atómico de secuencial de
+  // Factura en puntos_emision para que 2 cajas emitiendo casi al mismo tiempo
+  // bajo el mismo punto de emisión no se pisen la numeración (el cálculo
+  // viejo era 2 pasos sin lock — ver utils/secuenciales.js).
+  `CREATE TABLE IF NOT EXISTS "cajas" (
+    "id"             SERIAL PRIMARY KEY,
+    "empresaId"      INTEGER NOT NULL,
+    "puntoEmisionId" INTEGER NOT NULL,
+    "nombre"         VARCHAR(100) NOT NULL,
+    "activo"         BOOLEAN NOT NULL DEFAULT true,
+    "createdAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "cajas_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "empresas"("id"),
+    CONSTRAINT "cajas_puntoEmisionId_fkey" FOREIGN KEY ("puntoEmisionId") REFERENCES "puntos_emision"("id")
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "cajas_puntoEmisionId_nombre_key" ON "cajas"("puntoEmisionId", "nombre")`,
+  `CREATE INDEX IF NOT EXISTS "cajas_empresaId_idx" ON "cajas"("empresaId")`,
+  `ALTER TABLE "puntos_emision" ADD COLUMN IF NOT EXISTS "ultimoSecuencialFactura" INTEGER`,
+  // Backfill idempotente (WHERE ... IS NULL lo hace seguro de re-correr en
+  // cada arranque): inicializa el contador con el mayor entre el secuencial
+  // inicial configurado y el máximo secuencial de factura ya emitido bajo ese
+  // punto de emisión — mismo criterio que usaba siguienteSecuencial() en JS.
+  `UPDATE "puntos_emision" pe SET "ultimoSecuencialFactura" = GREATEST(pe."secInicialFactura", COALESCE((SELECT MAX(CAST(f."secuencial" AS INTEGER)) FROM "facturas" f WHERE f."empresaId" = pe."empresaId" AND f."establecimiento" = pe."establecimiento" AND f."puntoEmision" = pe."puntoEmision"), 0)) WHERE pe."ultimoSecuencialFactura" IS NULL`,
+  // Caja General por defecto para cada punto de emisión que aún no tenga
+  // ninguna — ningún tenant existente se queda sin poder facturar.
+  `INSERT INTO "cajas" ("empresaId", "puntoEmisionId", "nombre", "activo", "createdAt", "updatedAt") SELECT pe."empresaId", pe."id", 'Caja General', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM "puntos_emision" pe WHERE NOT EXISTS (SELECT 1 FROM "cajas" c WHERE c."puntoEmisionId" = pe."id")`,
+  // Límites explícitos por tenant (SuperAdmin) — null = ilimitado.
+  `ALTER TABLE "empresas" ADD COLUMN IF NOT EXISTS "maxSucursales" INTEGER`,
+  `ALTER TABLE "empresas" ADD COLUMN IF NOT EXISTS "maxCajas" INTEGER`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

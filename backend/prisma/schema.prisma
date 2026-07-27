@@ -32,6 +32,10 @@ model empresas {
   // null = ilimitado; 100 = Lite; 1000 = Medium
   maxUsuarios        Int?
   // null = ilimitado; 1 = Lite; 3 = Medium
+  maxSucursales      Int?
+  // null = ilimitado; techo explícito por tenant, seteado solo desde SuperAdmin
+  maxCajas           Int?
+  // null = ilimitado; techo explícito por tenant, seteado solo desde SuperAdmin
   esTrial            Boolean   @default(false)
   trialExpiresAt     DateTime?
   activo             Boolean   @default(true)
@@ -83,6 +87,7 @@ model empresas {
   guiasRemision                    guias_remision[]
   puntosEmision                    puntos_emision[]
   sucursales                       sucursales[]
+  cajas                            cajas[]
   bancos                           bancos[]
   cheques                          cheques[]
   departamentos                    departamentos[]
@@ -1341,16 +1346,47 @@ model puntos_emision {
   secInicialGuiaRemision Int @default(0)
   secInicialNotaVenta    Int @default(0)
 
+  // Contador atómico del último secuencial de Factura ya emitido bajo este
+  // punto de emisión — permite que varias cajas físicas (ver modelo `cajas`)
+  // compartan un mismo punto de emisión sin pisarse la numeración: el
+  // incremento (`UPDATE ... SET x = x+1 RETURNING x`) es atómico a nivel de
+  // fila en Postgres, a diferencia del cálculo viejo (`findFirst` + `max+1`
+  // en 2 pasos separados, ver utils/secuenciales.js). NULL hasta el backfill
+  // de la migración que lo introdujo.
+  ultimoSecuencialFactura Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   empresa  empresas    @relation(fields: [empresaId], references: [id])
   sucursal sucursales? @relation(fields: [sucursalId], references: [id])
+  cajas    cajas[]
 
   @@unique([empresaId, establecimiento, puntoEmision])
   @@index([empresaId])
   @@index([sucursalId])
   @@map("puntos_emision")
+}
+
+// Caja física (terminal/registradora) dentro de un punto de emisión SRI.
+// Varias cajas pueden compartir un mismo punto de emisión (misma secuencia
+// SRI) — el punto de emisión es un código autoasignado por la empresa, sin
+// costo ni límite del SRI, así que no hace falta 1 punto de emisión por caja.
+model cajas {
+  id             Int      @id @default(autoincrement())
+  empresaId      Int
+  puntoEmisionId Int
+  nombre         String   @db.VarChar(100)
+  activo         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  empresa      empresas       @relation(fields: [empresaId], references: [id])
+  puntoEmision puntos_emision @relation(fields: [puntoEmisionId], references: [id])
+
+  @@unique([puntoEmisionId, nombre])
+  @@index([empresaId])
+  @@map("cajas")
 }
 
 // ====================================

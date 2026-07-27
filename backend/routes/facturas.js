@@ -20,7 +20,7 @@ const {
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
 const { construirConfiguracionSriBase } = require('../utils/sriContribuyente');
-const { siguienteSecuencial } = require('../utils/secuenciales');
+const { siguienteSecuencial, siguienteSecuencialFacturaAtomico } = require('../utils/secuenciales');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
 const { esErrorConectividad } = require('../utils/colaSRI');
@@ -1013,18 +1013,15 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
     const establecimiento = String(establecimientoBody || config.establecimiento || '001').padStart(3, '0');
     const puntoEmision = String(puntoEmisionBody || config.puntoEmision || '001').padStart(3, '0');
 
-    // Siguiente secuencial (respeta secuencial inicial si la empresa migró desde otro sistema)
-    // Filtrado por establecimiento+puntoEmision — si no, dos puntos de venta
-    // activos se pisarían la numeración entre sí (cada par SRI debe llevar su
-    // propia secuencia consecutiva, no una compartida por toda la empresa).
-    const lastFact = await prisma.facturas.findFirst({
-      where: { empresaId: req.empresa.id, rucEmisor: config.ruc, establecimiento, puntoEmision },
-      orderBy: { secuencial: 'desc' },
-    });
-    const maxEnBD = lastFact ? (parseInt(String(lastFact.secuencial), 10) || 0) : 0;
-    const secuencialNum = await siguienteSecuencial(
-      prisma, req.empresa.id, establecimiento, puntoEmision,
-      maxEnBD, 'secInicialFactura'
+    // Siguiente secuencial — incremento ATÓMICO sobre puntos_emision
+    // (`ultimoSecuencialFactura`), no el cálculo viejo de 2 pasos
+    // (findFirst/max + luego crear) que quedaba expuesto a carrera en cuanto
+    // varias cajas físicas comparten un mismo punto de emisión (ver modelo
+    // `cajas`). El `UPDATE ... SET x = x+1` es atómico a nivel de fila en
+    // Postgres — dos requests concurrentes bajo el mismo punto de emisión
+    // nunca reciben el mismo número.
+    const secuencialNum = await siguienteSecuencialFacturaAtomico(
+      prisma, req.empresa.id, establecimiento, puntoEmision
     );
     const secuencial = String(secuencialNum).padStart(9, '0');
 
