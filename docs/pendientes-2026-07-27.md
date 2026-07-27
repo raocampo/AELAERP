@@ -356,3 +356,45 @@ mayo/2024 y otra de julio/2026. El F104 de mayo/2024 la incluyó sola
 2026, y el filtro `pendienteRevisionCedula=true` solo mostró la de 2026.
 Registros de prueba eliminados al terminar. `node --test`: 29/29,
 `npx vite build`: limpio.
+
+## Parte 7 (misma sesión) — Investigación: totales de Compras "no corresponden"
+
+El usuario reportó que los totales de compras de abril-2024 (89 registros,
+IVA $280.26) no coinciden con un Excel que compartió ("Totales por Tarifa
+IVA generada": 391 registros, IVA $322.20).
+
+**Conclusión de la investigación**: la pantalla de AELA (`ATS.jsx`, sección
+"Facturas de Compra registradas") y el PDF del talón resumen ATS
+coinciden perfectamente entre sí (ambos leen `facturas_compra` con el
+mismo filtro de período y cuentan **por factura**, `backend/routes/ats.js`)
+— eso no tiene bug. El Excel de 391 filas, en cambio, **no tiene ningún
+código de origen en AELA**: no existe en todo el repo (frontend ni
+backend) ninguna exportación con las columnas "Tarifa IVA / Registros /
+Monto IVA / Importe Total". Ese layout coincide exactamente con el export
+crudo nativo del portal del SRI ("Comprobantes Electrónicos Recibidos"),
+que trae **una fila por línea de ítem, no por factura** — de ahí 391 vs 89
+(coincide con un promedio de ~4.4 líneas por factura). El propio proyecto
+ya tiene evidencia de esto: existe un script dedicado
+(`backend/scripts/convertirComprasHistoricasSRI.js`) para convertir
+justamente ese formato del SRI a la plantilla de AELA, con el mismo
+alias `'tarifa iva' → 'tarifaIva'`, `'monto iva' → 'montoIva'`,
+`'importe total' → 'importeTotal'` que aparecen en el Excel del usuario.
+
+**Pendiente de confirmar con el usuario**: de dónde bajó exactamente ese
+Excel de 391 filas (¿botón "⬇ Excel" de Compras en AELA, o descarga
+directa del portal del SRI?). Si es del SRI, no hay nada que corregir —
+son fuentes distintas (documento vs. línea de detalle). Se le preguntó
+directamente en el chat.
+
+### Bug real encontrado y corregido (independiente de la pregunta principal)
+`GET /compras/exportar/xlsx` (`backend/routes/compras.js`) seleccionaba
+`subtotal12` de la base de datos pero nunca lo escribía en el Excel — ni
+en `headers` ni en `rows`. La columna "Subtotal 12%" desaparecía en
+silencio de ese export (el total general del Excel seguía siendo
+correcto porque `importeTotal`/`IVA` sí se guardan precalculados; solo el
+desglose por tarifa perdía la columna 12%). Agregada la columna faltante.
+
+**Verificación realizada**: `node --test` 29/29, `npx vite build` limpio,
+y descarga real del Excel contra `scfi_dev` (servidor propio en el puerto
+5601) confirmando que la cabecera ahora incluye "Subtotal 12%" entre
+"Subtotal 5%" y "Subtotal 15%".

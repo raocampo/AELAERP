@@ -523,7 +523,7 @@ router.get('/exportar/xlsx', async (req, res) => {
     const headers = [
       'ID', 'Fecha Emisión', 'Nro Factura', 'Nro Autorización',
       'Proveedor', 'RUC/CI Proveedor',
-      'Subtotal 0%', 'Subtotal 5%', 'Subtotal 15%', 'Descuento', 'IVA', 'Total',
+      'Subtotal 0%', 'Subtotal 5%', 'Subtotal 12%', 'Subtotal 15%', 'Descuento', 'IVA', 'Total',
       'Retención IVA', 'Retención Renta',
       'Origen', 'Tipo Gasto', 'Anulada', 'Observaciones', 'Fecha Registro',
     ];
@@ -531,7 +531,7 @@ router.get('/exportar/xlsx', async (req, res) => {
     const rows = items.map((r) => [
       r.id, fmtDate(r.fechaEmision), r.numeroFactura, r.numeroAutorizacion || '',
       r.razonSocialProveedor, r.identificacionProveedor,
-      fmtNum(r.subtotal0), fmtNum(r.subtotal5), fmtNum(r.subtotal15),
+      fmtNum(r.subtotal0), fmtNum(r.subtotal5), fmtNum(r.subtotal12), fmtNum(r.subtotal15),
       fmtNum(r.totalDescuento), fmtNum(r.totalIva), fmtNum(r.importeTotal),
       fmtNum(r.retencionIVA), fmtNum(r.retencionRenta),
       r.origenRegistro || 'MANUAL', r.tipoGasto || '',
@@ -543,7 +543,7 @@ router.get('/exportar/xlsx', async (req, res) => {
     ws['!cols'] = [
       { wch: 6 }, { wch: 12 }, { wch: 22 }, { wch: 30 },
       { wch: 36 }, { wch: 14 },
-      { wch: 11 }, { wch: 10 }, { wch: 11 }, { wch: 10 }, { wch: 10 }, { wch: 12 },
+      { wch: 11 }, { wch: 10 }, { wch: 11 }, { wch: 11 }, { wch: 10 }, { wch: 10 }, { wch: 12 },
       { wch: 13 }, { wch: 14 },
       { wch: 14 }, { wch: 20 }, { wch: 8 }, { wch: 30 }, { wch: 12 },
     ];
