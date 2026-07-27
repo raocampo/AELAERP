@@ -320,6 +320,93 @@
   flex: 0 0 auto;
 }
 
+/* ── Selector de cuenta con búsqueda (Libro Mayor) ──────────────────── */
+.conta-filters > .conta-selector-cuenta {
+  flex: 1 1 240px;
+  min-width: 200px;
+  position: relative;
+}
+
+.conta-selector-cuenta input {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.conta-selector-cuenta-lista {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin-top: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+.conta-selector-cuenta-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  background: transparent;
+  color: #1e293b;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.conta-selector-cuenta-item:last-child { border-bottom: none; }
+.conta-selector-cuenta-item:hover { background: #f5f3ff; }
+
+.conta-selector-cuenta-vacio {
+  padding: 8px 10px;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+/* ── Paginador (mismo patrón que ATS.css) ───────────────────────────── */
+.conta-paginador {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.conta-paginador button {
+  padding: 4px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #1e40af;
+  transition: background 0.15s;
+}
+
+.conta-paginador button:hover:not(:disabled) { background: #eff6ff; }
+.conta-paginador button:disabled { opacity: 0.4; cursor: not-allowed; }
+.conta-paginador span { font-size: 0.83rem; color: #475569; padding: 0 4px; }
+
+@media (prefers-color-scheme: dark) {
+  .conta-selector-cuenta input { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  .conta-selector-cuenta-lista { background: #1e293b; border-color: #334155; }
+  .conta-selector-cuenta-item { color: #e2e8f0; border-bottom-color: #334155; }
+  .conta-selector-cuenta-item:hover { background: #312e81; }
+  .conta-paginador button { background: #1e293b; border-color: #334155; color: #60a5fa; }
+  .conta-paginador button:hover:not(:disabled) { background: #1e3a5f; }
+  .conta-paginador span { color: #94a3b8; }
+}
+
 .conta-check-inline {
   display: flex;
   align-items: center;

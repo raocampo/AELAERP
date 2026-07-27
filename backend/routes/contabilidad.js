@@ -171,6 +171,60 @@ function escribirLineaPdf(doc, texto = '', opts = {}) {
   doc.text(texto, opts);
 }
 
+// Tabla real para PDFs de contabilidad (reemplaza el volcado de texto plano
+// separado por "|" que tenía el Libro Mayor) — mismo lenguaje visual que ya
+// usa el talón resumen del ATS (routes/ats.js): encabezado con fondo,
+// filas con banda alterna, salto de página repitiendo el encabezado.
+//
+// @param columnas [{ header, key, width, align?, formato? }]
+// @param filas    array de objetos con las claves de `columnas`
+// @param startY   y donde empezar a dibujar
+// @returns y final, para poder seguir escribiendo después de la tabla
+function dibujarTablaPdf(doc, columnas, filas, startY) {
+  const ML = doc.page.margins.left;
+  const LIMITE_Y = doc.page.height - doc.page.margins.bottom;
+  const ROW_H = 16;
+  const anchoTotal = columnas.reduce((s, c) => s + c.width, 0);
+  let y = startY;
+
+  const dibujarEncabezado = () => {
+    doc.rect(ML, y, anchoTotal, ROW_H).fillAndStroke('#e2e8f0', '#94a3b8');
+    doc.fillColor('#1e293b').font('Helvetica-Bold').fontSize(8);
+    let x = ML;
+    columnas.forEach((c) => {
+      doc.text(c.header, x + 3, y + 4, { width: c.width - 6, align: c.align || 'left' });
+      x += c.width;
+    });
+    doc.font('Helvetica').fillColor('#000000');
+    y += ROW_H;
+  };
+
+  dibujarEncabezado();
+
+  filas.forEach((fila, i) => {
+    if (y + ROW_H > LIMITE_Y) {
+      doc.addPage();
+      y = doc.page.margins.top;
+      dibujarEncabezado();
+    }
+    if (i % 2 === 1) doc.rect(ML, y, anchoTotal, ROW_H).fill('#f8fafc').fillColor('#000000');
+    let x = ML;
+    doc.fontSize(8);
+    columnas.forEach((c) => {
+      const valor = c.formato ? c.formato(fila[c.key], fila) : String(fila[c.key] ?? '');
+      // height + ellipsis: recorta con "…" según el ancho REAL del texto en
+      // vez de un límite de caracteres adivinado — evita que un detalle
+      // largo se envuelva a 2 líneas y se salga de la fila (fila de altura
+      // fija) tapando la siguiente.
+      doc.text(valor, x + 3, y + 4, { width: c.width - 6, height: ROW_H - 4, align: c.align || 'left', ellipsis: true });
+      x += c.width;
+    });
+    y += ROW_H;
+  });
+
+  return y + 6;
+}
+
 async function validarPeriodoAbiertoParaFecha(empresaId, fecha) {
   const totalPeriodos = await prisma.periodos_contables.count({
     where: { empresaId },
@@ -2215,25 +2269,47 @@ router.get('/reportes/mayor', async (req, res) => {
     doc.text(`Filtros: cuentaId=${cuentaId || 'todas'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} periodo=${req.query.periodo || '-'}`);
     doc.moveDown(0.5);
 
+    const money = (v) => `$${Number(v || 0).toFixed(2)}`;
+
     if (mayor) {
-      doc.fontSize(11).text(`Cuenta: ${mayor.cuenta.codigo} - ${mayor.cuenta.nombre} | Saldo final: ${mayor.saldoFinal}`);
-      doc.moveDown(0.2);
-      mayor.movimientos.forEach((movimiento) => {
-        escribirLineaPdf(
-          doc,
-          `${formatDateOnly(movimiento.fecha)} | As. ${movimiento.numero} | ${movimiento.tipo} | Debe ${movimiento.debe} | Haber ${movimiento.haber} | Saldo ${movimiento.saldo}`,
-        );
-      });
-      doc.moveDown(0.5);
+      // Se filtró UNA cuenta — el PDF trae solo su detalle, sin la
+      // mayorización de las demás cuentas (antes se anexaba siempre,
+      // ruido innecesario cuando lo que se pidió fue una cuenta puntual).
+      doc.fontSize(11).text(`Cuenta: ${mayor.cuenta.codigo} - ${mayor.cuenta.nombre}`);
+      doc.fontSize(10).text(`Saldo final: ${money(mayor.saldoFinal)}  ·  ${mayor.movimientos.length} movimiento(s)`);
+      doc.moveDown(0.3);
+
+      dibujarTablaPdf(doc, [
+        { header: 'Fecha',     key: 'fecha',      width: 55, formato: formatDateOnly },
+        { header: 'Asiento',   key: 'numero',     width: 75 },
+        { header: 'Tipo',      key: 'tipo',       width: 65 },
+        { header: 'Detalle',   key: 'detalle',    width: 158 },
+        { header: 'Debe',      key: 'debe',       width: 55, align: 'right', formato: money },
+        { header: 'Haber',     key: 'haber',      width: 55, align: 'right', formato: money },
+        { header: 'Saldo',     key: 'saldo',      width: 60, align: 'right', formato: money },
+      ], mayor.movimientos.map((m) => ({
+        ...m,
+        detalle: (m.descripcionDetalle || m.descripcionAsiento || '').slice(0, 55),
+      })), doc.y);
+    } else {
+      // Sin cuenta filtrada — mayorización por lote (resumen de todas las cuentas).
+      doc.fontSize(11).text('Mayorización por lote');
+      doc.fontSize(9).text(
+        `${mayorizacion.resumen.cuentas} cuenta(s) · ${mayorizacion.resumen.movimientos} movimiento(s) · ` +
+        `Debe ${money(mayorizacion.resumen.totalDebe)} · Haber ${money(mayorizacion.resumen.totalHaber)}`,
+      );
+      doc.moveDown(0.3);
+
+      dibujarTablaPdf(doc, [
+        { header: 'Código',      key: 'codigo',      width: 70 },
+        { header: 'Cuenta',      key: 'nombre',      width: 220 },
+        { header: 'Mov.',        key: 'movimientos', width: 40, align: 'right' },
+        { header: 'Debe',        key: 'totalDebe',   width: 60, align: 'right', formato: money },
+        { header: 'Haber',       key: 'totalHaber',  width: 60, align: 'right', formato: money },
+        { header: 'Saldo',       key: 'saldo',        width: 63, align: 'right', formato: money },
+      ], mayorizacion.tabla, doc.y);
     }
 
-    doc.fontSize(11).text('Mayorización por lote');
-    mayorizacion.tabla.forEach((fila) => {
-      escribirLineaPdf(
-        doc,
-        `${fila.codigo} ${fila.nombre} | Mov: ${fila.movimientos} | Debe ${fila.totalDebe} | Haber ${fila.totalHaber} | Saldo ${fila.saldo}`,
-      );
-    });
     doc.end();
   } catch (error) {
     console.error('GET /contabilidad/reportes/mayor:', error);

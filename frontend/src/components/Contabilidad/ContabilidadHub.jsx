@@ -12,6 +12,78 @@ const crearDetalleVacio = () => ({ cuentaId: '', centroCostoId: '', descripcion:
 
 const TABS_VALIDOS = ['resumen', 'diario', 'mayor', 'cierre', 'periodos', 'plan', 'centros-costo'];
 
+// ─── Paginación cliente-side para tablas largas (mismo patrón que ATS.jsx) ──
+const POR_PAGINA = 50;
+
+function usePagina(items) {
+  const [pagina, setPagina] = useState(1);
+  const totalPaginas = Math.max(1, Math.ceil(items.length / POR_PAGINA));
+  const paginaReal = Math.min(pagina, totalPaginas);
+  const slice = items.slice((paginaReal - 1) * POR_PAGINA, paginaReal * POR_PAGINA);
+  return { slice, pagina: paginaReal, totalPaginas, setPagina };
+}
+
+function Paginador({ pagina, totalPaginas, total, setPagina }) {
+  if (totalPaginas <= 1) return null;
+  return (
+    <div className="conta-paginador">
+      <button disabled={pagina === 1} onClick={() => setPagina(1)}>«</button>
+      <button disabled={pagina === 1} onClick={() => setPagina((p) => p - 1)}>‹ Anterior</button>
+      <span>Página <strong>{pagina}</strong> de <strong>{totalPaginas}</strong> ({total} registros)</span>
+      <button disabled={pagina === totalPaginas} onClick={() => setPagina((p) => p + 1)}>Siguiente ›</button>
+      <button disabled={pagina === totalPaginas} onClick={() => setPagina(totalPaginas)}>»</button>
+    </div>
+  );
+}
+
+// ─── Selector de cuenta con búsqueda por texto (código o nombre) ────────────
+function normalizarTexto(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function SelectorCuentaBuscable({ cuentas, value, onChange, placeholder = 'Buscar cuenta por código o nombre...' }) {
+  const [texto, setTexto] = useState('');
+  const [abierto, setAbierto] = useState(false);
+
+  useEffect(() => {
+    const actual = cuentas.find((c) => String(c.id) === String(value));
+    setTexto(actual ? `${actual.codigo} - ${actual.nombre}` : '');
+  }, [value, cuentas]);
+
+  const filtro = normalizarTexto(texto);
+  const resultados = (filtro
+    ? cuentas.filter((c) => normalizarTexto(`${c.codigo} ${c.nombre}`).includes(filtro))
+    : cuentas
+  ).slice(0, 30);
+
+  return (
+    <div className="conta-selector-cuenta">
+      <input
+        value={texto}
+        placeholder={placeholder}
+        onChange={(e) => { setTexto(e.target.value); setAbierto(true); }}
+        onFocus={(e) => { setAbierto(true); e.target.select(); }}
+        onBlur={() => setTimeout(() => setAbierto(false), 150)}
+      />
+      {abierto && (
+        <div className="conta-selector-cuenta-lista">
+          {resultados.length === 0 && <div className="conta-selector-cuenta-vacio">Sin coincidencias</div>}
+          {resultados.map((c) => (
+            <button
+              type="button"
+              key={c.id}
+              className="conta-selector-cuenta-item"
+              onClick={() => { onChange(String(c.id)); setAbierto(false); }}
+            >
+              <strong>{c.codigo}</strong> — {c.nombre}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const ContabilidadHub = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -98,6 +170,8 @@ const ContabilidadHub = () => {
   const [mayorFiltros, setMayorFiltros] = useState({ cuentaId: '', desde: '', hasta: '' });
   const [mayorDetalle, setMayorDetalle] = useState(null);
   const [mayorizacionLote, setMayorizacionLote] = useState(null);
+  const movimientosPag = usePagina(mayorDetalle?.movimientos || []);
+  const mayorizacionPag = usePagina(mayorizacionLote?.tabla || []);
 
   const [cierreLoading, setCierreLoading] = useState(false);
   const [cierreSubTab, setCierreSubTab] = useState('situacion'); // 'situacion' | 'resultados' | 'comprobacion'
@@ -1498,12 +1572,11 @@ const ContabilidadHub = () => {
           <div className="conta-card">
             <h3>Consulta de libro mayor</h3>
             <div className="conta-filters">
-              <select value={mayorFiltros.cuentaId} onChange={(e) => setMayorFiltros((prev) => ({ ...prev, cuentaId: e.target.value }))}>
-                <option value="">Seleccione cuenta...</option>
-                {cuentasMovimiento.map((c) => (
-                  <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
-                ))}
-              </select>
+              <SelectorCuentaBuscable
+                cuentas={cuentasMovimiento}
+                value={mayorFiltros.cuentaId}
+                onChange={(id) => setMayorFiltros((prev) => ({ ...prev, cuentaId: id }))}
+              />
               <input type="date" value={mayorFiltros.desde} onChange={(e) => setMayorFiltros((prev) => ({ ...prev, desde: e.target.value }))} />
               <input type="date" value={mayorFiltros.hasta} onChange={(e) => setMayorFiltros((prev) => ({ ...prev, hasta: e.target.value }))} />
               <div></div>
@@ -1544,7 +1617,7 @@ const ContabilidadHub = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(mayorDetalle.movimientos || []).map((m) => (
+                    {movimientosPag.slice.map((m) => (
                       <tr key={m.id}>
                         <td>{formatFechaCorta(m.fecha)}</td>
                         <td>{m.numero}</td>
@@ -1560,6 +1633,7 @@ const ContabilidadHub = () => {
                     )}
                   </tbody>
                 </table>
+                <Paginador {...movimientosPag} total={mayorDetalle.movimientos?.length || 0} />
               </>
             ) : (
               <div className="conta-empty">Seleccione una cuenta y consulte su mayor.</div>
@@ -1596,7 +1670,7 @@ const ContabilidadHub = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(mayorizacionLote.tabla || []).map((row) => (
+                    {mayorizacionPag.slice.map((row) => (
                       <tr key={row.cuentaId}>
                         <td>{row.codigo}</td>
                         <td>{row.nombre}</td>
@@ -1612,6 +1686,7 @@ const ContabilidadHub = () => {
                     )}
                   </tbody>
                 </table>
+                <Paginador {...mayorizacionPag} total={mayorizacionLote.tabla?.length || 0} />
               </>
             ) : (
               <div className="conta-empty">Ejecute la mayorización para ver el resumen por cuentas.</div>
