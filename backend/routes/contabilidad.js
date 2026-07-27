@@ -1,6 +1,8 @@
 const express = require('express');
 const multer  = require('multer');
 const PDFDocument = require('pdfkit');
+const fs   = require('fs');
+const path = require('path');
 const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
@@ -164,6 +166,53 @@ function crearDocumentoPdf(res, filename) {
   const doc = new PDFDocument({ size: 'A4', margin: 36 });
   doc.pipe(res);
   return doc;
+}
+
+// Resuelve el logo de configuracion_sri para PDFKit — soporta data URI
+// base64 (formato actual) y ruta de archivo legado. Mismo helper que ya usa
+// utils/sri.js (_resolverLogo) para el RIDE de factura, copiado localmente
+// porque allá está sin exportar.
+function _resolverLogoContable(logoUrl) {
+  if (!logoUrl) return { logoData: null, tieneLogo: false };
+  if (logoUrl.startsWith('data:')) {
+    try {
+      const b64 = logoUrl.replace(/^data:image\/\w+;base64,/, '');
+      return { logoData: Buffer.from(b64, 'base64'), tieneLogo: true };
+    } catch { return { logoData: null, tieneLogo: false }; }
+  }
+  const logoPath = path.join(__dirname, '..', logoUrl.replace(/^\//, ''));
+  const existe = fs.existsSync(logoPath);
+  return { logoData: existe ? logoPath : null, tieneLogo: existe };
+}
+
+// Encabezado corporativo reutilizable para los PDFs de contabilidad — logo
+// (si la empresa tiene uno cargado en Configuración SRI) a la izquierda,
+// razón social/RUC/dirección centrados, título del reporte debajo. Mismo
+// dato que ya usa el recibo POS (config.razonSocial/ruc/dirMatriz).
+function dibujarEncabezadoContable(doc, config, titulo) {
+  const ML = doc.page.margins.left;
+  const W  = doc.page.width - ML - doc.page.margins.right;
+  const { logoData, tieneLogo } = _resolverLogoContable(config?.logoUrl);
+  let y = doc.y;
+
+  if (tieneLogo) {
+    try { doc.image(logoData, ML, y, { fit: [70, 45] }); } catch { /* logo corrupto → omitir */ }
+  }
+
+  doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000')
+    .text((config?.razonSocial || 'Empresa').toUpperCase(), ML, y, { width: W, align: 'center' });
+  doc.fontSize(8).font('Helvetica').fillColor('#475569')
+    .text([config?.ruc, config?.dirMatriz, config?.telefono].filter(Boolean).join('  ·  '), { width: W, align: 'center' });
+  doc.moveDown(0.4);
+
+  doc.fontSize(13).font('Helvetica-Bold').fillColor('#000000')
+    .text(titulo, { width: W, align: 'center' });
+  doc.font('Helvetica').fillColor('#000000');
+  doc.moveDown(0.3);
+
+  const lineY = doc.y;
+  doc.moveTo(ML, lineY).lineTo(ML + W, lineY).lineWidth(1).stroke('#7C3AED');
+  doc.moveDown(0.4);
 }
 
 function escribirLineaPdf(doc, texto = '', opts = {}) {
@@ -2262,21 +2311,29 @@ router.get('/reportes/mayor', async (req, res) => {
       );
     }
 
+    const config = await prisma.configuracion_sri.findFirst({ where: { empresaId } });
+
     const doc = crearDocumentoPdf(res, `libro_mayor_${formatDateOnly(new Date())}.pdf`);
-    doc.fontSize(14).text('Libro Mayor', { align: 'left' });
-    doc.moveDown(0.3);
-    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`);
-    doc.text(`Filtros: cuentaId=${cuentaId || 'todas'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} periodo=${req.query.periodo || '-'}`);
-    doc.moveDown(0.5);
+    dibujarEncabezadoContable(doc, config, mayor ? 'Mayor de una cuenta contable' : 'Mayorización por lote');
 
     const money = (v) => `$${Number(v || 0).toFixed(2)}`;
+    const desde = req.query.desde ? formatDateOnly(req.query.desde) : null;
+    const hasta = req.query.hasta ? formatDateOnly(req.query.hasta) : null;
+
+    doc.fontSize(8).fillColor('#94a3b8')
+      .text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}` +
+        (desde || hasta ? `  ·  Período: ${desde || '...'} a ${hasta || '...'}` : ''))
+      .fillColor('#000000');
+    doc.moveDown(0.4);
 
     if (mayor) {
       // Se filtró UNA cuenta — el PDF trae solo su detalle, sin la
       // mayorización de las demás cuentas (antes se anexaba siempre,
       // ruido innecesario cuando lo que se pidió fue una cuenta puntual).
-      doc.fontSize(11).text(`Cuenta: ${mayor.cuenta.codigo} - ${mayor.cuenta.nombre}`);
-      doc.fontSize(10).text(`Saldo final: ${money(mayor.saldoFinal)}  ·  ${mayor.movimientos.length} movimiento(s)`);
+      doc.fontSize(11).font('Helvetica-Bold').text(`Cuenta: `, { continued: true })
+        .font('Helvetica').text(`${mayor.cuenta.codigo} - ${mayor.cuenta.nombre}`);
+      doc.fontSize(10).font('Helvetica-Bold').text('Saldo final: ', { continued: true })
+        .font('Helvetica').text(`${money(mayor.saldoFinal)}  ·  ${mayor.movimientos.length} movimiento(s)`);
       doc.moveDown(0.3);
 
       dibujarTablaPdf(doc, [
@@ -2292,9 +2349,9 @@ router.get('/reportes/mayor', async (req, res) => {
         detalle: (m.descripcionDetalle || m.descripcionAsiento || '').slice(0, 55),
       })), doc.y);
     } else {
-      // Sin cuenta filtrada — mayorización por lote (resumen de todas las cuentas).
-      doc.fontSize(11).text('Mayorización por lote');
-      doc.fontSize(9).text(
+      // Sin cuenta filtrada — mayorización por lote (resumen de todas las
+      // cuentas). El título ya lo puso dibujarEncabezadoContable() arriba.
+      doc.fontSize(9).font('Helvetica').text(
         `${mayorizacion.resumen.cuentas} cuenta(s) · ${mayorizacion.resumen.movimientos} movimiento(s) · ` +
         `Debe ${money(mayorizacion.resumen.totalDebe)} · Haber ${money(mayorizacion.resumen.totalHaber)}`,
       );
