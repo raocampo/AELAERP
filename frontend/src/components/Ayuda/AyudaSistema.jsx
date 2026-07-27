@@ -210,6 +210,109 @@ const SECCIONES = [
     ),
   },
   {
+    id: 'sucursales-cajas',
+    icono: '🏬',
+    titulo: 'Sucursales, Puntos de Emisión y Cajas (multi-caja)',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Para negocios con más de un local, o con varias cajas registradoras en el mismo local. Tres niveles:</p>
+        <table className="ayuda-tabla">
+          <thead><tr><th>Nivel</th><th>Qué es</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Sucursal</strong></td><td>Un local físico — el "establecimiento" del SRI (ej. Matriz, Sucursal Norte)</td></tr>
+            <tr><td><strong>Punto de Emisión</strong></td><td>Una secuencia de numeración SRI dentro de una sucursal</td></tr>
+            <tr><td><strong>Caja</strong></td><td>Una caja registradora física — varias cajas pueden compartir el mismo punto de emisión (misma numeración)</td></tr>
+          </tbody>
+        </table>
+
+        <h4>Activar el módulo</h4>
+        <ol>
+          <li>Ve a <strong>Configuración del Sistema → Impresión y kiosko</strong>.</li>
+          <li>Activa <strong>"Habilitar Sucursales y Puntos de Venta (multi-caja)"</strong>. Si tu negocio tiene una sola caja, déjalo desactivado — no cambia nada en tu flujo actual.</li>
+        </ol>
+
+        <h4>Crear sucursales, puntos de emisión y cajas</h4>
+        <ol>
+          <li>Ve a <strong>Configuración → Sucursales y Puntos de Venta</strong> (aparece en el menú solo si activaste el módulo).</li>
+          <li>Crea una sucursal nueva con su nombre y código de establecimiento (ej. 002).</li>
+          <li>Dentro de cada sucursal, agrega uno o más puntos de emisión.</li>
+          <li>Dentro de cada punto de emisión, agrega tantas cajas como necesites (ej. "Caja 1", "Caja 2").</li>
+        </ol>
+
+        <p>Con más de una caja activa, aparece un selector <strong>"Caja:"</strong> en POS, Facturación y Guías de Remisión para elegir con cuál se está trabajando.</p>
+
+        <div className="ayuda-nota">
+          💡 La primera vez que uses el sistema, ya tienes automáticamente una sucursal "Matriz" con una "Caja General" — no hace falta crear nada manualmente si no necesitas más de una.
+        </div>
+        <div className="ayuda-nota ayuda-nota-warning">
+          ⚠️ El código de establecimiento de una sucursal no se puede editar después de creada (afectaría la numeración SRI de documentos ya emitidos). Si te equivocaste al crearla y todavía no tiene documentos, elimínala y créala de nuevo con el código correcto.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'impresora-termica',
+    icono: '🖨️',
+    titulo: 'Impresora térmica — Red o USB',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>El recibo principal del POS (PDF) ya se imprime con cualquier impresora instalada en tu computador, sin configuración adicional. Esta sección es para una <strong>impresora térmica dedicada</strong> (tipo caja registradora) — etiquetas de productos con código de barras, ticket rápido sin diálogo de impresión, y el cajón de dinero.</p>
+
+        <h4>Configurar</h4>
+        <ol>
+          <li>Ve a <strong>Configuración del Sistema → Impresión y kiosko</strong>.</li>
+          <li>En "Impresora térmica", elige el modo de conexión:</li>
+        </ol>
+        <table className="ayuda-tabla">
+          <thead><tr><th>Modo</th><th>Cuándo usarlo</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Red (IP)</strong></td><td>Impresora térmica conectada a la misma red local, con IP fija</td></tr>
+            <tr><td><strong>USB</strong></td><td>Impresora conectada por cable USB directo al computador que factura</td></tr>
+          </tbody>
+        </table>
+        <ol start="3">
+          <li>En modo Red: ingresa la IP y el puerto (9100 por defecto).</li>
+          <li>En modo USB: haz clic en <strong>"Conectar impresora USB"</strong> — el navegador te pedirá elegir el dispositivo una sola vez, después lo recuerda solo.</li>
+          <li>Usa <strong>"Probar impresión"</strong> para confirmar que funciona antes de usarla en una venta real.</li>
+        </ol>
+
+        <div className="ayuda-nota">
+          💡 El modo USB solo funciona en Chrome, Edge u Opera (no Safari ni Firefox) — es una limitación de esos navegadores, no del sistema.
+        </div>
+        <div className="ayuda-nota ayuda-nota-warning">
+          ⚠️ En Windows, si al conectar la impresora por USB el navegador no puede tomarla, es porque Windows ya le asignó su propio driver de impresora a ese puerto — contacta a soporte para reasignarlo.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'modo-offline',
+    icono: '📴',
+    titulo: 'Trabajar sin internet (modo offline del POS)',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Si se corta el internet del negocio, puedes seguir vendiendo desde el <strong>POS</strong> (Facturas y Notas de Venta) sin interrupción.</p>
+
+        <h4>Qué pasa exactamente</h4>
+        <ol>
+          <li>Facturas normalmente, sin hacer nada especial.</li>
+          <li>Si no hay conexión en ese momento, la venta se guarda en tu propio computador/tablet con la fecha y hora reales — no se pierde.</li>
+          <li>En vez del comprobante final, ves un aviso: <em>"Venta guardada en este dispositivo — se enviará al SRI cuando vuelva la conexión"</em>. Todavía no tiene número de factura, así que no se puede imprimir el ticket fiscal en ese momento.</li>
+          <li>Puedes seguir vendiendo normalmente — cada venta offline se va acumulando.</li>
+          <li>Abajo de la pantalla aparece un aviso permanente con cuántas ventas están pendientes de sincronizar, y un botón <strong>"Sincronizar ahora"</strong>.</li>
+          <li>En cuanto vuelve la señal, todas se envían solas al servidor y recién ahí obtienen su número real y la autorización del SRI.</li>
+        </ol>
+
+        <div className="ayuda-nota ayuda-nota-warning">
+          ⚠️ Esto cubre solo Facturas y Notas de Venta desde el POS. Compras y Caja Diaria todavía necesitan conexión en el momento.
+        </div>
+        <div className="ayuda-nota">
+          💡 Ninguna factura electrónica puede quedar autorizada por el SRI sin internet — eso requiere de todos modos una conexión en tiempo real con el SRI. Lo que hace este modo es no perder la venta mientras tanto, y mandarla automáticamente apenas vuelva la señal.
+        </div>
+      </div>
+    ),
+  },
+  {
     id: 'compras-gastos',
     icono: '🛒',
     titulo: 'Compras — Clasificación de gastos para el SRI',
@@ -427,6 +530,30 @@ const SECCIONES = [
     ),
   },
   {
+    id: 'etiquetas-productos',
+    icono: '🏷️',
+    titulo: 'Etiquetas de Productos y regalos/combos en compras',
+    contenido: (
+      <div className="ayuda-contenido">
+        <h4>Imprimir etiquetas con código de barras</h4>
+        <ol>
+          <li>Ve a <strong>Inventario → Etiquetas de Productos</strong>.</li>
+          <li>Busca el producto por código o nombre y agrégalo a la lista.</li>
+          <li>Indica cuántas copias necesitas de cada uno y el ancho de papel (58 o 80mm).</li>
+          <li>Haz clic en <strong>Imprimir</strong> — usa la impresora térmica configurada (ver sección "Impresora térmica").</li>
+        </ol>
+        <p>El código de barras que se imprime es el <strong>código auxiliar</strong> del producto (o el código principal si no tiene auxiliar) — el mismo que reconoce el lector de código de barras en POS, Facturación y Compras.</p>
+
+        <h4>Regalos y combos de proveedor en compras</h4>
+        <p>Algunos proveedores facturan ítems de regalo a $0.00 con un código derivado del producto real (ej. producto <code>1043664</code> → regalo <code>P-1043664</code>). Al registrar la compra, el sistema los reconoce automáticamente y suma la cantidad al producto real en vez de crear un producto nuevo — así el catálogo no se llena de productos huérfanos.</p>
+        <ol>
+          <li>Los prefijos reconocidos por defecto son <code>P-</code>, <code>M-</code>, <code>OBQ-</code>, <code>COMBO-</code>, <code>REGALO-</code>, <code>BONI-</code> — configurables en <strong>Configuración del Sistema → Inventario</strong>.</li>
+          <li>Si un ítem a $0.00 no coincide con ningún producto conocido, queda en <strong>Compras → Obsequios pendientes</strong> para asignarlo manualmente.</li>
+        </ol>
+      </div>
+    ),
+  },
+  {
     id: 'utilidades',
     icono: '📊',
     titulo: 'Tabla de Utilidades — Márgenes de ganancia',
@@ -495,6 +622,28 @@ const SECCIONES = [
 
         <div className="ayuda-nota ayuda-nota-warning">
           ⚠️ Si tu empresa ya tiene asientos contables registrados, el sistema restringe el reemplazo completo — solo permite agregar cuentas nuevas o eliminar cuentas sin movimientos, para no romper la contabilidad ya generada.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'libro-mayor',
+    icono: '📖',
+    titulo: 'Libro Diario y Libro Mayor',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Ve a <strong>Contabilidad → Libro Diario</strong> para ver todos los asientos contables en orden cronológico, o <strong>Contabilidad → Libro Mayor</strong> para ver el movimiento acumulado de una cuenta específica.</p>
+
+        <h4>Consultar el mayor de una cuenta</h4>
+        <ol>
+          <li>En "Consulta de libro mayor", escribe parte del código o del nombre de la cuenta (ej. <em>"reten"</em>) en el buscador — se filtra mientras escribes, no hace falta el código exacto.</li>
+          <li>Elige un rango de fechas si quieres acotar el período (opcional).</li>
+          <li>Haz clic en <strong>Consultar</strong> para ver el detalle en pantalla, o <strong>PDF Servidor</strong> para descargarlo con el encabezado de tu empresa.</li>
+        </ol>
+        <p>También puedes ejecutar la <strong>Mayorización por lote</strong> para ver de un vistazo el resumen (movimientos, debe, haber, saldo) de todas las cuentas con movimiento en el período.</p>
+
+        <div className="ayuda-nota">
+          💡 Cuando una cuenta tiene muchos movimientos, tanto la tabla en pantalla como el listado de mayorización se muestran paginados (50 registros por página) para que sigan siendo manejables.
         </div>
       </div>
     ),
@@ -640,6 +789,26 @@ const SECCIONES = [
     ),
   },
   {
+    id: 'notas-credito-recibidas',
+    icono: '↩️',
+    titulo: 'Notas de Crédito recibidas de proveedores',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Cuando un proveedor te emite una Nota de Crédito (por una devolución o un ajuste sobre una compra), se descarga automáticamente por el Buzón SRI junto con las demás compras.</p>
+        <p>El sistema la aplica automáticamente en todos los lugares donde corresponde:</p>
+        <ul>
+          <li><strong>Reportes Tributarios y F104:</strong> se resta del crédito fiscal de IVA del mes.</li>
+          <li><strong>ATS:</strong> aparece en el detalle de compras con tipo de comprobante "04".</li>
+          <li><strong>Cuentas por Pagar:</strong> se descuenta del saldo pendiente de la compra que modifica (si el sistema encuentra la compra original por proveedor + número de factura).</li>
+          <li><strong>Contabilidad:</strong> genera su propio asiento, separando la base y el IVA correctamente.</li>
+        </ul>
+        <div className="ayuda-nota">
+          💡 No genera reversa de inventario automáticamente — si la nota de crédito corresponde a una devolución física de mercadería, ajusta el stock manualmente.
+        </div>
+      </div>
+    ),
+  },
+  {
     id: 'declaraciones',
     icono: '🧮',
     titulo: 'Declaraciones Tributarias — F104, F103, F101',
@@ -696,6 +865,25 @@ const SECCIONES = [
       <div className="ayuda-contenido">
         <p>Al emitir una guía de remisión, el campo de transportista tiene autocompletado: escribe el nombre y el sistema sugiere transportistas ya usados antes, completando RUC y placa automáticamente.</p>
         <p>No necesitas crear el catálogo por separado — cada vez que guardas una guía con un transportista nuevo, se agrega solo al catálogo para la próxima vez.</p>
+      </div>
+    ),
+  },
+  {
+    id: 'webservices-api',
+    icono: '🔌',
+    titulo: 'Integraciones externas (WebServices API)',
+    contenido: (
+      <div className="ayuda-contenido">
+        <p>Si tu negocio ya emite sus comprobantes con otro sistema de facturación electrónica propio (ej. un laboratorio clínico o una clínica con su propio convenio ante el SRI) y quieres que AELA lleve la contabilidad, declaraciones y bancos sin volver a facturar, existe una API para importar esos documentos automáticamente.</p>
+        <h4>Cómo funciona</h4>
+        <ul>
+          <li>El otro sistema ya autoriza sus propios comprobantes ante el SRI — AELA solo los <strong>registra</strong> para contabilidad, nunca los vuelve a firmar ni enviar.</li>
+          <li>Cada factura y cada cobro se manda por la API con su información completa (cliente, ítems, forma de pago) y AELA genera el asiento contable automáticamente.</li>
+          <li>Es segura ante reintentos: si el otro sistema reenvía el mismo comprobante por error de red, AELA no lo duplica.</li>
+        </ul>
+        <div className="ayuda-nota">
+          💡 Esto requiere trabajo de configuración técnica entre ambos sistemas — contacta a soporte para coordinar la clave de acceso (API Key) y la especificación técnica.
+        </div>
       </div>
     ),
   },
