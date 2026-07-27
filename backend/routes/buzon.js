@@ -37,7 +37,17 @@ const {
 const router  = express.Router();
 const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
+// Límite para /consultar y /importar: cada clave dispara una llamada real al
+// webservice del SRI, secuencial — con muchas claves se corre riesgo real de
+// pasar el timeout de 60 s del proxy de Railway. Se mantiene bajo a propósito.
 const MAX_CLAVES_LOTE = 50;
+
+// Límite para /importar-zip y /importar-xml: NO llaman al SRI (los XML ya
+// vienen autorizados desde el propio archivo), solo parseo local + escritura
+// en BD, así que corren como job en background (ver SCRAPER_JOBS más abajo)
+// y no dependen del timeout del proxy. El límite es solo anti-abuso/memoria,
+// mismo criterio que ya usa `facturas.js` para el import XML de ventas.
+const MAX_ARCHIVOS_LOCAL = 1000;
 
 // ─── Store en memoria para jobs async del scraper SRI ─────────
 // Evita el timeout de 60 s del proxy de Railway respondiendo de inmediato
@@ -435,7 +445,85 @@ router.post('/importar', async (req, res) => {
   }
 });
 
+// Procesa una lista de { filename, xmlString } contra importarDocumentoRecibido,
+// actualizando el progreso del job en SCRAPER_JOBS. Compartido por /importar-zip
+// e /importar-xml — ambos son local-only (sin llamar al SRI), así que corren en
+// background y no están atados al límite de 50 que sí aplica a /consultar e /importar.
+async function _procesarArchivosXmlEnBackground({ jobId, archivos, empresaId, usuarioId, opciones, db }) {
+  const update = (patch) => SCRAPER_JOBS.set(jobId, { ...(SCRAPER_JOBS.get(jobId) || {}), ...patch });
+  const resultados = [];
+
+  for (const [idx, { filename, xmlString }] of archivos.entries()) {
+    update({ mensaje: `Importando ${idx + 1} de ${archivos.length}...` });
+
+    const claveMatch = xmlString.match(/<claveAcceso>([^<]{49})<\/claveAcceso>/i);
+    const clave = claveMatch ? claveMatch[1].trim() : null;
+
+    if (!clave) {
+      resultados.push({ archivo: filename, estado: 'error', error: 'No se encontró clave de acceso (49 dígitos) en el XML' });
+      continue;
+    }
+
+    const tipo = detectarTipoDesdeClaveAcceso(clave);
+    if (!tipo) {
+      resultados.push({ archivo: filename, clave, estado: 'error', error: 'Tipo de documento no reconocido' });
+      continue;
+    }
+
+    try {
+      const resultado = await db.$transaction(async (tx) => {
+        return importarDocumentoRecibido({
+          tx, empresaId, usuarioId,
+          tipoDoc: tipo.cod,
+          xmlAutorizado: xmlString,
+          xmlEnvuelto: xmlString,
+          claveAcceso: clave,
+          numeroAutorizacion: clave,
+          fechaAutorizacion: null,
+          opcionesFactura: opciones,
+        });
+      });
+
+      await _generarAsientoSiAplicaDb(resultado, usuarioId, db);
+      resultados.push({ archivo: filename, clave, tipo: tipo.nombre, estado: resultado.accion, id: resultado.id, motivo: resultado.motivo });
+    } catch (err) {
+      console.error(`[Buzón import] Error importando ${filename}:`, err.message);
+      resultados.push({ archivo: filename, clave, tipo: tipo.nombre, estado: 'error', error: err.message });
+    }
+  }
+
+  const creados  = resultados.filter((r) => r.estado === 'creado').length;
+  const omitidos = resultados.filter((r) => r.estado === 'omitido').length;
+  const errores  = resultados.filter((r) => r.estado === 'error').length;
+
+  update({
+    status: 'done',
+    result: { success: true, resumen: { creados, omitidos, errores, totalArchivos: archivos.length }, resultados },
+  });
+  setTimeout(() => SCRAPER_JOBS.delete(jobId), 15 * 60 * 1000);
+}
+
+// Igual que _generarAsientoSiAplica pero sin depender de `req` (el job corre
+// en background, después de que la respuesta HTTP ya se envió).
+async function _generarAsientoSiAplicaDb(resultado, usuarioId, db) {
+  if (resultado?.accion !== 'creado') return;
+  try {
+    if (resultado.modelo === 'facturas_compra') {
+      await crearAsientoFacturaCompraRegistrada({ compraId: resultado.id, usuarioId, db });
+    } else if (resultado.modelo === 'retenciones_recibidas') {
+      await crearAsientoRetencionRecibida({ retencionRecibidaId: resultado.id, usuarioId, db });
+    } else if (resultado.modelo === 'docs_recibidos_otros') {
+      await crearAsientoDocRecibidoOtro({ docRecibidoId: resultado.id, usuarioId, db });
+    }
+  } catch (err) {
+    console.error(`[Buzón] Asiento contable de ${resultado.modelo} id=${resultado.id}:`, err.message);
+  }
+}
+
 // ─── POST /importar-zip ──────────────────────────────────────
+// Responde de inmediato con { jobId } y procesa el ZIP en background para no
+// depender del timeout de 60 s del proxy de Railway, sin importar cuántos
+// archivos traiga (solo lectura local del ZIP + escritura en BD, sin SRI).
 router.post('/importar-zip', upload.single('archivo'), async (req, res) => {
   try {
     if (!req.file) {
@@ -459,60 +547,22 @@ router.post('/importar-zip', upload.single('archivo'), async (req, res) => {
     if (entries.length === 0) {
       return res.status(400).json({ success: false, mensaje: 'El ZIP no contiene archivos XML' });
     }
-    if (entries.length > MAX_CLAVES_LOTE) {
-      return res.status(400).json({ success: false, mensaje: `El ZIP contiene ${entries.length} archivos. Máximo ${MAX_CLAVES_LOTE} por lote.` });
+    if (entries.length > MAX_ARCHIVOS_LOCAL) {
+      return res.status(400).json({ success: false, mensaje: `El ZIP contiene ${entries.length} archivos. Máximo ${MAX_ARCHIVOS_LOCAL} por lote.` });
     }
 
-    const resultados = [];
+    const archivos = entries.map((e) => ({ filename: e.name, xmlString: e.getData().toString('utf8') }));
+    const db = req.prisma || prisma;
 
-    for (const entry of entries) {
-      const xmlString = entry.getData().toString('utf8');
-      const filename  = entry.name;
+    const jobId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    SCRAPER_JOBS.set(jobId, { status: 'pending', startedAt: Date.now(), mensaje: `Importando 0 de ${archivos.length}...` });
+    _limpiarJobsViejos();
+    res.json({ jobId, status: 'pending' });
 
-      // Extraer clave de acceso del XML (infoTributaria/claveAcceso)
-      const claveMatch = xmlString.match(/<claveAcceso>([^<]{49})<\/claveAcceso>/i);
-      const clave = claveMatch ? claveMatch[1].trim() : null;
-
-      if (!clave) {
-        resultados.push({ archivo: filename, estado: 'error', error: 'No se encontró clave de acceso (49 dígitos) en el XML' });
-        continue;
-      }
-
-      const tipo = detectarTipoDesdeClaveAcceso(clave);
-      if (!tipo) {
-        resultados.push({ archivo: filename, clave, estado: 'error', error: 'Tipo de documento no reconocido' });
-        continue;
-      }
-
-      try {
-        const resultado = await (req.prisma || prisma).$transaction(async (tx) => {
-          return importarDocumentoRecibido({
-            tx,
-            empresaId,
-            usuarioId,
-            tipoDoc: tipo.cod,
-            xmlAutorizado: xmlString,
-            xmlEnvuelto: xmlString,
-            claveAcceso: clave,
-            numeroAutorizacion: clave,
-            fechaAutorizacion: null,
-            opcionesFactura: opciones,
-          });
-        });
-
-        await _generarAsientoSiAplica(resultado, req);
-        resultados.push({ archivo: filename, clave, tipo: tipo.nombre, estado: resultado.accion, id: resultado.id, motivo: resultado.motivo });
-      } catch (err) {
-        console.error(`[Buzón ZIP] Error importando ${filename}:`, err.message);
-        resultados.push({ archivo: filename, clave, tipo: tipo.nombre, estado: 'error', error: err.message });
-      }
-    }
-
-    const creados  = resultados.filter((r) => r.estado === 'creado').length;
-    const omitidos = resultados.filter((r) => r.estado === 'omitido').length;
-    const errores  = resultados.filter((r) => r.estado === 'error').length;
-
-    res.json({ success: true, resumen: { creados, omitidos, errores, totalArchivos: entries.length }, resultados });
+    _procesarArchivosXmlEnBackground({ jobId, archivos, empresaId, usuarioId, opciones, db }).catch((err) => {
+      console.error('Error en background de /buzon/importar-zip:', err);
+      SCRAPER_JOBS.set(jobId, { status: 'error', error: 'Error al procesar el archivo ZIP' });
+    });
   } catch (error) {
     console.error('Error en /buzon/importar-zip:', error);
     res.status(500).json({ success: false, mensaje: 'Error al procesar el archivo ZIP' });
@@ -520,15 +570,13 @@ router.post('/importar-zip', upload.single('archivo'), async (req, res) => {
 });
 
 // ─── POST /importar-xml ──────────────────────────────────────
-// Permite subir uno o varios archivos XML directamente (sin ZIP).
-router.post('/importar-xml', upload.array('archivos', MAX_CLAVES_LOTE), async (req, res) => {
+// Permite subir uno o varios archivos XML directamente (sin ZIP). Mismo
+// patrón de job en background que /importar-zip — ver comentario arriba.
+router.post('/importar-xml', upload.array('archivos', MAX_ARCHIVOS_LOCAL), async (req, res) => {
   try {
-    const archivos = req.files || [];
-    if (archivos.length === 0) {
+    const archivosSubidos = req.files || [];
+    if (archivosSubidos.length === 0) {
       return res.status(400).json({ success: false, mensaje: 'No se recibieron archivos XML' });
-    }
-    if (archivos.length > MAX_CLAVES_LOTE) {
-      return res.status(400).json({ success: false, mensaje: `Máximo ${MAX_CLAVES_LOTE} archivos XML por lote` });
     }
 
     const empresaId = req.empresa.id;
@@ -537,52 +585,18 @@ router.post('/importar-xml', upload.array('archivos', MAX_CLAVES_LOTE), async (r
 
     if (!await _validarEmpresaActiva(req, res)) return;
 
-    const resultados = [];
+    const archivos = archivosSubidos.map((f) => ({ filename: f.originalname, xmlString: f.buffer.toString('utf8') }));
+    const db = req.prisma || prisma;
 
-    for (const file of archivos) {
-      const filename  = file.originalname;
-      const xmlString = file.buffer.toString('utf8');
+    const jobId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    SCRAPER_JOBS.set(jobId, { status: 'pending', startedAt: Date.now(), mensaje: `Importando 0 de ${archivos.length}...` });
+    _limpiarJobsViejos();
+    res.json({ jobId, status: 'pending' });
 
-      const claveMatch = xmlString.match(/<claveAcceso>([^<]{49})<\/claveAcceso>/i);
-      const clave = claveMatch ? claveMatch[1].trim() : null;
-
-      if (!clave) {
-        resultados.push({ archivo: filename, estado: 'error', error: 'No se encontró clave de acceso (49 dígitos) en el XML' });
-        continue;
-      }
-
-      const tipo = detectarTipoDesdeClaveAcceso(clave);
-      if (!tipo) {
-        resultados.push({ archivo: filename, clave, estado: 'error', error: 'Tipo de documento no reconocido' });
-        continue;
-      }
-
-      try {
-        const resultado = await (req.prisma || prisma).$transaction(async (tx) => {
-          return importarDocumentoRecibido({
-            tx, empresaId, usuarioId,
-            tipoDoc: tipo.cod,
-            xmlAutorizado: xmlString,
-            xmlEnvuelto: xmlString,
-            claveAcceso: clave,
-            numeroAutorizacion: clave,
-            fechaAutorizacion: null,
-            opcionesFactura: opciones,
-          });
-        });
-        await _generarAsientoSiAplica(resultado, req);
-        resultados.push({ archivo: filename, clave, tipo: tipo.nombre, estado: resultado.accion, id: resultado.id, motivo: resultado.motivo });
-      } catch (err) {
-        console.error(`[Buzón XML] Error importando ${filename}:`, err.message);
-        resultados.push({ archivo: filename, clave, tipo: tipo.nombre, estado: 'error', error: err.message });
-      }
-    }
-
-    const creados  = resultados.filter((r) => r.estado === 'creado').length;
-    const omitidos = resultados.filter((r) => r.estado === 'omitido').length;
-    const errores  = resultados.filter((r) => r.estado === 'error').length;
-
-    res.json({ success: true, resumen: { creados, omitidos, errores, totalArchivos: archivos.length }, resultados });
+    _procesarArchivosXmlEnBackground({ jobId, archivos, empresaId, usuarioId, opciones, db }).catch((err) => {
+      console.error('Error en background de /buzon/importar-xml:', err);
+      SCRAPER_JOBS.set(jobId, { status: 'error', error: 'Error al procesar los archivos XML' });
+    });
   } catch (error) {
     console.error('Error en /buzon/importar-xml:', error);
     res.status(500).json({ success: false, mensaje: 'Error al procesar los archivos XML' });

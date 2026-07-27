@@ -199,3 +199,58 @@ Verificado con `npx vite build` limpio (chunk de AyudaSistema pasó de ~40kB
 a 67kB, consistente con el contenido agregado). No requiere probarse en
 navegador más allá de que compile — es contenido estático, sin lógica
 nueva.
+
+## Parte 5 (sesión nueva) — Buzón SRI: eliminar el límite de 50 archivos en "Importar ZIP" / "Importar XML"
+
+El usuario reportó que al descargar y comprimir los XML del portal SRI
+regularmente hay más de 50 archivos, y el sistema los rechaza.
+
+**Causa**: las 4 rutas de `routes/buzon.js` compartían la misma constante
+`MAX_CLAVES_LOTE = 50`, pero por razones distintas:
+- `/consultar` e `/importar` (pestañas "Por claves de acceso" y "Descarga
+  automática") sí necesitan ese límite bajo — cada clave dispara una llamada
+  real y secuencial al webservice del SRI, y con muchas claves se corre
+  riesgo real de superar el timeout de 60 s del proxy de Railway.
+- `/importar-zip` e `/importar-xml` (pestañas "Importar ZIP" / "Importar
+  XML") **no llaman al SRI en absoluto** — los XML ya vienen autorizados en
+  el propio archivo, así que solo hacen parseo local + escritura en BD. El
+  límite de 50 ahí era un caso de "copiar la misma constante sin repensar si
+  aplicaba", no una necesidad real.
+
+### Implementado
+- `/importar-zip` e `/importar-xml` ahora responden de inmediato con
+  `{ jobId }` y procesan los archivos en background, reusando el mismo
+  patrón de job asíncrono que ya existía para el scraper del portal SRI
+  (`SCRAPER_JOBS` + `GET /buzon/sri/job/:jobId`, mismo mecanismo documentado
+  en sesiones anteriores para evitar el timeout de 60 s de Railway). Esto
+  quita el límite de fondo (ya no depende de terminar en una sola request
+  HTTP) sin importar cuántos archivos traiga el lote.
+- Límite anti-abuso subido de 50 a **1000 archivos** por lote (mismo tope
+  que ya usa `facturas.js` para el import XML de ventas — se alinearon los
+  dos límites, antes eran inconsistentes entre sí sin motivo).
+- El límite de 50 para `/consultar` e `/importar` (llamadas reales al SRI)
+  **se mantiene intacto**, con comentario explicando por qué.
+- Frontend (`BuzonSRI.jsx`): las pestañas "Importar ZIP" e "Importar XML"
+  ahora muestran progreso ("Importando 12 de 340...") mientras el job corre
+  en background, reusando (extraído a la función `esperarJob()`) el mismo
+  polling que ya usaba la descarga automática del scraper SRI. Se quitó el
+  texto "Máximo 50 archivos" de la UI.
+
+### Verificación realizada
+- `node --test`: 29/29.
+- `npx vite build`: limpio.
+- **Probado end-to-end contra `scfi_dev` real**, con servidor propio en un
+  puerto alterno (5601, sin tocar el servidor de desarrollo del usuario en
+  5600) y JWT firmado localmente: subida de 2 XML sueltos vía
+  `/importar-xml` (1 nuevo + 1 duplicado → detecta bien "Ya existe"), y los
+  mismos 2 XML comprimidos en un `.zip` vía `/importar-zip`. En ambos casos
+  el job respondió `jobId` de inmediato, el polling devolvió `pending` →
+  `done`, y el resumen (`creados`/`omitidos`/`errores`) coincidió con lo
+  esperado, incluyendo el asiento contable automático (`asientos_contables`,
+  tipo `COMPRA`) generado por cada factura nueva. Los registros de prueba
+  (2 `facturas_compra` + 2 `asientos_contables`) se eliminaron de la base
+  al terminar.
+- **No probado**: la UI de progreso en un navegador real (no hay entorno de
+  navegador disponible aquí) ni un lote realmente grande (cientos de
+  archivos) — la lógica es la misma que ya corre en producción para el
+  scraper, solo se verificó con 1-2 archivos por request.

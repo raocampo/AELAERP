@@ -54,38 +54,51 @@ function esErrorBrowserNoDisponible(err) {
   return /BROWSER_UNAVAILABLE|no se pudo iniciar el navegador|chromium|chrome/i.test(msg);
 }
 
-// Inicia el job y hace polling hasta completar (evita el timeout de 60 s de Railway)
-async function consultarSriAutomatico(payload, onProgreso) {
-  const { data: inicio } = await api.post('/buzon/sri/consultar', payload);
-  if (!inicio.jobId) return { data: inicio }; // respuesta directa inesperada
-
-  const MAX_INTENTOS = 80; // máx ~4 min de polling (80 × 3 s)
-  for (let i = 0; i < MAX_INTENTOS; i++) {
+// Espera un job de background (jobId) haciendo polling hasta completar —
+// evita el timeout de 60 s del proxy de Railway. Compartido por la consulta
+// del scraper SRI y por la importación de ZIP/XML (ambos responden { jobId }
+// de inmediato y procesan en background).
+async function esperarJob(jobId, onProgreso, maxIntentos = 80) {
+  for (let i = 0; i < maxIntentos; i++) {
     await new Promise((r) => setTimeout(r, 3000));
     let estado;
     try {
-      const { data } = await api.get(`/buzon/sri/job/${inicio.jobId}`);
+      const { data } = await api.get(`/buzon/sri/job/${jobId}`);
       estado = data;
     } catch (pollErr) {
       // 422 = job terminó en error; extraer el mensaje del body
       if (pollErr.response?.status === 422) {
         const d = pollErr.response.data || {};
-        const e = new Error(d.mensaje || 'Error en el scraper SRI');
+        const e = new Error(d.mensaje || 'Error procesando el job');
         e.response = { data: d };
         throw e;
       }
       throw pollErr;
     }
     if (onProgreso) onProgreso(estado.mensaje || 'Procesando...');
-    if (estado.status === 'done') return { data: estado };
+    if (estado.status === 'done') return { data: estado.result ?? estado };
     if (estado.status === 'error') {
-      const err = new Error(estado.mensaje || 'Error en la consulta');
-      err.response = { data: { mensaje: estado.mensaje, erroresConsulta: estado.erroresConsulta } };
+      const err = new Error(estado.mensaje || estado.error || 'Error procesando el job');
+      err.response = { data: { mensaje: estado.mensaje || estado.error, erroresConsulta: estado.erroresConsulta } };
       throw err;
     }
     // status === 'pending' → continuar esperando
   }
-  throw new Error('Tiempo de espera agotado. El scraper tardó más de 4 minutos.');
+  throw new Error('Tiempo de espera agotado.');
+}
+
+// Inicia el job de consulta del scraper SRI y espera el resultado.
+async function consultarSriAutomatico(payload, onProgreso) {
+  const { data: inicio } = await api.post('/buzon/sri/consultar', payload);
+  if (!inicio.jobId) return { data: inicio }; // respuesta directa inesperada
+  try {
+    return await esperarJob(inicio.jobId, onProgreso, 80); // máx ~4 min
+  } catch (err) {
+    if (err.message === 'Tiempo de espera agotado.') {
+      throw new Error('Tiempo de espera agotado. El scraper tardó más de 4 minutos.');
+    }
+    throw err;
+  }
 }
 
 export default function BuzonSRI() {
@@ -132,10 +145,12 @@ export default function BuzonSRI() {
 
   const [archivoZip, setArchivoZip] = useState(null);
   const [importandoZip, setImportandoZip] = useState(false);
+  const [progresoZip, setProgresoZip] = useState('');
   const [resumenZip, setResumenZip] = useState(null);
 
   const [archivosXml, setArchivosXml]     = useState([]);
   const [importandoXml, setImportandoXml] = useState(false);
+  const [progresoXml, setProgresoXml]     = useState('');
   const [resumenXml, setResumenXml]       = useState(null);
 
   const [archivoTxt, setArchivoTxt]       = useState(null);
@@ -246,17 +261,22 @@ export default function BuzonSRI() {
   const importarXml = async () => {
     if (archivosXml.length === 0) { toast.error('Selecciona uno o más archivos XML'); return; }
     setImportandoXml(true);
+    setProgresoXml('Subiendo archivos...');
     try {
       const fd = new FormData();
       archivosXml.forEach((f) => fd.append('archivos', f));
       fd.append('opciones', JSON.stringify(opciones));
-      const res = await api.post('/buzon/importar-xml', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setResumenXml(res.data);
-      toast.success(`${res.data.resumen?.creados || 0} documento(s) importado(s) desde XML`);
+      const { data: inicio } = await api.post('/buzon/importar-xml', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = inicio.jobId
+        ? await esperarJob(inicio.jobId, setProgresoXml, 200) // máx ~10 min
+        : { data: inicio };
+      setResumenXml(data);
+      toast.success(`${data.resumen?.creados || 0} documento(s) importado(s) desde XML`);
     } catch (err) {
       toast.error(err.response?.data?.mensaje || 'Error al procesar los XML');
     } finally {
       setImportandoXml(false);
+      setProgresoXml('');
     }
   };
 
@@ -326,17 +346,22 @@ export default function BuzonSRI() {
   const importarZip = async () => {
     if (!archivoZip) { toast.error('Selecciona un archivo ZIP'); return; }
     setImportandoZip(true);
+    setProgresoZip('Subiendo archivo...');
     try {
       const fd = new FormData();
       fd.append('archivo', archivoZip);
       fd.append('opciones', JSON.stringify(opciones));
-      const res = await api.post('/buzon/importar-zip', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setResumenZip(res.data);
-      toast.success(`${res.data.resumen?.creados || 0} documento(s) importado(s) desde ZIP`);
+      const { data: inicio } = await api.post('/buzon/importar-zip', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = inicio.jobId
+        ? await esperarJob(inicio.jobId, setProgresoZip, 200) // máx ~10 min
+        : { data: inicio };
+      setResumenZip(data);
+      toast.success(`${data.resumen?.creados || 0} documento(s) importado(s) desde ZIP`);
     } catch (err) {
       toast.error(err.response?.data?.mensaje || 'Error al procesar el ZIP');
     } finally {
       setImportandoZip(false);
+      setProgresoZip('');
     }
   };
 
@@ -1151,7 +1176,7 @@ export default function BuzonSRI() {
         <div className="buzon-card">
           <div className="buzon-step">
             <h2 className="buzon-step-title">Importar desde ZIP</h2>
-            <p className="buzon-step-hint">Sube un archivo <strong>.zip</strong> con los XMLs descargados del portal SRI. Máximo 50 archivos XML.</p>
+            <p className="buzon-step-hint">Sube un archivo <strong>.zip</strong> con los XMLs descargados del portal SRI. Sin límite práctico de archivos — se procesan en background.</p>
             <DropZone
               accept=".zip"
               icon="🗜️"
@@ -1166,9 +1191,12 @@ export default function BuzonSRI() {
               <label><input type="checkbox" checked={opciones.creaProductos} onChange={(e) => setOpciones((p) => ({ ...p, creaProductos: e.target.checked }))} /> Crear productos faltantes</label>
               <label><input type="checkbox" checked={opciones.registraCaja} onChange={(e) => setOpciones((p) => ({ ...p, registraCaja: e.target.checked }))} /> Registrar egreso en caja</label>
             </div>
+            {importandoZip && progresoZip && (
+              <div className="buzon-alerta-info" style={{ marginTop: '.75rem' }}>⏳ {progresoZip}</div>
+            )}
             <div className="buzon-step-actions">
               <button className="btn-primary" onClick={importarZip} disabled={importandoZip || !archivoZip}>
-                {importandoZip ? 'Procesando ZIP...' : 'Importar ZIP'}
+                {importandoZip ? `⏳ ${progresoZip || 'Procesando ZIP...'}` : 'Importar ZIP'}
               </button>
             </div>
             {resumenZip && (
@@ -1208,14 +1236,14 @@ export default function BuzonSRI() {
             <h2 className="buzon-step-title">Importar archivos XML</h2>
             <p className="buzon-step-hint">
               Sube uno o varios archivos <strong>.xml</strong> descargados individualmente desde el portal SRI.
-              Admite facturas, liquidaciones, retenciones y notas de crédito/débito. Máximo {50} archivos.
+              Admite facturas, liquidaciones, retenciones y notas de crédito/débito. Sin límite práctico de archivos.
             </p>
             <DropZone
               accept=".xml"
               multiple
               icon="📋"
               label="Arrastra o selecciona archivos XML"
-              sublabel="Acepta múltiples .xml del portal SRI (máx. 50)"
+              sublabel="Acepta múltiples .xml del portal SRI"
               files={archivosXml}
               onChange={(fs) => { setArchivosXml(fs); setResumenXml(null); }}
             />
@@ -1230,9 +1258,12 @@ export default function BuzonSRI() {
               <label><input type="checkbox" checked={opciones.creaProductos} onChange={(e) => setOpciones((p) => ({ ...p, creaProductos: e.target.checked }))} /> Crear productos faltantes</label>
               <label><input type="checkbox" checked={opciones.registraCaja} onChange={(e) => setOpciones((p) => ({ ...p, registraCaja: e.target.checked }))} /> Registrar egreso en caja</label>
             </div>
+            {importandoXml && progresoXml && (
+              <div className="buzon-alerta-info" style={{ marginTop: '.75rem' }}>⏳ {progresoXml}</div>
+            )}
             <div className="buzon-step-actions">
               <button className="btn-primary" onClick={importarXml} disabled={importandoXml || archivosXml.length === 0}>
-                {importandoXml ? 'Procesando XML...' : `Importar ${archivosXml.length || ''} XML`}
+                {importandoXml ? `⏳ ${progresoXml || 'Procesando XML...'}` : `Importar ${archivosXml.length || ''} XML`}
               </button>
             </div>
             {resumenXml && (
