@@ -1,6 +1,6 @@
 # Estado del Proyecto AELA
 
-Fecha de referencia: `2026-07-17`
+Fecha de referencia: `2026-07-26`
 
 ## Resumen general
 
@@ -25,6 +25,8 @@ AELA ya cuenta con una base funcional operativa para:
 - **landing page AELA ERP** en tema claro con planes, contacto CorpSimtelec y registro self-service
 - **identidad visual AELA ERP** aplicada (colores, favicons, tipografía según brandbook CorpSimtelec)
 - **módulo Gestión de Usuarios** con UI rediseñada (avatares, badges, modal animado)
+- **Sucursales, Puntos de Emisión y Cajas físicas multi-caja** — varias cajas registradoras pueden compartir un mismo punto de emisión SRI (con contador atómico de secuencial para Facturas), con límite configurable maxSucursales/maxCajas desde SuperAdmin y activación explícita (`sucursalesHabilitado`) en Configuración del Sistema
+- **impresión térmica ESC/POS configurable por Red (IP) o USB (WebUSB)** desde Configuración del Sistema → Impresión (antes no existía ninguna pantalla para esto)
 
 
 ## Realizado
@@ -1004,6 +1006,88 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
    - Ver todos los tenants, planes, estado
    - Activar/suspender tenants
    - Ver logs de provisioning fallidos
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-26 parte 2 — Impresión térmica por USB/WebUSB)
+
+Ver `docs/pendientes-2026-07-26-parte2.md` sección "PARA RETOMAR". Todo verificado a
+nivel de bytes con Node, **nunca contra un navegador Chromium real ni una impresora
+física** (no hay entorno de navegador disponible para desarrollo):
+
+1. **Configuración del Sistema → Impresión**: probar modo USB con una impresora real
+   conectada — "Conectar impresora USB" (diálogo nativo del navegador) y "Probar
+   impresión" deben imprimir un ticket real.
+2. **Riesgo conocido en Windows**: si falla al "reclamar" el dispositivo, es porque
+   Windows ya le asignó su driver genérico — hay que reasignarlo a WinUSB (ej. Zadig).
+   No es un bug, es una limitación conocida de WebUSB en Windows.
+3. Confirmar que Etiquetas de Productos y el ticket térmico/cajón del POS imprimen
+   bien en ambos modos (red y usb).
+4. Confirmar el modelo exacto de la impresora 3nstar del cliente (línea de recibos =
+   debería funcionar; línea de etiquetas dedicada podría usar TSPL, no cubierto).
+5. Confirmar `[schema-fix]` en logs de Railway para `configuracion_sistema.impresoraModo`.
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-26 — Cajas físicas por Punto de Emisión + límite SuperAdmin)
+
+Ver `docs/pendientes-2026-07-26.md` sección "PARA RETOMAR". Incluye además un fix
+mismo día (commit `16cbd7e`): el selector de Caja/menú "Sucursales y Puntos de Venta"
+ahora queda oculto hasta activarlo explícitamente en Configuración del Sistema
+(antes aparecía solo, aunque nadie lo hubiera configurado).
+
+1. Confirmar `[schema-fix]` en logs de Railway (tabla `cajas`, columna
+   `ultimoSecuencialFactura` con backfill, `maxSucursales`/`maxCajas`).
+2. Crear una 2ª caja bajo el MISMO punto de emisión en un tenant real y facturar
+   desde ambas — confirmar que la numeración no se pisa (verificado con 20
+   transacciones concurrentes independientes en local, no en navegador).
+3. Confirmar que el bloqueo 403 aparece al alcanzar el límite maxSucursales/maxCajas
+   seteado desde SuperAdmin.
+4. Confirmar que "Corp Simtelec" (u otro tenant con puntos de emisión históricos)
+   ya NO muestra el selector de caja hasta activar "Sucursales y Puntos de Venta"
+   en Configuración del Sistema.
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-24 — Sucursales y Puntos de Venta + landing)
+
+Ver `docs/pendientes-2026-07-24.md` sección "PARA RETOMAR". Nota: el modelo de
+Sucursales evolucionó el 07-26 (ver arriba) a Sucursal → Punto de Emisión → Cajas.
+
+1. Ir a Configuración → Sucursales y Puntos de Venta con un tenant real, confirmar
+   Matriz + Caja General automáticas.
+2. Revisar la landing en navegador real (links de WhatsApp en móvil/desktop,
+   `registro.html` sigue igual para Lite/Medium/Pro).
+3. Fases 2-4 (Caja Diaria por caja, Stock por sucursal, Reportes por sucursal) —
+   NO implementadas, documentadas a propósito para no olvidarlas.
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-22/23 — Regalos/combos en compras + Etiquetas + fix SRI)
+
+Ver `docs/pendientes-2026-07-23.md` sección "PARA RETOMAR". Incluye un incidente de
+producción ya corregido (`0c536ac`, migración de `items_compra_pendientes` faltaba
+en `applySchemaFixes.js`).
+
+1. Cargar una compra real de Comercial S&S con líneas de regalo (`P-1043664`, etc.)
+   y confirmar que no crea productos huérfanos.
+2. Imprimir una etiqueta real en la impresora térmica de un cliente (sigue
+   pendiente — ver también la sesión 07-26 parte 2, que agregó el modo USB).
+3. Confirmar que el autocompletado de datos de empresa desde el RUC (SRI) funciona
+   en Configuración Inicial con un RUC nuevo real.
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-21 — Notas de Crédito recibidas: ATS/contabilidad/CxC-CxP)
+
+Ver `docs/pendientes-2026-07-21.md` sección "PARA RETOMAR MAÑANA DESDE LA OFICINA".
+
+1. **Decisión pendiente del cliente, NO tocar hasta respuesta**: ¿corregir
+   retroactivamente los 2 asientos de NC recibida de LSAC (junio 2026) que quedaron
+   con la lógica vieja (IVA sin separar)?
+2. Confirmar despliegue sin `P2022` para la migración `subtotal_exento_compras`.
+3. Probar en producción: columna "N. Créd." en CxC/CxP, compra "Exenta de IVA",
+   importación Excel con `tipo_sin_iva`.
+4. Preguntar al cliente si alguna vez tuvo que corregir manualmente el XML del ATS
+   antes de subirlo (los 4 bugs del XSD encontrados esta sesión afectaban TODAS las
+   declaraciones ATS del sistema, no solo las de NC).
+
+### 🟢 Sesión 2026-07-20 — Catch-up de documentación (módulos activables por cliente)
+
+Ver `docs/pendientes-2026-07-20.md`. Sesión de recuperación: había un commit
+(`51602db`) y un diff sin commitear que continuaba la misma feature, sin ningún
+`docs/pendientes-*.md` que lo cubriera. Ya verificado y documentado — sin pendientes
+nuevos más allá de los ya listados en ese documento.
 
 ### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-17 — No objeto/Exento IVA + Notas de Venta RIMPE en ATS)
 
