@@ -1,6 +1,6 @@
 # Estado del Proyecto AELA
 
-Fecha de referencia: `2026-07-26`
+Fecha de referencia: `2026-07-27`
 
 ## Resumen general
 
@@ -27,6 +27,8 @@ AELA ya cuenta con una base funcional operativa para:
 - **módulo Gestión de Usuarios** con UI rediseñada (avatares, badges, modal animado)
 - **Sucursales, Puntos de Emisión y Cajas físicas multi-caja** — varias cajas registradoras pueden compartir un mismo punto de emisión SRI (con contador atómico de secuencial para Facturas), con límite configurable maxSucursales/maxCajas desde SuperAdmin y activación explícita (`sucursalesHabilitado`) en Configuración del Sistema
 - **impresión térmica ESC/POS configurable por Red (IP) o USB (WebUSB)** desde Configuración del Sistema → Impresión (antes no existía ninguna pantalla para esto)
+- **modo offline del POS** (Facturas y Notas de Venta) — la venta se guarda localmente (IndexedDB) si se corta la señal y se sincroniza sola al volver, sin duplicar (idempotencyKey)
+- **Libro Mayor** con PDF real (tabla, encabezado corporativo con logo/datos de empresa), tablas paginadas y selector de cuenta con búsqueda por texto
 
 
 ## Realizado
@@ -1006,6 +1008,29 @@ DB_ENCRYPT_KEY        → 64 hex chars para cifrar dbPass de tenants
    - Ver todos los tenants, planes, estado
    - Activar/suspender tenants
    - Ver logs de provisioning fallidos
+
+### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-27 — Auditoría AVALAB + Modo offline del POS + Libro Mayor)
+
+Ver `docs/pendientes-2026-07-27.md` (3 partes + addendum). Todo verificado con
+scripts/HTTP real contra `scfi_dev` local o revisión visual de PDFs reales,
+**nada probado todavía en un navegador real ni en producción**:
+
+1. **AVALAB**: bug de establecimiento/puntoEmision corregido (verificado
+   antes/después). Sigue pendiente coordinar con AVALAB la primera llamada
+   HTTP real usando `docs/integracion-avalab.md` — no depende de código.
+2. **Modo offline del POS** (Facturas/Notas de Venta): existía toda la
+   infraestructura (Service Worker, cola IndexedDB) pero nunca conectada a
+   ninguna pantalla — ahora sí. Idempotencia verificada con 2 requests HTTP
+   reales seguidas (no duplica). **Probar en navegador real**: DevTools →
+   Network → Offline, vender desde el POS, confirmar que sincroniza sola al
+   volver la señal. Alcance: solo POS — Compras y Caja Diaria quedan para
+   después.
+3. **Libro Mayor**: PDF pasó de texto plano a tabla real con encabezado
+   corporativo (logo/razón social/RUC — confirmado que hoy ningún tenant
+   con contabilidad tiene logo cargado, así que el caso ya probado es el
+   real), paginación cliente-side y selector de cuenta buscable por texto
+   (antes un `<select>` plano). Falta probar el selector/paginador en un
+   navegador real.
 
 ### 🔴 Prioridad alta — Verificar en producción (sesión 2026-07-26 parte 2 — Impresión térmica por USB/WebUSB)
 
