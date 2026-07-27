@@ -281,6 +281,10 @@ model configuracion_sistema {
   impresionAutoReciboPos   Boolean  @default(false)
   impresoraKiosko          String?  @db.VarChar(120)
   // ── Impresora térmica POS ──────────────────────────────
+  // impresoraModo: 'ninguna' | 'red' (TCP a impresoraIp/Puerto) | 'usb' (WebUSB,
+  // desde el navegador — el backend en la nube no puede alcanzar un puerto USB
+  // del equipo del cliente). impresoraIp/Puerto solo aplican en modo 'red'.
+  impresoraModo            String   @default("ninguna") @db.VarChar(10)
   impresoraIp              String?  @db.VarChar(50) // IP local, ej: 192.168.1.100
   impresoraPuerto          Int?     @default(9100) // Puerto TCP ESC/POS
   impresoraAncho           Int?     @default(80) // Ancho papel: 58 o 80 mm

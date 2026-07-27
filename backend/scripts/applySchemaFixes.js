@@ -569,6 +569,10 @@ const FIXES = [
   // admin lo habilite en Configuración del Sistema, aunque ya existan
   // puntos_emision/cajas históricos en la BD.
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "sucursalesHabilitado" BOOLEAN NOT NULL DEFAULT false`,
+  // Modo de conexión de la impresora térmica (2026-07-26): 'ninguna' | 'red'
+  // (TCP, ya existente) | 'usb' (WebUSB desde el navegador — el backend en
+  // la nube no puede alcanzar un puerto USB del cliente).
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "impresoraModo" VARCHAR(10) NOT NULL DEFAULT 'ninguna'`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

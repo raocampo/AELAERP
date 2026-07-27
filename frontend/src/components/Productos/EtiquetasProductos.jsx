@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { enviarBufferUSB } from '../../utils/impresoraUsb';
 import '../Compras/ListaCompras.css';
 
 export default function EtiquetasProductos() {
@@ -11,11 +12,15 @@ export default function EtiquetasProductos() {
   const [buscando, setBuscando] = useState(false);
   const [lista, setLista] = useState([]); // [{ productoId, codigoPrincipal, codigoAuxiliar, nombre, precioUnitario, cantidad }]
   const [ancho, setAncho] = useState(80);
+  const [modo, setModo] = useState('red'); // 'red' | 'usb' — de configuracion_sistema.impresoraModo
   const [imprimiendo, setImprimiendo] = useState(false);
 
   useEffect(() => {
     api.get('/impresora/config')
-      .then((r) => { if (r.data?.data?.impresoraAncho) setAncho(r.data.data.impresoraAncho); })
+      .then((r) => {
+        if (r.data?.data?.impresoraAncho) setAncho(r.data.data.impresoraAncho);
+        if (r.data?.data?.impresoraModo) setModo(r.data.data.impresoraModo);
+      })
       .catch(() => {});
   }, []);
 
@@ -63,13 +68,20 @@ export default function EtiquetasProductos() {
     if (lista.length === 0) return;
     setImprimiendo(true);
     try {
-      const res = await api.post('/impresora/etiquetas/imprimir', {
-        ancho,
-        productos: lista.map((item) => ({ productoId: item.productoId, cantidad: item.cantidad })),
-      });
-      toast.success(res.data?.mensaje || 'Etiquetas enviadas a la impresora');
+      const productos = lista.map((item) => ({ productoId: item.productoId, cantidad: item.cantidad }));
+
+      if (modo === 'usb') {
+        // El backend en la nube no puede alcanzar el puerto USB del equipo —
+        // solo genera los bytes ESC/POS, y el navegador los manda por WebUSB.
+        const res = await api.post('/impresora/etiquetas/generar', { ancho, productos }, { responseType: 'arraybuffer' });
+        await enviarBufferUSB(res.data);
+        toast.success('Etiquetas enviadas a la impresora USB');
+      } else {
+        const res = await api.post('/impresora/etiquetas/imprimir', { ancho, productos });
+        toast.success(res.data?.mensaje || 'Etiquetas enviadas a la impresora');
+      }
     } catch (err) {
-      toast.error(err.response?.data?.mensaje || 'Error al imprimir las etiquetas');
+      toast.error(err.response?.data?.mensaje || err.message || 'Error al imprimir las etiquetas');
     } finally {
       setImprimiendo(false);
     }

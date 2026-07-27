@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import { abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
+import { enviarBufferUSB } from '../../utils/impresoraUsb';
 import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
 import './PuntoVenta.css';
 
@@ -265,6 +266,38 @@ export default function PuntoVenta() {
       await abrirBlobEnNuevaPestana(api, endpoint);
     } catch {
       toast.error('No se pudo generar el recibo');
+    }
+  };
+
+  // Ticket térmico ESC/POS (etiquetas/cajón/recibo directo) — alternativa al
+  // PDF de arriba para negocios con impresora térmica configurada
+  // (Configuración del Sistema → Impresión). En modo 'red' el backend manda
+  // los bytes por TCP; en modo 'usb' solo genera el buffer y el navegador lo
+  // manda por WebUSB (el backend en la nube no alcanza el puerto USB).
+  const imprimirTicketTermico = async (id, tipo) => {
+    try {
+      if (sistema?.impresoraModo === 'usb') {
+        const res = await api.post(`/impresora/recibo/${tipo}/${id}/generar`, {}, { responseType: 'arraybuffer' });
+        await enviarBufferUSB(res.data);
+      } else {
+        await api.post(`/impresora/recibo/${tipo}/${id}`);
+      }
+      toast.success('Ticket enviado a la impresora térmica');
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || err.message || 'No se pudo imprimir el ticket térmico');
+    }
+  };
+
+  const abrirCajonDinero = async () => {
+    try {
+      if (sistema?.impresoraModo === 'usb') {
+        const res = await api.post('/impresora/cajon/generar', {}, { responseType: 'arraybuffer' });
+        await enviarBufferUSB(res.data);
+      } else {
+        await api.post('/impresora/cajon');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || err.message || 'No se pudo abrir el cajón de dinero');
     }
   };
 
@@ -676,6 +709,19 @@ export default function PuntoVenta() {
             >
               🖨️ Imprimir recibo POS
             </button>
+            {sistema?.impresoraHabilitada && sistema?.impresoraModo !== 'ninguna' && (
+              <button
+                className="btn-recibo-print"
+                onClick={() => imprimirTicketTermico(docEmitido.id, docEmitido.tipo)}
+              >
+                🧾 Imprimir ticket térmico
+              </button>
+            )}
+            {sistema?.cajaDineroHabilitada && (
+              <button className="btn-recibo-detail" onClick={abrirCajonDinero}>
+                💵 Abrir cajón
+              </button>
+            )}
             <button
               className="btn-recibo-detail"
               onClick={() => navigate(docEmitido.tipo === 'nota_venta' ? `/notas-venta/${docEmitido.id}` : `/facturas/${docEmitido.id}`)}

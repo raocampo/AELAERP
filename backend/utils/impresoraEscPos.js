@@ -235,6 +235,32 @@ function enviarTCP(ip, puerto = 9100, buffer, timeoutMs = 8000) {
   });
 }
 
+// ── Comandos "puros" (generan el buffer sin enviarlo) ──────────
+// Reutilizados tanto por el envío TCP (modo red) como por los endpoints que
+// devuelven los bytes crudos para WebUSB (modo usb, ver routes/impresora.js).
+
+/** Buffer para abrir el cajón de dinero (sin imprimir nada). */
+function generarComandoCajon() {
+  return Buffer.concat([CMD.INIT, CMD.OPEN_DRAWER, CMD.FEED_1]);
+}
+
+/** Ticket corto de prueba — confirma que la impresora recibe y corta bien. */
+function generarTicketPrueba(ancho = 80) {
+  const chars = ancho === 58 ? 32 : 42;
+  return Buffer.concat([
+    CMD.INIT,
+    CMD.ALIGN_CENTER,
+    CMD.BOLD_ON,
+    linea('AELA ERP'),
+    CMD.BOLD_OFF,
+    linea('Prueba de impresión'),
+    separador(chars),
+    linea(new Date().toLocaleString('es-EC')),
+    CMD.FEED_3,
+    CMD.CUT_FULL,
+  ]);
+}
+
 // ── API pública ───────────────────────────────────────────────
 /**
  * Imprime un recibo en la impresora de red.
@@ -251,8 +277,7 @@ async function imprimirRecibo(doc, emp, config) {
  */
 async function abrirCajon(ip, puerto = 9100) {
   if (!ip) throw new Error('IP de impresora no configurada');
-  const buf = Buffer.concat([CMD.INIT, CMD.OPEN_DRAWER, CMD.FEED_1]);
-  await enviarTCP(ip, puerto, buf);
+  await enviarTCP(ip, puerto, generarComandoCajon());
 }
 
 /**
@@ -276,4 +301,5 @@ async function imprimirBuffer(ip, puerto = 9100, buffer) {
 module.exports = {
   imprimirRecibo, abrirCajon, probarConexion, generarRecibo,
   generarBarcode128, generarEtiquetaProducto, imprimirBuffer,
+  generarComandoCajon, generarTicketPrueba,
 };

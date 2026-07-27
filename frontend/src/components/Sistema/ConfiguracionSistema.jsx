@@ -3,7 +3,16 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import { capacidadesModulos } from '../../utils/sistema';
+import { usbDisponible, conectarImpresoraUSB, reconectarImpresoraUSB, enviarBufferUSB } from '../../utils/impresoraUsb';
 import './ConfiguracionSistema.css';
+
+const IMPRESORA_INICIAL = {
+  impresoraModo: 'ninguna',
+  impresoraIp: '',
+  impresoraPuerto: 9100,
+  impresoraAncho: 80,
+  cajaDineroHabilitada: false,
+};
 
 const PLANES = {
   lite: {
@@ -62,6 +71,13 @@ export default function ConfiguracionSistema() {
   const [smtpAbierto, setSmtpAbierto] = useState(false);
   const [nuevoPrefijo, setNuevoPrefijo] = useState('');
 
+  // Impresora térmica ESC/POS — configuración propia, guardada vía
+  // /impresora/config (no vía el PUT genérico de /configuracion-sistema).
+  const [impCfg, setImpCfg] = useState(IMPRESORA_INICIAL);
+  const [guardandoImpresora, setGuardandoImpresora] = useState(false);
+  const [probandoImpresora, setProbandoImpresora] = useState(false);
+  const [usbInfo, setUsbInfo] = useState(null);
+
   useEffect(() => {
     let ignore = false;
     const cargar = async () => {
@@ -87,6 +103,71 @@ export default function ConfiguracionSistema() {
       setCargando(false);
     }
   }, [sistema]);
+
+  useEffect(() => {
+    let ignore = false;
+    api.get('/impresora/config')
+      .then((res) => {
+        if (ignore || !res.data?.success) return;
+        const datos = { ...IMPRESORA_INICIAL, ...res.data.data };
+        setImpCfg(datos);
+        // Reconexión silenciosa si ya se autorizó el dispositivo antes en
+        // este navegador — no vuelve a pedir permiso.
+        if (datos.impresoraModo === 'usb') {
+          reconectarImpresoraUSB().then((info) => { if (!ignore && info) setUsbInfo(info); }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+    return () => { ignore = true; };
+  }, []);
+
+  const actualizarImp = (campo, valor) => setImpCfg((prev) => ({ ...prev, [campo]: valor }));
+
+  const guardarImpresora = async () => {
+    setGuardandoImpresora(true);
+    try {
+      await api.put('/impresora/config', {
+        ...impCfg,
+        impresoraHabilitada: impCfg.impresoraModo !== 'ninguna',
+      });
+      toast.success('Configuración de impresora guardada');
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo guardar la configuración de impresora');
+    } finally {
+      setGuardandoImpresora(false);
+    }
+  };
+
+  const conectarUsb = async () => {
+    try {
+      const info = await conectarImpresoraUSB();
+      setUsbInfo(info);
+      toast.success(`Impresora USB conectada: ${info.nombre}`);
+    } catch (error) {
+      toast.error(error.message || 'No se pudo conectar la impresora USB');
+    }
+  };
+
+  const probarImpresion = async () => {
+    setProbandoImpresora(true);
+    try {
+      if (impCfg.impresoraModo === 'usb') {
+        const res = await api.get('/impresora/prueba/generar', {
+          params: { ancho: impCfg.impresoraAncho },
+          responseType: 'arraybuffer',
+        });
+        await enviarBufferUSB(res.data);
+        toast.success('Ticket de prueba enviado a la impresora USB');
+      } else if (impCfg.impresoraModo === 'red') {
+        await api.post('/impresora/test', { ip: impCfg.impresoraIp, puerto: impCfg.impresoraPuerto });
+        toast.success('Conexión con la impresora de red exitosa');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || error.message || 'Error al probar la impresora');
+    } finally {
+      setProbandoImpresora(false);
+    }
+  };
 
   const actualizar = (campo, valor) => setForm((prev) => ({ ...prev, [campo]: valor }));
 
@@ -329,6 +410,103 @@ export default function ConfiguracionSistema() {
               placeholder="EPSON TM-T20 / impresora del kiosko"
             />
           </label>
+
+          {/* ── Impresora térmica ESC/POS (etiquetas y cajón de dinero) ── */}
+          <div className="syscfg-subsection">
+            <h3>Impresora térmica (etiquetas y cajón de dinero)</h3>
+            <p className="syscfg-note">
+              El recibo principal del POS ya se imprime por PDF con cualquier
+              impresora instalada en tu equipo — esto es solo para las
+              etiquetas con código de barras y el cajón de dinero, que
+              necesitan comandos directos a la impresora.
+            </p>
+
+            <label className="syscfg-field">
+              <span>Conexión</span>
+              <select
+                value={impCfg.impresoraModo}
+                onChange={(e) => actualizarImp('impresoraModo', e.target.value)}
+              >
+                <option value="ninguna">Sin impresora térmica</option>
+                <option value="red">Red (IP fija)</option>
+                {usbDisponible() && <option value="usb">USB (conectada a este equipo)</option>}
+              </select>
+              {!usbDisponible() && (
+                <span className="syscfg-hint">
+                  Este navegador no soporta impresión por USB (WebUSB) — usa Chrome, Edge u Opera para esa opción.
+                </span>
+              )}
+            </label>
+
+            {impCfg.impresoraModo === 'red' && (
+              <div className="syscfg-inline-fields">
+                <label className="syscfg-field">
+                  <span>IP de la impresora</span>
+                  <input
+                    value={impCfg.impresoraIp || ''}
+                    onChange={(e) => actualizarImp('impresoraIp', e.target.value)}
+                    placeholder="192.168.1.100"
+                  />
+                </label>
+                <label className="syscfg-field">
+                  <span>Puerto</span>
+                  <input
+                    type="number"
+                    value={impCfg.impresoraPuerto}
+                    onChange={(e) => actualizarImp('impresoraPuerto', parseInt(e.target.value, 10) || 9100)}
+                  />
+                </label>
+              </div>
+            )}
+
+            {impCfg.impresoraModo === 'usb' && (
+              <div className="syscfg-usb-box">
+                <button type="button" className="btn-secondary" onClick={conectarUsb}>
+                  🔌 Conectar impresora USB
+                </button>
+                <span className={`syscfg-badge ${usbInfo ? 'on' : 'off'}`}>
+                  {usbInfo ? `Conectada: ${usbInfo.nombre}` : 'No conectada en esta sesión'}
+                </span>
+                <p className="syscfg-hint">
+                  El navegador te pedirá elegir el dispositivo la primera vez — después lo recuerda
+                  automáticamente en este equipo/navegador. Si no aparece en la lista, revisa que el
+                  cable esté conectado y que Windows no la tenga bloqueada con su propio driver.
+                </p>
+              </div>
+            )}
+
+            {impCfg.impresoraModo !== 'ninguna' && (
+              <>
+                <label className="syscfg-field">
+                  <span>Ancho de papel</span>
+                  <select
+                    value={impCfg.impresoraAncho}
+                    onChange={(e) => actualizarImp('impresoraAncho', parseInt(e.target.value, 10))}
+                  >
+                    <option value={58}>58mm</option>
+                    <option value={80}>80mm</option>
+                  </select>
+                </label>
+                <label className="syscfg-check">
+                  <input
+                    type="checkbox"
+                    checked={impCfg.cajaDineroHabilitada}
+                    onChange={(e) => actualizarImp('cajaDineroHabilitada', e.target.checked)}
+                  />
+                  <span>Cajón de dinero conectado a la impresora</span>
+                </label>
+
+                <div className="syscfg-inline-actions">
+                  <button type="button" className="btn-secondary" onClick={probarImpresion} disabled={probandoImpresora}>
+                    {probandoImpresora ? 'Probando...' : '🖨️ Probar impresión'}
+                  </button>
+                  <button type="button" className="btn-primary" onClick={guardarImpresora} disabled={guardandoImpresora}>
+                    {guardandoImpresora ? 'Guardando...' : 'Guardar impresora'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </section>
 
         {/* ── Inventario ────────────────────────────────────────────────── */}
