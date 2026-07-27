@@ -564,6 +564,14 @@ const FIXES = [
   // Límites explícitos por tenant (SuperAdmin) — null = ilimitado.
   `ALTER TABLE "empresas" ADD COLUMN IF NOT EXISTS "maxSucursales" INTEGER`,
   `ALTER TABLE "empresas" ADD COLUMN IF NOT EXISTS "maxCajas" INTEGER`,
+  // Llave de idempotencia para ventas encoladas offline (2026-07-27) — evita
+  // duplicar facturas/notas de venta si un reintento de sincronización
+  // llega después de que el servidor ya la había creado pero la respuesta
+  // se perdió por un nuevo corte de conexión. NULL en documentos online.
+  `ALTER TABLE "facturas" ADD COLUMN IF NOT EXISTS "idempotencyKey" VARCHAR(64)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "facturas_idempotencyKey_key" ON "facturas"("idempotencyKey")`,
+  `ALTER TABLE "notas_venta" ADD COLUMN IF NOT EXISTS "idempotencyKey" VARCHAR(64)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "notas_venta_idempotencyKey_key" ON "notas_venta"("idempotencyKey")`,
   // Interruptor "Sucursales y Puntos de Venta habilitado" (2026-07-26) —
   // default false: el selector de caja y el menú quedan ocultos hasta que el
   // admin lo habilite en Configuración del Sistema, aunque ya existan

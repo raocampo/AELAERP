@@ -995,7 +995,22 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       fechaEmision,
       establecimiento: establecimientoBody,
       puntoEmision: puntoEmisionBody,
+      idempotencyKey,
     } = req.body;
+
+    // Venta encolada offline (POS sin internet, ver frontend/src/utils/
+    // syncQueue.js) reintentada — si el servidor ya la había creado y solo
+    // se perdió la respuesta por otro corte de conexión, devolver la misma
+    // factura en vez de crear un secuencial nuevo y duplicar la venta.
+    if (idempotencyKey) {
+      const yaExiste = await prisma.facturas.findUnique({
+        where: { idempotencyKey: String(idempotencyKey) },
+        select: { id: true, numeroFactura: true, importeTotal: true, estadoSri: true },
+      });
+      if (yaExiste) {
+        return res.status(200).json({ ok: true, data: yaExiste, mensaje: 'Ya existía, se devuelve la factura registrada' });
+      }
+    }
 
     // Validaciones mínimas
     if (!tipoIdentificacionComprador || !identificacionComprador || !razonSocialComprador) {
@@ -1056,6 +1071,7 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
         data: {
           empresaId: req.empresa.id,
           claveAcceso,
+          idempotencyKey: idempotencyKey || null,
           numeroFactura,
           secuencial,
           establecimiento,

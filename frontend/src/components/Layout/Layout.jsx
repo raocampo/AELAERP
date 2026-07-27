@@ -18,6 +18,7 @@ import CambiarPassword from '../Auth/CambiarPassword';
 import QuickBar from './QuickBar';
 import EmpresaSwitcher from './EmpresaSwitcher';
 import api from '../../services/api';
+import { procesarCola, pendientesLocales } from '../../utils/syncQueue';
 import './Layout.css';
 
 /** ErrorBoundary local para el Outlet — captura errores de módulos sin romper el layout */
@@ -236,6 +237,8 @@ export default function Layout() {
   const [upgradeTarget, setUpgradeTarget] = useState(null); // { planRequerido, moduloPath }
   const [mostrarCambiarPassword, setMostrarCambiarPassword] = useState(false);
   const [offline, setOffline]       = useState(!navigator.onLine);
+  const [pendientesSync, setPendientesSync] = useState(0);
+  const [sincronizando, setSincronizando]   = useState(false);
   const [swUpdate, setSwUpdate]     = useState(false);
   const [trialExpirado, setTrialExpirado] = useState(false);
   const [planVencido, setPlanVencido]     = useState(null);
@@ -298,24 +301,39 @@ export default function Layout() {
     setGruposAbiertos((prev) => ({ ...prev, [id]: !prev[id] }));
 
   useEffect(() => {
-    const onOnline    = () => setOffline(false);
-    const onOffline   = () => setOffline(true);
+    const actualizarPendientes = () => { pendientesLocales().then(setPendientesSync).catch(() => {}); };
+    const onOnline    = () => { setOffline(false); actualizarPendientes(); };
+    const onOffline   = () => { setOffline(true); actualizarPendientes(); };
     const onSwUpdate  = () => setSwUpdate(true);
     const onTrialExp  = () => setTrialExpirado(true);
     const onPlanVenc  = (e) => setPlanVencido({ mensaje: e.detail?.mensaje });
+    const onSyncItemOk = () => actualizarPendientes();
+    const onSyncComplete = () => { setSincronizando(false); actualizarPendientes(); };
     window.addEventListener('online',              onOnline);
     window.addEventListener('offline',             onOffline);
     window.addEventListener('aela:sw-update',      onSwUpdate);
     window.addEventListener('aela:trial-expirado', onTrialExp);
     window.addEventListener('aela:plan-vencido',   onPlanVenc);
+    window.addEventListener('aela:sync-item-ok',   onSyncItemOk);
+    window.addEventListener('aela:sync-complete',  onSyncComplete);
+    actualizarPendientes();
     return () => {
       window.removeEventListener('online',              onOnline);
       window.removeEventListener('offline',             onOffline);
       window.removeEventListener('aela:sw-update',      onSwUpdate);
       window.removeEventListener('aela:trial-expirado', onTrialExp);
       window.removeEventListener('aela:plan-vencido',   onPlanVenc);
+      window.removeEventListener('aela:sync-item-ok',   onSyncItemOk);
+      window.removeEventListener('aela:sync-complete',  onSyncComplete);
     };
   }, []);
+
+  const sincronizarAhora = async () => {
+    setSincronizando(true);
+    await procesarCola();
+    setSincronizando(false);
+    pendientesLocales().then(setPendientesSync).catch(() => {});
+  };
 
   const handleLogout = () => {
     const slug = localStorage.getItem('aela_tenant_slug');
@@ -578,7 +596,19 @@ export default function Layout() {
       {/* ── BANNER OFFLINE ── */}
       {offline && (
         <div className="banner-offline" role="status">
-          Sin conexión — Puedes seguir trabajando. Los datos se sincronizarán al volver el internet.
+          Sin conexión — Puedes seguir trabajando (Facturas y Notas de Venta desde el POS se guardan
+          localmente). {pendientesSync > 0 && `${pendientesSync} pendiente(s) de sincronizar. `}
+          Se enviarán automáticamente al volver el internet.
+        </div>
+      )}
+
+      {/* ── BANNER PENDIENTES DE SINCRONIZAR (ya en línea, cola sin vaciar) ── */}
+      {!offline && pendientesSync > 0 && (
+        <div className="banner-offline banner-offline--sync" role="status">
+          {pendientesSync} venta(s) guardada(s) localmente pendiente(s) de sincronizar.
+          <button className="banner-offline-btn" onClick={sincronizarAhora} disabled={sincronizando}>
+            {sincronizando ? 'Sincronizando...' : 'Sincronizar ahora'}
+          </button>
         </div>
       )}
 

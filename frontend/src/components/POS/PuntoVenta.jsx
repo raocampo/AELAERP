@@ -5,6 +5,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import { abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
 import { enviarBufferUSB } from '../../utils/impresoraUsb';
+import { apiOffline, estaOnline } from '../../utils/syncQueue';
 import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
 import './PuntoVenta.css';
 
@@ -57,6 +58,21 @@ export default function PuntoVenta() {
   useEffect(() => {
     setTipoDocumento(sistema?.documentoPosDefault || 'factura');
   }, [sistema?.documentoPosDefault]);
+
+  // Avisa cuando una venta guardada offline finalmente se sincroniza (evento
+  // disparado por procesarCola() en utils/syncQueue.js) — el cajero puede
+  // haber seguido vendiendo mientras tanto, así que esto es solo un aviso,
+  // no intenta reabrir el modal de la venta original.
+  useEffect(() => {
+    const onSyncOk = (e) => {
+      const { entidad, data } = e.detail || {};
+      if (entidad !== 'factura' && entidad !== 'nota_venta') return;
+      const numero = data?.numeroFactura || data?.numeroNota;
+      if (numero) toast.success(`Venta sincronizada — ahora es ${entidad === 'factura' ? 'Factura' : 'Nota de venta'} ${numero}`);
+    };
+    window.addEventListener('aela:sync-item-ok', onSyncOk);
+    return () => window.removeEventListener('aela:sync-item-ok', onSyncOk);
+  }, []);
 
   // Al cambiar tipo: si es 07 → poner consumidor final; si sale de 07 → limpiar campos
   useEffect(() => {
@@ -308,11 +324,18 @@ export default function PuntoVenta() {
     }
 
     setGuardando(true);
+    const online = estaOnline();
     try {
-      // Gestión de cliente en BD
+      // Gestión de cliente en BD — solo online. Sin conexión, se manda la
+      // identificación completa directo en la factura/nota (ver payload
+      // abajo) y el backend la resuelve/crea sola al sincronizar
+      // (enriquecerClienteDesdeFactura en routes/facturas.js, o el propio
+      // registro de notas_venta que ya guarda los datos del cliente en la
+      // fila) — evita depender de un clienteId que todavía no existe en el
+      // servidor mientras la venta sigue encolada localmente.
       let idClienteBD = clienteIdBD;
 
-      if (tipoId !== '07') {
+      if (online && tipoId !== '07') {
         if (idClienteBD) {
           // Cliente ya existe en BD: actualizar solo los campos que antes estaban vacíos
           const updates = {};
@@ -349,73 +372,98 @@ export default function PuntoVenta() {
       }
 
       if (tipoDocumento === 'nota_venta') {
-        const res = await api.post('/notas-venta', {
-          tipoIdentificacion: tipoId,
-          identificacion,
-          razonSocial,
-          direccion: direccion || undefined,
-          email: email || undefined,
-          telefono: telefono || undefined,
-          formaPago: formaPagoNota,
-          fechaEmision,
-          clienteId: idClienteBD || undefined,
-          detalles: carrito.map((item) => ({
-            codigoPrincipal: item.codigoPrincipal,
-            descripcion: item.descripcion,
-            cantidad: Number(item.cantidad || 1),
-            precioUnitario: Number(item.precioUnitario || 0),
-            descuento: 0,
-          })),
-          ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
+        const totalNota = subtotal;
+        const resp = await apiOffline('/notas-venta', {
+          method: 'POST',
+          entidad: 'nota_venta',
+          descripcion: `Nota de venta ${razonSocial} $${totalNota.toFixed(2)}`,
+          respuestaOptimista: { tipo: 'nota_venta', total: totalNota },
+          body: {
+            tipoIdentificacion: tipoId,
+            identificacion,
+            razonSocial,
+            direccion: direccion || undefined,
+            email: email || undefined,
+            telefono: telefono || undefined,
+            formaPago: formaPagoNota,
+            fechaEmision,
+            clienteId: idClienteBD || undefined,
+            detalles: carrito.map((item) => ({
+              codigoPrincipal: item.codigoPrincipal,
+              descripcion: item.descripcion,
+              cantidad: Number(item.cantidad || 1),
+              precioUnitario: Number(item.precioUnitario || 0),
+              descuento: 0,
+            })),
+            ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
+          },
         });
         setCarrito([]);
-        setDocEmitido({
-          id: res.data?.data?.id,
-          tipo: 'nota_venta',
-          numero: res.data?.data?.numeroNota || '—',
-          total: res.data?.data?.total ?? subtotal,
-        });
-        if (sistema?.impresionAutoReciboPos && res.data?.data?.id) {
-          void abrirReciboEmitido(res.data.data.id, 'nota_venta');
+        if (resp.offline) {
+          setDocEmitido({
+            offline: true, pendienteId: resp.pendienteId,
+            tipo: 'nota_venta', numero: null, total: totalNota,
+          });
+        } else {
+          const creada = resp.data?.data;
+          setDocEmitido({
+            id: creada?.id, tipo: 'nota_venta',
+            numero: creada?.numeroNota || '—', total: creada?.total ?? totalNota,
+          });
+          if (sistema?.impresionAutoReciboPos && creada?.id) {
+            void abrirReciboEmitido(creada.id, 'nota_venta');
+          }
         }
       } else {
-        const res = await api.post('/facturas', {
-          tipoIdentificacionComprador: tipoId,
-          identificacionComprador: identificacion,
-          razonSocialComprador: razonSocial,
-          direccionComprador: direccion || undefined,
-          emailComprador: email || undefined,
-          telefonoComprador: telefono || undefined,
-          fechaEmision,
-          clienteId: idClienteBD || undefined,
-          detalles: carrito.map((item) => ({
-            codigoPrincipal: item.codigoPrincipal,
-            descripcion: item.descripcion,
-            cantidad: Number(item.cantidad || 1),
-            precioUnitario: Number(item.precioUnitario || 0),
-            descuento: 0,
-            ivaPorcentaje: Number(item.ivaPorcentaje || 0),
-          })),
-          pagos: [
-            {
-              formaPago: FORMAS_FACTURA.find(f => f.value === formaPagoFactura)?.sriCodigo || formaPagoFactura,
-              total: totalConIva,  // total con IVA para que coincida con el importe total de la factura
-              plazo: 0,
-              unidadTiempo: 'dias',
-              ...(pagoRefFactura && { referencia: pagoRefFactura }),
-            },
-          ],
-          ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
+        const resp = await apiOffline('/facturas', {
+          method: 'POST',
+          entidad: 'factura',
+          descripcion: `Factura ${razonSocial} $${totalConIva.toFixed(2)}`,
+          respuestaOptimista: { tipo: 'factura', total: totalConIva },
+          body: {
+            tipoIdentificacionComprador: tipoId,
+            identificacionComprador: identificacion,
+            razonSocialComprador: razonSocial,
+            direccionComprador: direccion || undefined,
+            emailComprador: email || undefined,
+            telefonoComprador: telefono || undefined,
+            fechaEmision,
+            clienteId: idClienteBD || undefined,
+            detalles: carrito.map((item) => ({
+              codigoPrincipal: item.codigoPrincipal,
+              descripcion: item.descripcion,
+              cantidad: Number(item.cantidad || 1),
+              precioUnitario: Number(item.precioUnitario || 0),
+              descuento: 0,
+              ivaPorcentaje: Number(item.ivaPorcentaje || 0),
+            })),
+            pagos: [
+              {
+                formaPago: FORMAS_FACTURA.find(f => f.value === formaPagoFactura)?.sriCodigo || formaPagoFactura,
+                total: totalConIva,  // total con IVA para que coincida con el importe total de la factura
+                plazo: 0,
+                unidadTiempo: 'dias',
+                ...(pagoRefFactura && { referencia: pagoRefFactura }),
+              },
+            ],
+            ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
+          },
         });
         setCarrito([]);
-        setDocEmitido({
-          id: res.data?.data?.id,
-          tipo: 'factura',
-          numero: res.data?.data?.numeroFactura || '—',
-          total: res.data?.data?.importeTotal ?? totalConIva,
-        });
-        if (sistema?.impresionAutoReciboPos && res.data?.data?.id) {
-          void abrirReciboEmitido(res.data.data.id, 'factura');
+        if (resp.offline) {
+          setDocEmitido({
+            offline: true, pendienteId: resp.pendienteId,
+            tipo: 'factura', numero: null, total: totalConIva,
+          });
+        } else {
+          const creada = resp.data?.data;
+          setDocEmitido({
+            id: creada?.id, tipo: 'factura',
+            numero: creada?.numeroFactura || '—', total: creada?.importeTotal ?? totalConIva,
+          });
+          if (sistema?.impresionAutoReciboPos && creada?.id) {
+            void abrirReciboEmitido(creada.id, 'factura');
+          }
         }
       }
     } catch (error) {
@@ -682,7 +730,38 @@ export default function PuntoVenta() {
     )}
 
     {/* Modal de recibo tras emisión */}
-    {docEmitido && (
+    {docEmitido && docEmitido.offline && (
+      <div className="pos-recibo-overlay">
+        <div className="pos-recibo-modal">
+          <div className="recibo-icono">💾</div>
+          <h2>Venta guardada en este dispositivo</h2>
+          <p className="recibo-total">${Number(docEmitido.total || 0).toFixed(2)}</p>
+          <p className="recibo-nota">
+            No hay conexión — todavía no tiene número de {docEmitido.tipo === 'nota_venta' ? 'nota de venta' : 'factura'}.
+            Se enviará al SRI automáticamente en cuanto vuelva la señal (no cierres esta pestaña/navegador antes de que sincronice).
+          </p>
+          <div className="pos-recibo-acciones">
+            <button
+              className="btn-recibo-new"
+              onClick={() => {
+                setDocEmitido(null);
+                setTipoId('07');
+                setIdentificacion('9999999999999');
+                setRazonSocial('CONSUMIDOR FINAL');
+                setDireccion('');
+                setEmail('');
+                setTelefono('');
+                setClienteIdBD(null);
+                setClienteOriginal({ direccion: '', email: '', telefono: '' });
+              }}
+            >
+              ✓ Continuar vendiendo
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {docEmitido && !docEmitido.offline && (
       <div className="pos-recibo-overlay">
         <div className="pos-recibo-modal">
           <div className="recibo-icono">✅</div>

@@ -55,11 +55,25 @@ function abrirDB() {
  */
 export async function encolarOperacion(op) {
   const db = await abrirDB();
+
+  // Llave de idempotencia estable — se genera UNA vez al encolar y viaja en
+  // el mismo body en cada reintento (procesarCola() reenvía op.body tal
+  // cual). Si el servidor ya la creó pero la respuesta se perdió por otro
+  // corte de conexión, el backend devuelve el documento existente en vez de
+  // duplicarlo (ver POST /facturas y /notas-venta). Solo aplica a POST con
+  // body — no tiene sentido para GET ni para operaciones que no crean un
+  // documento nuevo.
+  let body = op.body;
+  if (op.method === 'POST' && body && typeof body === 'object' && !body.idempotencyKey) {
+    body = { ...body, idempotencyKey: crypto.randomUUID() };
+  }
+
   return new Promise((resolve, reject) => {
     const tx    = db.transaction('pending_ops', 'readwrite');
     const store = tx.objectStore('pending_ops');
     const registro = {
       ...op,
+      body,
       timestamp: Date.now(),
       intentos:  0,
       estado:    'pendiente',

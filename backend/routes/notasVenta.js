@@ -588,7 +588,20 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
       tipoIdentificacion, identificacion, razonSocial, direccion, email, telefono,
       detalles, formaPago, fechaEmision, observaciones, clienteId,
       establecimiento: establecimientoBody, puntoEmision: puntoEmisionBody,
+      idempotencyKey,
     } = req.body;
+
+    // Venta encolada offline (POS sin internet) reintentada — ver el mismo
+    // chequeo en routes/facturas.js.
+    if (idempotencyKey) {
+      const yaExiste = await prisma.notas_venta.findUnique({
+        where: { idempotencyKey: String(idempotencyKey) },
+        select: { id: true, numeroNota: true, total: true },
+      });
+      if (yaExiste) {
+        return res.status(200).json({ success: true, data: yaExiste, mensaje: 'Ya existía, se devuelve la nota de venta registrada' });
+      }
+    }
 
     // Nota: el secuencial de notas_venta sigue siendo único GLOBAL por
     // empresa (no es comprobante electrónico SRI, @@unique([empresaId,
@@ -636,6 +649,7 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
       const creada = await tx.notas_venta.create({
         data: {
           empresaId: req.empresa.id,
+          idempotencyKey: idempotencyKey || null,
           numeroNota,
           secuencial,
           establecimiento,

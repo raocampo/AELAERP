@@ -539,6 +539,12 @@ model facturas {
   id                          Int       @id @default(autoincrement())
   empresaId                   Int       @default(1)
   claveAcceso                 String    @unique @db.VarChar(49)
+  // Llave de idempotencia generada por el cliente al encolar una venta
+  // offline (frontend/src/utils/offlineDB.js) — evita duplicar la factura
+  // si un reintento de sincronización llega después de que el servidor ya
+  // la había creado pero la respuesta se perdió por corte de conexión.
+  // NULL en documentos creados online normalmente.
+  idempotencyKey               String?   @unique @db.VarChar(64)
   numeroFactura               String    @db.VarChar(17)
   secuencial                  String    @db.VarChar(9)
   // Punto de venta/sucursal que emitió el documento — usado para calcular el
@@ -978,6 +984,9 @@ model notas_debito {
 model notas_venta {
   id                  Int      @id @default(autoincrement())
   empresaId           Int      @default(1)
+  // Llave de idempotencia generada por el cliente al encolar offline — ver
+  // el mismo campo en el modelo `facturas`. NULL en documentos online.
+  idempotencyKey      String?  @unique @db.VarChar(64)
   numeroNota          String   @db.VarChar(17)
   // formato: 001-001-000000001
   secuencial          Int

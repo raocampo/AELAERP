@@ -157,8 +157,15 @@ export async function procesarCola() {
 
         if (resp.ok || resp.status === 409) {
           // 409 Conflict = ya existe (idempotente) — considerar como OK
+          const data = await resp.json().catch(() => null);
           await eliminarOperacion(op.id);
           console.log(`[SyncQueue] ✓ Op #${op.id} (${op.entidad}) sincronizada`);
+          // Notifica con los datos REALES del servidor (numeroFactura, id,
+          // etc.) para que la pantalla que la creó (ej. PuntoVenta.jsx)
+          // pueda reemplazar el ticket local "pendiente" por el definitivo.
+          window.dispatchEvent(new CustomEvent('aela:sync-item-ok', {
+            detail: { pendienteId: op.id, entidad: op.entidad, data: data?.data || null },
+          }));
         } else {
           // Error del servidor (400, 422, etc.) → no reintentar
           await marcarError(op.id);

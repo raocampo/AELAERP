@@ -316,6 +316,32 @@
   border-top: 2px solid #7C3AED;
 }
 
+.banner-offline--sync {
+  background: #3f2f0f;
+  color: #fbbf24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.banner-offline-btn {
+  background: #fbbf24;
+  color: #1e293b;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.banner-offline-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* ── Toast actualización SW ── */
 .toast-sw-update {
   position: fixed;
