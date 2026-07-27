@@ -39,6 +39,7 @@ const FORM_INICIAL = {
   impresoraKiosko: '',
   inventarioHabilitado: false,
   permitirStockNegativo: false,
+  sucursalesHabilitado: false,
   prefijosRegaloCompras: ['P-', 'M-', 'OBQ-', 'COMBO-', 'REGALO-', 'BONI-'],
   comprasHabilitadas: true,
   buzonSriHabilitado: true,
@@ -285,6 +286,24 @@ export default function ConfiguracionSistema() {
               <option value="factura">Factura</option>
               <option value="nota_venta">Nota de Venta</option>
             </select>
+          </label>
+        </section>
+
+        {/* ── Sucursales y Puntos de Venta ─────────────────────────────── */}
+        <section className="syscfg-card">
+          <h2>Sucursales y Puntos de Venta</h2>
+          <p className="syscfg-note">
+            Para negocios con más de una sucursal, o más de una caja registradora
+            emitiendo bajo el mismo punto de emisión SRI. Si tu negocio tiene una
+            sola caja, déjalo desactivado — no cambia nada en tu flujo actual.
+          </p>
+          <label className="syscfg-check">
+            <input
+              type="checkbox"
+              checked={form.sucursalesHabilitado}
+              onChange={(e) => actualizar('sucursalesHabilitado', e.target.checked)}
+            />
+            <span>Habilitar Sucursales y Puntos de Venta (multi-caja)</span>
           </label>
         </section>
 

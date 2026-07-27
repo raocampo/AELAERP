@@ -226,6 +226,11 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
     tributarioHabilitado:     caps.tributarioHabilitado     && Boolean(config?.tributarioHabilitado     ?? true),
     bancosHabilitado:         caps.bancosHabilitado         && Boolean(config?.bancosHabilitado         ?? true),
     talentoHumanoHabilitado:  caps.talentoHumanoHabilitado  && Boolean(config?.talentoHumanoHabilitado  ?? false),
+    // No gateado por plan (a diferencia de los de arriba) — cualquier plan
+    // puede habilitarlo, es una preferencia operativa, no una capacidad
+    // vendible por tier. Default false: aunque existan puntos_emision/cajas
+    // históricos, el selector queda oculto hasta que el admin lo active aquí.
+    sucursalesHabilitado:     Boolean(config?.sucursalesHabilitado ?? false),
     sbuEcuador:               parseFloat(config?.sbuEcuador) || 480.00,
   };
 }
@@ -280,6 +285,9 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
     tributarioHabilitado:     flag('tributarioHabilitado', true),
     bancosHabilitado:         flag('bancosHabilitado', true),
     talentoHumanoHabilitado:  flag('talentoHumanoHabilitado', false),
+    // Sin flag() — no gateado por plan/modulosContratados (ver comentario en
+    // obtenerConfiguracionSistemaOperativa).
+    sucursalesHabilitado:     Boolean(reqBody.sucursalesHabilitado !== undefined ? reqBody.sucursalesHabilitado : actual.sucursalesHabilitado),
     sbuEcuador:               parseFloat(reqBody.sbuEcuador) > 0
                                 ? parseFloat(reqBody.sbuEcuador)
                                 : parseFloat(actual.sbuEcuador) || 480.00,

@@ -564,6 +564,11 @@ const FIXES = [
   // Límites explícitos por tenant (SuperAdmin) — null = ilimitado.
   `ALTER TABLE "empresas" ADD COLUMN IF NOT EXISTS "maxSucursales" INTEGER`,
   `ALTER TABLE "empresas" ADD COLUMN IF NOT EXISTS "maxCajas" INTEGER`,
+  // Interruptor "Sucursales y Puntos de Venta habilitado" (2026-07-26) —
+  // default false: el selector de caja y el menú quedan ocultos hasta que el
+  // admin lo habilite en Configuración del Sistema, aunque ya existan
+  // puntos_emision/cajas históricos en la BD.
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "sucursalesHabilitado" BOOLEAN NOT NULL DEFAULT false`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
+import { useAuth } from '../../context/useAuth';
 import './SelectorPuntoVenta.css';
 
 const STORAGE_KEY = 'aela_caja_activa';
@@ -32,11 +33,20 @@ function aplanarCaja(caja) {
  * { establecimiento, puntoEmision } en el payload al crear el documento.
  */
 export default function SelectorPuntoVenta({ onChange, label = 'Caja:' }) {
+  const { sistema } = useAuth();
+  const habilitado = Boolean(sistema?.sucursalesHabilitado);
   const [cajas, setCajas] = useState([]);
   const [cajaActivaId, setCajaActivaId] = useState(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
+    // Módulo apagado (default): ni siquiera se consulta /cajas/activas — el
+    // padre nunca recibe establecimiento/puntoEmision y el backend cae solo
+    // al de configuracion_sri, igual que antes de que este módulo existiera.
+    // Así, tenants con puntos_emision/cajas históricos (de datos previos a
+    // esta feature) no ven aparecer un selector que nunca activaron.
+    if (!habilitado) { setCargando(false); return; }
+
     let ignore = false;
     api.get('/cajas/activas')
       .then((res) => {
@@ -53,7 +63,7 @@ export default function SelectorPuntoVenta({ onChange, label = 'Caja:' }) {
       .finally(() => { if (!ignore) setCargando(false); });
     return () => { ignore = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [habilitado]);
 
   const seleccionar = (id) => {
     const idNum = parseInt(id, 10);
@@ -65,9 +75,10 @@ export default function SelectorPuntoVenta({ onChange, label = 'Caja:' }) {
     }
   };
 
-  // Con 0 o 1 caja no hay nada que elegir — no se muestra selector, la única
-  // caja (o ninguna, si el tenant no la tiene aún) ya se notificó arriba.
-  if (cargando || cajas.length <= 1) return null;
+  // Módulo apagado, o con 0/1 caja no hay nada que elegir — no se muestra
+  // selector; con el módulo activo y 0/1 caja, la única (o ninguna) ya se
+  // notificó arriba.
+  if (!habilitado || cargando || cajas.length <= 1) return null;
 
   return (
     <div className="selector-punto-venta">

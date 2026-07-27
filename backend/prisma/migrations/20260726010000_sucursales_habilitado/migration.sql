@@ -1,0 +1,11 @@
+-- Interruptor "Sucursales y Puntos de Venta habilitado" en configuracion_sistema.
+--
+-- Reportado: un tenant con puntos_emision/cajas históricos (ej. de antes de
+-- esta feature, o creados sin intención) veía el selector de caja aparecer
+-- en POS/Facturación sin haber "activado" nada — el selector solo miraba si
+-- había más de 1 caja en la BD, no si el admin quería usar el módulo.
+--
+-- Default false: ningún tenant existente ve cambios hasta que entre a
+-- Configuración del Sistema y lo habilite explícitamente. No gateado por
+-- plan (a diferencia de facturacionHabilitada/bancosHabilitado/etc.).
+ALTER TABLE "configuracion_sistema" ADD COLUMN "sucursalesHabilitado" BOOLEAN NOT NULL DEFAULT false;

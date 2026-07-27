@@ -290,6 +290,12 @@ model configuracion_sistema {
   // ──────────────────────────────────────────────────────
   inventarioHabilitado     Boolean  @default(false)
   permitirStockNegativo    Boolean  @default(false)
+  // Sucursales/Puntos de Venta multi-caja (2026-07-26) — apagado por defecto:
+  // aunque ya existan puntos_emision/cajas de datos históricos, el selector
+  // de caja y el menú "Sucursales y Puntos de Venta" quedan ocultos hasta que
+  // el admin lo habilite explícitamente aquí. No gateado por plan (a
+  // diferencia de los módulos de arriba) — cualquier plan puede usarlo.
+  sucursalesHabilitado     Boolean  @default(false)
   // Prefijos que identifican ítems de regalo/combo del proveedor en compras
   // (ej. "P-1043664" ligado al producto real "1043664"). JSON array de strings.
   prefijosRegaloCompras    String?  @db.Text
