@@ -164,5 +164,8 @@ estética con logo/datos de la empresa en una esquina. Nuevo
 usa el RIDE de factura, `utils/sri.js`) si la empresa tiene uno cargado,
 razón social/RUC/dirección/teléfono centrados, título, línea divisoria en
 el morado de marca. Verificado con un PDF real (empresa sin logo cargado —
-se ve bien igual, esa sección simplemente no se dibuja). Falta probar con
-una empresa que sí tenga logo cargado.
+se ve bien igual, esa sección simplemente no se dibuja). **Confirmado con
+el usuario**: ninguna de las empresas que hoy llevan contabilidad tiene
+logo cargado — el caso ya probado es el que aplica en producción. Probar
+con logo queda de baja prioridad (reusa el mismo código ya probado del
+RIDE de factura, `utils/sri.js`), no bloqueante.
