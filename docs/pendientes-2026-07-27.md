@@ -1,9 +1,9 @@
-# AELA ERP — Sesión 2026-07-27 — Auditoría WebServices/AVALAB + Modo offline del POS + Libro Mayor
+# AELA ERP — Sesión 2026-07-27 — Auditoría WebServices/AVALAB + Modo offline del POS + Libro Mayor + Centro de Ayuda
 
 ## 🟢 PARA RETOMAR — checklist rápido
 
-**Código**: commiteado y pusheado a `main` (commits `123a5ae`, `2430ce5`, `6209ef9`, `1b7edd8`).
-Nada sin commitear.
+**Código**: commiteado y pusheado a `main` (commits `123a5ae`, `2430ce5`, `6209ef9`, `1b7edd8`,
+`30700f6`, `368d54e`). Nada sin commitear.
 
 0. **Libro Mayor**: probar en el navegador real (no solo el PDF, ya
    verificado) — Contabilidad → Libro Mayor, escribir "ret" (o cualquier
@@ -169,3 +169,33 @@ el usuario**: ninguna de las empresas que hoy llevan contabilidad tiene
 logo cargado — el caso ya probado es el que aplica en producción. Probar
 con logo queda de baja prioridad (reusa el mismo código ya probado del
 RIDE de factura, `utils/sri.js`), no bloqueante.
+
+## Parte 4 — Verificación ATS 5%/15% + Centro de Ayuda actualizado (commit `368d54e`)
+
+### ATS: ¿diferencia IVA 5% de 15%?
+El usuario preguntó, sin recordar el estado. Verificado que **sí** — la
+vista previa y el PDF del talón resumen (`routes/ats.js`) calculan totales
+separados por tarifa (`bt5/iva5`, `bt12/iva12`, `bt15/iva15`) a partir de
+datos reales, no de columnas hardcodeadas; F104 (`routes/declaraciones.js`)
+también los separa. El XML que se envía al SRI combina todo en un solo
+campo `<baseImpGrav>` — **se descargó el XSD oficial del SRI en el momento
+para confirmarlo**: el propio schema del SRI no tiene campos separados por
+tarifa (`baseImpGrav5`/`baseImpGrav12`/`baseImpGrav15` no existen), así que
+combinarlo ahí es lo correcto, no una falla del sistema.
+
+### Centro de Ayuda actualizado
+`frontend/src/components/Ayuda/AyudaSistema.jsx` — 6 secciones nuevas
+(mismo patrón de acordeón que las 24 ya existentes, sin índice de búsqueda
+que mantener aparte):
+1. Sucursales, Puntos de Emisión y Cajas (multi-caja)
+2. Impresora térmica — Red o USB
+3. Trabajar sin internet (modo offline del POS)
+4. Etiquetas de Productos y regalos/combos en compras
+5. Notas de Crédito recibidas de proveedores
+6. Libro Diario y Libro Mayor
+7. Integraciones externas (WebServices API)
+
+Verificado con `npx vite build` limpio (chunk de AyudaSistema pasó de ~40kB
+a 67kB, consistente con el contenido agregado). No requiere probarse en
+navegador más allá de que compile — es contenido estático, sin lógica
+nueva.
