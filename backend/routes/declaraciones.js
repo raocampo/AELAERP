@@ -16,6 +16,7 @@ const router  = express.Router();
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
+const { condicionComprasDeducibles, CUTOFF_APROBACION_CEDULA } = require('../utils/comprasFiscal');
 
 router.use(proteger);
 router.use(requiereModulo('tributarioHabilitado'));
@@ -94,10 +95,10 @@ router.get('/f104', async (req, res) => {
     // ── COMPRAS ─────────────────────────────────────────────────────────────────
     // Reglas de inclusión en el F104:
     //   1. Excluir si receptorEsRuc === false (facturadas a cédula personal, no al
-    //      RUC) — salvo que el contador la haya revisado y marcado aprobadaPorContador
-    //      (sí corresponde a la actividad económica, aunque llegó a cédula).
+    //      RUC) — salvo que el contador la haya revisado y marcado aprobadaPorContador,
+    //      o que sea de antes del corte (contabilidad atrasada). Ver comprasFiscal.js.
     //   2. Excluir si esGastoPersonal === true (alimentación, salud, etc. — persona
-    //      natural) — esto manda incluso si aprobadaPorContador está marcado.
+    //      natural) — esto manda incluso si el punto 1 la incluiría.
     //   3. receptorEsRuc null (compras manuales/históricas sin XML) SÍ se incluye.
     const compras = await db.facturas_compra.findMany({
       where: {
@@ -105,7 +106,7 @@ router.get('/f104', async (req, res) => {
         fechaEmision:    filtroFecha,
         anulada:         false,
         esGastoPersonal: { not: true },
-        OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }, { aprobadaPorContador: true }],
+        OR: condicionComprasDeducibles(),
       },
       select: {
         subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
@@ -154,8 +155,14 @@ router.get('/f104', async (req, res) => {
       liqIva        += d(l.totalIva);
     });
 
+    // Solo cuentan como "pendientes de revisión" las de después del corte —
+    // las anteriores ya se incluyen automáticamente (contabilidad atrasada).
     const comprasExcluidasCedula = await db.facturas_compra.count({
-      where: { empresaId, fechaEmision: filtroFecha, anulada: false, receptorEsRuc: false, aprobadaPorContador: false },
+      where: {
+        empresaId, fechaEmision: filtroFecha, anulada: false,
+        receptorEsRuc: false, aprobadaPorContador: false,
+        NOT: { fechaEmision: { lt: CUTOFF_APROBACION_CEDULA } },
+      },
     });
 
     // ── RETENCIONES DE IVA QUE LE HAN SIDO EFECTUADAS (recibidas de clientes) ───
@@ -441,7 +448,7 @@ router.get('/f101', async (req, res) => {
         _count: { id: true },
       }),
       db.facturas_compra.aggregate({
-        where: { empresaId, fechaEmision: filtroFecha, anulada: false, OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }, { aprobadaPorContador: true }] },
+        where: { empresaId, fechaEmision: filtroFecha, anulada: false, OR: condicionComprasDeducibles() },
         _sum:   { importeTotal: true, totalIva: true },
         _count: { id: true },
       }),

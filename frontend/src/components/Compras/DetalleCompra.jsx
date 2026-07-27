@@ -375,8 +375,10 @@ export default function DetalleCompra() {
           <div className="dc-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Editar compra {compra.numeroFactura}</h3>
             {/* Facturada a cédula: el contador puede revisarla y aprobarla como gasto
-                de la actividad económica para que sí cuente en el F104/F101 */}
-            {compra.receptorEsRuc === false && (
+                de la actividad económica para que sí cuente en el F104/F101. No se
+                muestra para compras de antes del corte (contabilidad atrasada) —
+                esas ya cuentan automáticamente, sin necesidad de revisión. */}
+            {compra.necesitaRevisionCedula && (
               <label className="dc-modal-label" style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
@@ -845,9 +847,13 @@ export default function DetalleCompra() {
                 <span className="detalle-compra-badge" style={{ background: '#dcfce7', color: '#15803d' }} title="Facturado a cédula, pero el contador la revisó y confirmó que corresponde a la actividad económica — sí cuenta para el F104/F101">
                   ✅ Facturado a cédula — aprobado por contador
                 </span>
-              ) : (
+              ) : compra.necesitaRevisionCedula ? (
                 <span className="detalle-compra-badge detalle-compra-badge-alert" title="Este comprobante llegó dirigido a una cédula personal, no al RUC de la empresa — no cuenta para el F104/F101 salvo que el contador la apruebe (botón Editar)">
                   ⚠️ Facturado a cédula, no deducible
+                </span>
+              ) : (
+                <span className="detalle-compra-badge" style={{ background: '#dcfce7', color: '#15803d' }} title="Facturado a cédula, pero es de un periodo histórico (contabilidad atrasada) — cuenta automáticamente sin necesidad de revisión">
+                  ✅ Facturado a cédula — periodo histórico
                 </span>
               )}
             </div>

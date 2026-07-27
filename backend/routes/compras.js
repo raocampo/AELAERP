@@ -21,6 +21,7 @@ const {
   generarPlantillaCompras,
 } = require('../utils/importarComprasHistoricas');
 const { extraerIdentificacionReceptorXml } = require('../utils/buzon');
+const { CUTOFF_APROBACION_CEDULA, necesitaRevisionCedula } = require('../utils/comprasFiscal');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -593,10 +594,18 @@ router.get('/', async (req, res) => {
     // Filtro por origen (MANUAL, BUZON_SRI, XML_IMPORTADO, etc.)
     if (origenRegistro) where.origenRegistro = origenRegistro;
 
-    // Facturadas a cédula que el contador todavía no ha revisado/aprobado
+    // Facturadas a cédula que el contador todavía no ha revisado/aprobado.
+    // Las de antes del corte (contabilidad atrasada) no necesitan revisión —
+    // ya cuentan automáticamente, así que se excluyen de este filtro.
     if (pendienteRevisionCedula === 'true') {
       where.receptorEsRuc = false;
       where.aprobadaPorContador = false;
+      where.fechaEmision = {
+        ...(where.fechaEmision || {}),
+        gte: where.fechaEmision?.gte && where.fechaEmision.gte > CUTOFF_APROBACION_CEDULA
+          ? where.fechaEmision.gte
+          : CUTOFF_APROBACION_CEDULA,
+      };
     }
 
     // ─── Cache de columnas disponibles ──────────────────────────
@@ -684,6 +693,9 @@ router.get('/', async (req, res) => {
       ...it,
       tieneAsientoContable: asientoMap.has(`COMP-${it.id}`),
       asientoCerrado: asientoMap.get(`COMP-${it.id}`)?.cerrado || false,
+      // Solo tiene sentido para receptorEsRuc===false: si es de antes del
+      // corte, ya cuenta automáticamente y no necesita que el contador la revise.
+      necesitaRevisionCedula: it.receptorEsRuc === false && !it.aprobadaPorContador && necesitaRevisionCedula(it.fechaEmision),
     }));
 
     res.json({
@@ -812,6 +824,7 @@ router.get('/:id', async (req, res) => {
         tieneAsientoContable: Boolean(asientoExistente),
         asientoId: asientoExistente?.id || null,
         asientoCerrado: asientoExistente?.cerrado || false,
+        necesitaRevisionCedula: compra.receptorEsRuc === false && !compra.aprobadaPorContador && necesitaRevisionCedula(compra.fechaEmision),
       },
     });
   } catch (error) {

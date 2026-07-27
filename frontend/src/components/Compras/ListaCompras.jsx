@@ -84,7 +84,7 @@ function InfoOps({ item }) {
     setAbierto((v) => !v);
   };
 
-  const tieneAviso = item.receptorEsRuc === false && !item.aprobadaPorContador;
+  const tieneAviso = item.necesitaRevisionCedula === true;
 
   return (
     <>
@@ -120,6 +120,11 @@ function InfoOps({ item }) {
           {item.receptorEsRuc === false && item.aprobadaPorContador && (
             <div className="compras-info-fila" style={{ color: '#15803d' }}>
               ✅ Facturado a cédula — aprobado por contador, cuenta para declaraciones.
+            </div>
+          )}
+          {item.receptorEsRuc === false && !item.aprobadaPorContador && !tieneAviso && (
+            <div className="compras-info-fila" style={{ color: '#15803d' }}>
+              ✅ Facturado a cédula — periodo histórico, cuenta automáticamente.
             </div>
           )}
         </div>,

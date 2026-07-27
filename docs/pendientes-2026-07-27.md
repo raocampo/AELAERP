@@ -320,3 +320,39 @@ revertirlo caso por caso. Eso es lo que el contador ahora pide poder hacer.
   Railway esto no aplica: el deploy siempre arranca un proceso nuevo.
 - **No probado**: el checkbox y el badge en un navegador real (no hay
   entorno de navegador disponible aquí).
+
+### Addendum mismo día — corte de fecha: contabilidad atrasada no necesita el check
+
+El usuario aclaró: hay un cliente poniendo al día contabilidad **pasada**
+(años anteriores) — ahí no quiere tener que revisar/aprobar factura por
+factura, sino que cuenten automáticamente. El check del contador debe
+exigirse **a partir de 2026** en adelante, no antes.
+
+**Implementado**: nuevo `backend/utils/comprasFiscal.js` — corte único
+`CUTOFF_APROBACION_CEDULA = 2026-01-01`, compartido por los 3 lugares que
+antes repetían el mismo `OR` (`declaraciones.js` F104/F101 y
+`facturas.js` reporte tributario). Una compra a cédula ahora cuenta si:
+receptorEsRuc no es false, o el contador la aprobó, o `fechaEmision` es
+anterior al corte. El contador `comprasExcluidasCedula` y el filtro
+`pendienteRevisionCedula` de `GET /compras` también respetan el corte —
+ya no marcan como "pendientes de revisión" las compras históricas, porque
+esas no la necesitan.
+
+- `GET /compras` (lista) y `GET /compras/:id` (detalle) ahora devuelven
+  `necesitaRevisionCedula` (booleano ya calculado en el backend, para no
+  duplicar la fecha de corte en el frontend). `DetalleCompra.jsx` usa ese
+  campo para decidir si mostrar el checkbox de aprobación; si la compra es
+  histórica (antes del corte) no lo muestra y en su lugar el badge dice
+  "✅ Facturado a cédula — periodo histórico" en vez de la advertencia.
+  Mismo criterio en el popover de `ListaCompras.jsx`.
+
+**Verificado end-to-end contra `scfi_dev` real** (mismo servidor de
+prueba en el puerto 5601): creé 2 facturas a cédula sin aprobar, una de
+mayo/2024 y otra de julio/2026. El F104 de mayo/2024 la incluyó sola
+(`cantidadCompras: 1`, `comprasExcluidasCedula: 0`, `ivaCreditoFiscal:
+1.5`); el F104 de julio/2026 la excluyó (`cantidadCompras: 0`,
+`comprasExcluidasCedula: 1`). `GET /compras` devolvió
+`necesitaRevisionCedula: false` para la histórica y `true` para la de
+2026, y el filtro `pendienteRevisionCedula=true` solo mostró la de 2026.
+Registros de prueba eliminados al terminar. `node --test`: 29/29,
+`npx vite build`: limpio.

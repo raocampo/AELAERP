@@ -26,6 +26,7 @@ const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
 const { esErrorConectividad } = require('../utils/colaSRI');
 const { getCertBuffer, tieneCertificado, getCertInfo } = require('../utils/certUtils');
 const { enviarDocumentoFiscal } = require('../utils/email');
+const { condicionComprasDeducibles } = require('../utils/comprasFiscal');
 
 // Aplicar autenticación JWT a todas las rutas
 router.use(proteger);
@@ -1830,14 +1831,14 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
 
     // ── Compras del período — mismos filtros que el F104 real ─────────────────
     // Excluye receptorEsRuc===false (facturado a cédula personal) salvo que el
-    // contador la haya aprobado (aprobadaPorContador), y excluye siempre
-    // esGastoPersonal===true; receptorEsRuc null (compras manuales/históricas
-    // sin XML) sí se incluye. Ver declaraciones.js /f104 para el detalle.
+    // contador la haya aprobado o sea de antes del corte (ver comprasFiscal.js),
+    // y excluye siempre esGastoPersonal===true; receptorEsRuc null (compras
+    // manuales/históricas sin XML) sí se incluye. Ver declaraciones.js /f104.
     const compras = await db.facturas_compra.findMany({
       where: {
         empresaId, fechaEmision: filtroFecha, anulada: false,
         esGastoPersonal: { not: true },
-        OR: [{ receptorEsRuc: null }, { receptorEsRuc: true }, { aprobadaPorContador: true }],
+        OR: condicionComprasDeducibles(),
       },
       select: {
         id: true, numeroFactura: true, fechaEmision: true,
