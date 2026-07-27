@@ -240,6 +240,8 @@ router.post('/facturas', async (req, res) => {
         claveAcceso:                 String(claveAcceso),
         numeroFactura:               numeroFactura,
         secuencial:                  numParseado.secuencial,
+        establecimiento:             numParseado.estab,
+        puntoEmision:                numParseado.ptoEmi,
         rucEmisor:                   config.ruc,
         razonSocialEmisor:           config.razonSocial,
         tipoIdentificacionComprador: cliente.tipoIdentificacion,
