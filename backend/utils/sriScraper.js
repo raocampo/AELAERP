@@ -345,29 +345,25 @@ async function _loginYObtenerJSF(ruc, password) {
       if (!kcFormMatch) throw new Error('No se pudo extraer el action del form de Keycloak');
 
       if (credencialesEnviadas) {
-        if (credencialesValidadasPorROPC) {
-          // ROPC ya confirmó que la clave es correcta (2026-07-28) — esta reaparición
-          // del form NO es un rechazo de credenciales, es el puente GeneraToken.jsp
-          // del portal forzando un logout al re-navegar por fetch (confirmado: el
-          // mismo comportamiento ocurre incluso con credenciales 100% correctas).
-          // No lanzar "credenciales incorrectas" (dispara esErrorCredencialesSri()
-          // en buzon.js y corta el fallback a Puppeteer/portal). Marcar el error
-          // explícitamente como NO de credenciales.
-          const err = new Error(
-            'El portal SRI validó tus credenciales correctamente, pero bloqueó el acceso ' +
-            'automatizado a "Comprobantes Recibidos" (requiere navegador real). Reintentando con navegador…'
-          );
-          err.esCredenciales = false;
-          throw err;
-        }
-        // Segunda aparición del form sin haber validado antes por ROPC → sí es
-        // rechazo real de credenciales o IP bloqueada por SRI.
-        const errMatch = html.match(/class="[^"]*kc-feedback-text[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i)
-                       || html.match(/id="input-error[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i);
-        const msg = errMatch
-          ? errMatch[1].replace(/<[^>]+>/g, '').trim()
-          : 'RUC o contraseña incorrectos (o el portal SRI bloqueó la IP de AELA — usa "Conectar desde portal SRI")';
-        throw new Error(`Credenciales del portal SRI incorrectas: ${msg}`);
+        // Esta reaparición del form llega por una nueva GET (no por el POST de
+        // login en sí — ese caso ya se maneja aparte, más abajo, cuando Keycloak
+        // responde 200 directo con el error inline). Confirmado 2026-07-28 (local
+        // y en Railway) que este patrón específico ocurre SIEMPRE por el puente
+        // GeneraToken.jsp forzando un logout al re-navegar, incluso con
+        // credenciales 100% correctas — nunca fue un verdadero rechazo. Si además
+        // ROPC ya confirmó la clave, lo decimos explícito; si ROPC no pudo
+        // confirmar (ej. red inestable en Railway hacia /token), no acusamos de
+        // "incorrectas" sin prueba — dejamos que Puppeteer (que si ve el error
+        // real vía DOM) sea quien decida.
+        const err = new Error(
+          credencialesValidadasPorROPC
+            ? 'El portal SRI validó tus credenciales correctamente, pero bloqueó el acceso ' +
+              'automatizado a "Comprobantes Recibidos" (requiere navegador real). Reintentando con navegador…'
+            : 'El portal SRI no completó la navegación automatizada a "Comprobantes Recibidos" ' +
+              '(no se pudieron confirmar las credenciales por esta vía). Reintentando con navegador real…'
+        );
+        err.esCredenciales = false;
+        throw err;
       }
 
       // Extraer TODOS los <input type="hidden"> del form: Keycloak incluye tokens
