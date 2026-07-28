@@ -8,26 +8,20 @@
 **Código (Partes 9-13, esta sesión)**: ver detalle más abajo — commiteado y pusheado al terminar
 de documentar (commit incluye este mismo archivo).
 
-0. **Selector de cuenta buscable en asientos** (Parte 9): probar en navegador — Contabilidad →
-   Libro Diario → Nuevo asiento manual (y Asiento inicial), escribir un código (ej. "5.1.02") o
-   un nombre y confirmar que filtra igual que ya lo hace el buscador del Libro Mayor.
+0. ~~**Selector de cuenta buscable en asientos**~~ (Parte 9) — CONFIRMADO por el usuario 2026-07-28.
 1. **Compras — clasificación automática inventario vs gasto** (Parte 13): probar con una
    importación real de Buzón SRI (ZIP o XML) que incluya al menos una factura de servicio
    (arriendo, internet, honorarios) y confirmar que el asiento generado ya no manda todo a
-   "Inventario Mercaderías" — revisar el asiento COMPRA resultante en el Libro Diario.
-2. **SuperAdmin — tenant `sys`**: confirmar en el panel que ya no muestra "Vencido" (se corrigió
-   `esTrial` y `estado` directamente en producción, Parte 12).
-3. **Tenant `tania-herrera`**: confirmar con la clienta que ya puede ingresar con el link
-   corregido (`?slug=tania-herrera`, con guion) y la contraseña temporal, y que le funcionó
-   "Cambiar contraseña" desde el sidebar.
+   "Inventario Mercaderías" — revisar el asiento COMPRA resultante en el Libro Diario. **Sigue
+   pendiente de probar** (2026-07-28).
+2. ~~**SuperAdmin — tenant `sys`**~~: CONFIRMADO por el usuario 2026-07-28 — ya no muestra "Vencido".
+3. ~~**Tenant `tania-herrera`**~~: CONFIRMADO por el usuario 2026-07-28 — la clienta ya puede
+   ingresar con el link corregido.
 
-4. **Libro Mayor**: probar en el navegador real (no solo el PDF, ya
-   verificado) — Contabilidad → Libro Mayor, escribir "ret" (o cualquier
-   parte de un nombre de cuenta) en el nuevo buscador y confirmar que
-   filtra bien; con una cuenta de muchos movimientos confirmar que aparece
-   el paginador "Página X de Y" en vez de listar todo de una vez.
+4. ~~**Libro Mayor**~~: CONFIRMADO por el usuario 2026-07-28 — buscador y paginador probados en
+   navegador real.
 
-5. **Probar en producción con datos reales**:
+5. **Probar en producción con datos reales**: **Sigue pendiente de probar** (2026-07-28).
    - Confirmar `[schema-fix]` en logs de Railway para `facturas.idempotencyKey`
      / `notas_venta.idempotencyKey`.
    - **Prueba real de offline**: en el navegador, DevTools → Network →
