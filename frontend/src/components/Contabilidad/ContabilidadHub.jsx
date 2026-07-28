@@ -136,7 +136,7 @@ const ContabilidadHub = () => {
     tipo: 'ACTIVO',
     naturaleza: 'DEBITO',
     codigoPadre: '',
-    aceptaMovimiento: false,
+    aceptaMovimiento: true,
     activo: true,
   });
 
@@ -847,6 +847,10 @@ const ContabilidadHub = () => {
   const guardarAsiento = async (e) => {
     e.preventDefault();
     if (asientoSoloLectura) return;
+    if (asientoForm.detalles.some((d) => !d.cuentaId)) {
+      toast.error('Selecciona una cuenta para cada línea del asiento');
+      return;
+    }
     try {
       const payload = {
         fecha: asientoForm.fecha,
@@ -989,6 +993,10 @@ const ContabilidadHub = () => {
 
   const guardarAsientoInicial = async (e) => {
     e.preventDefault();
+    if (asientoInicialForm.detalles.some((d) => !d.cuentaId)) {
+      toast.error('Selecciona una cuenta para cada línea del asiento');
+      return;
+    }
     try {
       const periodo = asientoInicialForm.periodo ? normalizarPeriodoMMYYYY(asientoInicialForm.periodo) : '';
       if (asientoInicialForm.periodo && !periodo) {
@@ -1406,12 +1414,11 @@ const ContabilidadHub = () => {
                             {asientoForm.detalles.map((detalle, index) => (
                               <tr key={`det-${index}`}>
                                 <td>
-                                  <select value={detalle.cuentaId} onChange={(e) => cambiarDetalle(index, 'cuentaId', e.target.value)} required>
-                                    <option value="">Seleccione...</option>
-                                    {cuentasMovimiento.map((c) => (
-                                      <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
-                                    ))}
-                                  </select>
+                                  <SelectorCuentaBuscable
+                                    cuentas={cuentasMovimiento}
+                                    value={detalle.cuentaId}
+                                    onChange={(id) => cambiarDetalle(index, 'cuentaId', id)}
+                                  />
                                 </td>
                                 <td>
                                   <select value={detalle.centroCostoId} onChange={(e) => cambiarDetalle(index, 'centroCostoId', e.target.value)}>
@@ -1746,12 +1753,17 @@ const ContabilidadHub = () => {
                 <label><input type="checkbox" checked={cuentaForm.aceptaMovimiento} onChange={(e) => setCuentaForm((prev) => ({ ...prev, aceptaMovimiento: e.target.checked }))} /> Acepta movimiento</label>
                 <label><input type="checkbox" checked={cuentaForm.activo} onChange={(e) => setCuentaForm((prev) => ({ ...prev, activo: e.target.checked }))} /> Activa</label>
               </div>
+              <small className="conta-subtab-hint full-width" style={{ margin: 0 }}>
+                Desmarca "Acepta movimiento" solo si esta es una cuenta de grupo/mayor (agrupa
+                otras cuentas). Si es una cuenta de detalle, debe quedar marcada — de lo
+                contrario no aparecerá para elegirla en asientos manuales ni en otras pantallas.
+              </small>
               <div className="conta-form-actions full-width">
                 <button type="submit" className="btn-primary">{cuentaForm.id ? 'Actualizar cuenta' : 'Crear cuenta'}</button>
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() => setCuentaForm({ id: null, codigo: '', nombre: '', nivel: 1, tipo: 'ACTIVO', naturaleza: 'DEBITO', codigoPadre: '', aceptaMovimiento: false, activo: true })}
+                  onClick={() => setCuentaForm({ id: null, codigo: '', nombre: '', nivel: 1, tipo: 'ACTIVO', naturaleza: 'DEBITO', codigoPadre: '', aceptaMovimiento: true, activo: true })}
                 >
                   Limpiar
                 </button>
@@ -2320,12 +2332,11 @@ const ContabilidadHub = () => {
                     {asientoInicialForm.detalles.map((d, index) => (
                       <tr key={`ini-${index}`}>
                         <td>
-                          <select value={d.cuentaId} onChange={(e) => cambiarDetalleAsientoInicial(index, 'cuentaId', e.target.value)} required>
-                            <option value="">Seleccione...</option>
-                            {cuentasMovimiento.map((c) => (
-                              <option key={c.id} value={c.id}>{c.codigo} - {c.nombre}</option>
-                            ))}
-                          </select>
+                          <SelectorCuentaBuscable
+                            cuentas={cuentasMovimiento}
+                            value={d.cuentaId}
+                            onChange={(id) => cambiarDetalleAsientoInicial(index, 'cuentaId', id)}
+                          />
                         </td>
                         <td><input value={d.descripcion} onChange={(e) => cambiarDetalleAsientoInicial(index, 'descripcion', e.target.value)} /></td>
                         <td><input type="number" min="0" step="0.01" value={d.debe} onChange={(e) => cambiarDetalleAsientoInicial(index, 'debe', e.target.value)} /></td>

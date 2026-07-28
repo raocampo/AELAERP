@@ -2,16 +2,32 @@
 
 ## 🟢 PARA RETOMAR — checklist rápido
 
-**Código**: commiteado y pusheado a `main` (commits `123a5ae`, `2430ce5`, `6209ef9`, `1b7edd8`,
-`30700f6`, `368d54e`). Nada sin commitear.
+**Código (Partes 1-8)**: commiteado y pusheado a `main` (commits `123a5ae`, `2430ce5`, `6209ef9`,
+`1b7edd8`, `30700f6`, `368d54e`, `6e7a92b`, `991ff33`, `9a3d239`, `50ebbc3`, `3a85926`).
 
-0. **Libro Mayor**: probar en el navegador real (no solo el PDF, ya
+**Código (Partes 9-13, esta sesión)**: ver detalle más abajo — commiteado y pusheado al terminar
+de documentar (commit incluye este mismo archivo).
+
+0. **Selector de cuenta buscable en asientos** (Parte 9): probar en navegador — Contabilidad →
+   Libro Diario → Nuevo asiento manual (y Asiento inicial), escribir un código (ej. "5.1.02") o
+   un nombre y confirmar que filtra igual que ya lo hace el buscador del Libro Mayor.
+1. **Compras — clasificación automática inventario vs gasto** (Parte 13): probar con una
+   importación real de Buzón SRI (ZIP o XML) que incluya al menos una factura de servicio
+   (arriendo, internet, honorarios) y confirmar que el asiento generado ya no manda todo a
+   "Inventario Mercaderías" — revisar el asiento COMPRA resultante en el Libro Diario.
+2. **SuperAdmin — tenant `sys`**: confirmar en el panel que ya no muestra "Vencido" (se corrigió
+   `esTrial` y `estado` directamente en producción, Parte 12).
+3. **Tenant `tania-herrera`**: confirmar con la clienta que ya puede ingresar con el link
+   corregido (`?slug=tania-herrera`, con guion) y la contraseña temporal, y que le funcionó
+   "Cambiar contraseña" desde el sidebar.
+
+4. **Libro Mayor**: probar en el navegador real (no solo el PDF, ya
    verificado) — Contabilidad → Libro Mayor, escribir "ret" (o cualquier
    parte de un nombre de cuenta) en el nuevo buscador y confirmar que
    filtra bien; con una cuenta de muchos movimientos confirmar que aparece
    el paginador "Página X de Y" en vez de listar todo de una vez.
 
-1. **Probar en producción con datos reales**:
+5. **Probar en producción con datos reales**:
    - Confirmar `[schema-fix]` en logs de Railway para `facturas.idempotencyKey`
      / `notas_venta.idempotencyKey`.
    - **Prueba real de offline**: en el navegador, DevTools → Network →
@@ -24,7 +40,7 @@
      venta, no la de sincronización.
    - Confirmar que el aviso "Venta sincronizada — ahora es Factura ..."
      aparece si el cajero sigue en la pantalla del POS cuando sincroniza.
-2. **Coordinar con AVALAB** cuándo hacen la primera llamada HTTP real usando
+6. **Coordinar con AVALAB** cuándo hacen la primera llamada HTTP real usando
    `docs/integracion-avalab.md` (documento de la sesión anterior) — sigue
    pendiente, no depende de código.
 
@@ -504,3 +520,216 @@ redondeo normal acumulado del SRI por factura, no un patrón sistemático.
   `H-YYMMDD-01`) siguen sin tocar — requieren que la contadora del
   cliente confirme el valor correcto, no están relacionados con el bug de
   esta sesión.
+
+## Parte 9 (misma sesión) — Selector de cuenta buscable también en asientos manuales
+
+Antes de esta parte, `SelectorCuentaBuscable` (input + filtro por substring de
+código+nombre, sin acentos ni mayúsculas) solo se usaba en "Consulta de libro
+mayor" (sesión 07-27 anterior) — los 2 usos restantes de la lista de cuentas
+(la tabla de detalle del formulario de "Nuevo asiento manual" y la de "Asiento
+inicial") seguían con un `<select>` nativo del navegador, que solo hace
+type-ahead sobre el inicio del texto de la opción (`codigo - nombre`): permitía
+llegar rápido escribiendo el código, pero no escribiendo el nombre de la
+cuenta. El usuario pidió que ambas formas de buscar funcionen igual en los
+asientos, como ya funcionaba en Libro Mayor.
+
+### Implementado
+- `ContabilidadHub.jsx`: los `<select>` de la columna "Cuenta" en el detalle de
+  "Nuevo asiento manual" (`asientoForm.detalles`) y "Asiento inicial"
+  (`asientoInicialForm.detalles`) se reemplazaron por `SelectorCuentaBuscable`
+  — mismo componente ya usado en Libro Mayor, sin cambios al componente en sí.
+- El `<select required>` nativo daba validación HTML5 gratis (no dejaba
+  enviar el formulario sin elegir cuenta); al ser ahora un input de texto, se
+  agregó la validación equivalente en JS (`guardarAsiento` y
+  `guardarAsientoInicial`): si alguna línea quedó sin `cuentaId`, se avisa con
+  toast y no se envía el formulario.
+- CSS (`ContabilidadHub.css`): `.conta-selector-cuenta` ahora tiene
+  `position: relative` como regla base (antes solo aplicaba dentro de
+  `.conta-filters`), para que el listado desplegable se posicione bien también
+  dentro de una celda de tabla.
+
+### Verificación realizada
+- `npx vite build`: limpio (antes y después del cambio).
+- No requiere backend — es un cambio 100% de frontend sobre un componente ya
+  probado en producción (Libro Mayor).
+- **No probado**: el comportamiento visual real en navegador (el buscador
+  desplegándose correctamente dentro de la celda de la tabla) — no hay
+  entorno de navegador disponible aquí. Ver checklist al inicio de este
+  documento.
+
+## Parte 10 (misma sesión) — Plan de Cuentas: "Acepta movimiento" nace marcado por defecto
+
+El usuario creó una cuenta nueva (`5.1.02.004 SEGUROS PREPAGADOS`) y, al
+editar un asiento para asignarle un movimiento, la cuenta no aparecía en el
+selector.
+
+**Causa**: no era un bug de datos ni de caché — el selector de cuentas para
+asientos filtra correctamente por `aceptaMovimiento && activo`
+(`ContabilidadHub.jsx:1031`, para no ofrecer cuentas de grupo/mayor). El
+formulario "Nueva cuenta contable" trae ese checkbox **desmarcado por
+defecto** y sin ninguna explicación de qué controla — fácil de pasarlo por
+alto al crear una cuenta de detalle (sus hermanas `5.1.02.001-003` sí lo
+tenían marcado).
+
+### Implementado
+- `aceptaMovimiento` ahora nace **marcado** por defecto, tanto al abrir el
+  formulario en blanco como al presionar "Limpiar" — la mayoría de cuentas que
+  se crean a mano son de detalle, no de grupo.
+- Nota explicativa bajo los checkboxes aclarando que solo las cuentas de
+  grupo/mayor deben ir desmarcadas, y que si queda desmarcada la cuenta no
+  aparecerá en asientos manuales.
+- No afecta cuentas ya existentes, solo el valor por defecto para las nuevas.
+
+### Verificación realizada
+- `npx vite build`: limpio.
+- **Pendiente para el usuario**: editar `5.1.02.004 SEGUROS PREPAGADOS` en
+  Plan de Cuentas, marcar "Acepta movimiento" y guardar — con eso ya
+  aparecerá en el selector del asiento que estaba armando.
+
+## Parte 11 (misma sesión) — Tenant `tania-herrera`: no podía ingresar
+
+El usuario reportó que un cliente (Tania Herrera, tenant creado ese mismo
+día) no podía ingresar con el usuario y contraseña recién creados.
+
+**Causa 1 — contraseña**: las contraseñas se guardan hasheadas (bcrypt,
+irreversible) — no había forma de "ver" la original. Se reseteó directo en
+la BD real del tenant (`aela_tania_herrera`, único usuario: `adminth1234` /
+`taniaherreraochoa@gmail.com`, rol admin) con una contraseña temporal nueva,
+usando el mismo hash (`bcryptjs`, costo 10) que ya usa
+`backend/routes/auth.js` y `backend/scripts/resetPassword.js`. Confirmado
+que el flujo de "🔑 Cambiar contraseña" del sidebar (`POST
+/auth/cambiar-password`) funciona correctamente para que la clienta la
+cambie ella misma.
+
+**Causa 2 — la real, encontrada después**: el intento de login seguía
+fallando incluso con la contraseña correcta. En `aela_master.tenants` (schema
+`aela_master` dentro de la BD `railway` de Railway) el tenant está registrado
+con slug **`tania-herrera`** (guion), pero el link que se estaba usando era
+`?slug=tania_herrera` (guion bajo). El middleware de tenant no encontraba
+ningún tenant con ese slug → 404 en `bootstrap-status`/`branding` → el
+frontend (`Login.jsx:87-90`) interpreta ese 404 como "slug inválido" y borra
+el tenant guardado en `localStorage`, dejando el login sin saber a qué BD
+conectarse. La URL correcta:
+
+```
+https://aela.corpsimtelec.com/login?slug=tania-herrera
+```
+
+No fue necesario tocar código — es un dato/link mal escrito, no un bug del
+sistema.
+
+### Verificación realizada
+- Acceso a la BD del tenant confirmado leyendo `aela_master.tenants` (lista
+  de bases en el servidor compartido de Railway: `aela_labsanjose`,
+  `aela_loja_torneos_y_competencia`, `aela_lsac`, `aela_mprq`, `aela_sys`,
+  `aela_tania_herrera`, `railway`).
+- **Pendiente**: confirmar con la clienta que ya puede ingresar con el link
+  corregido y cambiar su propia contraseña.
+
+## Parte 12 (misma sesión) — SuperAdmin: habilitar multiempresa + tenant `sys` marcado "Vencido" sin motivo real
+
+### Habilitar multiempresa en un tenant PRO
+Al crear una segunda empresa en el tenant `tania-herrera` (plan PRO), el
+sistema respondió "Tu plan PRO está configurado como monoempresa. Solo puedes
+tener una empresa." — no es un bug, es el gate esperado por
+`tipoInstancia` (`backend/routes/empresas.js:339-345`). Se le indicó al
+usuario dónde cambiarlo (Panel SuperAdmin → Editar tenant → "Tipo de
+instancia" → Multiempresa) y lo hizo él mismo vía `PUT
+/super-admin/tenants/:id`. Sin cambios de código.
+
+### Tenant `sys` mostraba "Vencido" con vencimiento a un año
+El usuario preguntó por qué el panel SuperAdmin mostraba el tenant `sys`
+(cliente Fernanda Sucunuta) como "Vencido" si la columna "Vencimiento"
+mostraba `19/7/2027` — más de un año en el futuro.
+
+**Causa raíz encontrada**: dos campos distintos del tenant, sin reconciliar
+entre sí. `esTrial=true` con `trialExpiresAt=2026-07-26` (un trial corto, ya
+vencido al momento de la pregunta), y por separado `fechaVencimiento
+=2027-07-20` (la fecha real del plan pago, a un año). El middleware
+(`backend/middleware/tenant.js:138`) revisa el trial **antes** que
+`fechaVencimiento`, y como `esTrial` seguía en `true`, el sistema ignoraba por
+completo la fecha correcta y marcaba "vencido" solo por el trial ya expirado.
+Los dos flujos de pago existentes (`_activarSuscripcion` en
+`suscripcionPago.js`, y `POST /tenants/:id/suscripciones` en
+`superAdmin.js`) ya ponían `esTrial=false` correctamente al registrar un
+pago — la inconsistencia venía del modal genérico "✏️ Editar", que permite
+tocar `fechaVencimiento` sin ninguna relación con el checkbox "Es trial".
+
+### Implementado
+- **Dato corregido en producción**: tenant `sys` → `esTrial=false`,
+  `estado='activo'` (ya tiene un vencimiento real a futuro, no es trial).
+- **Fix de fondo** (`backend/routes/superAdmin.js`, `PUT /tenants/:id`):
+  cuando se guarda una `fechaVencimiento` futura, el backend ahora fuerza
+  `esTrial=false` automáticamente y normaliza `estado` a `activo` (salvo que
+  se pida `suspendido` explícitamente) — cierra la brecha sin importar por
+  cuál pantalla se toque esa fecha.
+- **Frontend** (`PanelSuperAdmin.jsx`): el selector "Estado" del modal Editar
+  ahora se deshabilita cuando el tenant no es trial (plan pago real), con una
+  nota indicando usar el botón "⏸ Suspender"/"▶ Activar" de la lista en vez
+  de tocar el estado a mano — evita que se repita este tipo de
+  desincronización manual.
+
+### Verificación realizada
+- `node -c routes/superAdmin.js`: limpio. `npx vite build`: limpio.
+  `node --test`: 29/29.
+- Corrección de `sys` verificada leyendo de vuelta el registro en
+  `aela_master.tenants` tras el `UPDATE`.
+
+## Parte 13 (misma sesión) — Compras: el asiento automático mandaba todo a "Inventario Mercaderías"
+
+El usuario reportó que al cargar facturas de compra el asiento generado
+siempre debita la cuenta de Inventario, "y no necesariamente debería ir
+ahí" — pidió que el sistema analice la factura para decidir mejor a qué
+cuenta debería ir cada línea.
+
+**Causa raíz encontrada**: `backend/utils/importacionProductos.js:324`
+(`parsearFacturaCompraDesdeXml`, el parser de XML del SRI reutilizado por
+compras manuales y por el Buzón SRI) marcaba **toda** línea como
+`inventariable: true` sin ninguna condición. `backend/utils/buzon.js`
+("Importar ZIP"/"Importar XML" del Buzón SRI, reforzado en la Parte 5 de
+esta misma sesión) guardaba la compra con ese valor directo — la resolución
+contra el catálogo de productos existente solo corría si el usuario
+marcaba "registrar inventario"/"crear productos" en esa importación
+puntual, y aun así **nunca se guardaba de vuelta** en la compra: solo servía
+para decidir si aplicar el movimiento de stock, no para el asiento contable
+(`crearAsientoFacturaCompraRegistrada` en `contabilidad.js`, que separa
+Inventario vs. Compras/Gasto leyendo `detalle.inventariable` de la compra ya
+guardada). Por eso una factura de arriendo, internet u honorarios terminaba
+igual en Inventario.
+
+### Implementado
+- **Clasificador best-effort** (`pareceGastoOServicio`, nuevo en
+  `importacionProductos.js`): si la descripción de la línea contiene
+  palabras típicas de servicio/gasto operativo (arriendo, internet,
+  honorarios, seguros, mantenimiento, combustible, publicidad, software,
+  transporte, etc. — lista curada de ~35 términos), la línea nace como no
+  inventariable. Reemplaza el `inventariable: true` hardcodeado.
+- **El catálogo real tiene prioridad sobre la heurística**
+  (`utils/buzon.js`): antes de guardar la compra, cada línea se busca contra
+  `productos_servicios` de la empresa (mismo matching por
+  `codigoPrincipal`/`codigoAuxiliar` que ya usa `comprasInventario.js`); si
+  ya existe, su `inventariable` real reemplaza el resultado del texto. Esta
+  resolución ahora corre siempre (antes dependía de las opciones
+  "registrar inventario"/"crear productos") porque afecta el asiento
+  contable, no solo el movimiento de stock — y si se pidió aplicar
+  movimiento de inventario, ese paso sigue igual que antes.
+- Alcance: el parser es compartido con la importación manual/Excel de
+  compras (`FormCompra.jsx`), que ya tiene un checkbox "Inventariable" por
+  línea revisable por el usuario antes de guardar — ahí el default mejorado
+  reduce trabajo de corrección manual, pero no era el flujo roto (un humano
+  ya podía corregirlo). El flujo realmente ciego era el import automático
+  del Buzón SRI, que es el que se corrigió de fondo.
+
+### Verificación realizada
+- `node --test`: 29/29.
+- **Probado contra `scfi_dev` real**: se creó un producto de catálogo con
+  `inventariable=false` cuya descripción ("Plan corporativo premium") no
+  calza con ninguna palabra clave de la heurística (para forzar el caso
+  donde el catálogo debe ganarle al texto), más una línea nueva de
+  "ARRIENDO OFICINA JULIO 2026" sin producto asociado. Resultado: la primera
+  quedó `inventariable=false` por el catálogo (la heurística sola hubiera
+  dicho `true`), la segunda quedó `inventariable=false` por texto. Ambos
+  casos correctos. Registro de prueba eliminado al terminar.
+- **No probado**: una importación real de ZIP/XML con facturas mixtas en un
+  navegador (no hay entorno de navegador disponible aquí) — ver checklist al
+  inicio de este documento.

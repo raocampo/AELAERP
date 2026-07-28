@@ -37,6 +37,38 @@ function limpiarTexto(valor) {
   return String(valor || '').trim();
 }
 
+// ─── Clasificación best-effort: ¿esta línea de compra es mercadería para la
+// reventa (inventario) o un servicio/gasto operativo? ──────────────────────
+// Se usa SOLO como respaldo cuando el ítem no coincide con ningún producto ya
+// existente en el catálogo de la empresa — el catálogo real (producto.inventariable)
+// siempre tiene prioridad sobre esta heurística por texto (ver comprasInventario.js
+// y utils/buzon.js). Sin esto, el parser de XML del SRI asumía TODO como
+// inventariable por defecto, así que una factura de arriendo, internet o
+// honorarios terminaba generando un asiento contra "Inventario Mercaderías".
+const PALABRAS_CLAVE_GASTO = [
+  'arriendo', 'alquiler', 'servicio basico', 'servicios basicos', 'agua potable',
+  'energia electrica', 'planilla electrica', 'internet', 'telefonia', 'telefono',
+  'celular', 'honorarios', 'asesoria', 'consultoria', 'auditoria', 'seguro',
+  'comision', 'transporte', 'flete', 'mantenimiento', 'reparacion', 'publicidad',
+  'marketing', 'capacitacion', 'curso', 'seminario', 'software', 'licencia',
+  'suscripcion', 'combustible', 'gasolina', 'diesel', 'viatico', 'hospedaje',
+  'alimentacion', 'impuesto', 'tasa', 'patente', 'permiso', 'limpieza',
+  'seguridad', 'guardiania', 'notari', 'legalizacion', 'courier', 'envio',
+  'encomienda', 'suministro de oficina', 'utiles de oficina', 'papeleria',
+];
+
+function normalizarDescripcionCompra(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+}
+
+function pareceGastoOServicio(descripcion) {
+  const texto = normalizarDescripcionCompra(descripcion);
+  return PALABRAS_CLAVE_GASTO.some((clave) => texto.includes(clave));
+}
+
 function limpiarCodigo(valor) {
   return limpiarTexto(valor).toUpperCase();
 }
@@ -321,7 +353,11 @@ function parsearFacturaCompraDesdeXml(xmlString) {
       descuento,
       subtotal: Number(precioTotalSinImpuesto.toFixed(2)),
       total: Number(totalLinea.toFixed(2)),
-      inventariable: true,
+      // Best-effort: si la descripción es claramente un servicio/gasto (arriendo,
+      // internet, honorarios, etc.) no se marca inventariable. El llamador (ver
+      // utils/buzon.js) todavía puede sobreescribir esto con el dato real del
+      // catálogo si el ítem coincide con un producto ya existente.
+      inventariable: !pareceGastoOServicio(detalle.descripcion),
     };
   }).filter((item) => item.descripcion && item.cantidad > 0);
 
@@ -554,4 +590,5 @@ module.exports = {
   parsearFacturaCompraDesdeXml,
   obtenerXmlDesdeAutorizacion,
   importarProductos,
+  pareceGastoOServicio,
 };

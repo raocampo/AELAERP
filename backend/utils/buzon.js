@@ -277,6 +277,22 @@ async function importarDocumentoRecibido({
     const xmlParaParsear = xmlEnvuelto || xmlAutorizado;
     const datos = parsearFacturaCompraDesdeXml(xmlParaParsear);
 
+    // Antes de guardar, si algún ítem ya existe en el catálogo de productos de
+    // la empresa (mismo codigoPrincipal/codigoAuxiliar), su `inventariable` real
+    // manda sobre el best-effort del parser (heurística por texto de la
+    // descripción) — el catálogo es la fuente más confiable. Esto corre siempre,
+    // independiente de si se pidió "registrar inventario"/"crear productos" en
+    // esta importación puntual, porque afecta el asiento contable generado más
+    // adelante (crearAsientoFacturaCompraRegistrada lee compra.detalles), no solo
+    // el movimiento de stock.
+    if (datos.detalles?.length) {
+      const { buscarProductoCoincidente } = require('./comprasInventario');
+      for (const det of datos.detalles) {
+        const prodExistente = await buscarProductoCoincidente(tx, empresaId, det);
+        if (prodExistente) det.inventariable = Boolean(prodExistente.inventariable);
+      }
+    }
+
     // Verificar duplicado
     const existente = await tx.facturas_compra.findFirst({
       where: {

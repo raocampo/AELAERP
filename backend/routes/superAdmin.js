@@ -155,6 +155,21 @@ router.put('/tenants/:id', verificarSuperAdmin, async (req, res) => {
       });
     }
 
+    // Si se guarda una fecha de vencimiento futura, el tenant ya no debe seguir
+    // tratado como trial: si queda esTrial=true, el middleware (tenant.js) evalúa
+    // solo trialExpiresAt e ignora esta fecha por completo — un trial corto ya
+    // vencido puede marcar "vencido" un tenant con un plan pago vigente por un
+    // año, que es justo la inconsistencia real encontrada en el tenant "sys"
+    // (fechaVencimiento a futuro, esTrial nunca desmarcado al setearla a mano
+    // desde este mismo formulario). No se toca si el request pide 'suspendido'
+    // explícitamente — eso sigue siendo una decisión manual del admin.
+    if (data.fechaVencimiento instanceof Date && data.fechaVencimiento > new Date()) {
+      data.esTrial = false;
+      if (data.estado === undefined || data.estado === 'vencido') {
+        data.estado = 'activo';
+      }
+    }
+
     // Dominio personalizado (marca blanca) — se guarda dentro de brandConfig.dominio
     if (req.body.dominioPersonalizado !== undefined) {
       const tenantActual = await master.tenants.findUnique({

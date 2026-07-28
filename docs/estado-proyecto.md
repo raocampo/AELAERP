@@ -29,6 +29,9 @@ AELA ya cuenta con una base funcional operativa para:
 - **impresión térmica ESC/POS configurable por Red (IP) o USB (WebUSB)** desde Configuración del Sistema → Impresión (antes no existía ninguna pantalla para esto)
 - **modo offline del POS** (Facturas y Notas de Venta) — la venta se guarda localmente (IndexedDB) si se corta la señal y se sincroniza sola al volver, sin duplicar (idempotencyKey)
 - **Libro Mayor** con PDF real (tabla, encabezado corporativo con logo/datos de empresa), tablas paginadas y selector de cuenta con búsqueda por texto
+- **selector de cuenta buscable por código o nombre** también en los asientos manuales (Nuevo asiento y Asiento inicial), no solo en Libro Mayor
+- **compras: clasificación automática inventario vs. gasto** al importar del Buzón SRI — el asiento ya no manda todo a "Inventario Mercaderías"; usa el producto existente en catálogo si lo hay, o una heurística por palabras clave (arriendo, servicios, honorarios, etc.) para ítems nuevos
+- **SuperAdmin**: `esTrial` se corrige automáticamente al guardar una fecha de vencimiento futura (evita tenants marcados "Vencido" con un plan pago vigente)
 
 
 ## Realizado

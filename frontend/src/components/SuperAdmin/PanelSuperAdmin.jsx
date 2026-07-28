@@ -150,12 +150,19 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
 
           <div className="sa-form-row">
             <label>Estado</label>
-            <select value={form.estado} onChange={e => set('estado', e.target.value)}>
+            <select value={form.estado} onChange={e => set('estado', e.target.value)} disabled={!form.esTrial}>
               <option value="activo">Activo</option>
               <option value="suspendido">Suspendido</option>
               <option value="vencido">Vencido</option>
               <option value="provisioning">Provisioning</option>
             </select>
+            {!form.esTrial && (
+              <small className="sa-hint-block">
+                Con un plan pago (no trial) el estado se calcula solo a partir de la fecha de
+                vencimiento. Para suspender o reactivar usa el botón "⏸ Suspender" / "▶ Activar"
+                de la lista, no este selector.
+              </small>
+            )}
           </div>
 
           <div className="sa-form-row">
