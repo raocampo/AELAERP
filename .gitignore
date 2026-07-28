@@ -60,3 +60,7 @@ docs/ReIdi.py.ts-main/
 # PDFs técnicos pesados
 docs/*.pdf
 backend/scripts/_check_puchaicela.js
+
+# Backups de datos reales de clientes generados por scripts de corrección
+# (contienen valores financieros/tributarios reales — nunca al repo)
+backend/scripts/_backup_*.json

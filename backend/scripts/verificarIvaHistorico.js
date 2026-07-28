@@ -33,7 +33,12 @@ const prisma = new PrismaClient();
 const FIX = process.argv.includes('--fix');
 const empresaArg = process.argv.find((a) => a.startsWith('--empresa='));
 const empresaId = empresaArg ? parseInt(empresaArg.split('=')[1], 10) : null;
-const CORTE = new Date('2024-04-22');
+// Corregido 2026-07-27: el corte real de la tarifa 12%→15% es 2024-04-01, no
+// 2024-04-22 (ver applySchemaFixes.js). Con el corte viejo, este script no
+// detectaba nada raro entre el 1 y el 21 de abril de 2024 porque para esas
+// fechas ni siquiera entraban en el filtro `fechaEmision < CORTE` original —
+// ese rango se corrige aparte con scripts/corregirCorteIva15Abril2024.js.
+const CORTE = new Date('2024-04-01');
 const TOLERANCIA = 0.02;
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;

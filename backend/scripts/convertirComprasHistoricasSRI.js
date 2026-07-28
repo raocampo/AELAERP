@@ -137,7 +137,7 @@ function procesarHoja(nombreHoja, ws) {
   const headerMap = rows[0].map((h) => ALIAS[normHeader(h)] || null);
   const { anio: anioHoja, mes: mesHoja } = inferirMesAnioDeHoja(nombreHoja);
   const avisos = [];
-  let sinFechaColumna = false;
+  let filasSinFecha = 0;
 
   const grupos = new Map(); // key -> acumulador
 
@@ -153,7 +153,7 @@ function procesarHoja(nombreHoja, ws) {
 
     let fecha = parsearFecha(f.fechaEmision);
     if (!fecha) {
-      sinFechaColumna = true;
+      filasSinFecha++;
       fecha = anioHoja && mesHoja ? new Date(Date.UTC(anioHoja, mesHoja - 1, 1, 12)) : new Date();
     }
     const fechaAut = parsearFecha(f.fechaAutorizacion);
@@ -189,8 +189,8 @@ function procesarHoja(nombreHoja, ws) {
     if (desc && g.descripciones.length < 3 && !g.descripciones.includes(desc)) g.descripciones.push(desc);
   }
 
-  if (sinFechaColumna) {
-    avisos.push(`Esta hoja no tiene columna de Fecha Emisión — se usó el día 1 de ${mesHoja}/${anioHoja} como fecha para todas sus facturas (revisar si importa la fecha exacta).`);
+  if (filasSinFecha > 0) {
+    avisos.push(`${filasSinFecha} línea(s) de esta hoja no traían Fecha Emisión legible — se usó el día 1 de ${mesHoja}/${anioHoja} solo para esas líneas (no afecta el resto de las facturas de la hoja; no cambia el mes, solo el día exacto).`);
   }
 
   // Numerar facturas sintéticas por RUC+fecha cuando no hay número real

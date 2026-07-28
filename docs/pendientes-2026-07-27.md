@@ -398,3 +398,109 @@ desglose por tarifa perdía la columna 12%). Agregada la columna faltante.
 y descarga real del Excel contra `scfi_dev` (servidor propio en el puerto
 5601) confirmando que la cabecera ahora incluye "Subtotal 12%" entre
 "Subtotal 5%" y "Subtotal 15%".
+
+## Parte 8 (misma sesión) — Bug real de IVA mal calculado en compras históricas (producción, cliente Puchaicela) — encontrado y corregido
+
+El usuario confirmó que el Excel de la Parte 7 SÍ es la fuente real usada
+para importar la contabilidad histórica de **Daniel Ramiro Puchaicela**
+(RUC 1104196546001, tenant `aela_lsac`, `empresaId=4`) y pidió acceso a
+producción para investigar a fondo. Compartió `.env.local` (con la cadena
+de conexión externa de Railway) y el archivo real
+`COMPRAS JUNIO 2023 ABRIL 2025 PUCHAICELA.xlsx` (23 hojas, jun-2023 a
+abr-2025, export crudo del SRI).
+
+### Causa raíz encontrada
+
+La migración `20260715000000_subtotal12_iva_historico` (sesión 2026-07-15,
+`applySchemaFixes.js`) reclasificó `subtotal15 → subtotal12` para
+`fechaEmision < '2024-04-22'`, asumiendo que la tarifa 15% empezó a regir
+ese día. **La fecha real es 2024-04-01** — confirmado en
+`backend/utils/sri.js:96` ("15% tarifa vigente desde abr 2024") y
+verificado de forma empírica contra el export real del SRI del cliente:
+**cero** comprobantes a 12% en todo abril-2024 (188 líneas al 15%, 0 al
+12%, embebido en la propia hoja "ABRIL 2024 COMPRAS" del Excel, filas
+393-398 "Totales por Tarifa IVA generada" — el mismo cuadro que el usuario
+compartió como imagen en la Parte 7).
+
+Con la fecha de corte equivocada, las 3 semanas del 1 al 21 de abril de
+2024 quedaron mal reclasificadas a subtotal12, y el script de fix
+posterior (`verificarIvaHistorico.js --fix`, sesión 2026-07-15) terminó
+"confirmando" y horneando el IVA incorrecto al 12% en esos registros
+porque su ratio (15/12=1.25) coincidía exactamente con el patrón del bug
+que ese script sí sabía corregir — sin saber que la fecha de corte de
+origen ya estaba mal.
+
+### Alcance verificado (los 7 tenants de Railway a los que se tuvo acceso)
+
+- `railway` (empresas 1-3), `aela_mprq`, `aela_labsanjose`,
+  `aela_tania_herrera`: **0 registros afectados**.
+- `aela_sys`: tenant nuevo, sin datos del período — no aplica.
+- `aela_loja_torneos_y_competencia`: confirmado por el usuario que este
+  subtenant ya no existe (se borró) — no se tocó.
+- `aela_lsac`, empresa 4 (Puchaicela): **45 facturas de compra** con
+  `fechaEmision` entre 2024-04-01 y 2024-04-21 afectadas. Base mal
+  clasificada: $1,378.39. IVA subestimado: **$41.40** (de $165.41 al 12%
+  a $206.81 al 15% correcto).
+
+### Corrección aplicada en producción (con backup previo a cada paso)
+
+1. Nuevo script reutilizable `backend/scripts/corregirCorteIva15Abril2024.js`
+   (modo diagnóstico por defecto, `--fix` para aplicar) — genera backup
+   JSON de los registros originales antes de tocar nada
+   (`backend/scripts/_backup_*.json`, excluido del repo vía `.gitignore`,
+   nunca se sube data financiera real de un cliente a git).
+2. Ejecutado contra `aela_lsac --empresa=4 --fix`: 45 `facturas_compra`
+   corregidas (`subtotal12→subtotal15`, `totalIva`/`importeTotal`
+   recalculados al 15%).
+3. Reutilizado `regenerarAsientosCompraIva12.js` (ya existente de la
+   sesión 2026-07-15) para regenerar los 45 asientos contables vinculados:
+   **45 regenerados, 0 omitidos** (ningún período cerrado/bloqueado).
+4. Verificado: totales de abril-2024 en producción después del fix
+   (`base15=1514.32, iva=321.66, total=5276.99`) casi exactos al Excel
+   real (`base15=1520.32, iva=322.20, total=5277.53` agrupando por
+   factura) — la diferencia de ~$0.54 restante es redondeo normal por
+   línea del SRI, no un error. Asiento de la compra de mayor ajuste
+   (`#999`, +$10.26) verificado cuadrando debe=haber ($393.12=$393.12).
+
+### Fix de fondo (para que no se repita ni afecte a futuros clientes)
+
+- **`applySchemaFixes.js`** y **`verificarIvaHistorico.js`**: fecha de
+  corte corregida de `2024-04-22` a `2024-04-01`. Esto era **urgente**:
+  sin este cambio, el próximo arranque del servidor (que corre
+  `applySchemaFixes.js` contra todos los tenants) habría vuelto a mover
+  los 45 registros recién corregidos de `subtotal15` a `subtotal12`,
+  deshaciendo el fix.
+- **`convertirComprasHistoricasSRI.js`**: corregido un aviso engañoso que
+  decía "esta hoja no tiene columna de Fecha Emisión — se usó el día 1
+  ... para TODAS sus facturas" cuando en realidad solo un puñado de filas
+  basura al final de cada hoja (no todas) carecían de fecha — ahora
+  reporta el conteo real y aclara que no afecta al resto de la hoja.
+- **Nuevo `backend/scripts/reconciliarComprasHistoricas.js`**: herramienta
+  permanente y reutilizable (no atada a Puchaicela) — compara, mes por
+  mes, los totales de un Excel de compras históricas contra lo que quedó
+  en `facturas_compra` después de importarlo. Pensado para validar
+  futuras importaciones de otros clientes sin depender del preview (que
+  no garantiza que los totales por mes cuadren con el documento fuente).
+
+### Verificación exhaustiva de los 23 meses (a pedido explícito del usuario)
+
+Con `reconciliarComprasHistoricas.js` se reconciliaron los 23 meses
+completos (jun-2023 a abr-2025) del Excel de Puchaicela contra producción
+(post-fix). **Base 0% y base gravada cuadran en $0.00 de diferencia en
+los 23 meses** — abril-2024 fue el único mes con un error real de
+clasificación. Las diferencias de IVA restantes (todas ≤ $3.66/mes) son
+redondeo normal acumulado del SRI por factura, no un patrón sistemático.
+
+### Verificación técnica
+
+- `node --test`: 29/29 en todos los puntos de esta parte.
+- Sintaxis verificada de los 5 scripts tocados/creados.
+- Todo el trabajo de exploración/corrección en producción se hizo con
+  consultas de solo lectura primero, backup antes de cualquier `UPDATE`,
+  y verificación numérica exacta antes y después de cada paso — mismo
+  estándar que la sesión 2026-07-15.
+- **Pendiente**: los 16 registros de "revisión manual" ya documentados en
+  la sesión 2026-07-15 (ratios ~0.89-0.92 y ~0.66-0.67, asientos
+  `H-YYMMDD-01`) siguen sin tocar — requieren que la contadora del
+  cliente confirme el valor correcto, no están relacionados con el bug de
+  esta sesión.

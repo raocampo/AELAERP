@@ -416,18 +416,30 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "auditoria_empresaId_idx" ON "auditoria"("empresaId")`,
   `CREATE INDEX IF NOT EXISTS "auditoria_accion_idx"    ON "auditoria"("accion")`,
   `CREATE INDEX IF NOT EXISTS "auditoria_fecha_idx"     ON "auditoria"("fecha")`,
-  // IVA 12% histórico Ecuador (pre-2024-04-22) — campo subtotal12 (2026-07-15)
-  // Ecuador usó 12% desde 2001 hasta el 21-abr-2024 (y 14% brevemente en 2016-2017).
+  // IVA 12% histórico Ecuador (pre-2024-04-01) — campo subtotal12 (2026-07-15)
+  // Ecuador usó 12% desde 2001 hasta el 31-mar-2024 (y 14% brevemente en 2016-2017).
+  // La tarifa 15% rige desde el 01-abr-2024 (Ley Orgánica de Eficiencia Económica),
+  // confirmado en utils/sri.js:96 y verificado empíricamente contra exports reales
+  // del SRI de un cliente (cero comprobantes a 12% en todo abril-2024).
   // Antes este sistema guardaba toda base gravada en subtotal15 como catch-all.
   // La columna subtotal12 separa correctamente esa base para ATS, F104 y XML SRI.
+  //
+  // CORRECCIÓN 2026-07-27: el corte original de este fix usaba '2024-04-22' en vez
+  // de '2024-04-01' — reclasificó incorrectamente 3 semanas de compras realmente
+  // al 15% (01 al 21 de abril de 2024) como si fueran al 12%, subestimando el IVA
+  // en esos registros. Se corrigieron en producción con
+  // scripts/corregirCorteIva15Abril2024.js (backup + fix + regeneración de
+  // asientos). La fecha de corte se corrige aquí para que este UPDATE no vuelva a
+  // tocar esos registros ya corregidos en el próximo arranque (ahora solo aplica
+  // a fechaEmision < '2024-04-01', que es idempotente: subtotal15 ya es 0 ahí).
   `ALTER TABLE "facturas"            ADD COLUMN IF NOT EXISTS "subtotal12" DECIMAL(14,2) NOT NULL DEFAULT 0`,
   `ALTER TABLE "facturas_compra"     ADD COLUMN IF NOT EXISTS "subtotal12" DECIMAL(14,2) NOT NULL DEFAULT 0`,
   `ALTER TABLE "liquidaciones_compra" ADD COLUMN IF NOT EXISTS "subtotal12" DECIMAL(14,2) NOT NULL DEFAULT 0`,
-  // Backfill retroactivo: mover subtotal15 → subtotal12 en registros pre-2024-04-22.
+  // Backfill retroactivo: mover subtotal15 → subtotal12 en registros pre-2024-04-01.
   // Es idempotente: después del primer run, subtotal15 ya es 0 en esos registros.
-  `UPDATE "facturas"            SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
-  `UPDATE "facturas_compra"     SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
-  `UPDATE "liquidaciones_compra" SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-22' AND "subtotal15" > 0`,
+  `UPDATE "facturas"            SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-01' AND "subtotal15" > 0`,
+  `UPDATE "facturas_compra"     SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-01' AND "subtotal15" > 0`,
+  `UPDATE "liquidaciones_compra" SET "subtotal12" = "subtotal15", "subtotal15" = 0 WHERE "fechaEmision" < '2024-04-01' AND "subtotal15" > 0`,
   // IVA 5% en liquidaciones de compra (2026-07-16) — nunca existió esta columna:
   // el formulario solo permitía elegir 0%/15% y el cálculo de IVA ignoraba 5%,
   // así que no hace falta backfill (no puede haber datos previos en 5%).
