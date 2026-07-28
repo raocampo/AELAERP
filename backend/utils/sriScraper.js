@@ -1,17 +1,41 @@
 // ============================================================
 //  AELA — sriScraper.js
 //
-//  ESTRATEGIA ACTUAL (2026-06-30):
+//  ESTRATEGIA ACTUAL (2026-07-28):
 //    1. Fetch + JSF (sin navegador — preferido)
-//       a. ROPC → validar credenciales / obtener Bearer token
-//       b. Bearer en JSF (si ROPC OK)
-//       c. Browser flow fetch (seguimiento manual de redirects Keycloak)
-//       NOTA: ROPC invalid_grant ya NO detiene el flujo — Railway puede
-//       tener IPs de AWS bloqueadas en /token pero no en el form web.
-//    2. Puppeteer (fallback con Chromium de 3 niveles)
+//       a. ROPC con clave HASHEADA (MD5+SHA-512, igual que validarUsuario()
+//          del form real) → valida credenciales de forma definitiva. Con la
+//          clave en texto plano SIEMPRE da invalid_grant aunque sea correcta
+//          (confirmado 2026-07-28 contra el portal real).
+//       b. Bearer en JSF (normalmente falla — el puente GeneraToken.jsp de
+//          la app legacy de comprobantes NO acepta Bearer, solo el código
+//          OAuth completo vía cookies/redirect).
+//       c. Browser flow fetch (seguimiento manual de redirects Keycloak).
+//
+//    HALLAZGO CLAVE (2026-07-28, confirmado con credenciales reales y
+//    captura de navegador real del usuario): el login SÍ funciona por fetch
+//    (POST credenciales → 302, código OAuth válido, sesión Keycloak
+//    establecida). Pero el puente `GeneraToken.jsp` — usado para pasar la
+//    sesión de Keycloak a la app JSF legacy de "Comprobantes Recibidos" —
+//    SIEMPRE fuerza un logout y redirige al home de `sri-en-linea` en
+//    cuanto se le pide sin un `code` de OAuth fresco (algo que pasa
+//    inevitablemente en el 2º hop del propio redirect de GeneraToken.jsp).
+//    Esto ocurre incluso con Bearer token válido o con los parámetros MPT
+//    exactos capturados de una navegación real que SÍ funcionó en el
+//    navegador del usuario. Root cause no confirmado (sospecha: fingerprint
+//    TLS/HTTP2 o session-affinity de un balanceador F5 delante del portal,
+//    que un `fetch` de Node no puede replicar) — por eso el browser flow
+//    fetch para ESTA página específica se considera un callejón sin salida
+//    conocido; solo Puppeteer (navegador real) puede completarlo.
+//
+//    2. Puppeteer (único método que de verdad llega a la página JSF)
 //       Nivel 1: PUPPETEER_EXECUTABLE_PATH / nixpacks (chromium del sistema)
 //       Nivel 2: @sparticuz/chromium (binario serverless, descarga automática)
 //       Nivel 3: puppeteer bundled Chromium (solo dev local)
+//       Pendiente de confirmar en Railway: si Puppeteer puede alcanzar
+//       srienlinea.sri.gob.ec desde el contenedor (diagnóstico previo de
+//       2026-06-19 decía que no, pero es anterior a varios cambios de
+//       infraestructura — no se ha vuelto a probar desde entonces).
 //
 //  Railway env vars recomendadas:
 //    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true   (evita descarga innecesaria)
@@ -28,7 +52,7 @@ const SRI_BASE = 'https://srienlinea.sri.gob.ec';
 // Marcador de versión — permite confirmar en los logs de Railway qué build
 // del scraper está realmente corriendo (evita diagnósticos a ciegas si un
 // deploy no tomó el último commit).
-console.log('[SRI] sriScraper.js build 2026-07-01 — incluye hash MD5+SHA-512 (a581579)');
+console.log('[SRI] sriScraper.js build 2026-07-28 — ROPC con clave hasheada + fail-fast en credenciales incorrectas');
 
 // ─── Hash de contraseña para el portal SRI ───────────────────
 //
@@ -124,6 +148,13 @@ async function _loginROPC(ruc, password) {
   const tokenUrl = `${SRI_BASE}/auth/realms/Internet/protocol/openid-connect/token`;
   const T = 15_000;
 
+  // El realm valida la clave ya hasheada (MD5+SHA-512), igual que el form
+  // de Keycloak (ver _hashPasswordSRI) — mandar la clave en texto plano aquí
+  // SIEMPRE da invalid_grant aunque la clave sea correcta (confirmado
+  // 2026-07-28 contra el portal real: raw password → 401 invalid_grant,
+  // password hasheada → 200 con access_token).
+  const passwordHasheada = _hashPasswordSRI(password);
+
   // Intentar con distintos client_ids públicos del portal SRI
   const clientes = ['app-tuportal-internet', 'app-sri-claves-angular'];
 
@@ -139,7 +170,7 @@ async function _loginROPC(ruc, password) {
         grant_type: 'password',
         client_id,
         username: ruc,
-        password,
+        password: passwordHasheada,
         scope: 'openid profile',
       }).toString(),
       signal: AbortSignal.timeout(T),
@@ -231,24 +262,26 @@ async function _jsfConBearer(accessToken) {
 //       (puede estar bloqueado si Railway usa IPs de AWS en lista negra del SRI)
 async function _loginYObtenerJSF(ruc, password) {
   // ── 0. ROPC — validar credenciales y opcionalmente usar Bearer en JSF ──
+  // Desde que ROPC manda la clave hasheada (fix 2026-07-28), un invalid_grant
+  // aquí SÍ es definitivo: son credenciales incorrectas de verdad.
+  let credencialesValidadasPorROPC = false;
   try {
     const tokens = await _loginROPC(ruc, password);
+    credencialesValidadasPorROPC = true;
     // Credenciales correctas — intentar acceso directo con Bearer token
     const bearerResult = await _jsfConBearer(tokens.access_token);
     if (bearerResult) return bearerResult;
-    // Bearer no funcionó, pero credenciales son válidas → continuar con browser flow
-    console.log('[SRI-ROPC] Credenciales OK pero JSF no acepta Bearer. IP de Railway posiblemente bloqueada para browser flow.');
+    // Bearer no funcionó (confirmado 2026-07-28: el puente GeneraToken.jsp del
+    // JSF legacy no acepta Bearer, solo el código OAuth completo) → continuar
+    // con browser flow, sabiendo que las credenciales SÍ son correctas.
+    console.log('[SRI-ROPC] Credenciales confirmadas OK, pero JSF no acepta Bearer directo. Continuando con browser flow (credenciales ya validadas).');
   } catch (ropcErr) {
     if (ropcErr.esCredenciales) {
-      // ROPC reporta invalid_grant pero NO es definitivo: el endpoint /token de Keycloak
-      // puede tener restricciones de IP distintas al login form (Railway usa IPs de AWS
-      // que pueden estar en lista negra del /token pero no del form web).
-      // Continuamos al browser flow; si ese también falla, ESE error es el definitivo.
-      console.warn('[SRI-ROPC] invalid_grant en /token — continuando con browser flow para confirmar (posible bloqueo de IP en el endpoint ROPC)');
-    } else {
-      // ROPC no disponible (unauthorized_client, etc.) → continuar sin token
-      console.log('[SRI-ROPC] No disponible:', ropcErr.message.substring(0, 80));
+      // Definitivo: ROPC con clave hasheada rechazó las credenciales.
+      throw ropcErr;
     }
+    // ROPC no disponible (unauthorized_client, etc.) → continuar sin validar por esta vía
+    console.log('[SRI-ROPC] No disponible:', ropcErr.message.substring(0, 80));
   }
 
   // ── 1. Browser flow con seguimiento manual de redirects ─────
@@ -312,7 +345,23 @@ async function _loginYObtenerJSF(ruc, password) {
       if (!kcFormMatch) throw new Error('No se pudo extraer el action del form de Keycloak');
 
       if (credencialesEnviadas) {
-        // Segunda aparición del form → credenciales incorrectas o IP bloqueada por SRI
+        if (credencialesValidadasPorROPC) {
+          // ROPC ya confirmó que la clave es correcta (2026-07-28) — esta reaparición
+          // del form NO es un rechazo de credenciales, es el puente GeneraToken.jsp
+          // del portal forzando un logout al re-navegar por fetch (confirmado: el
+          // mismo comportamiento ocurre incluso con credenciales 100% correctas).
+          // No lanzar "credenciales incorrectas" (dispara esErrorCredencialesSri()
+          // en buzon.js y corta el fallback a Puppeteer/portal). Marcar el error
+          // explícitamente como NO de credenciales.
+          const err = new Error(
+            'El portal SRI validó tus credenciales correctamente, pero bloqueó el acceso ' +
+            'automatizado a "Comprobantes Recibidos" (requiere navegador real). Reintentando con navegador…'
+          );
+          err.esCredenciales = false;
+          throw err;
+        }
+        // Segunda aparición del form sin haber validado antes por ROPC → sí es
+        // rechazo real de credenciales o IP bloqueada por SRI.
         const errMatch = html.match(/class="[^"]*kc-feedback-text[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i)
                        || html.match(/id="input-error[^"]*"[^>]*>([\s\S]{0,300})<\/\w+>/i);
         const msg = errMatch
@@ -1370,12 +1419,12 @@ async function obtenerRecibidosScraper({
     return items;
   } catch (fetchErr) {
     console.warn('[SRI] Fetch-based falló:', fetchErr.message);
-    // NO bloqueamos Puppeteer aunque el mensaje parezca de credenciales.
-    // El portal SRI ejecuta validarUsuario() en onsubmit (JavaScript puro) que
-    // puede transformar/hashear la clave antes del POST. El fetch-based no ejecuta
-    // JS y la clave llega cruda al servidor → "Clave inválida / inactiva" incluso
-    // con la clave correcta. Puppeteer ejecuta ese JS correctamente.
-    console.log('[SRI] Continuando con Puppeteer (ejecuta validarUsuario JS)...');
+    // Desde el fix de ROPC con clave hasheada (2026-07-28), un esCredenciales===true
+    // aquí es definitivo — ROPC ya validó la clave real contra Keycloak antes de
+    // tocar el browser flow. No tiene sentido esperar 3 min a Puppeteer para
+    // confirmar lo mismo otra vez.
+    if (fetchErr.esCredenciales) throw fetchErr;
+    console.log('[SRI] Credenciales OK (confirmado por ROPC) pero el acceso automatizado a Comprobantes Recibidos fue bloqueado. Continuando con Puppeteer (navegador real)...');
   }
 
   // ── Intento 2: Puppeteer con @sparticuz/chromium (disponible en Railway) ──

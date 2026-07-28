@@ -32,6 +32,7 @@ AELA ya cuenta con una base funcional operativa para:
 - **selector de cuenta buscable por código o nombre** también en los asientos manuales (Nuevo asiento y Asiento inicial), no solo en Libro Mayor
 - **compras: clasificación automática inventario vs. gasto** al importar del Buzón SRI — el asiento ya no manda todo a "Inventario Mercaderías"; usa el producto existente en catálogo si lo hay, o una heurística por palabras clave (arriendo, servicios, honorarios, etc.) para ítems nuevos
 - **SuperAdmin**: `esTrial` se corrige automáticamente al guardar una fecha de vencimiento futura (evita tenants marcados "Vencido" con un plan pago vigente)
+- **Buzón SRI — Descarga automática**: validación de credenciales corregida (ROPC ahora usa la clave hasheada, igual que el portal real) — falla en <1s si la clave es incorrecta en vez de esperar 3 min. Diagnóstico confirma que el flujo sin navegador nunca puede llegar a la página de comprobantes (bloqueo del propio portal SRI, no un bug de AELA) — pendiente confirmar si Puppeteer sí puede en Railway
 
 
 ## Realizado
