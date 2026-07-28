@@ -820,6 +820,27 @@ function _resolverRutaChromium() {
   return raw;
 }
 
+// ─── Timeout duro alrededor de una promesa ───────────────────
+//
+//  puppeteer.launch({timeout}) confía en que Chromium avise cuando está
+//  listo por su propio canal de depuración — si ese canal nunca se
+//  establece (Chromium arrancó pero quedó colgado, típico de faltar alguna
+//  librería del sistema en el contenedor), la promesa de launch() NUNCA
+//  se resuelve ni rechaza, y su opción `timeout` no ayuda. Confirmado en
+//  Railway 2026-07-28: tras el log "Nivel 1 — executablePath" no volvió a
+//  salir NINGÚN log (ni uno de los ~15 que emite el resto del flujo) en 9
+//  minutos, hasta que el contenedor se reinició por un deploy — sin este
+//  wrapper, un Nivel 1 colgado nunca le da la oportunidad al Nivel 2
+//  (@sparticuz/chromium, sin esa dependencia de librerías del sistema).
+function _conTimeout(promise, ms, etiqueta) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${etiqueta}: sin respuesta tras ${ms / 1000}s (probable cuelgue de Chromium)`)), ms)
+    ),
+  ]);
+}
+
 // ─── Lanzar navegador ─────────────────────────────────────────
 //
 //  Estrategia de 3 niveles para Railway/serverless:
@@ -848,13 +869,17 @@ async function _lanzarNavegador() {
   if (configuredPath) {
     try {
       console.log('[SRI-Browser] Nivel 1 — executablePath:', configuredPath);
-      return await puppeteer.launch({
-        headless: true,
-        args: BASE_ARGS,
-        executablePath: configuredPath,
-        timeout: 30_000,
-        defaultViewport: { width: 1280, height: 800 },
-      });
+      return await _conTimeout(
+        puppeteer.launch({
+          headless: true,
+          args: BASE_ARGS,
+          executablePath: configuredPath,
+          timeout: 30_000,
+          defaultViewport: { width: 1280, height: 800 },
+        }),
+        20_000,
+        'Nivel 1 (executablePath)'
+      );
     } catch (err) {
       console.warn('[SRI-Browser] Nivel 1 falló:', err.message.substring(0, 100));
     }
@@ -865,13 +890,17 @@ async function _lanzarNavegador() {
     const chromium = require('@sparticuz/chromium');
     const sparticuzExec = await chromium.executablePath();
     console.log('[SRI-Browser] Nivel 2 — @sparticuz/chromium:', sparticuzExec);
-    return await puppeteer.launch({
-      headless: chromium.headless,
-      args: [...chromium.args, ...BASE_ARGS],
-      executablePath: sparticuzExec,
-      timeout: 30_000,
-      defaultViewport: { width: 1280, height: 800 },
-    });
+    return await _conTimeout(
+      puppeteer.launch({
+        headless: chromium.headless,
+        args: [...chromium.args, ...BASE_ARGS],
+        executablePath: sparticuzExec,
+        timeout: 30_000,
+        defaultViewport: { width: 1280, height: 800 },
+      }),
+      20_000,
+      'Nivel 2 (@sparticuz/chromium)'
+    );
   } catch (err) {
     console.warn('[SRI-Browser] Nivel 2 (@sparticuz/chromium) falló:', err.message.substring(0, 100));
   }
@@ -879,12 +908,16 @@ async function _lanzarNavegador() {
   // Nivel 3: puppeteer con su propio Chromium (solo disponible en desarrollo local)
   try {
     console.log('[SRI-Browser] Nivel 3 — puppeteer bundled Chromium');
-    return await puppeteer.launch({
-      headless: true,
-      args: BASE_ARGS,
-      timeout: 30_000,
-      defaultViewport: { width: 1280, height: 800 },
-    });
+    return await _conTimeout(
+      puppeteer.launch({
+        headless: true,
+        args: BASE_ARGS,
+        timeout: 30_000,
+        defaultViewport: { width: 1280, height: 800 },
+      }),
+      20_000,
+      'Nivel 3 (bundled)'
+    );
   } catch (err) {
     throw new Error(`BROWSER_UNAVAILABLE: No se pudo iniciar el navegador en ninguno de los 3 niveles. Último error: ${err.message}`);
   }
