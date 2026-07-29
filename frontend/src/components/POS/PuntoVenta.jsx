@@ -40,6 +40,12 @@ export default function PuntoVenta() {
   const [pagoRefFactura, setPagoRefFactura] = useState('');
   const [formaPagoNota, setFormaPagoNota] = useState('Efectivo');
   const [fechaEmision, setFechaEmision] = useState(new Date().toISOString().slice(0, 10));
+  // Res. SRI NAC-DGERCGC25-00000014: fecha de emisión = fecha real de la
+  // operación, sin backdating — el backend rechaza más de 3 días de atraso
+  // o fechas futuras; el picker refleja ese mismo rango para no dejar
+  // elegir algo que luego el servidor va a rechazar.
+  const fechaEmisionMin = (() => { const d = new Date(); d.setDate(d.getDate() - 3); return d.toISOString().slice(0, 10); })();
+  const fechaEmisionMax = new Date().toISOString().slice(0, 10);
   const [codigoBarras, setCodigoBarras] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState([]);
@@ -486,7 +492,14 @@ export default function PuntoVenta() {
             <option value="factura">Factura</option>
             <option value="nota_venta">Nota de venta</option>
           </select>
-          <input type="date" value={fechaEmision} onChange={(e) => setFechaEmision(e.target.value)} />
+          <input
+            type="date"
+            value={fechaEmision}
+            min={fechaEmisionMin}
+            max={fechaEmisionMax}
+            title="La fecha de emisión debe ser de hoy o hasta 3 días atrás (Res. SRI NAC-DGERCGC25-00000014)"
+            onChange={(e) => setFechaEmision(e.target.value)}
+          />
         </div>
       </div>
 

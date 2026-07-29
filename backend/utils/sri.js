@@ -230,6 +230,22 @@ function formatearNumeroFactura(estab, ptoEmi, secuencial) {
 
 // ─── 2. GENERACIÓN XML ───────────────────────────────────────────────────────
 
+// RUC del proveedor del sistema de facturación electrónica (CorpSimtelec,
+// dueño de AELA) — Res. SRI NAC-DGERCGC26-00000027 (27-jul-2026): todo
+// comprobante electrónico debe incluir en su información adicional el RUC
+// del proveedor del sistema/servicio de facturación electrónica usado por
+// el emisor. Es el mismo para todos los tenants (todos usan AELA).
+const RUC_PROVEEDOR_SISTEMA = '1103568240001';
+
+// Agrega el bloque <infoAdicional> con los campos propios del comprobante
+// más el RUC del proveedor de sistema (obligatorio en todos, incluso si no
+// hay ningún otro campo adicional que informar).
+function _agregarInfoAdicional(root, camposAd = []) {
+  const campos = [...camposAd, { nombre: 'RUC Proveedor Sistema', valor: RUC_PROVEEDOR_SISTEMA }];
+  const infoAd = root.ele('infoAdicional');
+  campos.forEach(c => infoAd.ele('campoAdicional', { nombre: c.nombre }).txt(c.valor));
+}
+
 /**
  * Genera el XML de una Factura según el esquema SRI versión 1.1.0
  */
@@ -411,7 +427,7 @@ function generarXMLFactura(data, config) {
     impEle.ele('valor').txt(det.ivaValor);
   });
 
-  // infoAdicional — datos del comprador + vendedor + observaciones
+  // infoAdicional — datos del comprador + vendedor + observaciones + RUC proveedor
   {
     const camposAd = [];
     if (emailComprador)         camposAd.push({ nombre: 'Correo',      valor: emailComprador });
@@ -419,10 +435,7 @@ function generarXMLFactura(data, config) {
     if (direccionComprador)     camposAd.push({ nombre: 'Direccion',   valor: direccionComprador });
     if (data.vendedor)          camposAd.push({ nombre: 'Vendedor',    valor: data.vendedor });
     if (observaciones)          camposAd.push({ nombre: 'Observacion', valor: observaciones });
-    if (camposAd.length > 0) {
-      const infoAd = root.ele('infoAdicional');
-      camposAd.forEach(c => infoAd.ele('campoAdicional', { nombre: c.nombre }).txt(c.valor));
-    }
+    _agregarInfoAdicional(root, camposAd);
   }
 
   return {
@@ -539,6 +552,9 @@ function generarXMLNotaCredito(data, config) {
     impEle.ele('valor').txt(det.iva.toFixed(2));
   });
 
+  // infoAdicional — RUC proveedor (obligatorio, Res. NAC-DGERCGC26-00000027)
+  _agregarInfoAdicional(root);
+
   return {
     xml: root.end({ prettyPrint: true }),
     totales: { totalSinImpuestos, totalIva, importeTotal },
@@ -645,6 +661,9 @@ function generarXMLNotaDebito(data, config) {
     mEle.ele('razon').txt(m.razon);
     mEle.ele('valor').txt(parseFloat(m.valor).toFixed(2));
   });
+
+  // infoAdicional — RUC proveedor (obligatorio, Res. NAC-DGERCGC26-00000027)
+  _agregarInfoAdicional(root);
 
   return {
     xml: root.end({ prettyPrint: true }),
@@ -1938,10 +1957,7 @@ function generarXMLRetencion(data, config) {
   });
 
   // infoAdicional
-  if (observaciones) {
-    const infoAd = root.ele('infoAdicional');
-    infoAd.ele('campoAdicional', { nombre: 'Observacion' }).txt(observaciones);
-  }
+  _agregarInfoAdicional(root, observaciones ? [{ nombre: 'Observacion', valor: observaciones }] : []);
 
   return {
     xml: root.end({ prettyPrint: true }),
@@ -2397,10 +2413,7 @@ function generarXMLLiquidacionCompra(data, config) {
     const camposAd = [];
     if (direccionProveedor) camposAd.push({ nombre: 'Direccion',   valor: direccionProveedor });
     if (observaciones)      camposAd.push({ nombre: 'Observacion', valor: observaciones });
-    if (camposAd.length > 0) {
-      const infoAd = root.ele('infoAdicional');
-      camposAd.forEach(c => infoAd.ele('campoAdicional', { nombre: c.nombre }).txt(c.valor));
-    }
+    _agregarInfoAdicional(root, camposAd);
   }
 
   return {
@@ -2752,11 +2765,8 @@ function generarXMLGuiaRemision(data, config) {
     det.ele('cantidad').txt(parseFloat(d.cantidad || 1).toFixed(2));
   });
 
-  // infoAdicional — observaciones
-  if (observaciones) {
-    root.ele('infoAdicional')
-        .ele('campoAdicional', { nombre: 'Observacion' }).txt(observaciones);
-  }
+  // infoAdicional — observaciones + RUC proveedor
+  _agregarInfoAdicional(root, observaciones ? [{ nombre: 'Observacion', valor: observaciones }] : []);
 
   return { xml: root.end({ prettyPrint: true }) };
 }

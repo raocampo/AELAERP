@@ -90,3 +90,71 @@ autorizadas** (`backend/routes/facturas.js`):
    requiere código, solo documentarlo en el Centro de Ayuda para que el
    usuario/contador sepa que ese trámite se hace directamente en
    srienlinea.sri.gob.ec, no en AELA.
+
+## Sesión 2026-07-29 (continuación) — RUC proveedor + fecha de emisión real
+
+El usuario confirmó el RUC de CorpSimtelec (`1103568240001`) y pidió
+implementar los dos pendientes restantes.
+
+### 1. RUC del proveedor de sistema en `infoAdicional` (Res. NAC-DGERCGC26-00000027)
+
+`backend/utils/sri.js`: nueva constante `RUC_PROVEEDOR_SISTEMA =
+'1103568240001'` + helper compartido `_agregarInfoAdicional(root,
+camposExtra)` que SIEMPRE agrega el campo `RUC Proveedor Sistema`, incluso
+si no hay ningún otro campo adicional. Reemplazados los 4 bloques
+`infoAdicional` inline que ya existían (factura, retención, liquidación de
+compra, guía de remisión) para usar el helper, y **agregado desde cero**
+en Nota de Crédito y Nota de Débito (antes no generaban `infoAdicional` en
+absoluto).
+
+Es el mismo RUC para los 6 tipos de comprobante y para todos los tenants
+(todos usan AELA como proveedor) — no es un campo de configuración por
+empresa, es una constante de código.
+
+### 2. Fecha de emisión real — sin backdating (Res. NAC-DGERCGC25-00000014, transmisión inmediata desde 2026-01-01)
+
+`backend/routes/facturas.js`, `POST /` (creación de factura): antes
+aceptaba cualquier `fechaEmision` del cliente sin validar. Ahora rechaza
+(400) si la fecha está a más de **3 días de atraso** o en el futuro (más
+de 6 horas, margen por husos horarios).
+
+**Por qué 3 días y no "debe ser exactamente hoy"**: el POS tiene modo
+offline (ver sesión anterior, `idempotencyKey` + `apiOffline()`) donde una
+venta se guarda localmente y se sincroniza sola minutos u horas después
+con la fecha real de la venta — un backdating exacto de "0 días" habría
+roto ese flujo. 3 días es un margen generoso para un corte de conexión
+largo (ej. un fin de semana) sin permitir el backdating real que la
+resolución prohíbe (facturar hoy algo de hace semanas/meses). Para
+facturas de períodos anteriores ya existe el módulo dedicado "Importar
+facturas históricas" (estado HISTORICO, sin transmisión real al SRI).
+
+Frontend (`PuntoVenta.jsx`): el date picker de fecha de emisión ahora
+tiene `min`/`max` reflejando el mismo rango, para no dejar elegir en la UI
+algo que el backend va a rechazar de todas formas.
+
+### Verificación realizada
+- `node --test`: 29/29. `npx vite build`: limpio.
+- **RUC proveedor**: generado un XML de prueba de Factura y de Nota de
+  Crédito (que antes no tenía `infoAdicional`) — ambos incluyen
+  `<campoAdicional nombre="RUC Proveedor Sistema">1103568240001</campoAdicional>`.
+- **Fecha de emisión**: probado end-to-end contra `aela_db` real (servidor
+  propio en puerto 5601, sin tocar el servidor de desarrollo del usuario):
+  sin fecha / hoy / hace 1 día → 201 creadas correctamente; hace 30 días /
+  en 2 días → 400 rechazadas con el mensaje esperado. Registros de prueba
+  eliminados al terminar.
+
+## Estado final de las 3 resoluciones investigadas
+
+Ver también `project_sri_resoluciones_2026.md` en la memoria persistente.
+
+1. ✅ Anulación/NC bloqueado para Consumidor Final (commit `4bde489`).
+2. ✅ RUC del proveedor en `infoAdicional` de los 6 comprobantes (este commit).
+3. ✅ Fecha de emisión real, sin backdating, en creación normal de facturas (este commit).
+4. **Pendiente, sin código** (es un trámite manual, no una API): aceptación
+   del receptor (5 días hábiles) para anular retenciones/NC/ND — ocurre
+   exclusivamente en srienlinea.sri.gob.ec. Documentar en el Centro de
+   Ayuda si se quiere.
+5. **Pendiente, trámite legal de CorpSimtelec** (no de código): registrar
+   la actividad económica de proveedor de facturación electrónica en el
+   RUC de CorpSimtelec, dentro de 30 días hábiles desde la publicación de
+   la Res. NAC-DGERCGC26-00000027 (27-jul-2026).

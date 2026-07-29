@@ -1044,6 +1044,30 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
 
     const fecha = fechaEmision ? new Date(fechaEmision) : new Date();
 
+    // Res. SRI NAC-DGERCGC25-00000014 (Disposición Reformatoria Primera #2,
+    // vigente desde 2026-01-01): se eliminó el plazo de gracia de 4 días
+    // hábiles — la transmisión debe ser inmediata y la fecha de emisión debe
+    // corresponder a la fecha real de la operación. No se exige que sea
+    // exactamente "ahora" (el POS permite ventas encoladas offline que se
+    // sincronizan minutos u horas después, con la fecha real de la venta —
+    // ver frontend/src/utils/offlineDB.js), pero sí se rechaza un backdating
+    // evidente. Para facturas de años anteriores usar "Importar históricas"
+    // (estado HISTORICO, sin transmisión real al SRI), no este endpoint.
+    const MAX_DIAS_ATRASO_FECHA_EMISION = 3;
+    const MAX_HORAS_ADELANTO_FECHA_EMISION = 6;
+    const ahora = new Date();
+    const limiteAtras = new Date(ahora.getTime() - MAX_DIAS_ATRASO_FECHA_EMISION * 24 * 60 * 60 * 1000);
+    const limiteAdelante = new Date(ahora.getTime() + MAX_HORAS_ADELANTO_FECHA_EMISION * 60 * 60 * 1000);
+    if (isNaN(fecha.getTime())) {
+      return res.status(400).json({ ok: false, error: 'Fecha de emisión inválida' });
+    }
+    if (fecha < limiteAtras || fecha > limiteAdelante) {
+      return res.status(400).json({
+        ok: false,
+        error: `La fecha de emisión debe corresponder a la operación real (máximo ${MAX_DIAS_ATRASO_FECHA_EMISION} días de atraso, sin fechas futuras) — Res. SRI NAC-DGERCGC25-00000014, transmisión inmediata vigente desde 2026-01-01. Para facturas de períodos anteriores usa "Importar facturas históricas".`,
+      });
+    }
+
     // Generar clave de acceso
     const claveAcceso = sri.generarClaveAcceso({
       fecha,
