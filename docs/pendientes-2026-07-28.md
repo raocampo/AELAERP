@@ -208,3 +208,39 @@ vieja).
   asiento" de un asiento con 2+ líneas, hacer clic en el campo Cuenta de la
   última línea, escribir para buscar, y confirmar que ahora sí se puede
   hacer clic en un resultado y que la cuenta cambia.
+
+### Addendum mismo día — flip-up + z-index (verificado en navegador real con Playwright)
+
+Tras el fix del portal, el usuario reportó dos problemas visuales nuevos con
+capturas: (1) el desplegable se abría muy lejos del campo cuando la fila
+estaba cerca del borde inferior del modal, y (2) "se dañó para ambos, Debe y
+Haber" — el clic en un resultado no seleccionaba nada.
+
+- **Causa (1)**: `useEffect` calcula la posición *después* de pintar — había
+  un frame donde `top`/`bottom` seguían en `null` y el portal cae en su
+  posición de flujo normal (al final de `<body>`), antes de saltar a la
+  posición correcta. Cambiado a `useLayoutEffect` (calcula antes de pintar,
+  sin frame intermedio visible). Se agregó también lógica de "flip":
+  si no hay espacio suficiente abajo, la lista se abre hacia arriba, y su
+  `max-height` se ajusta al espacio real disponible en vez de un valor fijo.
+- **Causa (2)**: el z-index de `.conta-selector-cuenta-lista` (20) quedaba
+  por debajo del z-index del overlay del modal (1000) — al dibujarse ahora
+  vía portal, fuera del árbol del modal, sus clics quedaban interceptados
+  por el propio contenido del modal encima. Subido a `z-index: 2000`.
+
+**Verificado en un navegador real esta vez** (se instaló Playwright +
+Chromium localmente, se sirvió el build de producción con `vite preview` en
+un puerto aislado —no se tocó el servidor de desarrollo del usuario en 5600—
+y se reseteó temporalmente la contraseña local del usuario admin solo en la
+BD de desarrollo para poder iniciar sesión): abrí un asiento real de 3
+líneas, hice clic en el campo Cuenta de la última fila, escribí para
+filtrar, hice clic en un resultado — el desplegable aparece a 2px del
+campo y la cuenta se actualiza correctamente (`1.1.01.001 - Caja`). Repetido
+también en la primera fila del mismo asiento y en el filtro de cuenta de
+Libro Mayor — mismo comportamiento correcto en los 3 usos del componente,
+0 errores de consola.
+
+**Nota para el usuario**: la contraseña de tu usuario local de desarrollo
+(`raocampo`) se reseteó temporalmente a `TempTest1234` para esta prueba —
+solo en tu base de datos local (`aela_db`), nunca tocó producción. Cámbiala
+de nuevo a lo que prefieras desde "🔑 Cambiar contraseña" si te interesa.

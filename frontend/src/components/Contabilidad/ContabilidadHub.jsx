@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
@@ -42,10 +42,13 @@ function normalizarTexto(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
+const ALTO_LISTA_DESEADO = 260; // debe calzar con max-height de .conta-selector-cuenta-lista
+const MARGEN_VIEWPORT = 8;
+
 function SelectorCuentaBuscable({ cuentas, value, onChange, placeholder = 'Buscar cuenta por código o nombre...' }) {
   const [texto, setTexto] = useState('');
   const [abierto, setAbierto] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const [pos, setPos] = useState({ left: 0, width: 0, top: null, bottom: null, maxHeight: ALTO_LISTA_DESEADO });
   const inputRef = useRef(null);
   const listaRef = useRef(null);
 
@@ -57,14 +60,40 @@ function SelectorCuentaBuscable({ cuentas, value, onChange, placeholder = 'Busca
   // La lista se dibuja vía portal en <body> (position: fixed) — evita que un
   // contenedor ancestro con scroll (ej. .conta-table-scroll, max-height +
   // overflow) recorte el desplegable cuando la fila está cerca del borde
-  // visible. Confirmado 2026-07-29: en "Editar asiento" la 2ª línea quedaba
-  // con el desplegable invisible/inalcanzable por este recorte.
-  useEffect(() => {
+  // visible. Además "voltea" hacia arriba si no hay espacio suficiente abajo
+  // (ej. última fila de una tabla corta, cerca del pie del modal) — mismo
+  // patrón que cualquier combobox: usa el lado con más espacio disponible y
+  // limita su alto a ese espacio real en vez de desbordar la ventana.
+  // Confirmado 2026-07-29: en "Editar asiento" el desplegable de la última
+  // fila quedaba recortado/fuera de vista tanto para Debe como para Haber.
+  // useLayoutEffect (no useEffect): calcula la posición ANTES de que el
+  // navegador pinte — con useEffect hay un frame donde top/bottom siguen en
+  // null (valor inicial) y el portal cae en su posición de flujo normal
+  // (al final de <body>, muy abajo en la página) antes de "saltar" a la
+  // posición correcta; con datos reales eso se veía como el desplegable
+  // apareciendo lejos del campo, para Debe y para Haber por igual.
+  useLayoutEffect(() => {
     if (!abierto) return;
     const actualizarPos = () => {
       if (!inputRef.current) return;
       const r = inputRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 2, left: r.left, width: r.width });
+      const espacioAbajo = window.innerHeight - r.bottom - MARGEN_VIEWPORT;
+      const espacioArriba = r.top - MARGEN_VIEWPORT;
+      const abrirArriba = espacioAbajo < ALTO_LISTA_DESEADO && espacioArriba > espacioAbajo;
+
+      if (abrirArriba) {
+        setPos({
+          left: r.left, width: r.width,
+          bottom: window.innerHeight - r.top + 2, top: null,
+          maxHeight: Math.max(100, Math.min(ALTO_LISTA_DESEADO, espacioArriba)),
+        });
+      } else {
+        setPos({
+          left: r.left, width: r.width,
+          top: r.bottom + 2, bottom: null,
+          maxHeight: Math.max(100, Math.min(ALTO_LISTA_DESEADO, espacioAbajo)),
+        });
+      }
     };
     actualizarPos();
     const cerrarPorScroll = (e) => {
@@ -99,7 +128,12 @@ function SelectorCuentaBuscable({ cuentas, value, onChange, placeholder = 'Busca
         <div
           ref={listaRef}
           className="conta-selector-cuenta-lista"
-          style={{ position: 'fixed', top: pos.top, left: pos.left, right: 'auto', width: pos.width, margin: 0 }}
+          style={{
+            position: 'fixed',
+            left: pos.left, width: pos.width, right: 'auto', margin: 0,
+            top: pos.top ?? 'auto', bottom: pos.bottom ?? 'auto',
+            maxHeight: pos.maxHeight,
+          }}
         >
           {resultados.length === 0 && <div className="conta-selector-cuenta-vacio">Sin coincidencias</div>}
           {resultados.map((c) => (

@@ -344,7 +344,11 @@
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 20;
+  /* Se dibuja vía portal a <body> (position:fixed vía inline style) para
+     escapar del overflow de .conta-table-scroll — al quedar fuera del
+     árbol del modal necesita un z-index por encima del overlay del modal
+     (1000) o sus clics quedan interceptados por el propio modal. */
+  z-index: 2000;
   margin-top: 2px;
   max-height: 260px;
   overflow-y: auto;
