@@ -142,3 +142,35 @@ específico) dentro del presupuesto total de 3 minutos.
 - **No probado aún**: si con este fix el Nivel 2 sí logra completar la
   navegación real en Railway — requiere una prueba más en producción. Ver
   checklist arriba.
+
+## Hallazgo 4 (mismo día, segundo intento del usuario en producción) — Nivel 1 se sigue colgando igual, incluso con el timeout
+
+El usuario probó de nuevo tras el fix del timeout duro. Mismo resultado
+exacto: log se corta en "Nivel 1 — executablePath: .../chromium" sin ningún
+"Nivel 1 falló" ni "Nivel 2" después. Dos explicaciones posibles, no
+excluyentes: (a) el deploy con el fix del timeout todavía no había
+terminado de desplegarse cuando se probó (Railway puede tardar unos
+minutos en compilar/desplegar), o (b) el binario de Chromium de nixpacks en
+este contenedor específico está tan roto que ni siquiera un
+`Promise.race` externo alcanza a rescatar el intento (no debería pasar si
+el event loop de Node sigue libre, pero no se puede descartar sin más
+datos).
+
+**Decisión tomada sin esperar más ciclos de diagnóstico**: con DOS intentos
+reales consecutivos mostrando el mismo cuelgue exacto en el mismo nivel,
+ya no vale la pena seguir intentando arreglar el binario de nixpacks —
+se reordenaron los 3 niveles para que `@sparticuz/chromium` (diseñado
+específicamente para no depender de librerías del sistema del contenedor,
+la causa más probable del cuelgue) sea el **primer** intento, y el binario
+de nixpacks quede como respaldo en segundo lugar en vez de primero.
+
+### Verificación realizada
+- `node --test`: 29/29.
+- Confirmado que `@sparticuz/chromium` carga y resuelve una ruta de
+  ejecutable sin errores (localmente en Windows resuelve una ruta que
+  luego no es un binario válido — es Linux-only, así que eso es esperado
+  y no informa nada sobre Railway, que sí es Linux).
+- **Pendiente crítico para la próxima prueba**: antes de volver a probar en
+  la app, confirmar en Railway → Deployments que el deploy más reciente
+  (este commit) ya está "Active" — para no repetir el ciclo de probar
+  contra un deploy viejo sin darse cuenta.

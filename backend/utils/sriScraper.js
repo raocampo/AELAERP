@@ -844,8 +844,14 @@ function _conTimeout(promise, ms, etiqueta) {
 // ─── Lanzar navegador ─────────────────────────────────────────
 //
 //  Estrategia de 3 niveles para Railway/serverless:
-//    1. PUPPETEER_EXECUTABLE_PATH / CHROMIUM_PATH (configurado en Railway env vars)
-//    2. @sparticuz/chromium (binario comprimido, descarga automática, diseñado para serverless)
+//    1. @sparticuz/chromium (binario autocontenido, sin depender de librerías
+//       del sistema del contenedor — el más confiable en Railway)
+//    2. PUPPETEER_EXECUTABLE_PATH / CHROMIUM_PATH (chromium de nixpacks, si
+//       está configurado — CONFIRMADO 2026-07-28, dos intentos reales
+//       seguidos en Railway: este nivel se cuelga indefinidamente al lanzar
+//       (el proceso arranca pero su canal de depuración nunca responde,
+//       típico de faltarle alguna librería del sistema al binario de
+//       nixpacks) — degradado a 2º intento en vez de 1º)
 //    3. Chromium bundleado por puppeteer (solo funciona en desarrollo local)
 async function _lanzarNavegador() {
   const configuredPath = _resolverRutaChromium();
@@ -865,31 +871,11 @@ async function _lanzarNavegador() {
     '--window-size=1280,800',
   ];
 
-  // Nivel 1: ruta explícita (nixpacks en Railway con PUPPETEER_EXECUTABLE_PATH=chromium)
-  if (configuredPath) {
-    try {
-      console.log('[SRI-Browser] Nivel 1 — executablePath:', configuredPath);
-      return await _conTimeout(
-        puppeteer.launch({
-          headless: true,
-          args: BASE_ARGS,
-          executablePath: configuredPath,
-          timeout: 30_000,
-          defaultViewport: { width: 1280, height: 800 },
-        }),
-        20_000,
-        'Nivel 1 (executablePath)'
-      );
-    } catch (err) {
-      console.warn('[SRI-Browser] Nivel 1 falló:', err.message.substring(0, 100));
-    }
-  }
-
-  // Nivel 2: @sparticuz/chromium (optimizado para Railway/Lambda/serverless)
+  // Nivel 1: @sparticuz/chromium (optimizado para Railway/Lambda/serverless)
   try {
     const chromium = require('@sparticuz/chromium');
     const sparticuzExec = await chromium.executablePath();
-    console.log('[SRI-Browser] Nivel 2 — @sparticuz/chromium:', sparticuzExec);
+    console.log('[SRI-Browser] Nivel 1 — @sparticuz/chromium:', sparticuzExec);
     return await _conTimeout(
       puppeteer.launch({
         headless: chromium.headless,
@@ -899,10 +885,31 @@ async function _lanzarNavegador() {
         defaultViewport: { width: 1280, height: 800 },
       }),
       20_000,
-      'Nivel 2 (@sparticuz/chromium)'
+      'Nivel 1 (@sparticuz/chromium)'
     );
   } catch (err) {
-    console.warn('[SRI-Browser] Nivel 2 (@sparticuz/chromium) falló:', err.message.substring(0, 100));
+    console.warn('[SRI-Browser] Nivel 1 (@sparticuz/chromium) falló:', err.message.substring(0, 100));
+  }
+
+  // Nivel 2: ruta explícita (nixpacks en Railway con PUPPETEER_EXECUTABLE_PATH=chromium)
+  // — degradado desde Nivel 1, ver nota arriba.
+  if (configuredPath) {
+    try {
+      console.log('[SRI-Browser] Nivel 2 — executablePath:', configuredPath);
+      return await _conTimeout(
+        puppeteer.launch({
+          headless: true,
+          args: BASE_ARGS,
+          executablePath: configuredPath,
+          timeout: 30_000,
+          defaultViewport: { width: 1280, height: 800 },
+        }),
+        20_000,
+        'Nivel 2 (executablePath)'
+      );
+    } catch (err) {
+      console.warn('[SRI-Browser] Nivel 2 falló:', err.message.substring(0, 100));
+    }
   }
 
   // Nivel 3: puppeteer con su propio Chromium (solo disponible en desarrollo local)
