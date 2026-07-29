@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -44,11 +45,39 @@ function normalizarTexto(s) {
 function SelectorCuentaBuscable({ cuentas, value, onChange, placeholder = 'Buscar cuenta por código o nombre...' }) {
   const [texto, setTexto] = useState('');
   const [abierto, setAbierto] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const inputRef = useRef(null);
+  const listaRef = useRef(null);
 
   useEffect(() => {
     const actual = cuentas.find((c) => String(c.id) === String(value));
     setTexto(actual ? `${actual.codigo} - ${actual.nombre}` : '');
   }, [value, cuentas]);
+
+  // La lista se dibuja vía portal en <body> (position: fixed) — evita que un
+  // contenedor ancestro con scroll (ej. .conta-table-scroll, max-height +
+  // overflow) recorte el desplegable cuando la fila está cerca del borde
+  // visible. Confirmado 2026-07-29: en "Editar asiento" la 2ª línea quedaba
+  // con el desplegable invisible/inalcanzable por este recorte.
+  useEffect(() => {
+    if (!abierto) return;
+    const actualizarPos = () => {
+      if (!inputRef.current) return;
+      const r = inputRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 2, left: r.left, width: r.width });
+    };
+    actualizarPos();
+    const cerrarPorScroll = (e) => {
+      if (listaRef.current && listaRef.current.contains(e.target)) return;
+      setAbierto(false);
+    };
+    window.addEventListener('scroll', cerrarPorScroll, true);
+    window.addEventListener('resize', actualizarPos);
+    return () => {
+      window.removeEventListener('scroll', cerrarPorScroll, true);
+      window.removeEventListener('resize', actualizarPos);
+    };
+  }, [abierto]);
 
   const filtro = normalizarTexto(texto);
   const resultados = (filtro
@@ -59,14 +88,19 @@ function SelectorCuentaBuscable({ cuentas, value, onChange, placeholder = 'Busca
   return (
     <div className="conta-selector-cuenta">
       <input
+        ref={inputRef}
         value={texto}
         placeholder={placeholder}
         onChange={(e) => { setTexto(e.target.value); setAbierto(true); }}
         onFocus={(e) => { setAbierto(true); e.target.select(); }}
         onBlur={() => setTimeout(() => setAbierto(false), 150)}
       />
-      {abierto && (
-        <div className="conta-selector-cuenta-lista">
+      {abierto && createPortal(
+        <div
+          ref={listaRef}
+          className="conta-selector-cuenta-lista"
+          style={{ position: 'fixed', top: pos.top, left: pos.left, right: 'auto', width: pos.width, margin: 0 }}
+        >
           {resultados.length === 0 && <div className="conta-selector-cuenta-vacio">Sin coincidencias</div>}
           {resultados.map((c) => (
             <button
@@ -78,7 +112,8 @@ function SelectorCuentaBuscable({ cuentas, value, onChange, placeholder = 'Busca
               <strong>{c.codigo}</strong> — {c.nombre}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

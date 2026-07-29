@@ -174,3 +174,37 @@ de nixpacks quede como respaldo en segundo lugar en vez de primero.
   la app, confirmar en Railway → Deployments que el deploy más reciente
   (este commit) ya está "Active" — para no repetir el ciclo de probar
   contra un deploy viejo sin darse cuenta.
+
+## Sesión 2026-07-29 — Fix: no se podía cambiar la cuenta al editar un asiento
+
+El usuario reportó (con captura de pantalla) que en el modal "Editar
+asiento" no dejaba cambiar la cuenta de la línea del Haber — el campo
+mostraba "11" (resto de una búsqueda) sin poder seleccionar un resultado.
+
+**Causa raíz**: `SelectorCuentaBuscable` (el buscador de cuenta por
+código/nombre, usado en asientos manuales, asiento inicial y Libro Mayor)
+dibuja su lista de resultados con `position: absolute` dentro de la celda
+de la tabla. Esa tabla (`.conta-table-scroll`, usada en "Nuevo asiento" /
+"Editar asiento") tiene `max-height: 420px` + `overflow-y/x: auto` — un
+contenedor con scroll recorta cualquier hijo absolutamente posicionado que
+se salga de su área visible. En una tabla de pocas líneas (como este
+asiento de 2 líneas), la lista desplegable de la última fila se recortaba
+casi por completo, dejándola invisible/inalcanzable aunque funcionalmente
+seguía ahí — de ahí que pareciera que "no dejaba cambiar".
+
+**Fix** (`ContabilidadHub.jsx`): la lista de resultados ahora se dibuja vía
+`createPortal` a `document.body` con `position: fixed`, calculando su
+posición desde `getBoundingClientRect()` del input (mismo patrón ya usado
+en `ListaCompras.jsx` para el popover "···" de info) — así ya no depende
+del `overflow` de ningún contenedor ancestro. Se cierra automáticamente si
+se hace scroll en la página (para no quedar flotando en una posición
+vieja).
+
+### Verificación realizada
+- `npx vite build`: limpio.
+- `node --test`: 29/29 (backend, sin cambios — sanity check).
+- **No probado en navegador real** (sin entorno de navegador disponible
+  aquí) — pendiente que el usuario confirme en la app: abrir "Editar
+  asiento" de un asiento con 2+ líneas, hacer clic en el campo Cuenta de la
+  última línea, escribir para buscar, y confirmar que ahora sí se puede
+  hacer clic en un resultado y que la cuenta cambia.
