@@ -244,3 +244,44 @@ Libro Mayor — mismo comportamiento correcto en los 3 usos del componente,
 (`raocampo`) se reseteó temporalmente a `TempTest1234` para esta prueba —
 solo en tu base de datos local (`aela_db`), nunca tocó producción. Cámbiala
 de nuevo a lo que prefieras desde "🔑 Cambiar contraseña" si te interesa.
+
+## Sesión 2026-07-29 (parte 2) — Modo oscuro roto en Contabilidad + espaciado apretado en Config. asientos
+
+El usuario compartió una captura del modal "Ver asiento" en modo oscuro:
+los valores de Fecha/Tipo/Referencia/Descripción y el contenido de la
+tabla (nombre de cuenta, Descripción, Debe, Haber) eran completamente
+invisibles — texto oscuro sobre el fondo ya oscuro del modal.
+
+**Causa raíz**: `ContabilidadHub.css` solo tenía cobertura de modo oscuro
+para un puñado de componentes específicos (selector de cuenta, subtabs,
+el cascarón del modal, import/dropzone/badges). El resto — `.conta-card`,
+`.conta-kpi`, `.conta-table` (texto de celdas), `.conta-form-grid`
+inputs/selects, `.conta-filters`, `.conta-origen-doc`, `.conta-warning`,
+`.conta-asiento-meta` (el bug reportado), tablas de estados financieros,
+`.conta-kpi-warn`, cabecera sticky de tabla — nunca tuvo overrides de modo
+oscuro. El color de texto global del body (`#1e293b`, oscuro) nunca se
+invierte para modo oscuro a nivel app — cada componente es responsable de
+su propio contraste, y esta sección del archivo quedó a medias.
+
+**Fix**: pasada completa de modo oscuro sobre `ContabilidadHub.css` — se
+agregaron ~15 bloques `@media (prefers-color-scheme: dark)` nuevos,
+colocados junto a cada regla de modo claro correspondiente (mismo patrón
+que ya usaba el archivo), cubriendo todo lo listado arriba.
+
+El usuario también pidió mejorar "Config. asientos" (Plan de Cuentas), que
+se veía muy apretado (5 selects angostos en una fila, texto truncado, poco
+padding). Se aumentó el padding de `.conta-card` (12px → 20px), el ancho
+mínimo de columna de `.conta-form-grid` (220px → 240px) y su gap (16px →
+20/24px), y se le dio más aire a la descripción bajo cada título
+(`.conta-import-sub`, margin-bottom 0 → 18px). Esto mejora TODAS las
+pantallas que usan estas clases compartidas (Nueva cuenta, Config cuentas,
+Importar Excel, Config. asientos), no solo la que se reportó.
+
+### Verificación realizada
+- `npx vite build`: limpio.
+- **Verificado visualmente en navegador real** (Playwright, `colorScheme:
+  'dark'` emulado + `page.emulateMedia`): capturas de "Ver asiento",
+  "Editar asiento" y "Resumen" en modo oscuro — todo el texto legible,
+  tarjetas/tablas con fondo oscuro consistente. Capturas de "Config.
+  asientos" en claro y oscuro — layout espacioso en 3 columnas en vez de 5
+  apretadas, sin texto truncado, buen padding.

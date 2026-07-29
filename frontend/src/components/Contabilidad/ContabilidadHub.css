@@ -78,6 +78,11 @@
   color: #22C55E;
 }
 
+@media (prefers-color-scheme: dark) {
+  .conta-tabs button { background: #1e293b; border-color: #334155; color: #94a3b8; }
+  .conta-tabs button.active { border-color: #4ade80; color: #4ade80; }
+}
+
 .conta-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -106,6 +111,12 @@
   font-size: 19px;
 }
 
+@media (prefers-color-scheme: dark) {
+  .conta-kpi { background: #1e293b; border-color: #334155; }
+  .conta-kpi span { color: #94a3b8; }
+  .conta-kpi strong { color: #f1f5f9; }
+}
+
 .conta-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -116,11 +127,17 @@
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  padding: 12px;
+  padding: 20px;
 }
 
 .conta-card h3 {
-  margin: 0 0 12px;
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .conta-card { background: #1e293b; border-color: #334155; }
+  .conta-card h3 { color: #f1f5f9; }
 }
 
 .conta-note {
@@ -141,6 +158,11 @@
   color: #1e293b;
 }
 
+@media (prefers-color-scheme: dark) {
+  .conta-note { background: #0f172a; border-color: #334155; color: #94a3b8; }
+  .conta-note strong { color: #f1f5f9; }
+}
+
 .conta-table {
   width: 100%;
   border-collapse: collapse;
@@ -152,6 +174,13 @@
   padding: 8px;
   text-align: left;
   font-size: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .conta-table th,
+  .conta-table td { border-bottom-color: #334155; }
+  .conta-table td { color: #e2e8f0; }
+  .conta-table th { color: #f1f5f9; }
 }
 
 .conta-empty {
@@ -167,6 +196,10 @@
   padding: 8px 12px;
   font-size: 13px;
   margin-bottom: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .conta-warning { background: #422006; border-color: #d97706; color: #fde68a; }
 }
 
 .conta-origen-doc {
@@ -193,6 +226,13 @@
   gap: 4px 16px;
   color: #1e40af;
 }
+
+@media (prefers-color-scheme: dark) {
+  .conta-origen-doc { background: #1e3a5f; border-color: #3b82f6; }
+  .conta-origen-doc.conta-origen-loading { color: #94a3b8; }
+  .conta-origen-grid { color: #bfdbfe; }
+}
+
 .btn-link {
   background: none;
   border: none;
@@ -217,6 +257,10 @@
   padding: 10px;
 }
 
+@media (prefers-color-scheme: dark) {
+  .conta-mini-list div { border-color: #334155; color: #e2e8f0; }
+}
+
 .conta-loading {
   color: #64748b;
 }
@@ -228,14 +272,15 @@
 
 .conta-form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px 24px;
 }
 
 .conta-form-grid label {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-size: 13px;
+  font-weight: 500;
   color: #64748b;
 }
 
@@ -248,6 +293,12 @@
   font-size: 14px;
   background: #ffffff;
   color: #1e293b;
+}
+
+@media (prefers-color-scheme: dark) {
+  .conta-form-grid label { color: #94a3b8; }
+  .conta-form-grid input,
+  .conta-form-grid select { background: #1e293b; border-color: #334155; color: #e2e8f0; }
 }
 
 .conta-form-grid .full-width {
@@ -304,6 +355,11 @@
   padding: 8px;
   background: #ffffff;
   color: #1e293b;
+}
+
+@media (prefers-color-scheme: dark) {
+  .conta-filters input,
+  .conta-filters select { background: #1e293b; border-color: #334155; color: #e2e8f0; }
 }
 
 /* Solo los campos de filtro (hijos directos) crecen/encogen — los
@@ -453,6 +509,11 @@
   box-sizing: border-box;
 }
 
+@media (prefers-color-scheme: dark) {
+  .conta-filter-field label { color: #94a3b8; }
+  .conta-filter-field input { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+}
+
 /* ── Tablas de estados financieros jerárquicos ── */
 .conta-table-estados {
   font-size: 13px;
@@ -523,6 +584,16 @@
   width: 60%;
 }
 
+@media (prefers-color-scheme: dark) {
+  .conta-table-estados th { background: #1e293b; color: #cbd5e1; border-bottom-color: #334155; }
+  .conta-table-estados td { border-bottom-color: #1e293b; color: #e2e8f0; }
+  .fila-grupo td { background: #1e293b; }
+  .fila-grupo .saldo-col { color: #f1f5f9; }
+  .fila-hoja td { color: #cbd5e1; }
+  .fila-resultado-ejercicio td { background: #422006; border-top-color: #d97706; color: #fde68a; }
+  .fila-total-final td { background: #052e16; border-top-color: #22c55e; }
+}
+
 /* ── KPI en estado de advertencia ── */
 .conta-kpi-warn {
   border-color: #fca5a5;
@@ -531,6 +602,11 @@
 
 .conta-kpi-warn strong {
   color: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  .conta-kpi-warn { border-color: #ef4444; background: #450a0a; }
+  .conta-kpi-warn strong { color: #fca5a5; }
 }
 
 .conta-badge {
@@ -598,8 +674,9 @@
 }
 
 .conta-import-sub {
-  margin: 0;
-  font-size: 0.85rem;
+  margin: 0 0 18px;
+  font-size: 0.88rem;
+  line-height: 1.5;
   color: #64748b;
 }
 
@@ -624,6 +701,11 @@
   top: 0;
   background: #f8fafc;
   z-index: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .conta-table-scroll { border-color: #334155; }
+  .conta-table-scroll .conta-table thead th { background: #0f172a; color: #f1f5f9; }
 }
 
 .conta-import-body {
@@ -1010,6 +1092,11 @@
 .conta-asiento-meta span { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
 .conta-asiento-meta strong { font-size: 15px; color: #1e293b; }
 
+@media (prefers-color-scheme: dark) {
+  .conta-asiento-meta span { color: #94a3b8; }
+  .conta-asiento-meta strong { color: #f1f5f9; }
+}
+
 /* ── Asiento — vista solo lectura ─────────────────────────────── */
 .conta-asiento-lectura td { padding: 12px 14px; font-size: 14px; }
 .conta-asiento-lectura th { padding: 10px 14px; font-size: 12px; }
@@ -1036,6 +1123,11 @@
   border-radius: 4px;
   padding: 1px 5px;
   margin-left: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .conta-cod { color: #a5b4fc; background: #312e81; }
+  .conta-cc-badge { color: #94a3b8; background: #1e293b; border-color: #334155; }
 }
 
 .conta-monto-cell {
