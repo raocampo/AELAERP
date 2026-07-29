@@ -167,6 +167,11 @@ const DetalleFactura = () => {
   const pagos    = typeof factura.pagos    === 'string' ? JSON.parse(factura.pagos)    : factura.pagos;
   const mensajes = factura.mensajesSri;
 
+  // Res. SRI NAC-DGERCGC25-00000014, Art. 3 (vigente desde 2026-01-01): las
+  // facturas a "Consumidor Final" (tipo '07') ya autorizadas por el SRI no se
+  // pueden anular ni tener Nota de Crédito — es una restricción legal.
+  const bloqueadoConsumidorFinal = factura.tipoIdentificacionComprador === '07' && factura.estadoSri === 'AUTORIZADO';
+
   return (
     <div className="detalle-factura-container">
       {/* Header */}
@@ -186,15 +191,23 @@ const DetalleFactura = () => {
           {['PENDIENTE_FIRMA', 'RECHAZADO'].includes(factura.estadoSri) && !factura.anulada && (
             <button className="btn-secondary" onClick={reenviar}>🔄 Reenviar SRI</button>
           )}
-          {!factura.anulada && factura.estadoSri !== 'ANULADO' && (
+          {!factura.anulada && factura.estadoSri !== 'ANULADO' && !bloqueadoConsumidorFinal && (
             <button className="btn-danger-outline" onClick={() => setModalAnular(true)}>
               🚫 Anular factura
             </button>
           )}
-          {!factura.anulada && factura.estadoSri !== 'ANULADO' && (
+          {!factura.anulada && factura.estadoSri !== 'ANULADO' && !bloqueadoConsumidorFinal && (
             <button className="btn-nc" onClick={() => setModalNC(true)}>
               📝 Nota de Crédito
             </button>
+          )}
+          {bloqueadoConsumidorFinal && (
+            <span
+              className="badge-bloqueo-cf"
+              title="Resolución SRI NAC-DGERCGC25-00000014, Art. 3 (vigente desde 2026-01-01): las facturas a Consumidor Final ya autorizadas no se pueden anular ni tener Nota de Crédito."
+            >
+              🔒 No anulable (Consumidor Final)
+            </span>
           )}
         </div>
       </div>

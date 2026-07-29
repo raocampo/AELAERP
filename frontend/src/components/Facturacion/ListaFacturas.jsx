@@ -279,11 +279,20 @@ const TabFacturas = ({ navigate, onIrNC }) => {
                           📒
                         </button>
                       )}
-                      {!f.anulada && f.estadoSri !== 'ANULADO' && (
+                      {!f.anulada && f.estadoSri !== 'ANULADO' && !(f.tipoIdentificacionComprador === '07' && f.estadoSri === 'AUTORIZADO') && (
                         <button className="btn-icon ic-anular" title="Anular factura"
                           onClick={() => setModalAnular(f)}>
                           <IcAnular/>
                         </button>
+                      )}
+                      {!f.anulada && f.estadoSri !== 'ANULADO' && f.tipoIdentificacionComprador === '07' && f.estadoSri === 'AUTORIZADO' && (
+                        <span
+                          className="btn-icon"
+                          style={{ cursor: 'help', opacity: 0.5 }}
+                          title="No anulable: factura a Consumidor Final ya autorizada (Res. SRI NAC-DGERCGC25-00000014, Art. 3)"
+                        >
+                          🔒
+                        </span>
                       )}
                     </div>
                   </td>

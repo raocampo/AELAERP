@@ -44,6 +44,23 @@
   letter-spacing: 0.05em;
 }
 
+.badge-bloqueo-cf {
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  cursor: help;
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge-bloqueo-cf { background: #1e293b; color: #94a3b8; border-color: #334155; }
+}
+
 .det-fact-acciones {
   display: flex;
   gap: 8px;

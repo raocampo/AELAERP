@@ -948,6 +948,7 @@ router.get('/', permitirVerFacturacion, async (req, res) => {
       select: {
         id: true, numeroFactura: true, fechaEmision: true,
         razonSocialComprador: true, identificacionComprador: true,
+        tipoIdentificacionComprador: true,
         importeTotal: true, estadoSri: true, anulada: true,
         numeroAutorizacion: true, pdfUrl: true, clienteId: true,
         createdAt: true,
@@ -1233,6 +1234,18 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
 
     // ── Para facturas AUTORIZADAS: emitir NC total como mecanismo SRI ───────
     if (factura.estadoSri === 'AUTORIZADO') {
+      // Res. SRI NAC-DGERCGC25-00000014, Art. 3 (último inciso, vigente desde
+      // 2026-01-01): las facturas emitidas a "consumidor final" (tipo '07'), una
+      // vez emitidas y transmitidas al SRI, no se pueden anular ni se les puede
+      // emitir Nota de Crédito. Es una restricción legal, no técnica — no hay
+      // forma de "forzarlo" sin violar la resolución.
+      if (factura.tipoIdentificacionComprador === '07') {
+        return res.status(400).json({
+          ok: false,
+          error: 'No se puede anular ni emitir Nota de Crédito sobre una factura a "Consumidor Final" ya autorizada por el SRI (Resolución NAC-DGERCGC25-00000014, Art. 3, vigente desde 2026-01-01). Si la venta fue errónea, contacta al SRI directamente.',
+        });
+      }
+
       const config = await getConfigSRI(req.empresa.id);
       if (!config) {
         return res.status(400).json({ ok: false, error: 'Configure primero el SRI para emitir la Nota de Crédito de anulación' });
@@ -1633,6 +1646,15 @@ router.post('/notas-credito', permitirEmitirFacturacion, async (req, res) => {
     if (!factura) return res.status(404).json({ ok: false, error: 'Factura origen no encontrada' });
     if (factura.anulada) {
       return res.status(400).json({ ok: false, error: 'No se puede emitir Nota de Crédito sobre una factura anulada' });
+    }
+    // Res. SRI NAC-DGERCGC25-00000014, Art. 3 (vigente desde 2026-01-01): no
+    // procede Nota de Crédito sobre facturas a "Consumidor Final" (tipo '07')
+    // ya autorizadas por el SRI.
+    if (factura.tipoIdentificacionComprador === '07' && factura.estadoSri === 'AUTORIZADO') {
+      return res.status(400).json({
+        ok: false,
+        error: 'No se puede emitir Nota de Crédito sobre una factura a "Consumidor Final" ya autorizada por el SRI (Resolución NAC-DGERCGC25-00000014, Art. 3, vigente desde 2026-01-01).',
+      });
     }
 
     // Punto de venta: el elegido explícitamente, o por defecto el mismo de la
