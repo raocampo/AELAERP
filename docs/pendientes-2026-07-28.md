@@ -1,29 +1,47 @@
-# AELA ERP — Sesión 2026-07-28 — Diagnóstico a fondo: Buzón SRI "Descarga automática"
+# AELA ERP — Sesión 2026-07-28/29 — Buzón SRI descarga automática, selector de cuenta, modo oscuro
 
 ## 🟢 PARA RETOMAR — checklist rápido
 
-**Código**: commiteado y pusheado a `main` (3 commits esta sesión).
+**Código**: todo commiteado y pusheado a `main` (7 commits, del `6fdf11b` al `30cf5a7`).
 
-1. **Probar de nuevo en producción con credenciales reales** — Buzón SRI →
-   "Descarga automática SRI". Con los fixes de esta sesión debería: si la
-   clave es incorrecta, fallar en <1s con el mensaje real (antes tardaba
-   hasta 3 min). Si la clave es correcta, cae a Puppeteer — revisar logs de
-   Railway (`[SRI-Browser]`) para ver si el Nivel 1 (nixpacks) sigue
-   colgándose (ahora debería fallar/pasar al Nivel 2 en ~20s en vez de
-   colgarse indefinidamente) y si el Nivel 2 (`@sparticuz/chromium`) logra
-   completar el login y navegar a la página real.
-2. **Si el Nivel 2 también se cuelga o falla** — la próxima pista a seguir
-   sería añadir logs explícitos dentro de `scraperSriLogin()` justo antes y
-   después de cada `page.goto()` (ahora mismo esa función es la más "muda"
-   del archivo, solo loguea cuando intercepta el POST de credenciales) para
-   saber si el cuelgue es al *lanzar* Chromium o al *navegar* con él ya
-   lanzado — son causas raíz distintas (librerías del sistema faltantes vs.
-   el proceso de Chromium sin salida a internet, este último ya sospechado
-   desde 2026-06-19).
-3. **Si ningún nivel de Puppeteer logra completar la navegación real** —
-   aceptar que la infraestructura actual de Railway no puede correr un
-   navegador real de forma confiable, y marcar "Descarga automática" como no
-   disponible en la UI, reforzando ZIP/XML/TXT (que sí son 100% estables).
+### 1. Buzón SRI — Descarga automática (pendiente de confirmar en Railway)
+- Con credenciales incorrectas: debe fallar en <1s con el mensaje real
+  (antes tardaba hasta 3 min probando Puppeteer igual). **Ya verificado
+  contra el portal real.**
+- Con credenciales correctas: cae a Puppeteer, probando primero
+  `@sparticuz/chromium` (reordenado porque el binario de nixpacks se colgaba
+  dos veces seguidas en Railway sin dar error). **Falta la prueba real en
+  producción** — revisar logs de Railway (`[SRI-Browser]`) para confirmar si
+  ahora sí completa el login y trae los comprobantes, o dónde se traba.
+- Si `@sparticuz/chromium` también falla — la siguiente pista sería agregar
+  logs explícitos dentro de `scraperSriLogin()` en cada `page.goto()` (hoy es
+  la función más "muda" del archivo) para saber si el problema es *lanzar*
+  Chromium o *navegar* con él ya lanzado (causas raíz distintas).
+- Si ningún nivel de Puppeteer logra completarlo — aceptar que la
+  infraestructura actual de Railway no puede correr un navegador real de
+  forma confiable, y marcar "Descarga automática" como no disponible en la
+  UI, reforzando ZIP/XML/TXT (que sí son 100% estables).
+
+### 2. Selector de cuenta en asientos (Nuevo/Editar/Asiento inicial, Libro Mayor) — ✅ RESUELTO Y VERIFICADO
+Reportado por el usuario con capturas (no dejaba cambiar la cuenta al
+editar un asiento). Corregido en 3 iteraciones (recorte por scroll → salto
+de posición → z-index) y **verificado en un navegador real con Playwright**
+contra datos reales: primera y última fila de un asiento, y el filtro de
+Libro Mayor — funciona correctamente en los 3 casos. No requiere más
+seguimiento salvo que el usuario note algo distinto en su uso diario.
+
+### 3. Modo oscuro en Contabilidad — ✅ RESUELTO Y VERIFICADO
+Reportado con captura (modal "Ver asiento" con texto invisible). Pasada
+completa de cobertura de modo oscuro en `ContabilidadHub.css`. **Verificado
+visualmente en navegador real** (Playwright con `color-scheme: dark`
+emulado) en Ver/Editar asiento y Resumen. Pendiente que el usuario lo
+confirme en su propio navegador/SO con modo oscuro real, por si hay algún
+matiz que la emulación no capture.
+
+### 4. Config. asientos y pantallas de Plan de Cuentas — ✅ RESUELTO Y VERIFICADO
+Reportado como "muy tupido". Más padding y ancho de columna — de 5 selects
+angostos truncados en una fila a 3 columnas espaciosas. Verificado en
+capturas claro y oscuro.
 
 ## Contexto: por qué "sigue sin funcionar"
 

@@ -1,6 +1,6 @@
 # Estado del Proyecto AELA
 
-Fecha de referencia: `2026-07-27`
+Fecha de referencia: `2026-07-29`
 
 ## Resumen general
 
@@ -32,7 +32,10 @@ AELA ya cuenta con una base funcional operativa para:
 - **selector de cuenta buscable por código o nombre** también en los asientos manuales (Nuevo asiento y Asiento inicial), no solo en Libro Mayor
 - **compras: clasificación automática inventario vs. gasto** al importar del Buzón SRI — el asiento ya no manda todo a "Inventario Mercaderías"; usa el producto existente en catálogo si lo hay, o una heurística por palabras clave (arriendo, servicios, honorarios, etc.) para ítems nuevos
 - **SuperAdmin**: `esTrial` se corrige automáticamente al guardar una fecha de vencimiento futura (evita tenants marcados "Vencido" con un plan pago vigente)
-- **Buzón SRI — Descarga automática**: validación de credenciales corregida (ROPC ahora usa la clave hasheada, igual que el portal real) — falla en <1s si la clave es incorrecta en vez de esperar 3 min. Diagnóstico confirma que el flujo sin navegador nunca puede llegar a la página de comprobantes (bloqueo del propio portal SRI, no un bug de AELA) — pendiente confirmar si Puppeteer sí puede en Railway
+- **Buzón SRI — Descarga automática**: validación de credenciales corregida (ROPC ahora usa la clave hasheada, igual que el portal real) — falla en <1s si la clave es incorrecta en vez de esperar 3 min. Diagnóstico a fondo (con credenciales reales) confirmó que el flujo sin navegador nunca puede llegar a la página de comprobantes (bloqueo del propio portal SRI vía el puente `GeneraToken.jsp`, no un bug de AELA) — solo Puppeteer (navegador real) puede completarlo. En Railway el Nivel 1 de Chromium (nixpacks) se cuelga al lanzar sin dar error (confirmado con logs reales, dos intentos); se agregó timeout duro por nivel y se reordenó para probar primero `@sparticuz/chromium` (autocontenido, no depende de librerías del sistema) — **pendiente confirmar en producción si con esto ya completa la navegación real**
+- **Selector de cuenta buscable** (asientos, Libro Mayor): corregido a fondo — la lista de resultados ahora se dibuja vía portal a `document.body` (ya no queda recortada por el scroll de la tabla), con posicionamiento calculado antes de pintar (sin parpadeo), volteo automático hacia arriba cuando no hay espacio abajo, y z-index por encima del modal. Verificado en navegador real con Playwright.
+- **Modo oscuro en Contabilidad**: pasada completa de cobertura — tarjetas, KPIs, tablas, formularios, filtros, y en particular el modal "Ver/Editar asiento" (reportado con texto invisible) ahora se ven correctamente en modo oscuro.
+- **Config. asientos automáticos** (Plan de Cuentas) y pantallas hermanas (Nueva cuenta, Config. cuentas, Importar Excel): más espaciosas — ya no se ven apretadas con texto truncado.
 
 
 ## Realizado
