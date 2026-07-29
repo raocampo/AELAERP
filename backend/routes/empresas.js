@@ -202,6 +202,8 @@ router.get('/estadisticas', proteger, async (req, res) => {
       clientes, productos, proveedores,
       stockBajoItems,
       cajaHoy,
+      facturasAñoSum, notasVentaAñoSum,
+      configSriRimpe,
     ] = await Promise.all([
       // Conteo anual
       req.prisma.facturas.count({
@@ -245,6 +247,20 @@ router.get('/estadisticas', proteger, async (req, res) => {
           movimientos: { select: { tipo: true, monto: true } },
         },
       }),
+
+      // Ingresos acumulados del año (para validar tope de régimen RIMPE)
+      req.prisma.facturas.aggregate({
+        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lte: finAño } },
+        _sum: { importeTotal: true },
+      }),
+      req.prisma.notas_venta.aggregate({
+        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lte: finAño } },
+        _sum: { total: true },
+      }),
+      req.prisma.configuracion_sri.findFirst({
+        where: { empresaId: eId, activo: true },
+        select: { contribuyenteRimpe: true, negocioPopular: true },
+      }),
     ]);
 
     // Calcular saldo de caja hoy
@@ -279,6 +295,31 @@ router.get('/estadisticas', proteger, async (req, res) => {
     const comprasMes = Number(comprasRes._sum.importeTotal ?? 0);
     const limite     = req.empresa.factAnualesMax;
 
+    // ── Alerta de tope de ingresos por régimen RIMPE ────────────────────────
+    // Topes vigentes (Ley de Régimen Tributario Interno, Régimen RIMPE):
+    // Negocio Popular hasta $20,000/año; RIMPE (incl. Emprendedor) hasta
+    // $300,000/año. Superar el tope obliga a recategorizarse (el SRI lo hace
+    // de oficio, pero el contribuyente debe ajustar facturación/declaración
+    // desde que lo supera, no cuando el SRI se lo notifique). Aviso temprano
+    // desde el 80% del tope para dar margen de reacción.
+    const ingresosAnio = Number(facturasAñoSum._sum.importeTotal ?? 0) + Number(notasVentaAñoSum._sum.total ?? 0);
+    let alertaRimpe = null;
+    if (configSriRimpe?.negocioPopular) {
+      const LIMITE = 20000;
+      if (ingresosAnio > LIMITE) {
+        alertaRimpe = { nivel: 'error', mensaje: `Tus ingresos de ${ahora.getFullYear()} ($${ingresosAnio.toFixed(2)}) superaron el tope de RIMPE Negocio Popular ($${LIMITE.toLocaleString()}) — deberías recategorizarte a RIMPE Emprendedor. Consulta a tu contador.` };
+      } else if (ingresosAnio > LIMITE * 0.8) {
+        alertaRimpe = { nivel: 'warn', mensaje: `Tus ingresos de ${ahora.getFullYear()} ($${ingresosAnio.toFixed(2)}) están cerca del tope de RIMPE Negocio Popular ($${LIMITE.toLocaleString()}).` };
+      }
+    } else if (configSriRimpe?.contribuyenteRimpe) {
+      const LIMITE = 300000;
+      if (ingresosAnio > LIMITE) {
+        alertaRimpe = { nivel: 'error', mensaje: `Tus ingresos de ${ahora.getFullYear()} ($${ingresosAnio.toFixed(2)}) superaron el tope de RIMPE ($${LIMITE.toLocaleString()}) — deberías recategorizarte a Régimen General. Consulta a tu contador.` };
+      } else if (ingresosAnio > LIMITE * 0.8) {
+        alertaRimpe = { nivel: 'warn', mensaje: `Tus ingresos de ${ahora.getFullYear()} ($${ingresosAnio.toFixed(2)}) están cerca del tope de RIMPE ($${LIMITE.toLocaleString()}).` };
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -310,6 +351,10 @@ router.get('/estadisticas', proteger, async (req, res) => {
         cajaNombre: cajaHoy?.nombreCaja ?? null,
 
         plan: req.empresa.plan,
+
+        // RIMPE — tope de ingresos anuales
+        ingresosAnio,
+        alertaRimpe,
       },
     });
   } catch (err) {

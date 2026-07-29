@@ -209,6 +209,19 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Tope de ingresos por régimen RIMPE */}
+      {stats?.alertaRimpe && tienePermiso(usuario?.rol, 'sri.configurar') && (
+        <div className={`dash-cert ${stats.alertaRimpe.nivel === 'error' ? 'vencido' : 'por-vencer'}`}>
+          <div className="dash-cert-left">
+            <span className="dash-cert-icono">{stats.alertaRimpe.nivel === 'error' ? '🚨' : '⚠️'}</span>
+            <div>
+              <strong className="dash-cert-titulo">Régimen RIMPE</strong>
+              <span className="dash-cert-cn">{stats.alertaRimpe.mensaje}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="dash-grid">
         {/* EMPRESA */}
         <section className="dash-card">
