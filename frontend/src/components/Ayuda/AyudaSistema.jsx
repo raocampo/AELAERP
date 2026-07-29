@@ -206,6 +206,30 @@ const SECCIONES = [
         <div className="ayuda-nota ayuda-nota-warning">
           ⚠️ Una vez autorizada por el SRI, una factura <strong>no se puede editar ni eliminar</strong>. Para corregirla debes emitir una Nota de Crédito.
         </div>
+
+        <h4>Anulación de comprobantes y Notas de Crédito (reglas del SRI desde 2026)</h4>
+        <p>El SRI reformó las normas de anulación de comprobantes electrónicos (Res. <strong>NAC-DGERCGC25-00000014</strong> y su reforma <strong>NAC-DGERCGC25-00000017</strong>). Hay dos mecanismos distintos y es importante no confundirlos:</p>
+        <table className="ayuda-tabla">
+          <thead><tr><th>Mecanismo</th><th>Dónde se hace</th><th>Plazo</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Anulación en línea</strong> (deja el comprobante como si nunca hubiera existido)</td>
+              <td>Directamente en el portal <strong>srienlinea.sri.gob.ec</strong>, con tu propia clave de acceso al SRI — <strong>no se hace desde AELA</strong></td>
+              <td>Hasta el día 7 del mes siguiente a la emisión. El receptor tiene 5 días hábiles para aceptarla; si no responde, queda sin efecto.</td>
+            </tr>
+            <tr>
+              <td><strong>Nota de Crédito</strong> (botón "🚫 Anular factura" o "📝 Nota de Crédito" en AELA)</td>
+              <td>En AELA — genera y transmite el documento al SRI automáticamente</td>
+              <td>Sin límite de tiempo (se eliminó el plazo de 12 meses)</td>
+            </tr>
+          </tbody>
+        </table>
+        <div className="ayuda-nota ayuda-nota-warning">
+          🔒 <strong>Excepción "Consumidor Final":</strong> desde el 01-ene-2026, una factura emitida a <strong>Consumidor Final</strong> ya autorizada por el SRI <strong>no se puede anular ni tener Nota de Crédito</strong> (ni en línea ni en AELA) — es una restricción legal, no un error del sistema. AELA oculta esos botones automáticamente y muestra un aviso 🔒 en su lugar. Si de verdad hubo un error en una venta a consumidor final, contacta al SRI directamente.
+        </div>
+        <div className="ayuda-nota">
+          💡 <strong>Fecha de emisión = fecha real de la venta:</strong> desde el 01-ene-2026 el SRI exige transmisión inmediata (ya no hay días de gracia). AELA no deja elegir una fecha de emisión con más de 3 días de atraso ni fechas futuras al crear una factura — ese margen solo cubre ventas del POS hechas sin internet que se sincronizan solas al volver la señal. Para contabilizar facturas de meses o años anteriores usa <strong>Ventas → Importar históricas</strong>, no la fecha de emisión de una factura nueva.
+        </div>
       </div>
     ),
   },

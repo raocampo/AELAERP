@@ -158,3 +158,21 @@ Ver también `project_sri_resoluciones_2026.md` en la memoria persistente.
    la actividad económica de proveedor de facturación electrónica en el
    RUC de CorpSimtelec, dentro de 30 días hábiles desde la publicación de
    la Res. NAC-DGERCGC26-00000027 (27-jul-2026).
+
+### 4. Centro de Ayuda actualizado (mismo patrón de acordeón, sección "Emitir una factura electrónica")
+
+Se agregó una explicación clara de los 2 mecanismos de anulación (en
+línea vía portal SRI vs. Nota de Crédito vía AELA), la restricción de
+Consumidor Final, y la regla de fecha de emisión real — para que el
+usuario/contador entienda por qué ciertos botones desaparecen y a dónde
+ir si necesita el trámite que AELA no puede hacer (anulación en línea con
+aceptación del receptor, exclusiva del portal del SRI).
+
+Verificado con `npx vite build` limpio (chunk de AyudaSistema pasó de
+~67kB a ~70kB, consistente con el contenido agregado).
+
+## Con esto, los 5 puntos quedan:
+1-3: ✅ implementados en código. 4: ✅ documentado en Ayuda (este commit).
+5: pendiente, trámite legal de CorpSimtelec (no código) — registrar la
+actividad económica de proveedor de facturación electrónica antes de
+~7-sep-2026 (30 días hábiles desde la publicación de la resolución).
