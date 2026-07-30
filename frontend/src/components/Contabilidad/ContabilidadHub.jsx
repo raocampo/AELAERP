@@ -243,8 +243,9 @@ const ContabilidadHub = () => {
   const mayorizacionPag = usePagina(mayorizacionLote?.tabla || []);
 
   const [cierreLoading, setCierreLoading] = useState(false);
-  const [cierreSubTab, setCierreSubTab] = useState('situacion'); // 'situacion' | 'resultados' | 'comprobacion' | 'flujo'
+  const [cierreSubTab, setCierreSubTab] = useState('situacion'); // 'situacion' | 'resultados' | 'comprobacion' | 'flujo' | 'patrimonio'
   const [flujoEfectivo, setFlujoEfectivo] = useState(null);
+  const [cambiosPatrimonio, setCambiosPatrimonio] = useState(null);
   const [estadosFiltros, setEstadosFiltros] = useState({ periodo: '', desde: '', hasta: '', fechaBalance: '' });
   const [asientoInicialForm, setAsientoInicialForm] = useState({
     periodo: '',
@@ -256,7 +257,7 @@ const ContabilidadHub = () => {
   const cargar = async () => {
     setLoading(true);
     try {
-      const [planRes, asientosRes, balanceRes, resultadosRes, bgRes, periodosRes, flujoRes] = await Promise.all([
+      const [planRes, asientosRes, balanceRes, resultadosRes, bgRes, periodosRes, flujoRes, patrimonioRes] = await Promise.all([
         api.get('/contabilidad/plan-cuentas'),
         api.get('/contabilidad/asientos', { params: { limit: 8 } }),
         api.get('/contabilidad/balance-comprobacion'),
@@ -264,6 +265,7 @@ const ContabilidadHub = () => {
         api.get('/contabilidad/balance-general'),
         api.get('/contabilidad/periodos'),
         api.get('/contabilidad/flujo-efectivo'),
+        api.get('/contabilidad/cambios-patrimonio'),
       ]);
 
       setPlan(planRes.data?.data?.flat || []);
@@ -273,6 +275,7 @@ const ContabilidadHub = () => {
       setBalanceGeneral(bgRes.data?.data || null);
       setPeriodos(periodosRes.data?.data?.items || []);
       setFlujoEfectivo(flujoRes.data?.data || null);
+      setCambiosPatrimonio(patrimonioRes.data?.data || null);
     } catch (error) {
       toast.error(error.response?.data?.mensaje || 'Error al cargar contabilidad');
     } finally {
@@ -406,17 +409,20 @@ const ContabilidadHub = () => {
         hasta: estadosFiltros.hasta || undefined,
       };
 
-      const [balanceRes, resultadosRes, bgRes, flujoRes] = await Promise.all([
+      const flujoParams = { desde: estadosFiltros.desde || undefined, hasta: estadosFiltros.hasta || undefined };
+      const [balanceRes, resultadosRes, bgRes, flujoRes, patrimonioRes] = await Promise.all([
         api.get('/contabilidad/balance-comprobacion', { params: paramsBase }),
         api.get('/contabilidad/estado-resultados', { params: paramsBase }),
         api.get('/contabilidad/balance-general', { params: { fecha: estadosFiltros.fechaBalance || undefined } }),
-        api.get('/contabilidad/flujo-efectivo', { params: { desde: estadosFiltros.desde || undefined, hasta: estadosFiltros.hasta || undefined } }),
+        api.get('/contabilidad/flujo-efectivo', { params: flujoParams }),
+        api.get('/contabilidad/cambios-patrimonio', { params: flujoParams }),
       ]);
 
       setBalance(balanceRes.data?.data || null);
       setEstadoResultados(resultadosRes.data?.data || null);
       setBalanceGeneral(bgRes.data?.data || null);
       setFlujoEfectivo(flujoRes.data?.data || null);
+      setCambiosPatrimonio(patrimonioRes.data?.data || null);
       if (periodo && periodo !== estadosFiltros.periodo) {
         setEstadosFiltros((prev) => ({ ...prev, periodo }));
       }
@@ -2482,6 +2488,7 @@ const ContabilidadHub = () => {
               <button className={cierreSubTab === 'resultados'   ? 'active' : ''} onClick={() => setCierreSubTab('resultados')}>Estado de Resultados</button>
               <button className={cierreSubTab === 'comprobacion' ? 'active' : ''} onClick={() => setCierreSubTab('comprobacion')}>Balance de Comprobación</button>
               <button className={cierreSubTab === 'flujo' ? 'active' : ''} onClick={() => setCierreSubTab('flujo')}>Flujo de Efectivo</button>
+              <button className={cierreSubTab === 'patrimonio' ? 'active' : ''} onClick={() => setCierreSubTab('patrimonio')}>Cambios en el Patrimonio</button>
             </div>
 
             {cierreLoading ? (
@@ -2635,6 +2642,47 @@ const ContabilidadHub = () => {
                         <tr className="fila-total-final"><td><strong>Efectivo neto de financiamiento</strong></td><td className="text-right"><strong>{toMoney(flujoEfectivo?.financiamiento?.total)}</strong></td></tr>
 
                         <tr className="fila-resultado-ejercicio"><td><strong>FLUJO NETO DE EFECTIVO DEL PERÍODO</strong></td><td className="text-right"><strong>{toMoney(flujoEfectivo?.flujoNetoCalculado)}</strong></td></tr>
+                      </tbody>
+                    </table>
+                  </>
+                )}
+
+                {/* ── Estado de Cambios en el Patrimonio ── */}
+                {cierreSubTab === 'patrimonio' && (
+                  <>
+                    <div className="conta-note" style={{ marginBottom: 12 }}>
+                      <p>Una fila por cada cuenta de patrimonio con saldo (capital, reservas,
+                      resultados acumulados) — saldo al inicio y fin del rango seleccionado.
+                      La utilidad neta del período se muestra aparte porque hoy no se traslada
+                      automáticamente a patrimonio (no hay cierre de ejercicio anual todavía).</p>
+                    </div>
+                    <div className="conta-kpis conta-kpis-compact" style={{ marginBottom: 12 }}>
+                      <div className="conta-kpi"><span>Patrimonio Inicial</span><strong>{toMoney(cambiosPatrimonio?.totalInicial)}</strong></div>
+                      <div className="conta-kpi"><span>Patrimonio Final</span><strong>{toMoney(cambiosPatrimonio?.totalFinal)}</strong></div>
+                      <div className="conta-kpi"><span>Utilidad Neta del Período (sin trasladar)</span><strong>{toMoney(cambiosPatrimonio?.utilidadNetaPeriodo)}</strong></div>
+                    </div>
+                    <table className="conta-table conta-table-estados">
+                      <thead>
+                        <tr><th>Cuenta</th><th className="text-right">Saldo Inicial</th><th className="text-right">Movimiento</th><th className="text-right">Saldo Final</th></tr>
+                      </thead>
+                      <tbody>
+                        {(cambiosPatrimonio?.componentes || []).map((c) => (
+                          <tr key={c.codigo} className="fila-hoja">
+                            <td className="col-cuenta"><span className="conta-cod">{c.codigo}</span> {c.nombre}</td>
+                            <td className="text-right">{toMoney(c.saldoInicial)}</td>
+                            <td className="text-right">{toMoney(c.movimientoPeriodo)}</td>
+                            <td className="text-right saldo-col">{toMoney(c.saldoFinal)}</td>
+                          </tr>
+                        ))}
+                        {(cambiosPatrimonio?.componentes || []).length === 0 && (
+                          <tr><td colSpan={4} className="conta-empty">Sin movimientos de patrimonio en el rango seleccionado</td></tr>
+                        )}
+                        <tr className="fila-total-final">
+                          <td><strong>TOTAL PATRIMONIO</strong></td>
+                          <td className="text-right"><strong>{toMoney(cambiosPatrimonio?.totalInicial)}</strong></td>
+                          <td className="text-right"><strong>{toMoney(cambiosPatrimonio?.totalMovimiento)}</strong></td>
+                          <td className="text-right"><strong>{toMoney(cambiosPatrimonio?.totalFinal)}</strong></td>
+                        </tr>
                       </tbody>
                     </table>
                   </>

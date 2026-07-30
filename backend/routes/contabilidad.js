@@ -745,6 +745,45 @@ async function obtenerFlujoEfectivo(empresaId, fechaDesde, fechaHasta) {
   };
 }
 
+// ─── Estado de Cambios en el Patrimonio ──────────────────────────────────────
+//
+// Data-driven: no asume nombres/profundidad de subgrupos (Capital/Reservas/
+// Resultados varían de estructura entre el plan base y el NIIF Supercías) —
+// muestra una fila por cada cuenta de patrimonio que acepta movimiento
+// (aceptaMovimiento=true), con su saldo al inicio y fin del período. Es el
+// mismo nivel de detalle que cualquier plan de cuentas expone de por sí.
+async function obtenerCambiosPatrimonio(empresaId, fechaDesde, fechaHasta) {
+  const inicio = fechaDesde ? new Date(fechaDesde) : new Date(new Date().getFullYear(), 0, 1);
+  const fin = endOfDay(fechaHasta) || endOfDay(new Date());
+  const finAnterior = endOfDay(new Date(inicio.getTime() - 24 * 60 * 60 * 1000));
+
+  const [patInicial, patFinal, resultadosPeriodo] = await Promise.all([
+    construirJerarquiaContable(empresaId, ['PATRIMONIO'], { hasta: finAnterior.toISOString() }),
+    construirJerarquiaContable(empresaId, ['PATRIMONIO'], { hasta: fin.toISOString() }),
+    construirJerarquiaContable(empresaId, ['INGRESO', 'GASTO', 'COSTO'], { desde: inicio.toISOString(), hasta: fin.toISOString() }),
+  ]);
+
+  const ingresosPeriodo = round2(resultadosPeriodo.filter((f) => !f.codigoPadre && f.tipo === 'INGRESO').reduce((a, f) => a + f.saldo, 0));
+  const egresosPeriodo  = round2(resultadosPeriodo.filter((f) => !f.codigoPadre && (f.tipo === 'GASTO' || f.tipo === 'COSTO')).reduce((a, f) => a + f.saldo, 0));
+  const utilidadNetaPeriodo = round2(ingresosPeriodo - egresosPeriodo);
+
+  const mapaInicial = new Map(patInicial.map((f) => [f.codigo, f.saldo]));
+  const componentes = patFinal
+    .filter((f) => f.aceptaMovimiento)
+    .map((f) => {
+      const saldoInicial = mapaInicial.get(f.codigo) ?? 0;
+      const saldoFinal = f.saldo;
+      return { codigo: f.codigo, nombre: f.nombre, saldoInicial, movimientoPeriodo: round2(saldoFinal - saldoInicial), saldoFinal };
+    })
+    .filter((c) => c.saldoInicial !== 0 || c.saldoFinal !== 0);
+
+  const totalInicial = round2(componentes.reduce((a, c) => a + c.saldoInicial, 0));
+  const totalFinal = round2(componentes.reduce((a, c) => a + c.saldoFinal, 0));
+  const totalMovimiento = round2(totalFinal - totalInicial);
+
+  return { fechaDesde: inicio, fechaHasta: fin, utilidadNetaPeriodo, componentes, totalInicial, totalMovimiento, totalFinal };
+}
+
 async function obtenerConsultasResumen(empresaId, filtros = {}) {
   const where = construirWhereAsientos(empresaId, filtros);
   const asientos = await prisma.asientos_contables.findMany({
@@ -2618,6 +2657,19 @@ router.get('/flujo-efectivo', async (req, res) => {
   } catch (error) {
     console.error('GET /contabilidad/flujo-efectivo:', error);
     res.status(500).json({ success: false, mensaje: 'Error al generar el estado de flujo de efectivo' });
+  }
+});
+
+// GET /api/contabilidad/cambios-patrimonio
+router.get('/cambios-patrimonio', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const { desde, hasta } = req.query;
+    const data = await obtenerCambiosPatrimonio(empresaId, desde, hasta);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /contabilidad/cambios-patrimonio:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al generar el estado de cambios en el patrimonio' });
   }
 });
 
