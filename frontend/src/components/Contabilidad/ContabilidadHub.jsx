@@ -246,6 +246,8 @@ const ContabilidadHub = () => {
   const [cierreSubTab, setCierreSubTab] = useState('situacion'); // 'situacion' | 'resultados' | 'comprobacion' | 'flujo' | 'patrimonio'
   const [flujoEfectivo, setFlujoEfectivo] = useState(null);
   const [cambiosPatrimonio, setCambiosPatrimonio] = useState(null);
+  const [anioCierre, setAnioCierre] = useState(String(new Date().getFullYear()));
+  const [cerrandoEjercicio, setCerrandoEjercicio] = useState(false);
   const [estadosFiltros, setEstadosFiltros] = useState({ periodo: '', desde: '', hasta: '', fechaBalance: '' });
   const [asientoInicialForm, setAsientoInicialForm] = useState({
     periodo: '',
@@ -432,6 +434,27 @@ const ContabilidadHub = () => {
       setCierreLoading(false);
     }
   }, [estadosFiltros]);
+
+  const cerrarEjercicioAnual = async () => {
+    const anio = parseInt(anioCierre, 10);
+    if (!anio) return toast.error('Escribe un año válido');
+    if (!window.confirm(
+      `¿Cerrar el ejercicio ${anio}? Esto genera un asiento definitivo (bloqueado) que deja en cero ` +
+      `todas las cuentas de ingresos, gastos y costos con movimiento en ${anio}, trasladando el ` +
+      `resultado neto a la cuenta de patrimonio "Utilidad del Ejercicio". No se puede deshacer con un botón — ` +
+      `solo anulando el asiento manualmente si fue un error.`
+    )) return;
+    setCerrandoEjercicio(true);
+    try {
+      const res = await api.post('/contabilidad/cierre-ejercicio', { anio });
+      toast.success(res.data?.mensaje || 'Ejercicio cerrado correctamente');
+      await cargarEstadosFinancieros();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al cerrar el ejercicio');
+    } finally {
+      setCerrandoEjercicio(false);
+    }
+  };
 
   const cargarLibroMayor = useCallback(async () => {
     if (!mayorFiltros.cuentaId) {
@@ -2689,6 +2712,26 @@ const ContabilidadHub = () => {
                 )}
               </>
             )}
+          </div>
+
+          <div className="conta-card">
+            <h3>⚠️ Cierre de ejercicio anual</h3>
+            <p className="conta-import-sub">
+              Genera el asiento definitivo que deja en cero las cuentas de ingresos, gastos y
+              costos del año elegido y traslada el resultado neto a patrimonio. Acción irreversible
+              con un botón — el asiento queda bloqueado, solo se revierte anulándolo manualmente.
+            </p>
+            <div className="conta-form-grid">
+              <div>
+                <label>Año a cerrar</label>
+                <input type="number" value={anioCierre} onChange={(e) => setAnioCierre(e.target.value)} style={{ maxWidth: 140 }} />
+              </div>
+              <div className="conta-form-actions" style={{ alignItems: 'flex-end' }}>
+                <button className="btn-danger-outline" disabled={cerrandoEjercicio} onClick={cerrarEjercicioAnual}>
+                  {cerrandoEjercicio ? 'Cerrando...' : `🔒 Cerrar ejercicio ${anioCierre}`}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

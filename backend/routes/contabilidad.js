@@ -784,6 +784,82 @@ async function obtenerCambiosPatrimonio(empresaId, fechaDesde, fechaHasta) {
   return { fechaDesde: inicio, fechaHasta: fin, utilidadNetaPeriodo, componentes, totalInicial, totalMovimiento, totalFinal };
 }
 
+// ─── Cierre de ejercicio anual ────────────────────────────────────────────────
+//
+// Genera el asiento de cierre formal: debita cada cuenta de INGRESO con
+// saldo (naturaleza CREDITO) y acredita cada cuenta de GASTO/COSTO con saldo
+// (naturaleza DEBITO), dejándolas en cero para el año cerrado, y traslada el
+// neto (utilidad o pérdida) a la cuenta de patrimonio "Utilidad del
+// Ejercicio". No se genera un asiento de "apertura" aparte: a diferencia de
+// un libro físico, las cuentas de Balance (Activo/Pasivo/Patrimonio) en AELA
+// ya son acumulativas desde el origen — su "saldo inicial" del año siguiente
+// es automáticamente el saldo con el que quedó el cierre, sin necesidad de
+// repetirlo en un asiento nuevo.
+async function cerrarEjercicioAnual(empresaId, anio, usuarioId) {
+  const inicio = new Date(anio, 0, 1);
+  const fin = endOfDay(new Date(anio, 11, 31));
+
+  const yaExiste = await prisma.asientos_contables.findFirst({
+    where: { empresaId, tipo: 'CIERRE_ANUAL', fecha: { gte: inicio, lte: fin } },
+  });
+  if (yaExiste) {
+    const err = new Error(`El ejercicio ${anio} ya fue cerrado (asiento ${yaExiste.numero}).`);
+    err.status = 400;
+    throw err;
+  }
+
+  const filasResultados = await construirJerarquiaContable(empresaId, ['INGRESO', 'GASTO', 'COSTO'], {
+    desde: inicio.toISOString(), hasta: fin.toISOString(),
+  });
+  const cuentasHoja = filasResultados.filter((f) => f.aceptaMovimiento && round2(f.saldo) !== 0);
+  if (!cuentasHoja.length) {
+    const err = new Error(`No hay movimientos de ingresos, gastos o costos en ${anio} para cerrar.`);
+    err.status = 400;
+    throw err;
+  }
+
+  const filasPatrimonio = await construirJerarquiaContable(empresaId, ['PATRIMONIO'], { hasta: fin.toISOString() });
+  const cuentaResultado = filasPatrimonio.find((f) => f.aceptaMovimiento && /utilidad|resultado/i.test(f.nombre));
+  if (!cuentaResultado) {
+    const err = new Error('No se encontró una cuenta de patrimonio para el resultado del ejercicio (ej. "Utilidad del Ejercicio") que acepte movimiento. Créala en el Plan de Cuentas antes de cerrar.');
+    err.status = 400;
+    throw err;
+  }
+
+  const detalles = [];
+  let totalIngresos = 0;
+  let totalEgresos = 0;
+  for (const c of cuentasHoja) {
+    const monto = Math.abs(round2(c.saldo));
+    if (c.naturaleza === 'CREDITO') {
+      detalles.push({ cuentaId: c.id, debe: monto, haber: 0, descripcion: `Cierre ${anio} — ${c.nombre}` });
+      totalIngresos = round2(totalIngresos + c.saldo);
+    } else {
+      detalles.push({ cuentaId: c.id, debe: 0, haber: monto, descripcion: `Cierre ${anio} — ${c.nombre}` });
+      totalEgresos = round2(totalEgresos + c.saldo);
+    }
+  }
+  const utilidadNeta = round2(totalIngresos - totalEgresos);
+  if (utilidadNeta >= 0) {
+    detalles.push({ cuentaId: cuentaResultado.id, debe: 0, haber: utilidadNeta, descripcion: `Utilidad del ejercicio ${anio}` });
+  } else {
+    detalles.push({ cuentaId: cuentaResultado.id, debe: -utilidadNeta, haber: 0, descripcion: `Pérdida del ejercicio ${anio}` });
+  }
+
+  const asiento = await crearAsientoContable({
+    empresaId,
+    fecha: fin,
+    descripcion: `Cierre de ejercicio ${anio}`,
+    tipo: 'CIERRE_ANUAL',
+    referencia: `CIERRE-${anio}`,
+    usuarioId,
+    detalles,
+    cerrado: true,
+  });
+
+  return { asiento, utilidadNeta, cuentasCerradas: cuentasHoja.length, cuentaResultado: { id: cuentaResultado.id, codigo: cuentaResultado.codigo, nombre: cuentaResultado.nombre } };
+}
+
 async function obtenerConsultasResumen(empresaId, filtros = {}) {
   const where = construirWhereAsientos(empresaId, filtros);
   const asientos = await prisma.asientos_contables.findMany({
@@ -2670,6 +2746,19 @@ router.get('/cambios-patrimonio', async (req, res) => {
   } catch (error) {
     console.error('GET /contabilidad/cambios-patrimonio:', error);
     res.status(500).json({ success: false, mensaje: 'Error al generar el estado de cambios en el patrimonio' });
+  }
+});
+
+// POST /api/contabilidad/cierre-ejercicio
+router.post('/cierre-ejercicio', autorizarPermiso('contabilidad.gestionar'), async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const anio = parseInt(req.body?.anio, 10) || new Date().getFullYear();
+    const data = await cerrarEjercicioAnual(empresaId, anio, req.usuario?.id);
+    res.json({ success: true, data, mensaje: `Ejercicio ${anio} cerrado — ${data.utilidadNeta >= 0 ? 'utilidad' : 'pérdida'} de $${Math.abs(data.utilidadNeta).toFixed(2)} trasladada a ${data.cuentaResultado.nombre}.` });
+  } catch (error) {
+    console.error('POST /contabilidad/cierre-ejercicio:', error);
+    res.status(error.status || 500).json({ success: false, mensaje: error.message || 'Error al cerrar el ejercicio anual' });
   }
 });
 
