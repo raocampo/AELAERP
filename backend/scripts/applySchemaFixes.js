@@ -638,6 +638,21 @@ const FIXES = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "nomina_pagos_especiales_detalle_pagoId_empleadoId_key" ON "nomina_pagos_especiales_detalle"("pagoId", "empleadoId")`,
   `CREATE INDEX IF NOT EXISTS "nomina_pagos_especiales_detalle_pagoId_idx" ON "nomina_pagos_especiales_detalle"("pagoId")`,
   `CREATE INDEX IF NOT EXISTS "nomina_pagos_especiales_detalle_empleadoId_idx" ON "nomina_pagos_especiales_detalle"("empleadoId")`,
+  // Compras de importación (DIM/DAU, tributos aduaneros) — activable por
+  // empresa, apagado por defecto (2026-07-30).
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "importacionesHabilitado" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "numeroDim" VARCHAR(30)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "fechaDim" TIMESTAMP(3)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "paisOrigenProveedor" VARCHAR(2)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "valorFob" DECIMAL(14,2)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "valorFlete" DECIMAL(14,2)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "valorSeguro" DECIMAL(14,2)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "valorCif" DECIMAL(14,2)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "valorDai" DECIMAL(14,2)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "valorFodinfa" DECIMAL(14,2)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "valorIce" DECIMAL(14,2)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "valorIsd" DECIMAL(14,2)`,
+  `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "tributosAduanerosPagados" BOOLEAN NOT NULL DEFAULT false`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

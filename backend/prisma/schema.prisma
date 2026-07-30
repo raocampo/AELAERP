@@ -317,6 +317,9 @@ model configuracion_sistema {
   // Régimen de décimo cuarto sueldo (define período de acumulación y fecha
   // límite de pago): 'sierra' (Ago-Jul, pago hasta 15 ago) | 'costa' (Mar-Feb, pago hasta 15 mar)
   regimenDecimoCuarto      String   @default("sierra") @db.VarChar(10)
+  // Compras de importación (DIM/DAU, tributos aduaneros) — apagado por
+  // defecto, se activa solo para el cliente que de verdad importa mercadería.
+  importacionesHabilitado  Boolean  @default(false)
   updatedAt                DateTime @updatedAt
 
   empresa empresas @relation(fields: [empresaId], references: [id])
@@ -682,6 +685,23 @@ model facturas_compra {
   esGastoPersonal             Boolean  @default(false)
   categoriaGastoPersonal      String?  @db.VarChar(30)
   // alimentacion | salud | vivienda | vestimenta | educacion
+  // Compras de importación (tipoComprobante = 'IMPORTACION', código SRI 20 —
+  // Documento de Importación DIM, antes DAU). Todos nulos en compras
+  // domésticas. importeTotal/totalIva se siguen usando para lo debido al
+  // proveedor del exterior; estos campos son los tributos aduaneros propios
+  // de nacionalizar la mercadería (pagados a la SENAE, no al proveedor).
+  numeroDim                   String?   @db.VarChar(30)
+  fechaDim                    DateTime?
+  paisOrigenProveedor         String?   @db.VarChar(2)
+  valorFob                    Decimal?  @db.Decimal(14, 2)
+  valorFlete                  Decimal?  @db.Decimal(14, 2)
+  valorSeguro                 Decimal?  @db.Decimal(14, 2)
+  valorCif                    Decimal?  @db.Decimal(14, 2)
+  valorDai                    Decimal?  @db.Decimal(14, 2)
+  valorFodinfa                Decimal?  @db.Decimal(14, 2)
+  valorIce                    Decimal?  @db.Decimal(14, 2)
+  valorIsd                    Decimal?  @db.Decimal(14, 2)
+  tributosAduanerosPagados    Boolean   @default(false)
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 

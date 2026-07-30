@@ -61,6 +61,7 @@ const FORM_INICIAL = {
   talentoHumanoHabilitado: false,
   sbuEcuador: '480.00',
   regimenDecimoCuarto: 'sierra',
+  importacionesHabilitado: false,
 };
 
 export default function ConfiguracionSistema() {
@@ -386,6 +387,25 @@ export default function ConfiguracionSistema() {
               onChange={(e) => actualizar('sucursalesHabilitado', e.target.checked)}
             />
             <span>Habilitar Sucursales y Puntos de Venta (multi-caja)</span>
+          </label>
+        </section>
+
+        {/* ── Compras de importación ───────────────────────────────────── */}
+        <section className="syscfg-card">
+          <h2>Compras de Importación</h2>
+          <p className="syscfg-note">
+            Para clientes que importan mercadería del exterior: registra el DIM/DAU,
+            FOB/flete/seguro, DAI, FODINFA, ICE, IVA e ISD de importación, con el
+            asiento contable correcto (proveedor del exterior + tributos aduaneros
+            por separado). Si tu negocio no importa, déjalo desactivado.
+          </p>
+          <label className="syscfg-check">
+            <input
+              type="checkbox"
+              checked={form.importacionesHabilitado}
+              onChange={(e) => actualizar('importacionesHabilitado', e.target.checked)}
+            />
+            <span>Habilitar Compras de Importación (DIM/DAU)</span>
           </label>
         </section>
 

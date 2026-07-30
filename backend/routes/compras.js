@@ -7,7 +7,7 @@ const { requiereModulo } = require('../middleware/modulos');
 const { registrarAuditoria } = require('../utils/auditoria');
 const { aplicarMovimientoInventario } = require('../utils/inventario');
 const { registrarMovimientoCaja } = require('../utils/caja');
-const { crearAsientoFacturaCompraRegistrada, crearAsientoReversoCompraAnulada } = require('../utils/contabilidad');
+const { crearAsientoFacturaCompraRegistrada, crearAsientoReversoCompraAnulada, round2 } = require('../utils/contabilidad');
 const { resolverOMarcarPendiente, registrarItemCompraPendiente } = require('../utils/comprasInventario');
 const { obtenerConfiguracionSistemaOperativa } = require('../utils/configuracionSistema');
 const {
@@ -64,7 +64,7 @@ function limpiarCodigo(valor) {
   return limpiarTexto(valor).toUpperCase();
 }
 
-const TIPOS_COMPROBANTE_COMPRA = new Set(['FACTURA', 'NOTA_VENTA']);
+const TIPOS_COMPROBANTE_COMPRA = new Set(['FACTURA', 'NOTA_VENTA', 'IMPORTACION']);
 function normalizarTipoComprobante(valor) {
   const v = limpiarCodigo(valor);
   return TIPOS_COMPROBANTE_COMPRA.has(v) ? v : 'FACTURA';
@@ -1154,6 +1154,18 @@ router.post('/', async (req, res) => {
       registrarEgresoCaja = false,
       esGastoPersonal = false,
       categoriaGastoPersonal,
+      // Compras de importación (DIM/DAU) — solo cuando tipoComprobante === 'IMPORTACION'
+      numeroDim,
+      fechaDim,
+      paisOrigenProveedor,
+      valorFob,
+      valorFlete,
+      valorSeguro,
+      valorDai,
+      valorFodinfa,
+      valorIce,
+      valorIsd,
+      tasaIvaImportacion = 15,
     } = req.body || {};
 
     if (!limpiarTexto(tipoIdentificacionProveedor) || !limpiarTexto(identificacionProveedor) || !limpiarTexto(razonSocialProveedor)) {
@@ -1191,6 +1203,45 @@ router.post('/', async (req, res) => {
       totalIva: 0,
       importeTotal: 0,
     });
+
+    // Compras de importación: la base gravada de IVA y el total no salen de
+    // sumar líneas (esas reflejan el costo prorrateado del producto para
+    // inventario) sino de los valores declarados en el DIM/DAU — CIF + DAI +
+    // FODINFA + ICE. Lo debido al proveedor del exterior (importeTotal) es
+    // solo el FOB; los tributos aduaneros se pagan aparte a la SENAE, casi
+    // siempre de inmediato (ver crearAsientoFacturaCompraImportacion).
+    let datosImportacion = null;
+    if (normalizarTipoComprobante(tipoComprobante) === 'IMPORTACION') {
+      const fob = toNumber(valorFob, 0);
+      const flete = toNumber(valorFlete, 0);
+      const seguro = toNumber(valorSeguro, 0);
+      const cif = round2(fob + flete + seguro);
+      const dai = toNumber(valorDai, 0);
+      const fodinfa = valorFodinfa !== undefined && valorFodinfa !== null && valorFodinfa !== ''
+        ? toNumber(valorFodinfa, 0)
+        : round2(cif * 0.005); // 0.5% del CIF por defecto — editable por el usuario
+      const ice = toNumber(valorIce, 0);
+      const isd = toNumber(valorIsd, 0);
+      const baseIva = round2(cif + dai + fodinfa + ice);
+      const tasaIva = toNumber(tasaIvaImportacion, 15);
+      const iva = round2(baseIva * tasaIva / 100);
+
+      totales.subtotal0 = 0; totales.subtotal5 = 0; totales.subtotal12 = 0; totales.subtotal15 = 0;
+      if (tasaIva === 5) totales.subtotal5 = baseIva;
+      else if (tasaIva === 12 || tasaIva === 14) totales.subtotal12 = baseIva;
+      else if (tasaIva > 0) totales.subtotal15 = baseIva;
+      else totales.subtotal0 = baseIva;
+      totales.totalIva = iva;
+      totales.importeTotal = round2(fob);
+
+      datosImportacion = {
+        numeroDim: limpiarTexto(numeroDim) || null,
+        fechaDim: fechaDim ? new Date(fechaDim) : null,
+        paisOrigenProveedor: limpiarTexto(paisOrigenProveedor) || null,
+        valorFob: fob, valorFlete: flete, valorSeguro: seguro, valorCif: cif,
+        valorDai: dai, valorFodinfa: fodinfa, valorIce: ice, valorIsd: isd,
+      };
+    }
 
     const pagosFinales = ensureArray(pagos).length > 0
       ? ensureArray(pagos).map((pago) => ({
@@ -1278,6 +1329,7 @@ router.post('/', async (req, res) => {
           tipoGasto: limpiarTexto(tipoGasto) || null,
           esGastoPersonal: toBoolean(esGastoPersonal, false),
           categoriaGastoPersonal: limpiarTexto(categoriaGastoPersonal) || null,
+          ...(datosImportacion || {}),
         },
       });
 

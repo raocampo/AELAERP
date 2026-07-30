@@ -94,6 +94,19 @@ export default function FormCompra() {
     actualizarProductosExistentes: true,
     registrarInventario: Boolean(sistema?.inventarioHabilitado),
     registrarEgresoCaja: false,
+    // Compras de importación (DIM/DAU) — solo aplica si tipoComprobante === 'IMPORTACION'
+    numeroDim: '',
+    fechaDim: hoy(),
+    paisOrigenProveedor: '',
+    valorFob: '',
+    valorFlete: '',
+    valorSeguro: '',
+    valorDai: '',
+    valorFodinfa: '',
+    valorIce: '',
+    valorIsd: '',
+    tasaIvaImportacion: '15',
+    tributosAduanerosPagados: true,
   });
   const [detalles, setDetalles] = useState([detalleVacio()]);
   const [codigoScanner, setCodigoScanner] = useState('');
@@ -157,6 +170,18 @@ export default function FormCompra() {
       actualizarProductosExistentes: true,
       registrarInventario: Boolean(sistema?.inventarioHabilitado),
       registrarEgresoCaja: false,
+      numeroDim: '',
+      fechaDim: hoy(),
+      paisOrigenProveedor: '',
+      valorFob: '',
+      valorFlete: '',
+      valorSeguro: '',
+      valorDai: '',
+      valorFodinfa: '',
+      valorIce: '',
+      valorIsd: '',
+      tasaIvaImportacion: '15',
+      tributosAduanerosPagados: true,
     });
     setDetalles([detalleVacio()]);
   };
@@ -467,6 +492,20 @@ export default function FormCompra() {
         actualizarProductosExistentes: form.actualizarProductosExistentes,
         registrarInventario: sistema?.inventarioHabilitado ? form.registrarInventario : false,
         registrarEgresoCaja: sistema?.cajaDiariaHabilitada ? form.registrarEgresoCaja : false,
+        ...(form.tipoComprobante === 'IMPORTACION' ? {
+          numeroDim: form.numeroDim.trim(),
+          fechaDim: form.fechaDim,
+          paisOrigenProveedor: form.paisOrigenProveedor.trim(),
+          valorFob: form.valorFob,
+          valorFlete: form.valorFlete,
+          valorSeguro: form.valorSeguro,
+          valorDai: form.valorDai,
+          valorFodinfa: form.valorFodinfa,
+          valorIce: form.valorIce,
+          valorIsd: form.valorIsd,
+          tasaIvaImportacion: form.tasaIvaImportacion,
+          tributosAduanerosPagados: form.tributosAduanerosPagados,
+        } : {}),
         pagos: [{
           formaPago: form.formaPago,
           total: totalGeneral.toFixed(2),
@@ -681,11 +720,20 @@ export default function FormCompra() {
               <select value={form.tipoComprobante} onChange={(e) => actualizarForm('tipoComprobante', e.target.value)}>
                 <option value="FACTURA">📄 Factura</option>
                 <option value="NOTA_VENTA">🧾 Nota de Venta (proveedor RIMPE Negocio Popular)</option>
+                {sistema?.importacionesHabilitado && (
+                  <option value="IMPORTACION">🚢 Importación (DIM/DAU)</option>
+                )}
               </select>
               {form.tipoComprobante === 'NOTA_VENTA' && (
                 <small className="compra-helper-text">
                   Documento sin derecho a crédito tributario de IVA — se declara en el ATS
                   como "02 Nota de Venta", no como factura.
+                </small>
+              )}
+              {form.tipoComprobante === 'IMPORTACION' && (
+                <small className="compra-helper-text">
+                  Se declara en el ATS como "20 Documento de Importación". El IVA de
+                  importación sí da derecho a crédito tributario.
                 </small>
               )}
             </label>
@@ -734,6 +782,86 @@ export default function FormCompra() {
             </label>
           </div>
         </section>
+
+        {form.tipoComprobante === 'IMPORTACION' && (
+          <section className="compra-card">
+            <h2>Datos de Importación (DIM/DAU)</h2>
+            <div className="compra-fields">
+              <label>
+                <span>Número DIM/DAU</span>
+                <input value={form.numeroDim} onChange={(e) => actualizarForm('numeroDim', e.target.value)} placeholder="Declaración Aduanera de Importación" />
+              </label>
+              <label>
+                <span>Fecha DIM/DAU</span>
+                <input type="date" value={form.fechaDim} onChange={(e) => actualizarForm('fechaDim', e.target.value)} />
+              </label>
+              <label>
+                <span>País de origen (ISO-2)</span>
+                <input value={form.paisOrigenProveedor} onChange={(e) => actualizarForm('paisOrigenProveedor', e.target.value.toUpperCase())} placeholder="CN, US, CO…" maxLength={2} />
+              </label>
+              <label>
+                <span>Valor FOB ($)</span>
+                <input type="number" step="0.01" min="0" value={form.valorFob} onChange={(e) => actualizarForm('valorFob', e.target.value)} />
+              </label>
+              <label>
+                <span>Flete ($)</span>
+                <input type="number" step="0.01" min="0" value={form.valorFlete} onChange={(e) => actualizarForm('valorFlete', e.target.value)} />
+              </label>
+              <label>
+                <span>Seguro ($)</span>
+                <input type="number" step="0.01" min="0" value={form.valorSeguro} onChange={(e) => actualizarForm('valorSeguro', e.target.value)} />
+              </label>
+              <label>
+                <span>Valor CIF (calculado)</span>
+                <input type="text" disabled value={(Number(form.valorFob || 0) + Number(form.valorFlete || 0) + Number(form.valorSeguro || 0)).toFixed(2)} />
+              </label>
+              <label>
+                <span>DAI — Arancel (Ad-Valorem) ($)</span>
+                <input type="number" step="0.01" min="0" value={form.valorDai} onChange={(e) => actualizarForm('valorDai', e.target.value)} />
+              </label>
+              <label>
+                <span>FODINFA ($)</span>
+                <input
+                  type="number" step="0.01" min="0"
+                  value={form.valorFodinfa}
+                  onChange={(e) => actualizarForm('valorFodinfa', e.target.value)}
+                  placeholder={((Number(form.valorFob || 0) + Number(form.valorFlete || 0) + Number(form.valorSeguro || 0)) * 0.005).toFixed(2)}
+                />
+                <small className="compra-helper-text">0.5% del CIF por defecto si se deja vacío — editable con el valor real del DIM.</small>
+              </label>
+              <label>
+                <span>ICE ($, si aplica)</span>
+                <input type="number" step="0.01" min="0" value={form.valorIce} onChange={(e) => actualizarForm('valorIce', e.target.value)} />
+              </label>
+              <label>
+                <span>Tarifa IVA importación</span>
+                <select value={form.tasaIvaImportacion} onChange={(e) => actualizarForm('tasaIvaImportacion', e.target.value)}>
+                  <option value="15">15%</option>
+                  <option value="5">5%</option>
+                  <option value="0">0%</option>
+                </select>
+                <small className="compra-helper-text">Base: CIF + DAI + FODINFA + ICE. El IVA calculado es crédito tributario.</small>
+              </label>
+              <label>
+                <span>ISD — Salida de Divisas ($, si aplica)</span>
+                <input type="number" step="0.01" min="0" value={form.valorIsd} onChange={(e) => actualizarForm('valorIsd', e.target.value)} />
+                <small className="compra-helper-text">
+                  Tarifa general 5%, con exenciones/reducciones según partida arancelaria y
+                  decretos vigentes — verificar con la contadora cuál aplica a esta importación.
+                </small>
+              </label>
+              <label className="compra-check">
+                <input type="checkbox" checked={form.tributosAduanerosPagados} onChange={(e) => actualizarForm('tributosAduanerosPagados', e.target.checked)} />
+                <span>Tributos aduaneros ya pagados a la SENAE</span>
+              </label>
+              {!form.tributosAduanerosPagados && (
+                <small className="compra-helper-text">
+                  Se registrará como "Tributos Aduaneros por Pagar" en vez de un pago desde Bancos.
+                </small>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="compra-card compra-card-wide">
           <div className="compra-section-header">

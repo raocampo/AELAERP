@@ -415,16 +415,22 @@ router.get('/exportar', async (req, res) => {
       const baseNoObjeto = r2(compra.subtotalNoObjeto || 0);
       const baseExenta = r2(compra.subtotalExento || 0);
       const esNotaVenta = compra.tipoComprobante === 'NOTA_VENTA';
+      const esImportacion = compra.tipoComprobante === 'IMPORTACION';
       // Nota de Venta (proveedor RIMPE Negocio Popular): sin derecho a crédito
-      // tributario de IVA — codSustento 02 (Costo o Gasto), no 01.
+      // tributario de IVA — codSustento 02 (Costo o Gasto), no 01. Importación
+      // sí da derecho a crédito tributario de IVA (codSustento 01), salvo que
+      // se haya marcado como activo fijo.
       const codSustento = esNotaVenta ? '02' : (compra.tipoGasto === 'ACTIVO_FIJO' ? '03' : '01');
+      // Catálogo SRI tabla 4: 01 Factura, 02 Nota de Venta, 20 Documento de
+      // Importación (DIM, antes DAU).
+      const tipoComprobanteAts = esNotaVenta ? '02' : (esImportacion ? '20' : '01');
 
       comprasXML += `
     <detalleCompras>
       <codSustento>${codSustento}</codSustento>
       <tpIdProv>${tpId}</tpIdProv>
       <idProv>${compra.identificacionProveedor}</idProv>
-      <tipoComprobante>${esNotaVenta ? '02' : '01'}</tipoComprobante>
+      <tipoComprobante>${tipoComprobanteAts}</tipoComprobante>
       <parteRel>NO</parteRel>
       <fechaRegistro>${fmtFecha(compra.createdAt || compra.fechaEmision)}</fechaRegistro>
       <establecimiento>${estab}</establecimiento>
@@ -436,7 +442,7 @@ router.get('/exportar', async (req, res) => {
       <baseImponible>${base0.toFixed(2)}</baseImponible>
       <baseImpGrav>${baseGravada.toFixed(2)}</baseImpGrav>
       <baseImpExe>${baseExenta.toFixed(2)}</baseImpExe>
-      <montoIce>0.00</montoIce>
+      <montoIce>${r2(compra.valorIce || 0).toFixed(2)}</montoIce>
       <montoIva>${r2(compra.totalIva).toFixed(2)}</montoIva>
       <valRetBien10>${retIva.valRetBien10.toFixed(2)}</valRetBien10>
       <valRetServ20>${retIva.valRetServ20.toFixed(2)}</valRetServ20>

@@ -81,6 +81,10 @@ const CONCEPTOS_COMPRAS = [
   { codigoReferencia: 'MONTO_ICE_COMPRAS',     etiqueta: 'Monto ICE Compras',                   codigoDefault: '5.2.01.005', nombreDefault: 'Impuesto Consumos Especiales',   tipoDefault: 'GASTO',  naturalezaDefault: 'DEBITO'  },
   { codigoReferencia: 'BASE_NO_OBJETO_IVA',    etiqueta: 'Base Imponible No Objeto de IVA',     codigoDefault: '5.2.01.006', nombreDefault: 'Compras No Objeto de IVA',       tipoDefault: 'GASTO',  naturalezaDefault: 'DEBITO'  },
   { codigoReferencia: 'AJUSTE_CENTAVOS',       etiqueta: 'Ajuste de Centavos',                  codigoDefault: '5.2.09.001', nombreDefault: 'Ajuste de Centavos',             tipoDefault: 'GASTO',  naturalezaDefault: 'DEBITO'  },
+  // Compras de importación (DIM/DAU) — tributos aduaneros y proveedor del exterior
+  { codigoReferencia: 'CXP_PROVEEDOR_EXTERIOR', etiqueta: 'Cuentas por Pagar Proveedores del Exterior', codigoDefault: '2.1.04.002', nombreDefault: 'Cuentas por Pagar Proveedores del Exterior', tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO' },
+  { codigoReferencia: 'TRIBUTOS_ADUANEROS_PAGO', etiqueta: 'Pago de tributos aduaneros (Bancos)', codigoDefault: '1.1.02.001', nombreDefault: 'Bancos', tipoDefault: 'ACTIVO', naturalezaDefault: 'DEBITO' },
+  { codigoReferencia: 'TRIBUTOS_ADUANEROS_PAGAR', etiqueta: 'Tributos Aduaneros por Pagar', codigoDefault: '2.1.04.003', nombreDefault: 'Tributos Aduaneros por Pagar', tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO' },
 ];
 
 // Conceptos de ventas (facturas de venta) — usados en crearAsientoFacturaAutorizada

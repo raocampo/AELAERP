@@ -1428,6 +1428,94 @@ function _agruparDetallesPorCuenta(detalles) {
   return [...mapa.values()].filter((d) => d.debe > 0 || d.haber > 0);
 }
 
+// Asiento de una compra de importación (DIM/DAU) — se paga en dos partes que
+// nunca son el mismo monto que "importeTotal" de una compra doméstica: lo
+// debido al proveedor del exterior (FOB) por un lado, y todo lo pagado a
+// terceros en Ecuador para nacionalizar la mercadería por otro — flete y
+// seguro (si se pagaron aparte, a un transportista/aseguradora, no al
+// proveedor) más los tributos aduaneros propios (DAI + FODINFA + ICE + IVA +
+// ISD) pagados a la SENAE. El IVA de importación SÍ es crédito tributario
+// recuperable, igual que en una compra doméstica; el resto (CIF completo +
+// DAI + FODINFA + ICE + ISD) se capitaliza al costo del inventario (NIC 2).
+async function _crearAsientoCompraImportacion({ compra, referencia, usuarioId, fecha, db }) {
+  const iva = round2(compra.totalIva || 0);
+  const fob = round2(compra.valorFob || compra.importeTotal || 0);
+  const flete = round2(compra.valorFlete || 0);
+  const seguro = round2(compra.valorSeguro || 0);
+  const cif = round2(compra.valorCif || (fob + flete + seguro));
+  const dai = round2(compra.valorDai || 0);
+  const fodinfa = round2(compra.valorFodinfa || 0);
+  const ice = round2(compra.valorIce || 0);
+  const isd = round2(compra.valorIsd || 0);
+  const costoCapitalizable = round2(cif + dai + fodinfa + ice + isd);
+  // Todo lo pagado a terceros ecuatorianos (SENAE + flete/seguro si no se le
+  // pagaron directo al proveedor exterior) para poder nacionalizar la carga.
+  const totalTributosAduaneros = round2(flete + seguro + dai + fodinfa + ice + iva + isd);
+
+  const mapaCompras = await obtenerCuentasReferenciaConfiguradas({ empresaId: compra.empresaId, categoria: 'COMPRAS', tx: db });
+  const resolverCompra = (ref, codigoDefault, nombreDefault, tipoDefault, natDef) =>
+    _resolverCuentaPorCodigo({ empresaId: compra.empresaId, mapaConfig: mapaCompras, codigoReferencia: ref, codigoDefault, nombreDefault, tipoDefault, naturalezaDefault: natDef, tx: db });
+
+  const cuentaInventario = await resolverCompra('INVENTARIO_COMPRAS', '1.1.04.001', 'Inventario Mercaderias', 'ACTIVO', 'DEBITO');
+  let cuentaCosto = null;
+  if (compra.cuentaGastoId) {
+    cuentaCosto = await db.plan_cuentas.findFirst({ where: { id: compra.cuentaGastoId, empresaId: compra.empresaId, activo: true } });
+  }
+  if (!cuentaCosto) cuentaCosto = cuentaInventario;
+
+  const cuentaIvaCompras = await resolverCompra('IVA_COMPRAS', '1.1.05.001', 'IVA Credito Tributario Compras', 'ACTIVO', 'DEBITO');
+  const cuentaProveedorExterior = compra.egresoCajaRegistrado
+    ? await resolverCompra('CAJA_PAGO_COMPRAS', '1.1.01.001', 'Caja', 'ACTIVO', 'DEBITO')
+    : await resolverCompra('CXP_PROVEEDOR_EXTERIOR', '2.1.04.002', 'Cuentas por Pagar Proveedores del Exterior', 'PASIVO', 'CREDITO');
+  // Si aún no se pagan a la SENAE, es un pasivo transitorio, no una salida de Bancos.
+  const cuentaTributosAduaneros = compra.tributosAduanerosPagados
+    ? await resolverCompra('TRIBUTOS_ADUANEROS_PAGO', '1.1.02.001', 'Bancos', 'ACTIVO', 'DEBITO')
+    : await resolverCompra('TRIBUTOS_ADUANEROS_PAGAR', '2.1.04.003', 'Tributos Aduaneros por Pagar', 'PASIVO', 'CREDITO');
+
+  const movimientos = [];
+  if (costoCapitalizable > 0) {
+    movimientos.push({
+      cuentaId: cuentaCosto.id,
+      descripcion: `Costo de importación (FOB+DAI+FODINFA+ICE+ISD) — DIM ${compra.numeroDim || compra.numeroFactura}`,
+      debe: costoCapitalizable, haber: 0,
+    });
+  }
+  if (iva > 0) {
+    movimientos.push({
+      cuentaId: cuentaIvaCompras.id,
+      descripcion: `IVA crédito tributario importación — DIM ${compra.numeroDim || compra.numeroFactura}`,
+      debe: iva, haber: 0,
+    });
+  }
+  if (fob > 0) {
+    movimientos.push({
+      cuentaId: cuentaProveedorExterior.id,
+      descripcion: compra.egresoCajaRegistrado ? 'Pago registrado desde caja — proveedor exterior' : 'Cuenta por pagar proveedor del exterior (FOB)',
+      debe: 0, haber: fob,
+    });
+  }
+  if (totalTributosAduaneros > 0) {
+    movimientos.push({
+      cuentaId: cuentaTributosAduaneros.id,
+      descripcion: `Flete+seguro+tributos aduaneros (DAI+FODINFA+ICE+IVA+ISD) — DIM ${compra.numeroDim || compra.numeroFactura}`,
+      debe: 0, haber: totalTributosAduaneros,
+    });
+  }
+
+  const asiento = await crearAsientoContable({
+    empresaId: compra.empresaId,
+    fecha,
+    descripcion: `Asiento automático compra de importación — DIM ${compra.numeroDim || compra.numeroFactura}`,
+    tipo: 'COMPRA',
+    referencia,
+    usuarioId,
+    detalles: _agruparDetallesPorCuenta(movimientos),
+    tx: db,
+  });
+
+  return { asiento, creado: true };
+}
+
 async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha = new Date(), db = prisma }) {
   const compraIdNum = toInt(compraId);
   const compra = await db.facturas_compra.findUnique({ where: { id: compraIdNum } });
@@ -1442,6 +1530,10 @@ async function crearAsientoFacturaCompraRegistrada({ compraId, usuarioId, fecha 
     },
   });
   if (existente) return { asiento: existente, creado: false };
+
+  if (compra.tipoComprobante === 'IMPORTACION') {
+    return _crearAsientoCompraImportacion({ compra, referencia, usuarioId, fecha, db });
+  }
 
   const iva = round2(compra.totalIva || 0);
   const total = round2(compra.importeTotal || 0);
