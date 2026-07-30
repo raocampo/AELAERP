@@ -1869,26 +1869,100 @@ async function generarReciboPOS(factura, configSri, outputPath) {
  */
 const VIGENCIA_CORTE_RETENCION_RENTA = '2026-03-01';
 
+// Nota sobre 340/341 (retirados 2026-07-30): la versión anterior de este
+// catálogo los usaba para "Relación de dependencia" / "Décimo tercer sueldo",
+// pero esos conceptos NO se documentan con un comprobante de retención tipo
+// 07 (usan el Comprobante de Retenciones en Relación de Dependencia, un
+// formulario/documento anual distinto — Formulario 107 — que AELA no emite
+// hoy; la nómina calcula el IR mensual pero nunca genera este tipo 07). El
+// código numérico 340 en el catálogo real de comprobantes de retención
+// corresponde a "Impuesto único a la exportación de banano" — quedaría mal
+// asignado si se dejaba como estaba. Se los quita de aquí para no ofrecer
+// una opción que generaría un comprobante SRI semánticamente incorrecto.
 const CODIGOS_RETENCION_RENTA = {
-  '303':  { descripcion: 'Honorarios profesionales (persona natural, predomina el intelecto, con título)', porcentaje: 10 },
-  '303A': { descripcion: 'Servicios profesionales prestados por sociedades residentes',                     porcentajeAntes: 3,    porcentajeDespues: 5 },
-  '304':  { descripcion: 'Servicios donde predomina el intelecto, sin título profesional',                  porcentaje: 10 },
-  '307':  { descripcion: 'Servicios donde predomina la mano de obra',                                       porcentajeAntes: 2,    porcentajeDespues: 3 },
-  '309':  { descripcion: 'Publicidad y medios de comunicación',                                             porcentajeAntes: 2.75, porcentajeDespues: 3 },
-  '310':  { descripcion: 'Transporte privado de pasajeros / público o privado de carga',                    porcentaje: 1 },
-  '312':  { descripcion: 'Transferencia de bienes muebles de naturaleza corporal',                          porcentajeAntes: 1.75, porcentajeDespues: 2 },
-  '319':  { descripcion: 'Arrendamiento mercantil (cuotas, incluida opción de compra)',                     porcentaje: 2 },
-  '320':  { descripcion: 'Arrendamiento de bienes inmuebles',                                                porcentaje: 10 },
-  '322':  { descripcion: 'Seguros y reaseguros (primas y cesiones)',                                        porcentajeAntes: 1,    porcentajeDespues: 2 },
-  // 323 y 332: no forman parte del alcance de esta resolución (pagos al
-  // exterior se rigen por la tarifa societaria general de la LRTI; la
-  // descripción/porcentaje de 332 no se pudo verificar contra ninguna de las
-  // dos resoluciones) — se dejan sin tocar, marcados para revisión aparte.
-  '323': { descripcion: 'Pagos al exterior servicios (no cubierto por esta resolución — verificar tarifa societaria vigente)', porcentaje: 22 },
-  '332': { descripcion: 'Compraventa de divisas (no verificado contra la resolución — revisar con la contadora)', porcentaje: 1 },
-  '340': { descripcion: 'Relación de dependencia',    porcentaje: 0 }, // variable, tabla LORTI — excluido explícitamente por Art. 6b de la resolución
-  '341': { descripcion: 'Décimo tercer sueldo',       porcentaje: 0 }, // variable, régimen de exención propio
-  '3440': { descripcion: 'Otras retenciones (regla general — pagos sin porcentaje específico)', porcentajeAntes: 2.75, porcentajeDespues: 3 },
+  '303':   { descripcion: 'Honorarios profesionales (persona natural, predomina el intelecto, con título)', porcentaje: 10 },
+  '303A':  { descripcion: 'Servicios profesionales prestados por sociedades residentes',                    porcentajeAntes: 3,    porcentajeDespues: 5 },
+  '304':   { descripcion: 'Servicios donde predomina el intelecto, sin título profesional',                 porcentaje: 10 },
+  '304A':  { descripcion: 'Comisiones y demás pagos — predomina el intelecto, sin título profesional',      porcentaje: 10 },
+  '304B':  { descripcion: 'Pagos a notarios y registradores de la propiedad/mercantil por su cargo',        porcentaje: 10 },
+  '304C':  { descripcion: 'Pagos a deportistas, entrenadores, árbitros, cuerpo técnico',                    porcentajeAntes: 8,    porcentajeDespues: 10 },
+  '304D':  { descripcion: 'Pagos a artistas nacionales o extranjeros residentes',                           porcentajeAntes: 8,    porcentajeDespues: 10 },
+  '304E':  { descripcion: 'Honorarios y demás pagos por servicios de docencia',                             porcentaje: 10 },
+  '307':   { descripcion: 'Servicios donde predomina la mano de obra',                                       porcentajeAntes: 2,    porcentajeDespues: 3 },
+  '308':   { descripcion: 'Utilización o aprovechamiento de imagen o renombre (incl. influencers)',          porcentaje: 10 },
+  '309':   { descripcion: 'Publicidad y medios de comunicación',                                             porcentajeAntes: 2.75, porcentajeDespues: 3 },
+  '310':   { descripcion: 'Transporte privado de pasajeros / público o privado de carga',                    porcentaje: 1 },
+  '311':   { descripcion: 'Liquidación de compra (proveedor de nivel cultural o rusticidad, sin RUC)',        porcentajeAntes: 2,    porcentajeDespues: 3 },
+  '312':   { descripcion: 'Transferencia de bienes muebles de naturaleza corporal',                          porcentajeAntes: 1.75, porcentajeDespues: 2 },
+  '312A':  { descripcion: 'Compra al productor de bienes bioacuáticos, forestales y afines (Art. 27.1 LRTI)', porcentaje: 1 },
+  '312C':  { descripcion: 'Compra al comercializador de bienes bioacuáticos, forestales y afines',            porcentaje: 1.75 },
+  '314A':  { descripcion: 'Regalías por franquicias (COESCCI) — pago a personas naturales',                  porcentaje: 10 },
+  '314B':  { descripcion: 'Cánones, derechos de autor, marcas, patentes (COESCCI) — personas naturales',     porcentaje: 10 },
+  '314C':  { descripcion: 'Regalías por franquicias (COESCCI) — pago a sociedades',                          porcentaje: 10 },
+  '314D':  { descripcion: 'Cánones, derechos de autor, marcas, patentes (COESCCI) — sociedades',             porcentaje: 10 },
+  '319':   { descripcion: 'Arrendamiento mercantil (cuotas, incluida opción de compra)',                     porcentaje: 2 },
+  '320':   { descripcion: 'Arrendamiento de bienes inmuebles',                                                porcentaje: 10 },
+  '322':   { descripcion: 'Seguros y reaseguros (primas y cesiones)',                                        porcentajeAntes: 1,    porcentajeDespues: 2 },
+  '323':   { descripcion: 'Rendimientos financieros pagados a naturales y sociedades (no a IFIs)',           porcentaje: 2 },
+  '323A':  { descripcion: 'Rendimientos financieros — depósitos en cuenta corriente',                        porcentaje: 2 },
+  '323B1': { descripcion: 'Rendimientos financieros — depósitos en cuenta de ahorros (sociedades)',           porcentaje: 2 },
+  '323E':  { descripcion: 'Rendimientos financieros — depósito a plazo fijo, gravados',                      porcentaje: 2 },
+  '323E2': { descripcion: 'Rendimientos financieros — depósito a plazo fijo, exentos',                       porcentaje: 0 },
+  '323F':  { descripcion: 'Rendimientos financieros — operaciones de reporto (repos)',                       porcentaje: 2 },
+  '323G':  { descripcion: 'Inversiones (captaciones) — rendimientos distintos de los pagados a IFIs',        porcentaje: 2 },
+  '323H':  { descripcion: 'Rendimientos financieros — obligaciones',                                          porcentaje: 2 },
+  '323I':  { descripcion: 'Rendimientos financieros — bonos convertibles en acciones',                       porcentaje: 2 },
+  '323M':  { descripcion: 'Rendimientos financieros — inversiones en títulos valores de renta fija, gravados', porcentaje: 2 },
+  '323N':  { descripcion: 'Rendimientos financieros — inversiones en títulos valores de renta fija, exentos', porcentaje: 0 },
+  '323O':  { descripcion: 'Intereses y rendimientos financieros pagados a bancos y entidades bajo control SB/SEPS', porcentaje: 0 },
+  '323P':  { descripcion: 'Intereses pagados por entidades del sector público a sujetos pasivos',            porcentajeAntes: 2, porcentajeDespues: 3 },
+  '323Q':  { descripcion: 'Otros intereses y rendimientos financieros gravados',                             porcentajeAntes: 2, porcentajeDespues: 3 },
+  '323R':  { descripcion: 'Otros intereses y rendimientos financieros exentos',                              porcentaje: 0 },
+  '323S':  { descripcion: 'Pagos del BCE y depósitos centralizados de valores, como intermediarios, a IFIs por cuenta de terceros', porcentaje: 2 },
+  '323T':  { descripcion: 'Rendimientos financieros originados en deuda pública ecuatoriana',                porcentaje: 0 },
+  '323U':  { descripcion: 'Rendimientos financieros — títulos valores de obligaciones ≥360 días (proyectos públicos APP)', porcentaje: 0 },
+  '324A':  { descripcion: 'Intereses en operaciones de crédito entre IFIs y entidades de economía popular y solidaria', porcentajeAntes: 1, porcentajeDespues: 2 },
+  '324B':  { descripcion: 'Inversiones entre IFIs y entidades de economía popular y solidaria',               porcentajeAntes: 1, porcentajeDespues: 2 },
+  '324C':  { descripcion: 'Pagos del BCE y depósitos centralizados de valores, como intermediarios, a IFIs por cuenta de otras IFIs', porcentajeAntes: 1, porcentajeDespues: 2 },
+  '325':   { descripcion: 'Anticipo de dividendos',                                                          porcentaje: 25 },
+  '325A':  { descripcion: 'Préstamos a accionistas, beneficiarios o partícipes residentes o establecidos en Ecuador', porcentaje: 25 },
+  '3250':  { descripcion: 'Dividendos exentos (no llegan a la franja exenta o por beneficio de otras leyes)', porcentaje: 0 },
+  '326':   { descripcion: 'Dividendos distribuidos — impuesto único (Art. 27 LRTI)',                          porcentaje: null, notaPorcentaje: '12% o 14% según destino/jurisdicción del beneficiario' },
+  '327':   { descripcion: 'Dividendos distribuidos a personas naturales residentes',                         porcentaje: null, notaPorcentaje: '12% o 14% según destino/jurisdicción del beneficiario' },
+  '328':   { descripcion: 'Dividendos distribuidos a sociedades residentes',                                 porcentaje: 0 },
+  '329':   { descripcion: 'Dividendos distribuidos a fideicomisos residentes',                                porcentaje: 0 },
+  '331':   { descripcion: 'Dividendos en acciones (capitalización de utilidades)',                           porcentaje: 0 },
+  '332':   { descripcion: 'Otras compras de bienes y servicios no sujetas a retención (incl. RIMPE Negocio Popular)', porcentaje: 0 },
+  '332B':  { descripcion: 'Compra de bienes inmuebles',                                                       porcentaje: 0 },
+  '332C':  { descripcion: 'Transporte público de pasajeros',                                                 porcentaje: 0 },
+  '332D':  { descripcion: 'Pagos a compañías de aviación o marítimas por transporte de pasajeros/carga internacional', porcentaje: 0 },
+  '332E':  { descripcion: 'Valores entregados por cooperativas de transporte a sus socios',                   porcentaje: 0 },
+  '332F':  { descripcion: 'Compraventa de divisas distintas al dólar de los Estados Unidos',                  porcentaje: 0 },
+  '332G':  { descripcion: 'Pagos con tarjeta de crédito',                                                     porcentaje: 0 },
+  '332H':  { descripcion: 'Pago al exterior con tarjeta de crédito reportado por la emisora (solo recap)',   porcentaje: 0 },
+  '332I':  { descripcion: 'Pago a través de convenio de débito (clientes de IFIs)',                          porcentaje: 0 },
+  '333':   { descripcion: 'Ganancia en enajenación de derechos representativos de capital cotizados en bolsa', porcentaje: 10 },
+  '334':   { descripcion: 'Enajenación de derechos representativos de capital NO cotizados en bolsa',        porcentaje: 1 },
+  '335':   { descripcion: 'Loterías, rifas, pronósticos deportivos, apuestas y similares',                   porcentaje: 15 },
+  '336':   { descripcion: 'Venta de combustibles a comercializadoras',                                        porcentaje: 0.2 }, // 2 por mil
+  '337':   { descripcion: 'Venta de combustibles a distribuidores',                                          porcentaje: 0.3 }, // 3 por mil
+  '338':   { descripcion: 'Producción y venta local de banano (producido o no por el mismo sujeto pasivo)',  porcentaje: null, notaPorcentaje: '1% a 2% según el precio oficial de sustentación vigente' },
+  '343':   { descripcion: 'Otras retenciones aplicables al 1% (incl. RIMPE Emprendedores)',                  porcentaje: 1 },
+  '343A':  { descripcion: 'Energía eléctrica',                                                                porcentajeAntes: 1,    porcentajeDespues: 2 },
+  '343B':  { descripcion: 'Construcción de obra material inmueble, urbanización, lotización',                porcentajeAntes: 1.75, porcentajeDespues: 2 },
+  '343C':  { descripcion: 'Recepción de botellas plásticas no retornables de PET (persona natural, sobre el excedente exento)', porcentajeAntes: 2, porcentajeDespues: 2 },
+  '3440':  { descripcion: 'Otras retenciones (regla general — pagos sin porcentaje específico)',              porcentajeAntes: 2.75, porcentajeDespues: 3 },
+  '344A':  { descripcion: 'Pago local con tarjeta de crédito/débito (reportado por la emisora)',              porcentaje: 2 },
+  '344B':  { descripcion: 'Adquisición de sustancias minerales dentro del territorio nacional',              porcentaje: 2 },
+  '346':   { descripcion: 'Otras retenciones aplicables a otros porcentajes',                                 porcentaje: null, notaPorcentaje: 'Varios porcentajes según el caso — verificar con la contadora' },
+  '346A':  { descripcion: 'Otras ganancias de capital distintas de enajenación de derechos representativos de capital', porcentaje: null, notaPorcentaje: 'Varios porcentajes según el caso' },
+  '346B':  { descripcion: 'Donaciones en dinero — impuesto a las donaciones',                                 porcentaje: null, notaPorcentaje: 'Conforme Art. 36 literal d) de la LRTI' },
+  '346C':  { descripcion: 'Retención a cargo del propio sujeto pasivo — producción/comercialización de minerales', porcentaje: null, notaPorcentaje: '0% o 10% según el caso' },
+  '346D':  { descripcion: 'Retención a cargo del propio sujeto pasivo — comercialización de productos forestales', porcentaje: null, notaPorcentaje: '0% o 10% según el caso' },
+  '350':   { descripcion: 'Otras autorretenciones (Art. 92.1 incisos 1 y 2 RLRTI)',                          porcentaje: null, notaPorcentaje: '1.50% o 1.75% según el caso' },
+  '3480':  { descripcion: 'Impuesto a la renta único — operadores de pronósticos deportivos',                 porcentaje: 15 },
+  '3481':  { descripcion: 'Autorretenciones — Sociedades Grandes Contribuyentes',                             porcentaje: null, notaPorcentaje: 'Conforme Res. NAC-DGERCGC24-00000003 (12-ene-2024)' },
+  '3482':  { descripcion: 'Comisiones a sociedades nacionales/extranjeras residentes con establecimiento permanente', porcentaje: 3 },
 };
 
 const CODIGOS_RETENCION_IVA = {

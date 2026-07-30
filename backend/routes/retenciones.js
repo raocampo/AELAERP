@@ -805,6 +805,15 @@ function _expandirCatalogoRetencion(catalogo, codigoTipo) {
         descripcion: `${v.descripcion} (desde 01/03/2026 — ${v.porcentajeDespues}%)`,
         porcentaje: v.porcentajeDespues,
       });
+    } else if (v.porcentaje === null) {
+      // Porcentaje variable/condicional (ej. dividendos según jurisdicción,
+      // autorretenciones según el caso) — no hay un valor único que
+      // precargar; se deja en 0 para que el contador lo escriba a mano.
+      filas.push({
+        id: cod, codigo: codigoTipo, codigoPorcentaje: cod,
+        descripcion: `${v.descripcion} (% variable — ${v.notaPorcentaje})`,
+        porcentaje: 0,
+      });
     } else {
       filas.push({ id: cod, codigo: codigoTipo, codigoPorcentaje: cod, descripcion: v.descripcion, porcentaje: v.porcentaje });
     }
