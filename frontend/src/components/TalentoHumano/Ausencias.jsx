@@ -91,6 +91,17 @@ const Ausencias = () => {
     }
   };
 
+  const pagarVacacion = async (aus) => {
+    if (!confirm(`¿Registrar el pago de ${aus.dias} días de vacación de ${aus.empleado.nombres} ${aus.empleado.apellidos}? Se generará el asiento contable correspondiente.`)) return;
+    try {
+      const r = await api.patch(`/talento-humano/ausencias/${aus.id}/pagar`);
+      toast.success(`Vacación pagada: $${Number(r.data.data.valorPagado).toFixed(2)}`);
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al pagar vacación');
+    }
+  };
+
   const totalPages = Math.ceil(total / PER_PAGE);
 
   return (
@@ -173,6 +184,12 @@ const Ausencias = () => {
                         <button className="btn-th-sm" onClick={() => toggleAprobar(aus)}>
                           {aus.aprobado ? '↩ Retirar' : '✅ Aprobar'}
                         </button>
+                        {aus.tipo === 'vacacion' && aus.aprobado && !aus.pagado && (
+                          <button className="btn-th-sm" onClick={() => pagarVacacion(aus)} title="Registrar pago de vacación">💵 Pagar</button>
+                        )}
+                        {aus.tipo === 'vacacion' && aus.pagado && (
+                          <span className="badge-pagada" title={`Pagado: $${Number(aus.valorPagado).toFixed(2)}`}>Pagado</span>
+                        )}
                         <button className="btn-th-danger" onClick={() => eliminar(aus)}>🗑</button>
                       </div>
                     </td>

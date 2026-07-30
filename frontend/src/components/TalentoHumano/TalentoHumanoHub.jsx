@@ -86,6 +86,11 @@ const TalentoHumanoHub = () => {
           <span className="qc-title">Ausencias y Vacaciones</span>
           <span className="qc-desc">Control de permisos y licencias</span>
         </button>
+        <button className="th-quick-card" onClick={() => navigate('/talento-humano/pagos-especiales')}>
+          <span className="qc-icon">🎁</span>
+          <span className="qc-title">Pagos Especiales</span>
+          <span className="qc-desc">Décimo tercero/cuarto, utilidades 15% y liquidaciones</span>
+        </button>
       </div>
     </div>
   );

@@ -17,6 +17,12 @@ const CONCEPTOS_NOMINA = [
   { codigoReferencia: 'PROV_FONDOS_RESERVA_PAGAR', etiqueta: 'Provisión Fondos de Reserva por Pagar',           codigoDefault: '2.1.05.006', nombreDefault: 'Provisión Fondos de Reserva por Pagar',           tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO' },
   { codigoReferencia: 'ANTICIPOS_EMPLEADOS',       etiqueta: 'Anticipos a Empleados',                           codigoDefault: '1.1.08.001', nombreDefault: 'Anticipos a Empleados',                           tipoDefault: 'ACTIVO', naturalezaDefault: 'DEBITO' },
   { codigoReferencia: 'OTROS_DESCUENTOS_NOMINA',   etiqueta: 'Otros Descuentos de Nómina por Pagar',            codigoDefault: '2.1.05.007', nombreDefault: 'Otros Descuentos de Nómina por Pagar',            tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO' },
+  { codigoReferencia: 'GASTO_PROV_VACACIONES',     etiqueta: 'Gasto Provisión Vacaciones',                      codigoDefault: '5.1.02.006', nombreDefault: 'Gasto Provisión Vacaciones',                      tipoDefault: 'GASTO',  naturalezaDefault: 'DEBITO' },
+  { codigoReferencia: 'PROV_VACACIONES_PAGAR',     etiqueta: 'Provisión Vacaciones por Pagar',                  codigoDefault: '2.1.05.008', nombreDefault: 'Provisión Vacaciones por Pagar',                  tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO' },
+  { codigoReferencia: 'GASTO_UTILIDADES_TRABAJADORES', etiqueta: 'Gasto 15% Utilidades a Trabajadores',         codigoDefault: '5.1.02.007', nombreDefault: 'Gasto 15% Utilidades a Trabajadores',             tipoDefault: 'GASTO',  naturalezaDefault: 'DEBITO' },
+  { codigoReferencia: 'UTILIDADES_POR_PAGAR',      etiqueta: 'Utilidades por Pagar a Trabajadores',             codigoDefault: '2.1.05.009', nombreDefault: 'Utilidades por Pagar a Trabajadores',             tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO' },
+  { codigoReferencia: 'GASTO_INDEMNIZACION_LABORAL', etiqueta: 'Gasto Indemnizaciones Laborales',               codigoDefault: '5.1.02.008', nombreDefault: 'Gasto Indemnizaciones Laborales',                 tipoDefault: 'GASTO',  naturalezaDefault: 'DEBITO' },
+  { codigoReferencia: 'LIQUIDACIONES_POR_PAGAR',   etiqueta: 'Liquidaciones Laborales por Pagar',               codigoDefault: '2.1.05.010', nombreDefault: 'Liquidaciones Laborales por Pagar',               tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO' },
 ];
 
 // Categoría General — sin motor que las use todavía (AELA no tiene cierre de

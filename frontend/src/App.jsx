@@ -112,6 +112,7 @@ const Departamentos      = lazy(() => import('./components/TalentoHumano/Departa
 const Cargos             = lazy(() => import('./components/TalentoHumano/Cargos'));
 const Nomina             = lazy(() => import('./components/TalentoHumano/Nomina'));
 const Ausencias          = lazy(() => import('./components/TalentoHumano/Ausencias'));
+const PagosEspeciales    = lazy(() => import('./components/TalentoHumano/PagosEspeciales'));
 const AyudaSistema       = lazy(() => import('./components/Ayuda/AyudaSistema'));
 const ListaProformas     = lazy(() => import('./components/Proformas/ListaProformas'));
 const FormProforma       = lazy(() => import('./components/Proformas/FormProforma'));
@@ -298,6 +299,7 @@ function App() {
                 <Route path="talento-humano/cargos"        element={<MediumRoute><ModuleRoute moduleKey="talentoHumano"><PermissionRoute permission="rrhh.gestionar"><Cargos /></PermissionRoute></ModuleRoute></MediumRoute>} />
                 <Route path="talento-humano/nomina"        element={<MediumRoute><ModuleRoute moduleKey="talentoHumano"><PermissionRoute permission="rrhh.nomina"><Nomina /></PermissionRoute></ModuleRoute></MediumRoute>} />
                 <Route path="talento-humano/ausencias"     element={<MediumRoute><ModuleRoute moduleKey="talentoHumano"><PermissionRoute permission="rrhh.ver"><Ausencias /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                <Route path="talento-humano/pagos-especiales" element={<MediumRoute><ModuleRoute moduleKey="talentoHumano"><PermissionRoute permission="rrhh.nomina"><PagosEspeciales /></PermissionRoute></ModuleRoute></MediumRoute>} />
 
                 {/* Usuarios — solo admin */}
                 <Route path="usuarios" element={<AdminRoute><GestionUsuarios /></AdminRoute>} />

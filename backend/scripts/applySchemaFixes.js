@@ -597,6 +597,47 @@ const FIXES = [
   // false) y aprobarla como gasto de la actividad económica, para que sí
   // cuente en el crédito tributario de IVA (F104) y en el F101 (2026-07-27).
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "aprobadaPorContador" BOOLEAN NOT NULL DEFAULT false`,
+  // Nómina real: décimo tercero/cuarto, vacaciones, utilidades 15% y
+  // liquidación de haberes (2026-07-30).
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "regimenDecimoCuarto" VARCHAR(10) NOT NULL DEFAULT 'sierra'`,
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "cargasFamiliares" INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE "nomina_detalles" ADD COLUMN IF NOT EXISTS "vacacionesProp" DECIMAL(10,2) NOT NULL DEFAULT 0`,
+  `ALTER TABLE "ausencias" ADD COLUMN IF NOT EXISTS "pagado" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "ausencias" ADD COLUMN IF NOT EXISTS "valorPagado" DECIMAL(10,2)`,
+  `ALTER TABLE "ausencias" ADD COLUMN IF NOT EXISTS "fechaPago" TIMESTAMP(3)`,
+  `CREATE TABLE IF NOT EXISTS "nomina_pagos_especiales" (
+    "id"            SERIAL PRIMARY KEY,
+    "empresaId"     INTEGER NOT NULL DEFAULT 1,
+    "tipo"          VARCHAR(20) NOT NULL,
+    "anio"          INTEGER NOT NULL,
+    "periodoDesde"  TIMESTAMP(3) NOT NULL,
+    "periodoHasta"  TIMESTAMP(3) NOT NULL,
+    "estado"        VARCHAR(20) NOT NULL DEFAULT 'BORRADOR',
+    "fechaPago"      TIMESTAMP(3),
+    "totalPagado"   DECIMAL(14,2) NOT NULL DEFAULT 0,
+    "observaciones" TEXT,
+    "creadoPor"     INTEGER,
+    "createdAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"     TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "nomina_pagos_especiales_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "empresas"("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "nomina_pagos_especiales_empresaId_idx" ON "nomina_pagos_especiales"("empresaId")`,
+  `CREATE INDEX IF NOT EXISTS "nomina_pagos_especiales_empresaId_tipo_anio_idx" ON "nomina_pagos_especiales"("empresaId", "tipo", "anio")`,
+  `CREATE TABLE IF NOT EXISTS "nomina_pagos_especiales_detalle" (
+    "id"            SERIAL PRIMARY KEY,
+    "pagoId"        INTEGER NOT NULL,
+    "empleadoId"    INTEGER NOT NULL,
+    "baseCalculo"   DECIMAL(12,2) NOT NULL DEFAULT 0,
+    "diasBase"      INTEGER,
+    "valor"         DECIMAL(10,2) NOT NULL DEFAULT 0,
+    "detalleJson"   TEXT,
+    "observaciones" VARCHAR(300),
+    CONSTRAINT "nomina_pagos_especiales_detalle_pagoId_fkey" FOREIGN KEY ("pagoId") REFERENCES "nomina_pagos_especiales"("id") ON DELETE CASCADE,
+    CONSTRAINT "nomina_pagos_especiales_detalle_empleadoId_fkey" FOREIGN KEY ("empleadoId") REFERENCES "empleados"("id")
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "nomina_pagos_especiales_detalle_pagoId_empleadoId_key" ON "nomina_pagos_especiales_detalle"("pagoId", "empleadoId")`,
+  `CREATE INDEX IF NOT EXISTS "nomina_pagos_especiales_detalle_pagoId_idx" ON "nomina_pagos_especiales_detalle"("pagoId")`,
+  `CREATE INDEX IF NOT EXISTS "nomina_pagos_especiales_detalle_empleadoId_idx" ON "nomina_pagos_especiales_detalle"("empleadoId")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

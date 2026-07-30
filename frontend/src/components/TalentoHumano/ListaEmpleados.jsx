@@ -6,6 +6,14 @@ import { formatFechaCorta } from '../../utils/fecha';
 import { IcEditar } from '../../utils/icons';
 import './TalentoHumano.css';
 
+const MOTIVOS_SALIDA = [
+  { value: 'renuncia', label: 'Renuncia voluntaria' },
+  { value: 'despido_intempestivo', label: 'Despido intempestivo' },
+  { value: 'despido_causa_justa', label: 'Despido con causa justa (visto bueno)' },
+  { value: 'mutuo_acuerdo', label: 'Mutuo acuerdo' },
+  { value: 'fin_contrato', label: 'Fin de contrato / plazo fijo' },
+];
+
 const ListaEmpleados = () => {
   const navigate = useNavigate();
   const [lista, setLista] = useState([]);
@@ -16,6 +24,7 @@ const ListaEmpleados = () => {
   const [deptFiltro, setDeptFiltro] = useState('');
   const [activoFiltro, setActivoFiltro] = useState('true');
   const [page, setPage] = useState(1);
+  const [liquidarEmp, setLiquidarEmp] = useState(null);
   const PER_PAGE = 50;
 
   const cargar = useCallback(async () => {
@@ -117,6 +126,12 @@ const ListaEmpleados = () => {
                           onClick={() => navigate(`/talento-humano/empleados/${emp.id}`)}>
                           <IcEditar/>
                         </button>
+                        {emp.activo && (
+                          <button className="btn-th-sm" title="Liquidar (terminar relación laboral)"
+                            onClick={() => setLiquidarEmp(emp)}>
+                            🧾 Liquidar
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -136,6 +151,65 @@ const ListaEmpleados = () => {
           )}
         </>
       )}
+
+      {liquidarEmp && (
+        <LiquidarModal
+          empleado={liquidarEmp}
+          onClose={() => setLiquidarEmp(null)}
+          onLiquidado={() => { setLiquidarEmp(null); cargar(); navigate('/talento-humano/pagos-especiales'); }}
+        />
+      )}
+    </div>
+  );
+};
+
+const LiquidarModal = ({ empleado, onClose, onLiquidado }) => {
+  const [fechaSalida, setFechaSalida] = useState(new Date().toISOString().slice(0, 10));
+  const [motivoSalida, setMotivoSalida] = useState('renuncia');
+  const [guardando, setGuardando] = useState(false);
+
+  const confirmar = async () => {
+    if (!confirm(`¿Calcular la liquidación de haberes de ${empleado.nombres} ${empleado.apellidos}? El empleado quedará marcado como inactivo con fecha de salida ${fechaSalida}.`)) return;
+    setGuardando(true);
+    try {
+      await api.post(`/talento-humano/empleados/${empleado.id}/liquidar`, { fechaSalida, motivoSalida });
+      toast.success('Liquidación calculada — revísala en Pagos Especiales antes de pagarla');
+      onLiquidado();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al calcular la liquidación');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="th-modal-overlay">
+      <div className="th-modal">
+        <h2>Liquidar: {empleado.apellidos}, {empleado.nombres}</h2>
+        <p style={{ fontSize: '0.85rem', color: '#718096', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+          Se calculará sueldo pendiente, vacaciones no gozadas, décimo tercero/cuarto y fondos de reserva
+          proporcionales, y (según el motivo) bonificación por desahucio o indemnización. Quedará en
+          BORRADOR para revisión antes de pagarse.
+        </p>
+        <div className="th-form-grid">
+          <div className="th-form-group">
+            <label>Fecha de salida *</label>
+            <input type="date" value={fechaSalida} onChange={(e) => setFechaSalida(e.target.value)} />
+          </div>
+          <div className="th-form-group">
+            <label>Motivo *</label>
+            <select value={motivoSalida} onChange={(e) => setMotivoSalida(e.target.value)}>
+              {MOTIVOS_SALIDA.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="th-modal-actions">
+          <button type="button" className="btn-th-secondary" onClick={onClose}>Cancelar</button>
+          <button type="button" className="btn-th-primary" disabled={guardando} onClick={confirmar}>
+            {guardando ? 'Calculando…' : 'Calcular liquidación'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

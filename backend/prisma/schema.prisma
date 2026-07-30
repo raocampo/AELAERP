@@ -96,6 +96,7 @@ model empresas {
   contratos                        contratos[]
   nominas                          nominas[]
   ausencias                        ausencias[]
+  nominaPagosEspeciales            nomina_pagos_especiales[]
   tablaUtilidades                  tabla_utilidades[]
   centrosCosto                     centros_costo[]
   configuracionesCuentasReferencia configuracion_cuentas_referencia[]
@@ -313,6 +314,9 @@ model configuracion_sistema {
   tributarioHabilitado     Boolean  @default(true)
   bancosHabilitado         Boolean  @default(true)
   sbuEcuador               Decimal  @default(460.00) @db.Decimal(8, 2)
+  // Régimen de décimo cuarto sueldo (define período de acumulación y fecha
+  // límite de pago): 'sierra' (Ago-Jul, pago hasta 15 ago) | 'costa' (Mar-Feb, pago hasta 15 mar)
+  regimenDecimoCuarto      String   @default("sierra") @db.VarChar(10)
   updatedAt                DateTime @updatedAt
 
   empresa empresas @relation(fields: [empresaId], references: [id])
@@ -1746,6 +1750,8 @@ model empleados {
   // Configuracion beneficios
   fondosReserva   Boolean   @default(false)
   // Se activa automaticamente despues del primer año
+  cargasFamiliares Int      @default(0)
+  // Número de cargas familiares — usado en el reparto del 5% de utilidades
   // Estado
   activo          Boolean   @default(true)
   observaciones   String?   @db.Text
@@ -1758,6 +1764,7 @@ model empleados {
   nominaDetalles nomina_detalles[]
   ausencias      ausencias[]
   contratos      contratos[]
+  pagosEspeciales nomina_pagos_especiales_detalle[]
 
   @@unique([empresaId, cedula])
   @@index([empresaId])
@@ -1825,10 +1832,13 @@ model nomina_detalles {
   valorHorasExtraExtraordinario Decimal  @default(0) @db.Decimal(10, 2)
   otrosIngresos                 Decimal  @default(0) @db.Decimal(10, 2)
   otrosIngresosDetalle          String?  @db.VarChar(300)
-  // Beneficios proporcionales (informativo)
+  // Beneficios proporcionales — se acumulan mes a mes en las cuentas de
+  // provisión (ver crearAsientoNominaPeriodo) y se liquidan/pagan realmente
+  // vía POST /nomina/especiales (décimo 3º/4º) o /ausencias/:id/pagar (vacaciones)
   decimoTerceroProp             Decimal  @default(0) @db.Decimal(10, 2)
   decimoCuartoProp              Decimal  @default(0) @db.Decimal(10, 2)
   fondosReservaProp             Decimal  @default(0) @db.Decimal(10, 2)
+  vacacionesProp                Decimal  @default(0) @db.Decimal(10, 2)
   // Descuentos
   aportePersonalIESS            Decimal  @default(0) @db.Decimal(10, 2)
   // 9.45%
@@ -1868,6 +1878,10 @@ model ausencias {
   dias          Int
   aprobado      Boolean  @default(false)
   aprobadoPor   Int?
+  // Liquidación de vacaciones pagadas (solo aplica tipo = vacacion)
+  pagado        Boolean  @default(false)
+  valorPagado   Decimal? @db.Decimal(10, 2)
+  fechaPago     DateTime?
   observaciones String?  @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -1878,6 +1892,60 @@ model ausencias {
   @@index([empresaId])
   @@index([empleadoId])
   @@map("ausencias")
+}
+
+// ====================================
+// NÓMINA — PAGOS ESPECIALES
+// Décimo tercero, décimo cuarto, utilidades 15% y liquidación de haberes.
+// Cada registro es una corrida de pago (batch) con una línea de detalle por
+// empleado; para LIQUIDACION la corrida siempre tiene una sola línea (el
+// empleado que termina su relación laboral).
+// ====================================
+model nomina_pagos_especiales {
+  id            Int       @id @default(autoincrement())
+  empresaId     Int       @default(1)
+  tipo          String    @db.VarChar(20)
+  // DECIMO_TERCERO | DECIMO_CUARTO | VACACIONES | UTILIDADES | LIQUIDACION
+  anio          Int
+  periodoDesde  DateTime
+  periodoHasta  DateTime
+  estado        String    @default("BORRADOR") @db.VarChar(20)
+  // BORRADOR | PAGADA
+  fechaPago     DateTime?
+  totalPagado   Decimal   @default(0) @db.Decimal(14, 2)
+  observaciones String?   @db.Text
+  creadoPor     Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  empresa  empresas                           @relation(fields: [empresaId], references: [id])
+  detalles nomina_pagos_especiales_detalle[]
+
+  @@index([empresaId])
+  @@index([empresaId, tipo, anio])
+  @@map("nomina_pagos_especiales")
+}
+
+model nomina_pagos_especiales_detalle {
+  id            Int      @id @default(autoincrement())
+  pagoId        Int
+  empleadoId    Int
+  baseCalculo   Decimal  @default(0) @db.Decimal(12, 2)
+  // Suma de remuneraciones o utilidad usada para prorratear, según el tipo
+  diasBase      Int?
+  // Días trabajados en el período (proporcionalidad)
+  valor         Decimal  @default(0) @db.Decimal(10, 2)
+  detalleJson   String?  @db.Text
+  // Desglose opcional (p.ej. utilidades: partes 10%/5%)
+  observaciones String?  @db.VarChar(300)
+
+  pago     nomina_pagos_especiales @relation(fields: [pagoId], references: [id], onDelete: Cascade)
+  empleado empleados               @relation(fields: [empleadoId], references: [id])
+
+  @@unique([pagoId, empleadoId])
+  @@index([pagoId])
+  @@index([empleadoId])
+  @@map("nomina_pagos_especiales_detalle")
 }
 
 // ====================================

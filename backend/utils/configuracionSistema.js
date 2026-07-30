@@ -163,6 +163,7 @@ function construirConfiguracionSistemaBase(empresa = {}) {
     permitirStockNegativo:   false,
     prefijosRegaloCompras:   JSON.stringify(PREFIJOS_REGALO_DEFAULT),
     sbuEcuador:              480.00,
+    regimenDecimoCuarto:     'sierra',
     ...caps,
   };
 }
@@ -232,6 +233,7 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
     // históricos, el selector queda oculto hasta que el admin lo active aquí.
     sucursalesHabilitado:     Boolean(config?.sucursalesHabilitado ?? false),
     sbuEcuador:               parseFloat(config?.sbuEcuador) || 480.00,
+    regimenDecimoCuarto:      ['sierra', 'costa'].includes(config?.regimenDecimoCuarto) ? config.regimenDecimoCuarto : 'sierra',
   };
 }
 
@@ -291,6 +293,9 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
     sbuEcuador:               parseFloat(reqBody.sbuEcuador) > 0
                                 ? parseFloat(reqBody.sbuEcuador)
                                 : parseFloat(actual.sbuEcuador) || 480.00,
+    regimenDecimoCuarto:      ['sierra', 'costa'].includes(reqBody.regimenDecimoCuarto)
+                                ? reqBody.regimenDecimoCuarto
+                                : (actual.regimenDecimoCuarto || 'sierra'),
   };
 }
 

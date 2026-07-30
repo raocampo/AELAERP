@@ -255,6 +255,7 @@ function _calcularTotalesNomina(detallesNomina) {
     totalDecimoTercero: sumar('decimoTerceroProp'),
     totalDecimoCuarto: sumar('decimoCuartoProp'),
     totalFondosReserva: sumar('fondosReservaProp'),
+    totalVacaciones: sumar('vacacionesProp'),
     totalAportePatronal: sumar('aportePatronal'),
     totalAportePersonal,
     totalImpuestoRenta,
@@ -317,6 +318,10 @@ async function crearAsientoNominaPeriodo({ empresaId, periodo, usuarioId, fecha 
     const cuenta = await cuentaPorConcepto('GASTO_PROV_FONDOS_RESERVA');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión fondos de reserva ${periodo}`, debe: t.totalFondosReserva, haber: 0 });
   }
+  if (t.totalVacaciones > 0) {
+    const cuenta = await cuentaPorConcepto('GASTO_PROV_VACACIONES');
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión vacaciones ${periodo}`, debe: t.totalVacaciones, haber: 0 });
+  }
 
   const cuentaSueldosPagar = await cuentaPorConcepto('SUELDOS_POR_PAGAR');
   detalles.push({ cuentaId: cuentaSueldosPagar.id, descripcion: `Neto a pagar ${periodo}`, debe: 0, haber: t.totalNeto });
@@ -341,6 +346,10 @@ async function crearAsientoNominaPeriodo({ empresaId, periodo, usuarioId, fecha 
   if (t.totalFondosReserva > 0) {
     const cuenta = await cuentaPorConcepto('PROV_FONDOS_RESERVA_PAGAR');
     detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión fondos de reserva ${periodo}`, debe: 0, haber: t.totalFondosReserva });
+  }
+  if (t.totalVacaciones > 0) {
+    const cuenta = await cuentaPorConcepto('PROV_VACACIONES_PAGAR');
+    detalles.push({ cuentaId: cuenta.id, descripcion: `Provisión vacaciones ${periodo}`, debe: 0, haber: t.totalVacaciones });
   }
   if (t.totalAnticipos > 0) {
     const cuenta = await cuentaPorConcepto('ANTICIPOS_EMPLEADOS');
@@ -417,6 +426,148 @@ async function crearAsientoPagoNominaPeriodo({ empresaId, periodo, usuarioId, fe
       { cuentaId: cuentaSueldosPagar.id, descripcion: `Pago neto ${periodo}`, debe: totalNeto, haber: 0 },
       { cuentaId: cuentaCaja.id, descripcion: `Pago neto ${periodo}`, debe: 0, haber: totalNeto },
     ],
+  });
+
+  return { asiento, creado: true };
+}
+
+// Pago de una ausencia de tipo vacación ya aprobada — descarga la provisión
+// mensual de vacaciones (PROV_VACACIONES_PAGAR) acumulada en crearAsientoNominaPeriodo.
+async function crearAsientoPagoVacaciones({ empresaId, ausenciaId, valor, usuarioId, fecha = new Date(), db = prisma }) {
+  const empresaIdNum = toInt(empresaId);
+  const referencia = `VACACIONES-${ausenciaId}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: empresaIdNum, tipo: 'NOMINA', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const montoValor = round2(valor);
+  if (montoValor <= 0) return { asiento: null, creado: false };
+
+  const mapaConfig = await obtenerCuentasReferenciaConfiguradas({ empresaId: empresaIdNum, categoria: 'NOMINA', tx: db });
+  const conceptoLiab = CONCEPTOS_NOMINA.find((x) => x.codigoReferencia === 'PROV_VACACIONES_PAGAR');
+  const cuentaLiab = await _resolverCuentaPorCodigo({
+    empresaId: empresaIdNum, mapaConfig, codigoReferencia: 'PROV_VACACIONES_PAGAR',
+    codigoDefault: conceptoLiab.codigoDefault, nombreDefault: conceptoLiab.nombreDefault,
+    tipoDefault: conceptoLiab.tipoDefault, naturalezaDefault: conceptoLiab.naturalezaDefault, tx: db,
+  });
+  const cuentaCaja = await ensureCuentaMovimiento({
+    empresaId: empresaIdNum, tx: db,
+    codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+  });
+
+  const asiento = await crearAsientoContable({
+    empresaId: empresaIdNum,
+    fecha,
+    descripcion: 'Pago de vacaciones',
+    tipo: 'NOMINA',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles: [
+      { cuentaId: cuentaLiab.id, descripcion: 'Pago vacaciones', debe: montoValor, haber: 0 },
+      { cuentaId: cuentaCaja.id, descripcion: 'Pago vacaciones', debe: 0, haber: montoValor },
+    ],
+  });
+
+  return { asiento, creado: true };
+}
+
+// Pago de una corrida de nomina_pagos_especiales (décimo tercero/cuarto,
+// utilidades 15% o liquidación de haberes). Décimo tercero/cuarto descargan
+// la provisión mensual ya expensada mes a mes; utilidades y los componentes
+// nuevos de liquidación (sueldo pendiente, indemnización/desahucio) se
+// expensan recién en este asiento, ya que no tuvieron provisión previa.
+async function crearAsientoPagoEspecialNomina({ empresaId, pagoEspecialId, usuarioId, fecha = new Date(), db = prisma }) {
+  const empresaIdNum = toInt(empresaId);
+  const pago = await db.nomina_pagos_especiales.findFirst({
+    where: { id: toInt(pagoEspecialId), empresaId: empresaIdNum },
+    include: { detalles: true },
+  });
+  if (!pago) throw new Error('Pago especial no encontrado');
+
+  const referencia = `PAGOESP-${pago.id}`;
+  const existente = await db.asientos_contables.findFirst({
+    where: { empresaId: empresaIdNum, tipo: 'NOMINA', referencia },
+  });
+  if (existente) return { asiento: existente, creado: false };
+
+  const total = round2(pago.totalPagado);
+  if (total <= 0) throw new Error('El pago no tiene un monto válido para generar el asiento');
+
+  const mapaConfig = await obtenerCuentasReferenciaConfiguradas({ empresaId: empresaIdNum, categoria: 'NOMINA', tx: db });
+  const cuentaPorConcepto = async (codigoReferencia) => {
+    const c = CONCEPTOS_NOMINA.find((x) => x.codigoReferencia === codigoReferencia);
+    return _resolverCuentaPorCodigo({
+      empresaId: empresaIdNum, mapaConfig, codigoReferencia,
+      codigoDefault: c.codigoDefault, nombreDefault: c.nombreDefault, tipoDefault: c.tipoDefault, naturalezaDefault: c.naturalezaDefault, tx: db,
+    });
+  };
+  const cuentaCaja = await ensureCuentaMovimiento({
+    empresaId: empresaIdNum, tx: db,
+    codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO',
+  });
+
+  const detalles = [];
+
+  if (pago.tipo === 'DECIMO_TERCERO' || pago.tipo === 'DECIMO_CUARTO') {
+    const codigoRef = pago.tipo === 'DECIMO_TERCERO' ? 'PROV_DECIMO_TERCERO_PAGAR' : 'PROV_DECIMO_CUARTO_PAGAR';
+    const etiqueta = pago.tipo === 'DECIMO_TERCERO' ? 'Décimo Tercero' : 'Décimo Cuarto';
+    const cuentaLiab = await cuentaPorConcepto(codigoRef);
+    detalles.push({ cuentaId: cuentaLiab.id, descripcion: `Pago ${etiqueta} ${pago.anio}`, debe: total, haber: 0 });
+    detalles.push({ cuentaId: cuentaCaja.id, descripcion: `Pago ${etiqueta} ${pago.anio}`, debe: 0, haber: total });
+  } else if (pago.tipo === 'UTILIDADES') {
+    const cuentaGasto = await cuentaPorConcepto('GASTO_UTILIDADES_TRABAJADORES');
+    detalles.push({ cuentaId: cuentaGasto.id, descripcion: `Utilidades 15% trabajadores ${pago.anio}`, debe: total, haber: 0 });
+    detalles.push({ cuentaId: cuentaCaja.id, descripcion: `Pago utilidades ${pago.anio}`, debe: 0, haber: total });
+  } else if (pago.tipo === 'LIQUIDACION') {
+    const provisionCuentas = {
+      vacacionesPendientes: 'PROV_VACACIONES_PAGAR',
+      decimoTerceroPendiente: 'PROV_DECIMO_TERCERO_PAGAR',
+      decimoCuartoPendiente: 'PROV_DECIMO_CUARTO_PAGAR',
+      fondosReservaPendiente: 'PROV_FONDOS_RESERVA_PAGAR',
+    };
+    const acumProvision = {};
+    let sueldoPendienteTotal = 0;
+    let indemnizacionTotal = 0;
+    for (const d of pago.detalles) {
+      let comp = {};
+      try { comp = JSON.parse(d.detalleJson || '{}'); } catch { comp = {}; }
+      for (const [campo, codigoRef] of Object.entries(provisionCuentas)) {
+        const v = round2(comp[campo] || 0);
+        if (v > 0) acumProvision[codigoRef] = round2((acumProvision[codigoRef] || 0) + v);
+      }
+      sueldoPendienteTotal = round2(sueldoPendienteTotal + round2(comp.sueldoPendiente || 0));
+      indemnizacionTotal = round2(indemnizacionTotal + round2(comp.bonifDesahucio || 0) + round2(comp.indemnizacion || 0));
+    }
+    for (const [codigoRef, monto] of Object.entries(acumProvision)) {
+      if (monto > 0) {
+        const cuenta = await cuentaPorConcepto(codigoRef);
+        detalles.push({ cuentaId: cuenta.id, descripcion: `Liquidación de haberes — ${codigoRef}`, debe: monto, haber: 0 });
+      }
+    }
+    if (sueldoPendienteTotal > 0) {
+      const cuentaGastoSueldos = await cuentaPorConcepto('GASTO_SUELDOS');
+      detalles.push({ cuentaId: cuentaGastoSueldos.id, descripcion: 'Liquidación — sueldo pendiente', debe: sueldoPendienteTotal, haber: 0 });
+    }
+    if (indemnizacionTotal > 0) {
+      const cuentaGastoIndem = await cuentaPorConcepto('GASTO_INDEMNIZACION_LABORAL');
+      detalles.push({ cuentaId: cuentaGastoIndem.id, descripcion: 'Liquidación — bonificación desahucio / indemnización', debe: indemnizacionTotal, haber: 0 });
+    }
+    detalles.push({ cuentaId: cuentaCaja.id, descripcion: 'Pago liquidación de haberes', debe: 0, haber: total });
+  } else {
+    throw new Error(`Tipo de pago especial desconocido: ${pago.tipo}`);
+  }
+
+  const asiento = await crearAsientoContable({
+    empresaId: empresaIdNum,
+    fecha,
+    descripcion: `Pago ${pago.tipo} ${pago.anio}`,
+    tipo: 'NOMINA',
+    referencia,
+    usuarioId,
+    tx: db,
+    detalles,
   });
 
   return { asiento, creado: true };
@@ -2165,6 +2316,8 @@ module.exports = {
   crearAsientoContable,
   crearAsientoNominaPeriodo,
   crearAsientoPagoNominaPeriodo,
+  crearAsientoPagoVacaciones,
+  crearAsientoPagoEspecialNomina,
   crearAsientoFacturaAutorizada,
   crearAsientoCostoVentaFactura,
   crearAsientoVentaNotaVenta,

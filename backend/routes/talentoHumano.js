@@ -8,7 +8,11 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
-const { crearAsientoNominaPeriodo, crearAsientoPagoNominaPeriodo } = require('../utils/contabilidad');
+const {
+  crearAsientoNominaPeriodo, crearAsientoPagoNominaPeriodo,
+  crearAsientoPagoVacaciones, crearAsientoPagoEspecialNomina,
+  round2,
+} = require('../utils/contabilidad');
 
 const verRRHH      = [proteger, autorizarPermiso('rrhh.ver')];
 const gestionarRRHH = [proteger, autorizarPermiso('rrhh.gestionar')];
@@ -96,6 +100,83 @@ function calcularImpuestoRentaMensual({
     baseImponible: +baseImponible.toFixed(2),
     ingresoGravadoAnual: +ingresosAnuales.toFixed(2),
   };
+}
+
+// ─── Helpers de fechas para beneficios de ley ────────────────────────────────
+
+// Enumera los pares {anio, mes} de las nóminas mensuales que caen dentro de
+// [desde, hasta] — usado para sumar campos proporcionales (decimoTerceroProp,
+// etc.) ya calculados mes a mes en nomina_detalles.
+function _mesesEnRango(desde, hasta) {
+  const metas = [];
+  let d = new Date(desde.getFullYear(), desde.getMonth(), 1);
+  const fin = new Date(hasta.getFullYear(), hasta.getMonth(), 1);
+  while (d <= fin) {
+    metas.push({ anio: d.getFullYear(), mes: d.getMonth() + 1 });
+    d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  }
+  return metas;
+}
+
+async function _sumarProporcionalPendiente({ empresaId, empleadoId, campo, desde, hasta }) {
+  const metas = _mesesEnRango(desde, hasta);
+  if (metas.length === 0) return 0;
+  const nominas = await prisma.nominas.findMany({ where: { empresaId, OR: metas }, select: { id: true } });
+  if (nominas.length === 0) return 0;
+  const detalles = await prisma.nomina_detalles.findMany({
+    where: { empleadoId, nominaId: { in: nominas.map((n) => n.id) } },
+  });
+  return round2(detalles.reduce((s, d) => s + parseFloat(d[campo] || 0), 0));
+}
+
+// Período legal de acumulación de décimo tercero/cuarto para un año dado.
+function _periodoDecimo(tipo, anio, regimenDecimoCuarto) {
+  if (tipo === 'DECIMO_TERCERO') {
+    return { desde: new Date(anio - 1, 11, 1), hasta: new Date(anio, 10, 30, 23, 59, 59, 999) };
+  }
+  if (tipo === 'DECIMO_CUARTO') {
+    if (regimenDecimoCuarto === 'costa') {
+      return { desde: new Date(anio - 1, 2, 1), hasta: new Date(anio, 1, 28, 23, 59, 59, 999) };
+    }
+    return { desde: new Date(anio - 1, 7, 1), hasta: new Date(anio, 6, 31, 23, 59, 59, 999) };
+  }
+  throw new Error('Tipo de décimo inválido');
+}
+
+// Año de la corrida DECIMO_TERCERO/DECIMO_CUARTO (ver _periodoDecimo) dentro
+// del cual cae una fecha dada — para saber a qué período legal pertenece.
+function _anioPeriodoDecimo(tipo, fecha, regimenDecimoCuarto) {
+  if (tipo === 'DECIMO_TERCERO') {
+    return fecha.getMonth() === 11 ? fecha.getFullYear() + 1 : fecha.getFullYear();
+  }
+  const mesInicio = regimenDecimoCuarto === 'costa' ? 2 : 7; // Mar=2, Ago=7 (0-indexado)
+  return fecha.getMonth() >= mesInicio ? fecha.getFullYear() + 1 : fecha.getFullYear();
+}
+
+// Fecha de inicio del período pendiente de un decimo para un empleado: el mes
+// siguiente al fin del último período ya PAGADO, o el inicio legal estándar
+// si nunca se le ha pagado (p.ej. empleado nuevo).
+async function _inicioPendienteDecimo({ empresaId, empleadoId, tipo, fechaIngreso, fallbackDesde }) {
+  const ultimo = await prisma.nomina_pagos_especiales.findFirst({
+    where: { empresaId, tipo, estado: 'PAGADA', detalles: { some: { empleadoId } } },
+    orderBy: { periodoHasta: 'desc' },
+  });
+  if (ultimo) return new Date(ultimo.periodoHasta.getFullYear(), ultimo.periodoHasta.getMonth() + 1, 1);
+  return fechaIngreso > fallbackDesde ? fechaIngreso : fallbackDesde;
+}
+
+function _diasEntre(desde, hasta) {
+  return Math.max(0, Math.round((new Date(hasta) - new Date(desde)) / (1000 * 60 * 60 * 24)) + 1);
+}
+
+// Duración en convención laboral ecuatoriana (meses de 30 días, año de 360).
+function _dias360(desde, hasta) {
+  const d1 = new Date(desde);
+  const d2 = new Date(hasta);
+  const dias = (d2.getFullYear() - d1.getFullYear()) * 360
+    + (d2.getMonth() - d1.getMonth()) * 30
+    + (Math.min(d2.getDate(), 30) - Math.min(d1.getDate(), 30));
+  return Math.max(0, dias);
 }
 
 // ============================================================
@@ -414,6 +495,28 @@ router.get('/nomina', ...verRRHH, async (req, res) => {
   }
 });
 
+// Nota de orden de rutas: debe registrarse ANTES de '/nomina/:id' — si no,
+// Express hace match de '/nomina/especiales' contra ':id' (con id="especiales")
+// y nunca llega a este handler.
+router.get('/nomina/especiales', ...verRRHH, async (req, res) => {
+  try {
+    const { tipo, anio } = req.query;
+    const where = {
+      empresaId: req.empresa.id,
+      ...(tipo ? { tipo } : {}),
+      ...(anio ? { anio: parseInt(anio) } : {}),
+    };
+    const data = await prisma.nomina_pagos_especiales.findMany({
+      where,
+      orderBy: [{ anio: 'desc' }, { createdAt: 'desc' }],
+      include: { _count: { select: { detalles: true } } },
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, mensaje: 'Error al listar pagos especiales' });
+  }
+});
+
 router.get('/nomina/:id', ...verRRHH, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -469,10 +572,15 @@ router.post('/nomina', ...nominaRRHH, async (req, res) => {
       const aportePersonal = emp.afiliadoIESS ? +(salario * APORTE_PERSONAL_IESS).toFixed(2) : 0;
       const aportePatronal = emp.afiliadoIESS ? +(salario * APORTE_PATRONAL_IESS).toFixed(2) : 0;
 
-      // Proporcionales informativos (no se descuentan del sueldo mensual)
+      // Proporcionales de beneficios de ley — se acumulan mes a mes en las
+      // cuentas de provisión (ver crearAsientoNominaPeriodo) y se liquidan
+      // realmente vía POST /nomina/especiales (décimo 3º/4º) o
+      // /ausencias/:id/pagar (vacaciones); no se descuentan del sueldo mensual.
       const decimoTerceroProp = +(salario / 12).toFixed(2);
       const decimoCuartoProp  = +(sbu / 12).toFixed(2);
       const fondosReservaProp = emp.fondosReserva ? +(salario / 12).toFixed(2) : 0;
+      // Vacaciones: 15 días/año ÷ 12 meses = 1.25 días/mes; valor = salario/30 × 1.25
+      const vacacionesProp    = +(salario / 24).toFixed(2);
 
       // Impuesto a la Renta calculado con tabla LORTI
       const { irMensual } = calcularImpuestoRentaMensual({
@@ -496,6 +604,7 @@ router.post('/nomina', ...nominaRRHH, async (req, res) => {
         decimoTerceroProp,
         decimoCuartoProp,
         fondosReservaProp,
+        vacacionesProp,
         aportePersonalIESS:    aportePersonal,
         impuestoRenta:         irMensual,
         prestamosIESS:         0,
@@ -714,6 +823,310 @@ router.delete('/nomina/:id', ...nominaRRHH, async (req, res) => {
 });
 
 // ============================================================
+// NÓMINA — PAGOS ESPECIALES
+// Décimo tercero, décimo cuarto, utilidades 15% y liquidación de haberes.
+// ============================================================
+
+router.get('/nomina/especiales/:id', ...verRRHH, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const pago = await prisma.nomina_pagos_especiales.findFirst({
+      where: { id, empresaId: req.empresa.id },
+      include: {
+        detalles: {
+          include: { empleado: { select: { id: true, cedula: true, nombres: true, apellidos: true } } },
+          orderBy: [{ empleado: { apellidos: 'asc' } }],
+        },
+      },
+    });
+    if (!pago) return res.status(404).json({ success: false, mensaje: 'Pago especial no encontrado' });
+    res.json({ success: true, data: pago });
+  } catch (err) {
+    res.status(500).json({ success: false, mensaje: 'Error al obtener pago especial' });
+  }
+});
+
+// Generar corrida de pago de décimo tercero o décimo cuarto — suma la
+// provisión mensual ya acumulada (decimoTerceroProp/decimoCuartoProp) en el
+// período legal de acumulación del año indicado.
+router.post('/nomina/especiales/generar-decimo', ...nominaRRHH, async (req, res) => {
+  try {
+    const { tipo, anio } = req.body;
+    if (!['DECIMO_TERCERO', 'DECIMO_CUARTO'].includes(tipo)) {
+      return res.status(400).json({ success: false, mensaje: 'Tipo inválido (use DECIMO_TERCERO o DECIMO_CUARTO)' });
+    }
+    const anioInt = parseInt(anio);
+    if (!anioInt) return res.status(400).json({ success: false, mensaje: 'El año es requerido' });
+
+    const yaExiste = await prisma.nomina_pagos_especiales.findFirst({
+      where: { empresaId: req.empresa.id, tipo, anio: anioInt },
+    });
+    if (yaExiste) {
+      const etiqueta = tipo === 'DECIMO_TERCERO' ? 'décimo tercero' : 'décimo cuarto';
+      return res.status(400).json({ success: false, mensaje: `Ya existe una corrida de ${etiqueta} para ${anioInt}` });
+    }
+
+    const config = await prisma.configuracion_sistema.findUnique({ where: { empresaId: req.empresa.id } });
+    const regimen = config?.regimenDecimoCuarto || 'sierra';
+    const { desde, hasta } = _periodoDecimo(tipo, anioInt, regimen);
+
+    const campo = tipo === 'DECIMO_TERCERO' ? 'decimoTerceroProp' : 'decimoCuartoProp';
+    const metas = _mesesEnRango(desde, hasta);
+    const nominasPeriodo = await prisma.nominas.findMany({ where: { empresaId: req.empresa.id, OR: metas }, select: { id: true } });
+    const detallesNomina = await prisma.nomina_detalles.findMany({
+      where: { nominaId: { in: nominasPeriodo.map((n) => n.id) } },
+    });
+
+    const porEmpleado = new Map();
+    for (const d of detallesNomina) {
+      const val = parseFloat(d[campo] || 0);
+      if (val <= 0) continue;
+      porEmpleado.set(d.empleadoId, round2((porEmpleado.get(d.empleadoId) || 0) + val));
+    }
+
+    if (porEmpleado.size === 0) {
+      const etiqueta = tipo === 'DECIMO_TERCERO' ? 'décimo tercero' : 'décimo cuarto';
+      return res.status(400).json({ success: false, mensaje: `No hay provisión acumulada de ${etiqueta} en el período ${desde.toISOString().slice(0, 10)} a ${hasta.toISOString().slice(0, 10)} — procese primero las nóminas mensuales de ese rango` });
+    }
+
+    const detalles = [...porEmpleado.entries()].map(([empleadoId, valor]) => ({
+      empleadoId, baseCalculo: valor, valor,
+    }));
+    const totalPagado = round2(detalles.reduce((s, d) => s + d.valor, 0));
+
+    const pago = await prisma.nomina_pagos_especiales.create({
+      data: {
+        empresaId: req.empresa.id, tipo, anio: anioInt,
+        periodoDesde: desde, periodoHasta: hasta,
+        estado: 'BORRADOR', totalPagado,
+        creadoPor: req.usuario.id,
+        detalles: { createMany: { data: detalles } },
+      },
+      include: { _count: { select: { detalles: true } } },
+    });
+    res.status(201).json({ success: true, data: pago });
+  } catch (err) {
+    console.error('Error generar décimo:', err);
+    res.status(500).json({ success: false, mensaje: 'Error al generar la corrida de décimo' });
+  }
+});
+
+// Generar reparto de utilidades 15% — requiere que el ejercicio ya esté
+// cerrado en Contabilidad (asiento CIERRE_ANUAL) para conocer la utilidad neta.
+// 10% se reparte proporcional a días trabajados en el año, 5% proporcional a
+// cargas familiares (o también por días si ningún empleado tiene registradas).
+router.post('/nomina/especiales/generar-utilidades', ...nominaRRHH, async (req, res) => {
+  try {
+    const anioInt = parseInt(req.body.anio);
+    if (!anioInt) return res.status(400).json({ success: false, mensaje: 'El año es requerido' });
+
+    const yaExiste = await prisma.nomina_pagos_especiales.findFirst({
+      where: { empresaId: req.empresa.id, tipo: 'UTILIDADES', anio: anioInt },
+    });
+    if (yaExiste) return res.status(400).json({ success: false, mensaje: `Ya existe un reparto de utilidades para ${anioInt}` });
+
+    const inicioAnio = new Date(anioInt, 0, 1);
+    const finAnio = new Date(anioInt, 11, 31, 23, 59, 59, 999);
+
+    const cierre = await prisma.asientos_contables.findFirst({
+      where: { empresaId: req.empresa.id, tipo: 'CIERRE_ANUAL', fecha: { gte: inicioAnio, lte: finAnio } },
+      include: { detalles: { include: { cuenta: true } } },
+    });
+    if (!cierre) return res.status(400).json({ success: false, mensaje: `Primero debe cerrarse el ejercicio ${anioInt} en Contabilidad (Cierre y Estados) antes de repartir utilidades` });
+
+    const lineaResultado = cierre.detalles.find((d) => /utilidad|resultado/i.test(d.cuenta.nombre));
+    const utilidadNeta = lineaResultado ? round2(parseFloat(lineaResultado.haber) - parseFloat(lineaResultado.debe)) : 0;
+    if (utilidadNeta <= 0) {
+      return res.status(400).json({ success: false, mensaje: `El ejercicio ${anioInt} no registró utilidad neta positiva — no corresponde reparto a trabajadores` });
+    }
+
+    const parte10 = round2(utilidadNeta * 0.10);
+    const parte5 = round2(utilidadNeta * 0.05);
+
+    const empleados = await prisma.empleados.findMany({
+      where: {
+        empresaId: req.empresa.id,
+        fechaIngreso: { lte: finAnio },
+        OR: [{ fechaSalida: null }, { fechaSalida: { gte: inicioAnio } }],
+      },
+    });
+    if (empleados.length === 0) return res.status(400).json({ success: false, mensaje: 'No hay empleados que hayan trabajado durante ese año' });
+
+    const conDias = empleados.map((emp) => {
+      const ini = emp.fechaIngreso > inicioAnio ? emp.fechaIngreso : inicioAnio;
+      const fin = emp.fechaSalida && emp.fechaSalida < finAnio ? emp.fechaSalida : finAnio;
+      return { emp, dias: _diasEntre(ini, fin) };
+    });
+    const totalDias = conDias.reduce((s, c) => s + c.dias, 0);
+    const totalCargas = empleados.reduce((s, e) => s + (e.cargasFamiliares || 0), 0);
+
+    const detalles = conDias.map(({ emp, dias }) => {
+      const porDias = totalDias > 0 ? round2(parte10 * dias / totalDias) : 0;
+      const porCargas = totalCargas > 0
+        ? round2(parte5 * (emp.cargasFamiliares || 0) / totalCargas)
+        : (totalDias > 0 ? round2(parte5 * dias / totalDias) : 0);
+      return {
+        empleadoId: emp.id,
+        baseCalculo: utilidadNeta,
+        diasBase: dias,
+        valor: round2(porDias + porCargas),
+        detalleJson: JSON.stringify({ parte10Dias: porDias, parte5Cargas: porCargas, cargasFamiliares: emp.cargasFamiliares || 0 }),
+      };
+    }).filter((d) => d.valor > 0);
+
+    const totalPagado = round2(detalles.reduce((s, d) => s + d.valor, 0));
+    const notaCargas = totalCargas === 0 ? ', repartido por días al no existir cargas familiares registradas' : '';
+
+    const pago = await prisma.nomina_pagos_especiales.create({
+      data: {
+        empresaId: req.empresa.id, tipo: 'UTILIDADES', anio: anioInt,
+        periodoDesde: inicioAnio, periodoHasta: finAnio,
+        estado: 'BORRADOR', totalPagado,
+        observaciones: `Utilidad neta ${anioInt}: $${utilidadNeta.toFixed(2)} — 15% = $${round2(utilidadNeta * 0.15).toFixed(2)} (10% por días trabajados + 5% por cargas familiares${notaCargas})`,
+        creadoPor: req.usuario.id,
+        detalles: { createMany: { data: detalles } },
+      },
+      include: { _count: { select: { detalles: true } } },
+    });
+    res.status(201).json({ success: true, data: pago });
+  } catch (err) {
+    console.error('Error generar utilidades:', err);
+    res.status(500).json({ success: false, mensaje: 'Error al generar el reparto de utilidades' });
+  }
+});
+
+// Registrar el pago de una corrida ya generada (décimo tercero/cuarto,
+// utilidades o liquidación) — genera el asiento contable y la marca PAGADA.
+router.patch('/nomina/especiales/:id/pagar', ...nominaRRHH, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const pago = await prisma.nomina_pagos_especiales.findFirst({ where: { id, empresaId: req.empresa.id } });
+    if (!pago) return res.status(404).json({ success: false, mensaje: 'Pago especial no encontrado' });
+    if (pago.estado === 'PAGADA') return res.status(400).json({ success: false, mensaje: 'Este pago ya fue registrado como pagado' });
+
+    const { asiento } = await crearAsientoPagoEspecialNomina({ empresaId: req.empresa.id, pagoEspecialId: id, usuarioId: req.usuario.id });
+    const updated = await prisma.nomina_pagos_especiales.update({ where: { id }, data: { estado: 'PAGADA', fechaPago: new Date() } });
+    res.json({ success: true, data: updated, asientoOk: !!asiento });
+  } catch (err) {
+    console.error('Error pagar especial:', err);
+    res.status(400).json({ success: false, mensaje: err.message || 'Error al registrar el pago' });
+  }
+});
+
+router.delete('/nomina/especiales/:id', ...nominaRRHH, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const pago = await prisma.nomina_pagos_especiales.findFirst({ where: { id, empresaId: req.empresa.id } });
+    if (!pago) return res.status(404).json({ success: false, mensaje: 'Pago especial no encontrado' });
+    if (pago.estado === 'PAGADA') return res.status(400).json({ success: false, mensaje: 'No se puede eliminar un pago ya registrado' });
+    await prisma.nomina_pagos_especiales.delete({ where: { id } });
+    res.json({ success: true, mensaje: 'Pago especial eliminado' });
+  } catch (err) {
+    res.status(500).json({ success: false, mensaje: 'Error al eliminar pago especial' });
+  }
+});
+
+// Liquidación de haberes al terminar la relación laboral — calcula sueldo
+// pendiente, vacaciones no gozadas, décimo tercero/cuarto y fondos de reserva
+// proporcionales pendientes, y (según motivo) bonificación por desahucio
+// (Art. 185 Código de Trabajo) o indemnización por despido intempestivo
+// (Art. 188). Estos dos últimos son estimaciones legales — quedan en BORRADOR
+// para revisión del área legal/contable antes de pagarse.
+router.post('/empleados/:id/liquidar', ...nominaRRHH, async (req, res) => {
+  try {
+    const empleadoId = parseInt(req.params.id);
+    const { fechaSalida, motivoSalida } = req.body;
+    if (!fechaSalida) return res.status(400).json({ success: false, mensaje: 'La fecha de salida es requerida' });
+    if (!motivoSalida) return res.status(400).json({ success: false, mensaje: 'El motivo de salida es requerido' });
+
+    const emp = await prisma.empleados.findFirst({ where: { id: empleadoId, empresaId: req.empresa.id } });
+    if (!emp) return res.status(404).json({ success: false, mensaje: 'Empleado no encontrado' });
+
+    const yaExiste = await prisma.nomina_pagos_especiales_detalle.findFirst({
+      where: { empleadoId, pago: { empresaId: req.empresa.id, tipo: 'LIQUIDACION' } },
+    });
+    if (yaExiste) return res.status(400).json({ success: false, mensaje: 'Este empleado ya tiene una liquidación registrada' });
+
+    const salida = new Date(fechaSalida);
+    const salario = parseFloat(emp.salarioBase);
+    const config = await prisma.configuracion_sistema.findUnique({ where: { empresaId: req.empresa.id } });
+    const regimen = config?.regimenDecimoCuarto || 'sierra';
+
+    // 1. Sueldo pendiente del mes en curso
+    const diasMes = _diasEntre(new Date(salida.getFullYear(), salida.getMonth(), 1), salida);
+    const sueldoPendiente = round2((salario / 30) * diasMes);
+
+    // 2. Vacaciones no gozadas: devengadas (1.25 días/mes) menos ya tomadas
+    const mesesTrabajados = _dias360(emp.fechaIngreso, salida) / 30;
+    const diasVacacionesDevengados = round2(mesesTrabajados * 1.25);
+    const ausenciasVacacion = await prisma.ausencias.aggregate({
+      where: { empleadoId, tipo: 'vacacion', aprobado: true },
+      _sum: { dias: true },
+    });
+    const diasVacacionesTomados = ausenciasVacacion._sum.dias || 0;
+    const diasVacacionesPendientes = Math.max(0, round2(diasVacacionesDevengados - diasVacacionesTomados));
+    const vacacionesPendientes = round2((salario / 30) * diasVacacionesPendientes);
+
+    // 3. Décimo tercero / décimo cuarto proporcional pendiente (desde el fin
+    //    del último período ya pagado hasta la fecha de salida)
+    const { desde: inicioDecimo3Legal } = _periodoDecimo('DECIMO_TERCERO', _anioPeriodoDecimo('DECIMO_TERCERO', salida, regimen), regimen);
+    const { desde: inicioDecimo4Legal } = _periodoDecimo('DECIMO_CUARTO', _anioPeriodoDecimo('DECIMO_CUARTO', salida, regimen), regimen);
+    const inicioDecimo3 = await _inicioPendienteDecimo({ empresaId: req.empresa.id, empleadoId, tipo: 'DECIMO_TERCERO', fechaIngreso: emp.fechaIngreso, fallbackDesde: inicioDecimo3Legal < emp.fechaIngreso ? emp.fechaIngreso : inicioDecimo3Legal });
+    const inicioDecimo4 = await _inicioPendienteDecimo({ empresaId: req.empresa.id, empleadoId, tipo: 'DECIMO_CUARTO', fechaIngreso: emp.fechaIngreso, fallbackDesde: inicioDecimo4Legal < emp.fechaIngreso ? emp.fechaIngreso : inicioDecimo4Legal });
+    const decimoTerceroPendiente = await _sumarProporcionalPendiente({ empresaId: req.empresa.id, empleadoId, campo: 'decimoTerceroProp', desde: inicioDecimo3, hasta: salida });
+    const decimoCuartoPendiente = await _sumarProporcionalPendiente({ empresaId: req.empresa.id, empleadoId, campo: 'decimoCuartoProp', desde: inicioDecimo4, hasta: salida });
+
+    // 4. Fondos de reserva acumulados y nunca liquidados (no existe corrida de
+    //    pago propia para fondos de reserva hoy — se salda íntegro aquí)
+    const fondosReservaPendiente = emp.fondosReserva
+      ? await _sumarProporcionalPendiente({ empresaId: req.empresa.id, empleadoId, campo: 'fondosReservaProp', desde: emp.fechaIngreso, hasta: salida })
+      : 0;
+
+    // 5. Bonificación por desahucio (Art. 185) e indemnización por despido
+    //    intempestivo (Art. 188) — estimación, sujeta a revisión legal.
+    const aniosServicio = round2(_dias360(emp.fechaIngreso, salida) / 360);
+    const bonifDesahucio = motivoSalida !== 'despido_causa_justa'
+      ? round2(0.25 * salario * aniosServicio)
+      : 0;
+    let indemnizacion = 0;
+    if (motivoSalida === 'despido_intempestivo') {
+      indemnizacion = aniosServicio < 3
+        ? round2(salario * 3)
+        : round2(Math.min(salario * aniosServicio, salario * 25));
+    }
+
+    const componentes = {
+      sueldoPendiente, vacacionesPendientes, diasVacacionesPendientes,
+      decimoTerceroPendiente, decimoCuartoPendiente, fondosReservaPendiente,
+      bonifDesahucio, indemnizacion, aniosServicio,
+    };
+    const valorTotal = round2(
+      sueldoPendiente + vacacionesPendientes + decimoTerceroPendiente +
+      decimoCuartoPendiente + fondosReservaPendiente + bonifDesahucio + indemnizacion,
+    );
+
+    const pago = await prisma.nomina_pagos_especiales.create({
+      data: {
+        empresaId: req.empresa.id, tipo: 'LIQUIDACION', anio: salida.getFullYear(),
+        periodoDesde: emp.fechaIngreso, periodoHasta: salida,
+        estado: 'BORRADOR', totalPagado: valorTotal,
+        observaciones: `Liquidación de ${emp.nombres} ${emp.apellidos} — motivo: ${motivoSalida}. Bonificación por desahucio e indemnización calculadas según Art. 185/188 del Código de Trabajo — revisar con el área legal/contable antes de pagar.`,
+        creadoPor: req.usuario.id,
+        detalles: { create: [{ empleadoId, baseCalculo: round2(salario), valor: valorTotal, detalleJson: JSON.stringify(componentes) }] },
+      },
+      include: { detalles: true },
+    });
+
+    await prisma.empleados.update({ where: { id: empleadoId }, data: { activo: false, fechaSalida: salida, motivoSalida } });
+
+    res.status(201).json({ success: true, data: pago });
+  } catch (err) {
+    console.error('Error liquidar empleado:', err);
+    res.status(500).json({ success: false, mensaje: 'Error al calcular la liquidación de haberes' });
+  }
+});
+
+// ============================================================
 // AUSENCIAS / VACACIONES
 // ============================================================
 
@@ -792,6 +1205,38 @@ router.patch('/ausencias/:id/aprobar', ...gestionarRRHH, async (req, res) => {
   }
 });
 
+// Liquidar (pagar) una ausencia de tipo vacación ya aprobada — descarga la
+// provisión mensual de vacaciones acumulada mes a mes en la nómina regular.
+router.patch('/ausencias/:id/pagar', ...nominaRRHH, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const ausencia = await prisma.ausencias.findFirst({
+      where: { id, empresaId: req.empresa.id },
+      include: { empleado: true },
+    });
+    if (!ausencia) return res.status(404).json({ success: false, mensaje: 'Ausencia no encontrada' });
+    if (ausencia.tipo !== 'vacacion') return res.status(400).json({ success: false, mensaje: 'Solo se pueden liquidar ausencias de tipo vacación' });
+    if (!ausencia.aprobado) return res.status(400).json({ success: false, mensaje: 'La ausencia debe estar aprobada antes de pagarla' });
+    if (ausencia.pagado) return res.status(400).json({ success: false, mensaje: 'Esta vacación ya fue pagada' });
+
+    const salario = parseFloat(ausencia.empleado.salarioBase);
+    const valor = round2((salario / 30) * ausencia.dias);
+
+    const { asiento } = await crearAsientoPagoVacaciones({
+      empresaId: req.empresa.id, ausenciaId: id, valor, usuarioId: req.usuario.id,
+    });
+
+    const updated = await prisma.ausencias.update({
+      where: { id },
+      data: { pagado: true, valorPagado: valor, fechaPago: new Date() },
+    });
+    res.json({ success: true, data: updated, asientoOk: !!asiento });
+  } catch (err) {
+    console.error('Error pagar vacaciones:', err);
+    res.status(400).json({ success: false, mensaje: err.message || 'Error al pagar vacaciones' });
+  }
+});
+
 router.delete('/ausencias/:id', ...gestionarRRHH, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -867,7 +1312,7 @@ router.get('/nomina/:id/csv', ...nominaRRHH, async (req, res) => {
       'Préstamos IESS','Anticipos','Otros Descuentos',
       'Total Descuentos',
       'Neto a Pagar',
-      'Décimo Tercero Prop.','Décimo Cuarto Prop.','Fondos Reserva Prop.',
+      'Décimo Tercero Prop.','Décimo Cuarto Prop.','Fondos Reserva Prop.','Vacaciones Prop.',
       'Aporte Patronal IESS (11.15%)',
     ];
 
@@ -901,6 +1346,7 @@ router.get('/nomina/:id/csv', ...nominaRRHH, async (req, res) => {
       n2(d.decimoTerceroProp),
       n2(d.decimoCuartoProp),
       n2(d.fondosReservaProp),
+      n2(d.vacacionesProp),
       n2(d.aportePatronal),
     ].map(esc).join(','));
 
@@ -923,6 +1369,7 @@ router.get('/nomina/:id/csv', ...nominaRRHH, async (req, res) => {
       n2(sum('decimoTerceroProp')),
       n2(sum('decimoCuartoProp')),
       n2(sum('fondosReservaProp')),
+      n2(sum('vacacionesProp')),
       n2(sum('aportePatronal')),
     ].map(esc).join(',');
 

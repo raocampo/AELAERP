@@ -60,6 +60,7 @@ const FORM_INICIAL = {
   bancosHabilitado: true,
   talentoHumanoHabilitado: false,
   sbuEcuador: '480.00',
+  regimenDecimoCuarto: 'sierra',
 };
 
 export default function ConfiguracionSistema() {
@@ -657,6 +658,21 @@ export default function ConfiguracionSistema() {
               </div>
               <small className="syscfg-hint">
                 Se usa para calcular el décimo cuarto proporcional en la nómina. Actualizar cada año según resolución ministerial.
+              </small>
+            </div>
+            <div className="syscfg-field">
+              <label>Régimen de Décimo Cuarto</label>
+              <select
+                value={form.regimenDecimoCuarto}
+                onChange={(e) => actualizar('regimenDecimoCuarto', e.target.value)}
+                disabled={!caps.talentoHumanoHabilitado}
+                style={{ maxWidth: '220px' }}
+              >
+                <option value="sierra">Sierra / Oriente (pago hasta 15 de agosto)</option>
+                <option value="costa">Costa / Insular (pago hasta 15 de marzo)</option>
+              </select>
+              <small className="syscfg-hint">
+                Define el período legal de acumulación usado en Talento Humano → Pagos Especiales para generar la corrida de décimo cuarto.
               </small>
             </div>
           </div>
