@@ -645,6 +645,106 @@ async function obtenerBalanceGeneral(empresaId, fechaCorte = new Date()) {
   };
 }
 
+// ─── Estado de Flujo de Efectivo (método indirecto) ──────────────────────────
+//
+// No existe un campo explícito "operación/inversión/financiamiento" por
+// cuenta en el plan de cuentas, y AELA admite 2 esquemas de códigos con
+// prefijos distintos (base: "1.1"/"1.2"/"2.1"/"2.2"/"3.1" con puntos;
+// Supercías/NIIF: "101"/"102"/"201"/"202"/"30" sin puntos) — un prefijo fijo
+// solo funcionaría para uno de los dos. Ambos esquemas sí usan los mismos
+// NOMBRES de grupo estándar de contabilidad ("ACTIVO CORRIENTE"/"ACTIVO NO
+// CORRIENTE"/etc.), así que la clasificación se hace por nombre, no por
+// código — robusta ante cualquiera de los 2 planes semillados.
+const _RX_NO_CORRIENTE = /no\s+corriente/i;
+const _RX_CORRIENTE    = /corriente/i;
+const _RX_EFECTIVO     = /efectivo\s+y\s+equivalentes/i;
+
+function _buscarGrupoContable(filas, tipo, { corriente, noCorriente, patron } = {}) {
+  const candidatos = filas.filter((f) => {
+    if (f.tipo !== tipo) return false;
+    if (patron) return patron.test(f.nombre);
+    const esNoCorriente = _RX_NO_CORRIENTE.test(f.nombre);
+    const esCorriente = _RX_CORRIENTE.test(f.nombre) && !esNoCorriente;
+    return noCorriente ? esNoCorriente : corriente ? esCorriente : false;
+  });
+  // Si hay varios candidatos (no debería, con los 2 planes soportados), el
+  // más cercano a la raíz del plan es el código más corto.
+  candidatos.sort((a, b) => a.codigo.length - b.codigo.length);
+  return candidatos[0]?.saldo ?? 0;
+}
+
+async function obtenerFlujoEfectivo(empresaId, fechaDesde, fechaHasta) {
+  const inicio = fechaDesde ? new Date(fechaDesde) : new Date(new Date().getFullYear(), 0, 1);
+  const fin = endOfDay(fechaHasta) || endOfDay(new Date());
+  const finAnterior = endOfDay(new Date(inicio.getTime() - 24 * 60 * 60 * 1000));
+
+  const [balInicial, balFinal, resultadosPeriodo] = await Promise.all([
+    construirJerarquiaContable(empresaId, ['ACTIVO', 'PASIVO', 'PATRIMONIO'], { hasta: finAnterior.toISOString() }),
+    construirJerarquiaContable(empresaId, ['ACTIVO', 'PASIVO', 'PATRIMONIO'], { hasta: fin.toISOString() }),
+    construirJerarquiaContable(empresaId, ['INGRESO', 'GASTO', 'COSTO'], { desde: inicio.toISOString(), hasta: fin.toISOString() }),
+  ]);
+
+  const ingresosPeriodo = round2(resultadosPeriodo.filter((f) => !f.codigoPadre && f.tipo === 'INGRESO').reduce((a, f) => a + f.saldo, 0));
+  const egresosPeriodo  = round2(resultadosPeriodo.filter((f) => !f.codigoPadre && (f.tipo === 'GASTO' || f.tipo === 'COSTO')).reduce((a, f) => a + f.saldo, 0));
+  const utilidadNeta = round2(ingresosPeriodo - egresosPeriodo);
+
+  const efectivoInicial = _buscarGrupoContable(balInicial, 'ACTIVO', { patron: _RX_EFECTIVO });
+  const efectivoFinal   = _buscarGrupoContable(balFinal,   'ACTIVO', { patron: _RX_EFECTIVO });
+  const variacionEfectivoReal = round2(efectivoFinal - efectivoInicial);
+
+  const variacionGrupo = (tipo, opts) =>
+    round2(_buscarGrupoContable(balFinal, tipo, opts) - _buscarGrupoContable(balInicial, tipo, opts));
+
+  // Operación: utilidad neta ajustada por cambios en capital de trabajo.
+  // Un aumento de activo corriente operativo (CxC, inventario) CONSUME
+  // efectivo (signo negativo); un aumento de pasivo corriente (CxP) LIBERA
+  // efectivo (signo positivo).
+  const varActivoCorriente = variacionGrupo('ACTIVO', { corriente: true });
+  const varEfectivo = round2(efectivoFinal - efectivoInicial);
+  const varActivoCorrienteOperativo = round2(varActivoCorriente - varEfectivo);
+  const varPasivoCorriente = variacionGrupo('PASIVO', { corriente: true });
+  const flujoOperacion = round2(utilidadNeta - varActivoCorrienteOperativo + varPasivoCorriente);
+
+  // Inversión: un aumento de activo no corriente (compra de PPE) CONSUME efectivo.
+  const varActivoNoCorriente = variacionGrupo('ACTIVO', { noCorriente: true });
+  const flujoInversion = round2(-varActivoNoCorriente);
+
+  // Financiamiento: aumento de deuda LP o aportes de capital LIBERAN/aportan efectivo.
+  const varPasivoNoCorriente = variacionGrupo('PASIVO', { noCorriente: true });
+  const varPatrimonio = round2(
+    balFinal.filter((f) => !f.codigoPadre && f.tipo === 'PATRIMONIO').reduce((a, f) => a + f.saldo, 0) -
+    balInicial.filter((f) => !f.codigoPadre && f.tipo === 'PATRIMONIO').reduce((a, f) => a + f.saldo, 0)
+  );
+  const flujoFinanciamiento = round2(varPasivoNoCorriente + varPatrimonio);
+
+  const flujoNetoCalculado = round2(flujoOperacion + flujoInversion + flujoFinanciamiento);
+
+  return {
+    fechaDesde: inicio,
+    fechaHasta: fin,
+    operacion: {
+      utilidadNeta,
+      variacionCuentasPorCobrarEInventario: round2(-varActivoCorrienteOperativo),
+      variacionCuentasPorPagar: varPasivoCorriente,
+      total: flujoOperacion,
+    },
+    inversion: {
+      variacionActivoFijo: round2(-varActivoNoCorriente),
+      total: flujoInversion,
+    },
+    financiamiento: {
+      variacionDeudaLargoPlazo: varPasivoNoCorriente,
+      variacionPatrimonio: varPatrimonio,
+      total: flujoFinanciamiento,
+    },
+    flujoNetoCalculado,
+    efectivoInicial,
+    efectivoFinal,
+    variacionEfectivoReal,
+    cuadra: Math.abs(round2(flujoNetoCalculado - variacionEfectivoReal)) < 0.01,
+  };
+}
+
 async function obtenerConsultasResumen(empresaId, filtros = {}) {
   const where = construirWhereAsientos(empresaId, filtros);
   const asientos = await prisma.asientos_contables.findMany({
@@ -2505,6 +2605,19 @@ router.get('/balance-general', async (req, res) => {
   } catch (error) {
     console.error('GET /contabilidad/balance-general:', error);
     res.status(500).json({ success: false, mensaje: 'Error al generar balance general' });
+  }
+});
+
+// GET /api/contabilidad/flujo-efectivo
+router.get('/flujo-efectivo', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const { desde, hasta } = req.query;
+    const data = await obtenerFlujoEfectivo(empresaId, desde, hasta);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /contabilidad/flujo-efectivo:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al generar el estado de flujo de efectivo' });
   }
 });
 

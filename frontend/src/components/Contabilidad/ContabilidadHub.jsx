@@ -243,7 +243,8 @@ const ContabilidadHub = () => {
   const mayorizacionPag = usePagina(mayorizacionLote?.tabla || []);
 
   const [cierreLoading, setCierreLoading] = useState(false);
-  const [cierreSubTab, setCierreSubTab] = useState('situacion'); // 'situacion' | 'resultados' | 'comprobacion'
+  const [cierreSubTab, setCierreSubTab] = useState('situacion'); // 'situacion' | 'resultados' | 'comprobacion' | 'flujo'
+  const [flujoEfectivo, setFlujoEfectivo] = useState(null);
   const [estadosFiltros, setEstadosFiltros] = useState({ periodo: '', desde: '', hasta: '', fechaBalance: '' });
   const [asientoInicialForm, setAsientoInicialForm] = useState({
     periodo: '',
@@ -255,13 +256,14 @@ const ContabilidadHub = () => {
   const cargar = async () => {
     setLoading(true);
     try {
-      const [planRes, asientosRes, balanceRes, resultadosRes, bgRes, periodosRes] = await Promise.all([
+      const [planRes, asientosRes, balanceRes, resultadosRes, bgRes, periodosRes, flujoRes] = await Promise.all([
         api.get('/contabilidad/plan-cuentas'),
         api.get('/contabilidad/asientos', { params: { limit: 8 } }),
         api.get('/contabilidad/balance-comprobacion'),
         api.get('/contabilidad/estado-resultados'),
         api.get('/contabilidad/balance-general'),
         api.get('/contabilidad/periodos'),
+        api.get('/contabilidad/flujo-efectivo'),
       ]);
 
       setPlan(planRes.data?.data?.flat || []);
@@ -270,6 +272,7 @@ const ContabilidadHub = () => {
       setEstadoResultados(resultadosRes.data?.data || null);
       setBalanceGeneral(bgRes.data?.data || null);
       setPeriodos(periodosRes.data?.data?.items || []);
+      setFlujoEfectivo(flujoRes.data?.data || null);
     } catch (error) {
       toast.error(error.response?.data?.mensaje || 'Error al cargar contabilidad');
     } finally {
@@ -403,15 +406,17 @@ const ContabilidadHub = () => {
         hasta: estadosFiltros.hasta || undefined,
       };
 
-      const [balanceRes, resultadosRes, bgRes] = await Promise.all([
+      const [balanceRes, resultadosRes, bgRes, flujoRes] = await Promise.all([
         api.get('/contabilidad/balance-comprobacion', { params: paramsBase }),
         api.get('/contabilidad/estado-resultados', { params: paramsBase }),
         api.get('/contabilidad/balance-general', { params: { fecha: estadosFiltros.fechaBalance || undefined } }),
+        api.get('/contabilidad/flujo-efectivo', { params: { desde: estadosFiltros.desde || undefined, hasta: estadosFiltros.hasta || undefined } }),
       ]);
 
       setBalance(balanceRes.data?.data || null);
       setEstadoResultados(resultadosRes.data?.data || null);
       setBalanceGeneral(bgRes.data?.data || null);
+      setFlujoEfectivo(flujoRes.data?.data || null);
       if (periodo && periodo !== estadosFiltros.periodo) {
         setEstadosFiltros((prev) => ({ ...prev, periodo }));
       }
@@ -2476,6 +2481,7 @@ const ContabilidadHub = () => {
               <button className={cierreSubTab === 'situacion'    ? 'active' : ''} onClick={() => setCierreSubTab('situacion')}>Estado de Situación Financiera</button>
               <button className={cierreSubTab === 'resultados'   ? 'active' : ''} onClick={() => setCierreSubTab('resultados')}>Estado de Resultados</button>
               <button className={cierreSubTab === 'comprobacion' ? 'active' : ''} onClick={() => setCierreSubTab('comprobacion')}>Balance de Comprobación</button>
+              <button className={cierreSubTab === 'flujo' ? 'active' : ''} onClick={() => setCierreSubTab('flujo')}>Flujo de Efectivo</button>
             </div>
 
             {cierreLoading ? (
@@ -2581,6 +2587,54 @@ const ContabilidadHub = () => {
                             <td className="text-right saldo-col">{toMoney(f.saldo)}</td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </>
+                )}
+
+                {/* ── Estado de Flujo de Efectivo ── */}
+                {cierreSubTab === 'flujo' && (
+                  <>
+                    <div className="conta-note" style={{ marginBottom: 12 }}>
+                      <p>Método indirecto: parte de la utilidad neta del período y la ajusta por
+                      cambios en capital de trabajo, activos fijos y financiamiento. Calculado a
+                      partir de las variaciones del Estado de Situación Financiera entre el inicio
+                      y el fin del rango seleccionado (usa los mismos filtros de fecha de arriba).</p>
+                    </div>
+                    {flujoEfectivo && !flujoEfectivo.cuadra && (
+                      <div className="conta-warning" style={{ marginBottom: 12 }}>
+                        ⚠ El flujo calculado (${toMoney(flujoEfectivo.flujoNetoCalculado)}) no coincide
+                        con la variación real de efectivo (${toMoney(flujoEfectivo.variacionEfectivoReal)}).
+                        Puede deberse a un plan de cuentas importado que no usa los nombres estándar
+                        "ACTIVO CORRIENTE"/"NO CORRIENTE" — revisa con tu contador antes de usar este reporte.
+                      </div>
+                    )}
+                    <div className="conta-kpis conta-kpis-compact" style={{ marginBottom: 12 }}>
+                      <div className="conta-kpi"><span>Efectivo Inicial</span><strong>{toMoney(flujoEfectivo?.efectivoInicial)}</strong></div>
+                      <div className="conta-kpi"><span>Efectivo Final</span><strong>{toMoney(flujoEfectivo?.efectivoFinal)}</strong></div>
+                      <div className={`conta-kpi ${flujoEfectivo?.cuadra ? '' : 'conta-kpi-warn'}`}><span>Cuadra</span><strong>{flujoEfectivo?.cuadra ? 'Sí' : 'No'}</strong></div>
+                    </div>
+                    <table className="conta-table conta-table-estados">
+                      <thead>
+                        <tr><th>Concepto</th><th className="text-right">Valor</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr className="fila-grupo"><td colSpan={2}>ACTIVIDADES DE OPERACIÓN</td></tr>
+                        <tr className="fila-hoja"><td className="col-cuenta"><span className="cuenta-indent" style={{ '--nivel': 2 }}>Utilidad neta del período</span></td><td className="text-right saldo-col">{toMoney(flujoEfectivo?.operacion?.utilidadNeta)}</td></tr>
+                        <tr className="fila-hoja"><td className="col-cuenta"><span className="cuenta-indent" style={{ '--nivel': 2 }}>Variación cuentas por cobrar e inventario</span></td><td className="text-right saldo-col">{toMoney(flujoEfectivo?.operacion?.variacionCuentasPorCobrarEInventario)}</td></tr>
+                        <tr className="fila-hoja"><td className="col-cuenta"><span className="cuenta-indent" style={{ '--nivel': 2 }}>Variación cuentas por pagar</span></td><td className="text-right saldo-col">{toMoney(flujoEfectivo?.operacion?.variacionCuentasPorPagar)}</td></tr>
+                        <tr className="fila-total-final"><td><strong>Efectivo neto de operación</strong></td><td className="text-right"><strong>{toMoney(flujoEfectivo?.operacion?.total)}</strong></td></tr>
+
+                        <tr className="fila-grupo"><td colSpan={2}>ACTIVIDADES DE INVERSIÓN</td></tr>
+                        <tr className="fila-hoja"><td className="col-cuenta"><span className="cuenta-indent" style={{ '--nivel': 2 }}>Variación de activo fijo</span></td><td className="text-right saldo-col">{toMoney(flujoEfectivo?.inversion?.variacionActivoFijo)}</td></tr>
+                        <tr className="fila-total-final"><td><strong>Efectivo neto de inversión</strong></td><td className="text-right"><strong>{toMoney(flujoEfectivo?.inversion?.total)}</strong></td></tr>
+
+                        <tr className="fila-grupo"><td colSpan={2}>ACTIVIDADES DE FINANCIAMIENTO</td></tr>
+                        <tr className="fila-hoja"><td className="col-cuenta"><span className="cuenta-indent" style={{ '--nivel': 2 }}>Variación deuda a largo plazo</span></td><td className="text-right saldo-col">{toMoney(flujoEfectivo?.financiamiento?.variacionDeudaLargoPlazo)}</td></tr>
+                        <tr className="fila-hoja"><td className="col-cuenta"><span className="cuenta-indent" style={{ '--nivel': 2 }}>Variación de patrimonio (capital, dividendos)</span></td><td className="text-right saldo-col">{toMoney(flujoEfectivo?.financiamiento?.variacionPatrimonio)}</td></tr>
+                        <tr className="fila-total-final"><td><strong>Efectivo neto de financiamiento</strong></td><td className="text-right"><strong>{toMoney(flujoEfectivo?.financiamiento?.total)}</strong></td></tr>
+
+                        <tr className="fila-resultado-ejercicio"><td><strong>FLUJO NETO DE EFECTIVO DEL PERÍODO</strong></td><td className="text-right"><strong>{toMoney(flujoEfectivo?.flujoNetoCalculado)}</strong></td></tr>
                       </tbody>
                     </table>
                   </>
