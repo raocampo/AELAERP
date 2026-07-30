@@ -785,6 +785,33 @@ router.post('/:id/anular', async (req, res) => {
   }
 });
 
+// Expande un catálogo de códigos SRI a filas seleccionables: los códigos con
+// porcentaje único quedan como una sola fila; los que tienen porcentajeAntes/
+// porcentajeDespues (cambiaron con la Res. NAC-DGERCGC26-00000009, vigente
+// desde el 2026-03-01) se parten en 2 filas con el MISMO codigoPorcentaje SRI
+// (lo que realmente se envía en el XML) pero un `id` sintético distinto para
+// que el selector del frontend pueda distinguir cuál eligió el contador.
+function _expandirCatalogoRetencion(catalogo, codigoTipo) {
+  const filas = [];
+  for (const [cod, v] of Object.entries(catalogo)) {
+    if (v.porcentajeAntes !== undefined && v.porcentajeDespues !== undefined) {
+      filas.push({
+        id: `${cod}_ANTES`, codigo: codigoTipo, codigoPorcentaje: cod,
+        descripcion: `${v.descripcion} (hasta 28/02/2026 — ${v.porcentajeAntes}%)`,
+        porcentaje: v.porcentajeAntes,
+      });
+      filas.push({
+        id: `${cod}_DESDE`, codigo: codigoTipo, codigoPorcentaje: cod,
+        descripcion: `${v.descripcion} (desde 01/03/2026 — ${v.porcentajeDespues}%)`,
+        porcentaje: v.porcentajeDespues,
+      });
+    } else {
+      filas.push({ id: cod, codigo: codigoTipo, codigoPorcentaje: cod, descripcion: v.descripcion, porcentaje: v.porcentaje });
+    }
+  }
+  return filas;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/retenciones/catalogos/impuestos — Catálogos de retenciones
 // ─────────────────────────────────────────────────────────────────────────────
@@ -793,18 +820,8 @@ router.get('/catalogos/impuestos', async (req, res) => {
     res.json({
       ok: true,
       data: {
-        renta: Object.entries(sri.CODIGOS_RETENCION_RENTA).map(([cod, v]) => ({
-          codigo: '1',
-          codigoPorcentaje: cod,
-          descripcion: v.descripcion,
-          porcentaje: v.porcentaje,
-        })),
-        iva: Object.entries(sri.CODIGOS_RETENCION_IVA).map(([cod, v]) => ({
-          codigo: '2',
-          codigoPorcentaje: cod,
-          descripcion: v.descripcion,
-          porcentaje: v.porcentaje,
-        })),
+        renta: _expandirCatalogoRetencion(sri.CODIGOS_RETENCION_RENTA, '1'),
+        iva: _expandirCatalogoRetencion(sri.CODIGOS_RETENCION_IVA, '2'),
         tiposDocSustento: [
           { codigo: '01', descripcion: 'Factura' },
           { codigo: '02', descripcion: 'Nota de Venta' },

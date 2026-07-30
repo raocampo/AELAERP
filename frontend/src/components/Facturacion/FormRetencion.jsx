@@ -83,10 +83,11 @@ export default function FormRetencion() {
   const [impuestos, setImpuestos] = useState([
     {
       tipo: 'renta',
+      catalogoId: '303',
       codigo: '1',
       codigoPorcentaje: '303',
       descripcion: 'Honorarios profesionales',
-      porcentajeRetener: 8,
+      porcentajeRetener: 10,
       baseImponible: '',
       valorRetenido: '',
     },
@@ -205,10 +206,11 @@ export default function FormRetencion() {
   const agregarImpuesto = () => {
     setImpuestos((prev) => [...prev, {
       tipo: 'renta',
+      catalogoId: '303',
       codigo: '1',
       codigoPorcentaje: '303',
       descripcion: 'Honorarios profesionales',
-      porcentajeRetener: 8,
+      porcentajeRetener: 10,
       baseImponible: '',
       valorRetenido: '',
     }]);
@@ -225,6 +227,7 @@ export default function FormRetencion() {
       ...imp,
       tipo,
       codigo: tipo === 'renta' ? '1' : '2',
+      catalogoId: primero.id || '',
       codigoPorcentaje: primero.codigoPorcentaje || '',
       descripcion: primero.descripcion || '',
       porcentajeRetener: primero.porcentaje || 0,
@@ -233,15 +236,20 @@ export default function FormRetencion() {
     })));
   };
 
-  const cambiarCodigo = (idx, codigoPorcentaje) => {
+  // catalogoId identifica la fila elegida en el <select> (un mismo código SRI
+  // puede aparecer 2 veces — antes/después del 2026-03-01 — con el mismo
+  // codigoPorcentaje pero distinto id/porcentaje; ver _expandirCatalogoRetencion
+  // en retenciones.js). codigoPorcentaje es lo único que se envía al SRI.
+  const cambiarCodigo = (idx, catalogoId) => {
     setImpuestos((prev) => prev.map((imp, i) => {
       if (i !== idx) return imp;
       const lista = imp.tipo === 'renta' ? catalogos.renta : catalogos.iva;
-      const item = lista.find((l) => l.codigoPorcentaje === codigoPorcentaje) || {};
-      const pct = item.porcentaje || imp.porcentajeRetener;
+      const item = lista.find((l) => l.id === catalogoId) || {};
+      const pct = item.porcentaje ?? imp.porcentajeRetener;
       return {
         ...imp,
-        codigoPorcentaje,
+        catalogoId,
+        codigoPorcentaje: item.codigoPorcentaje ?? imp.codigoPorcentaje,
         descripcion: item.descripcion || imp.descripcion,
         porcentajeRetener: pct,
         valorRetenido: calcValor(imp.baseImponible, pct),
@@ -650,12 +658,12 @@ export default function FormRetencion() {
               <div className="ret-campo ret-campo-cod">
                 <label>Concepto</label>
                 <select
-                  value={imp.codigoPorcentaje}
+                  value={imp.catalogoId || imp.codigoPorcentaje}
                   onChange={(e) => cambiarCodigo(idx, e.target.value)}
                   className="ret-input-form"
                 >
                   {(imp.tipo === 'renta' ? catalogos.renta : catalogos.iva).map((c) => (
-                    <option key={c.codigoPorcentaje} value={c.codigoPorcentaje}>
+                    <option key={c.id} value={c.id}>
                       {c.codigoPorcentaje} — {c.descripcion}
                     </option>
                   ))}

@@ -47,9 +47,10 @@ function _catalogoRetencion(esVenta) {
     ? { codigoDefault: '1.1.07.001', nombreDefault: 'Retención IVA (Crédito Tributario)', tipoDefault: 'ACTIVO', naturalezaDefault: 'DEBITO' }
     : { codigoDefault: '2.1.05.001', nombreDefault: 'Retenciones por Pagar', tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO' };
 
+  const pctLabel = (v) => (v.porcentaje !== undefined ? `${v.porcentaje}%` : `${v.porcentajeAntes}%→${v.porcentajeDespues}%`);
   const renta = Object.entries(CODIGOS_RETENCION_RENTA).map(([cod, v]) => ({
     codigoReferencia: cod,
-    etiqueta: `RET_FUENTE - ${cod} ${v.descripcion} (${v.porcentaje}%)`,
+    etiqueta: `RET_FUENTE - ${cod} ${v.descripcion} (${pctLabel(v)})`,
     ...rentaDefault,
   }));
   const iva = Object.entries(CODIGOS_RETENCION_IVA).map(([cod, v]) => ({

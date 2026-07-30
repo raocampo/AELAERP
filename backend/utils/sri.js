@@ -1851,22 +1851,44 @@ async function generarReciboPOS(factura, configSri, outputPath) {
 /**
  * Catálogo de impuestos para retenciones.
  * codigo 1 = Renta (IR), codigo 2 = IVA, codigo 6 = ISD
+ *
+ * Tabla reconstruida 2026-07-30 a partir del texto oficial completo de:
+ *   - Resolución NAC-DGERCGC24-00000008 (29-feb-2024, derogada) — valores "antes"
+ *   - Resolución NAC-DGERCGC26-00000009 (27-feb-2026, vigente desde 01-mar-2026) — valores "despues"
+ * Ambos PDFs descargados directamente de sri.gob.ec y leídos completos (no
+ * solo resúmenes de terceros). Códigos con `porcentajeAntes`/`porcentajeDespues`
+ * cambiaron de valor con la resolución 2026; los que solo tienen `porcentaje`
+ * no cambiaron. VIGENCIA_CORTE_RETENCION_RENTA marca la fecha de corte.
+ *
+ * Al reconstruir la tabla completa se detectó que varios códigos tenían la
+ * descripción y/o el porcentaje desalineados del catálogo oficial desde ANTES
+ * de esta resolución (algunos posiblemente desde 2024 o antes) — no es algo
+ * que cambió en marzo 2026. Se corrigió aquí porque ya se estaba reconstruyendo
+ * la tabla completa con fuente verificada; ver docs/pendientes correspondiente
+ * para el detalle código por código de qué cambió y por qué.
  */
+const VIGENCIA_CORTE_RETENCION_RENTA = '2026-03-01';
+
 const CODIGOS_RETENCION_RENTA = {
-  '303': { descripcion: 'Honorarios profesionales', porcentaje: 8 },
-  '304': { descripcion: 'Servicios predomina M.O.',  porcentaje: 8 },
-  '307': { descripcion: 'Publicidad y comunicación', porcentaje: 1.75 },
-  '309': { descripcion: 'Transporte privado',         porcentaje: 1 },
-  '310': { descripcion: 'Arrendamiento inmuebles',    porcentaje: 8 },
-  '312': { descripcion: 'Transferencia bienes m.n.',  porcentaje: 1.75 },
-  '319': { descripcion: 'Arrendamiento de bienes',    porcentaje: 1.75 },
-  '320': { descripcion: 'Seguros y reaseguros',       porcentaje: 1.75 },
-  '322': { descripcion: 'Servicios entre sociedades', porcentaje: 1.75 },
-  '323': { descripcion: 'Pagos al exterior servicios', porcentaje: 22 },
-  '332': { descripcion: 'Compraventa de divisas',     porcentaje: 1 },
-  '340': { descripcion: 'Relación de dependencia',    porcentaje: 0 }, // variable
-  '341': { descripcion: 'Décimo tercer sueldo',       porcentaje: 0 }, // variable
-  '3440': { descripcion: 'Otras retenciones',         porcentaje: 1.75 },
+  '303':  { descripcion: 'Honorarios profesionales (persona natural, predomina el intelecto, con título)', porcentaje: 10 },
+  '303A': { descripcion: 'Servicios profesionales prestados por sociedades residentes',                     porcentajeAntes: 3,    porcentajeDespues: 5 },
+  '304':  { descripcion: 'Servicios donde predomina el intelecto, sin título profesional',                  porcentaje: 10 },
+  '307':  { descripcion: 'Servicios donde predomina la mano de obra',                                       porcentajeAntes: 2,    porcentajeDespues: 3 },
+  '309':  { descripcion: 'Publicidad y medios de comunicación',                                             porcentajeAntes: 2.75, porcentajeDespues: 3 },
+  '310':  { descripcion: 'Transporte privado de pasajeros / público o privado de carga',                    porcentaje: 1 },
+  '312':  { descripcion: 'Transferencia de bienes muebles de naturaleza corporal',                          porcentajeAntes: 1.75, porcentajeDespues: 2 },
+  '319':  { descripcion: 'Arrendamiento mercantil (cuotas, incluida opción de compra)',                     porcentaje: 2 },
+  '320':  { descripcion: 'Arrendamiento de bienes inmuebles',                                                porcentaje: 10 },
+  '322':  { descripcion: 'Seguros y reaseguros (primas y cesiones)',                                        porcentajeAntes: 1,    porcentajeDespues: 2 },
+  // 323 y 332: no forman parte del alcance de esta resolución (pagos al
+  // exterior se rigen por la tarifa societaria general de la LRTI; la
+  // descripción/porcentaje de 332 no se pudo verificar contra ninguna de las
+  // dos resoluciones) — se dejan sin tocar, marcados para revisión aparte.
+  '323': { descripcion: 'Pagos al exterior servicios (no cubierto por esta resolución — verificar tarifa societaria vigente)', porcentaje: 22 },
+  '332': { descripcion: 'Compraventa de divisas (no verificado contra la resolución — revisar con la contadora)', porcentaje: 1 },
+  '340': { descripcion: 'Relación de dependencia',    porcentaje: 0 }, // variable, tabla LORTI — excluido explícitamente por Art. 6b de la resolución
+  '341': { descripcion: 'Décimo tercer sueldo',       porcentaje: 0 }, // variable, régimen de exención propio
+  '3440': { descripcion: 'Otras retenciones (regla general — pagos sin porcentaje específico)', porcentajeAntes: 2.75, porcentajeDespues: 3 },
 };
 
 const CODIGOS_RETENCION_IVA = {
@@ -2798,6 +2820,7 @@ module.exports = {
   resolverFormaPago,
   CODIGOS_RETENCION_RENTA,
   CODIGOS_RETENCION_IVA,
+  VIGENCIA_CORTE_RETENCION_RENTA,
   IVA_CODIGO,
   IVA_TARIFA,
   parsearNotaCreditoRecibidaXml,
