@@ -1398,6 +1398,7 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     if (factura.direccionComprador) camposIA.push({ n: 'Dirección',   v: factura.direccionComprador });
     if (factura.vendedor)           camposIA.push({ n: 'Vendedor',    v: factura.vendedor });
     if (factura.observaciones)      camposIA.push({ n: 'Observación', v: factura.observaciones });
+    camposIA.push({ n: 'Prov. Sistema Fact.', v: RUC_PROVEEDOR_SISTEMA });
 
     const IA_H    = 12;
     const LABEL_W = FP_W * 0.30;
@@ -1602,6 +1603,10 @@ async function generarRIDENotaCredito(nc, configSri, outputPath) {
     y += 14;
     doc.text(`TOTAL NC: $${parseFloat(nc.importeTotal).toFixed(2)}`, W - 100 + 40, y, { width: 110, align: 'right' });
 
+    y += 24;
+    doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
+      .text(`Prov. Sistema Fact.: ${RUC_PROVEEDOR_SISTEMA}`, 40, y);
+
     doc.end();
     stream.on('finish', () => resolve(outputPath));
     stream.on('error', reject);
@@ -1663,6 +1668,10 @@ async function generarRIDENotaDebito(nd, configSri, outputPath) {
     doc.text(`IVA: $${totalIva.toFixed(2)}`, W - 100 + 40, y, { width: 110, align: 'right' });
     y += 14;
     doc.text(`TOTAL ND: $${total.toFixed(2)}`, W - 100 + 40, y, { width: 110, align: 'right' });
+
+    y += 24;
+    doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
+      .text(`Prov. Sistema Fact.: ${RUC_PROVEEDOR_SISTEMA}`, 40, y);
 
     doc.end();
     stream.on('finish', () => resolve(outputPath));
@@ -2326,6 +2335,10 @@ async function generarRIDERetencion(retencion, configSri, outputPath) {
       y += 14;
     }
 
+    doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
+       .text(`Prov. Sistema Fact.: ${RUC_PROVEEDOR_SISTEMA}`, ML, y, { lineBreak: false });
+    y += 12;
+
     y += 6;
     doc.fontSize(6).font('Helvetica').fillColor('#888888')
        .text(
@@ -2754,6 +2767,10 @@ async function generarRIDELiquidacionCompra(liq, configSri, outputPath) {
       doc.fontSize(7).font('Helvetica').fillColor(NEGRO).text(liq.observaciones, { lineBreak: false });
       y += 14;
     }
+
+    doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
+       .text(`Prov. Sistema Fact.: ${RUC_PROVEEDOR_SISTEMA}`, ML, y, { lineBreak: false });
+    y += 12;
 
     y += 6;
     doc.fontSize(6).font('Helvetica').fillColor('#888888')
