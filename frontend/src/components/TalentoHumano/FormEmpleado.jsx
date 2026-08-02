@@ -10,6 +10,7 @@ const EMPTY_EMP = {
   tipoContrato: 'indefinido', fechaIngreso: '', salarioBase: '',
   departamentoId: '', cargoId: '',
   afiliadoIESS: true, codigoIESS: '', tieneRenta: false, fondosReserva: false,
+  cargasFamiliares: 0,
   observaciones: '',
 };
 
@@ -197,6 +198,18 @@ const FormEmpleado = () => {
             <div className="th-form-group">
               <label>Código IESS</label>
               <input value={form.codigoIESS} onChange={e => set('codigoIESS', e.target.value)} placeholder="Número afiliado IESS" />
+            </div>
+            <div className="th-form-group">
+              <label>Cargas familiares</label>
+              <input
+                type="number" min="0" step="1"
+                value={form.cargasFamiliares}
+                onChange={e => set('cargasFamiliares', e.target.value)}
+                placeholder="0"
+              />
+              <small style={{ color:'var(--color-text-muted,#718096)' }}>
+                Usado para repartir el 5% de utilidades por cargas familiares (Pagos Especiales)
+              </small>
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:'0.75rem', paddingTop:'1.4rem' }}>
               <label style={{ display:'flex', gap:'0.5rem', alignItems:'center', cursor:'pointer', fontSize:'0.875rem' }}>

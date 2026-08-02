@@ -8,6 +8,7 @@
 // ============================================================
 const express = require('express');
 const router  = express.Router();
+const prisma  = require('../config/prisma');
 const { proteger } = require('../middleware/auth');
 const {
   imprimirRecibo, abrirCajon, probarConexion, generarEtiquetaProducto, imprimirBuffer,
@@ -20,7 +21,7 @@ router.use(proteger);
 // ── GET /api/impresora/config ─────────────────────────────────
 router.get('/config', async (req, res) => {
   try {
-    const cfg = await req.prisma.configuracion_sistema.findUnique({
+    const cfg = await prisma.configuracion_sistema.findUnique({
       where: { empresaId: req.empresa.id },
       select: {
         impresoraModo:       true,
@@ -66,7 +67,7 @@ router.put('/config', async (req, res) => {
     if (impresionAutoReciboPos !== undefined) data.impresionAutoReciboPos = Boolean(impresionAutoReciboPos);
     if (impresionAutoMobile   !== undefined) data.impresionAutoMobile   = Boolean(impresionAutoMobile);
 
-    await req.prisma.configuracion_sistema.upsert({
+    await prisma.configuracion_sistema.upsert({
       where: { empresaId: req.empresa.id },
       update: data,
       create: { empresaId: req.empresa.id, ...data },
@@ -96,7 +97,7 @@ router.post('/recibo/:tipo/:id', async (req, res) => {
   const { tipo, id } = req.params;
   try {
     // 1. Leer config de impresora
-    const cfg = await req.prisma.configuracion_sistema.findUnique({
+    const cfg = await prisma.configuracion_sistema.findUnique({
       where: { empresaId: req.empresa.id },
       select: {
         impresoraHabilitada: true,
@@ -119,11 +120,11 @@ router.post('/recibo/:tipo/:id', async (req, res) => {
     const docId = parseInt(id);
 
     if (tipo === 'nota_venta') {
-      doc = await req.prisma.notas_venta.findFirst({
+      doc = await prisma.notas_venta.findFirst({
         where: { id: docId, empresaId: req.empresa.id },
       });
     } else if (tipo === 'factura') {
-      doc = await req.prisma.facturas.findFirst({
+      doc = await prisma.facturas.findFirst({
         where: { id: docId, empresaId: req.empresa.id },
       });
     } else {
@@ -135,7 +136,7 @@ router.post('/recibo/:tipo/:id', async (req, res) => {
     }
 
     // 3. Cargar datos de la empresa
-    const emp = await req.prisma.configuracion_sri.findFirst({
+    const emp = await prisma.configuracion_sri.findFirst({
       where: { empresaId: req.empresa.id },
       select: {
         razonSocial: true, ruc: true, dirMatriz: true,
@@ -173,7 +174,7 @@ router.post('/recibo/:tipo/:id', async (req, res) => {
 // ── POST /api/impresora/cajon ─────────────────────────────────
 router.post('/cajon', async (req, res) => {
   try {
-    const cfg = await req.prisma.configuracion_sistema.findUnique({
+    const cfg = await prisma.configuracion_sistema.findUnique({
       where: { empresaId: req.empresa.id },
       select: { impresoraIp: true, impresoraPuerto: true, cajaDineroHabilitada: true },
     });
@@ -204,7 +205,7 @@ router.post('/etiquetas/preview', async (req, res) => {
     }
 
     const ids = productos.map((p) => parseInt(p.productoId, 10)).filter(Boolean);
-    const encontrados = await req.prisma.productos_servicios.findMany({
+    const encontrados = await prisma.productos_servicios.findMany({
       where: { id: { in: ids }, empresaId: req.empresa.id },
       select: { id: true, codigoPrincipal: true, codigoAuxiliar: true, nombre: true, precioUnitario: true },
     });
@@ -243,7 +244,7 @@ async function construirBufferEtiquetas(req, anchoDefault) {
   const anchoFinal = parseInt(ancho, 10) || anchoDefault || 80;
 
   const ids = productos.map((p) => parseInt(p.productoId, 10)).filter(Boolean);
-  const encontrados = await req.prisma.productos_servicios.findMany({
+  const encontrados = await prisma.productos_servicios.findMany({
     where: { id: { in: ids }, empresaId: req.empresa.id },
     select: { id: true, codigoPrincipal: true, codigoAuxiliar: true, nombre: true, precioUnitario: true },
   });
@@ -271,7 +272,7 @@ async function construirBufferEtiquetas(req, anchoDefault) {
 // ── POST /api/impresora/etiquetas/imprimir (modo red — TCP) ───
 router.post('/etiquetas/imprimir', async (req, res) => {
   try {
-    const cfg = await req.prisma.configuracion_sistema.findUnique({
+    const cfg = await prisma.configuracion_sistema.findUnique({
       where: { empresaId: req.empresa.id },
       select: { impresoraHabilitada: true, impresoraIp: true, impresoraPuerto: true, impresoraAncho: true },
     });
@@ -299,7 +300,7 @@ router.post('/etiquetas/imprimir', async (req, res) => {
 // módulo esté habilitado.
 router.post('/etiquetas/generar', async (req, res) => {
   try {
-    const cfg = await req.prisma.configuracion_sistema.findUnique({
+    const cfg = await prisma.configuracion_sistema.findUnique({
       where: { empresaId: req.empresa.id },
       select: { impresoraHabilitada: true, impresoraAncho: true },
     });
@@ -326,7 +327,7 @@ router.post('/etiquetas/generar', async (req, res) => {
 router.post('/recibo/:tipo/:id/generar', async (req, res) => {
   const { tipo, id } = req.params;
   try {
-    const cfg = await req.prisma.configuracion_sistema.findUnique({
+    const cfg = await prisma.configuracion_sistema.findUnique({
       where: { empresaId: req.empresa.id },
       select: { impresoraHabilitada: true, impresoraAncho: true, cajaDineroHabilitada: true },
     });
@@ -341,15 +342,15 @@ router.post('/recibo/:tipo/:id/generar', async (req, res) => {
     const docId = parseInt(id, 10);
     let doc;
     if (tipo === 'nota_venta') {
-      doc = await req.prisma.notas_venta.findFirst({ where: { id: docId, empresaId: req.empresa.id } });
+      doc = await prisma.notas_venta.findFirst({ where: { id: docId, empresaId: req.empresa.id } });
     } else if (tipo === 'factura') {
-      doc = await req.prisma.facturas.findFirst({ where: { id: docId, empresaId: req.empresa.id } });
+      doc = await prisma.facturas.findFirst({ where: { id: docId, empresaId: req.empresa.id } });
     } else {
       return res.status(400).json({ success: false, mensaje: 'Tipo de documento no válido' });
     }
     if (!doc) return res.status(404).json({ success: false, mensaje: 'Documento no encontrado' });
 
-    const emp = await req.prisma.configuracion_sri.findFirst({
+    const emp = await prisma.configuracion_sri.findFirst({
       where: { empresaId: req.empresa.id },
       select: { razonSocial: true, ruc: true, dirMatriz: true, nombreComercial: true, emailNotificaciones: true },
     });
@@ -373,7 +374,7 @@ router.post('/recibo/:tipo/:id/generar', async (req, res) => {
 // ── POST /api/impresora/cajon/generar (modo usb) ──────────────
 router.post('/cajon/generar', async (req, res) => {
   try {
-    const cfg = await req.prisma.configuracion_sistema.findUnique({
+    const cfg = await prisma.configuracion_sistema.findUnique({
       where: { empresaId: req.empresa.id },
       select: { cajaDineroHabilitada: true },
     });

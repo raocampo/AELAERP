@@ -386,7 +386,7 @@ router.post('/empleados', ...gestionarRRHH, async (req, res) => {
       fechaNacimiento, sexo, estadoCivil,
       tipoContrato, fechaIngreso, salarioBase,
       departamentoId, cargoId,
-      afiliadoIESS, codigoIESS, tieneRenta, fondosReserva,
+      afiliadoIESS, codigoIESS, tieneRenta, fondosReserva, cargasFamiliares,
       observaciones,
     } = req.body;
 
@@ -417,6 +417,7 @@ router.post('/empleados', ...gestionarRRHH, async (req, res) => {
         codigoIESS:    codigoIESS?.trim() || null,
         tieneRenta:    tieneRenta !== undefined ? Boolean(tieneRenta) : false,
         fondosReserva: fondosReserva !== undefined ? Boolean(fondosReserva) : false,
+        cargasFamiliares: cargasFamiliares !== undefined ? parseInt(cargasFamiliares) || 0 : 0,
         observaciones: observaciones?.trim() || null,
       },
       include: {
@@ -442,7 +443,7 @@ router.put('/empleados/:id', ...gestionarRRHH, async (req, res) => {
       'cedula','nombres','apellidos','email','telefono','direccion',
       'sexo','estadoCivil','tipoContrato','salarioBase',
       'departamentoId','cargoId',
-      'afiliadoIESS','codigoIESS','tieneRenta','fondosReserva',
+      'afiliadoIESS','codigoIESS','tieneRenta','fondosReserva','cargasFamiliares',
       'activo','observaciones','motivoSalida',
     ];
     const data = {};
@@ -450,6 +451,7 @@ router.put('/empleados/:id', ...gestionarRRHH, async (req, res) => {
       if (req.body[c] !== undefined) {
         if (c === 'salarioBase') data[c] = parseFloat(req.body[c]);
         else if (c === 'departamentoId' || c === 'cargoId') data[c] = req.body[c] ? parseInt(req.body[c]) : null;
+        else if (c === 'cargasFamiliares') data[c] = parseInt(req.body[c]) || 0;
         else if (['afiliadoIESS','tieneRenta','fondosReserva','activo'].includes(c)) data[c] = Boolean(req.body[c]);
         else data[c] = req.body[c]?.trim ? req.body[c].trim() || null : req.body[c];
       }
