@@ -103,10 +103,16 @@ export default function PuntoVenta() {
   const consultarSRI = async (idParam) => {
     const limpio = (idParam ?? identificacion).trim();
     if (tipoId === '07') return;
-    if (!/^\d{10}$/.test(limpio) && !/^\d{13}$/.test(limpio)) {
+    const esRUC = /^\d{13}$/.test(limpio);
+    if (!/^\d{10}$/.test(limpio) && !esRUC) {
       if (limpio.length > 0) setMensajeSRI('Ingresa 10 dígitos (cédula) o 13 dígitos (RUC)');
       return;
     }
+    // Corrige el tipo de identificación según la longitud del número YA (sin
+    // esperar la respuesta del SRI/BD local, para que aplique también a
+    // clientes nuevos sin registro previo) — evita enviar al SRI un RUC de
+    // 13 dígitos etiquetado como cédula (o viceversa), que el SRI rechaza.
+    setTipoId(esRUC ? '04' : '05');
 
     setBuscandoSRI(true);
     setMensajeSRI('');
@@ -117,6 +123,7 @@ export default function PuntoVenta() {
       const d = res.data;
       if (d.success && d.data) {
         const c = d.data;
+        if (c.tipoIdentificacion) setTipoId(c.tipoIdentificacion);
         setRazonSocial(c.razonSocial || '');
         setDireccion(c.direccion || '');
         setEmail(c.email || '');

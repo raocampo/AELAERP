@@ -92,8 +92,14 @@ export default function FormNotaVenta() {
   // ── Consulta SRI ──────────────────────────────────────────────────────────
   const consultarSRI = async (id) => {
     const limpio = id.trim();
-    const ok = /^\d{10}$/.test(limpio) || /^\d{13}$/.test(limpio);
+    const esRUC = /^\d{13}$/.test(limpio);
+    const ok = /^\d{10}$/.test(limpio) || esRUC;
     if (!ok || tipoId === '07') return;
+    // Corrige el tipo de identificación según la longitud del número YA (sin
+    // esperar la respuesta del SRI/BD local) — evita enviar un RUC de 13
+    // dígitos etiquetado como cédula, que el SRI rechaza.
+    setTipoId(esRUC ? '04' : '05');
+
     setBuscandoSRI(true);
     setMensajeSRI('');
     try {
@@ -101,6 +107,7 @@ export default function FormNotaVenta() {
       if (res.data.success && res.data.data) {
         const c = res.data.data;
         setClienteId(c.id || null);
+        if (c.tipoIdentificacion) setTipoId(c.tipoIdentificacion);
         if (c.razonSocial) setRazonSocial(c.razonSocial);
         if (c.direccion) setDireccion(c.direccion);
         if (!email) setEmail(c.email || '');

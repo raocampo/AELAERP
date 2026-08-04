@@ -355,6 +355,7 @@ const FormFactura = () => {
   const seleccionarCliente = (c) => {
     setClienteId(c.id);
     setIdComprador(c.identificacion);
+    if (c.tipoIdentificacion) setTipoId(c.tipoIdentificacion);
     setRazonSocial(c.razonSocial);
     setEmail(c.email || '');
     setTelefono(c.telefono || '');
@@ -377,6 +378,16 @@ const FormFactura = () => {
     if (!esCedula && !esRUC) return;
     if (tipoId === '07') return;
 
+    // El tipo de identificación seleccionado en el <select> puede haber
+    // quedado desactualizado (ej. en "Cédula" por defecto mientras se
+    // escribe un RUC de 13 dígitos) — se corrige según la longitud del
+    // número YA (sin esperar a la respuesta del SRI/BD local, para que
+    // también aplique a clientes nuevos que no tengan ningún registro
+    // previo), para que el XML nunca se envíe con un tipo que no coincide
+    // con la longitud real del número (el SRI lo rechaza: "la longitud del
+    // número de cédula debe ser 10").
+    setTipoId(esRUC ? '04' : '05');
+
     setBuscandoSRI(true);
     setMensajeSRI('');
     try {
@@ -384,6 +395,7 @@ const FormFactura = () => {
       if (res.data.success && res.data.data) {
         const c = res.data.data;
         setClienteId(c.id || null);
+        if (c.tipoIdentificacion) setTipoId(c.tipoIdentificacion);
         if (c.razonSocial) setRazonSocial(c.razonSocial);
         if (c.direccion) setDireccion(c.direccion);
         if (!email) setEmail(c.email || '');

@@ -614,6 +614,14 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
     if (!tipoIdentificacion || !identificacion || !razonSocial) {
       return res.status(400).json({ success: false, mensaje: 'Faltan datos del destinatario' });
     }
+    // Mismo chequeo que en facturas.js: el SRI rechaza el comprobante si el
+    // tipo de identificación no coincide con la longitud real del número.
+    if (tipoIdentificacion === '05' && !/^\d{10}$/.test(identificacion)) {
+      return res.status(400).json({ success: false, mensaje: `La cédula del destinatario debe tener 10 dígitos (tiene ${identificacion.length}). Si es un RUC, selecciona "RUC" como tipo de identificación.` });
+    }
+    if (tipoIdentificacion === '04' && !/^\d{13}$/.test(identificacion)) {
+      return res.status(400).json({ success: false, mensaje: `El RUC del destinatario debe tener 13 dígitos (tiene ${identificacion.length}). Si es una cédula, selecciona "Cédula" como tipo de identificación.` });
+    }
     if (!detalles || detalles.length === 0) {
       return res.status(400).json({ success: false, mensaje: 'Debe incluir al menos un detalle' });
     }

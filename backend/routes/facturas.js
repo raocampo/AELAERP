@@ -1018,6 +1018,16 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
     if (!tipoIdentificacionComprador || !identificacionComprador || !razonSocialComprador) {
       return res.status(400).json({ ok: false, error: 'Faltan datos del comprador' });
     }
+    // El SRI rechaza el comprobante si el tipo de identificación no coincide
+    // con la longitud real del número (ej. RUC de 13 dígitos enviado como
+    // cédula) — se valida aquí, antes de consumir un secuencial, en vez de
+    // dejar que el SRI lo rechace después de emitido.
+    if (tipoIdentificacionComprador === '05' && !/^\d{10}$/.test(identificacionComprador)) {
+      return res.status(400).json({ ok: false, error: `La cédula del comprador debe tener 10 dígitos (tiene ${identificacionComprador.length}). Si es un RUC, selecciona "RUC" como tipo de identificación.` });
+    }
+    if (tipoIdentificacionComprador === '04' && !/^\d{13}$/.test(identificacionComprador)) {
+      return res.status(400).json({ ok: false, error: `El RUC del comprador debe tener 13 dígitos (tiene ${identificacionComprador.length}). Si es una cédula, selecciona "Cédula" como tipo de identificación.` });
+    }
     if (!detalles || detalles.length === 0) {
       return res.status(400).json({ ok: false, error: 'Debe incluir al menos un detalle' });
     }
