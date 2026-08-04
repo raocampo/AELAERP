@@ -18,6 +18,7 @@ export interface Empresa {
 export interface Sistema {
   posHabilitado: boolean;
   inventarioHabilitado: boolean;
+  facturacionHabilitada: boolean;
   documentoPosDefault?: 'factura' | 'nota_venta';
   cajaNombre?: string;
 }

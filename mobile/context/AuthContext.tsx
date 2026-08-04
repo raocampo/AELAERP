@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import type { Href } from 'expo-router';
 import api, { clearSession, STORAGE_KEYS } from '../services/api';
 import type { Empresa, Sistema, Usuario } from '../types';
 
@@ -22,6 +23,17 @@ interface AuthActions {
 }
 
 const AuthContext = createContext<AuthState & AuthActions>({} as AuthState & AuthActions);
+
+// Orden de preferencia de los tabs con módulo propio (Configuración no está
+// gateada por módulo, siempre es el último recurso). `sistema` null/undefined
+// (sesión restaurada de una versión vieja de la app sin el campo todavía)
+// se trata como habilitado, hasta que recargarSistema() lo corrija.
+export function primerTabDisponible(sistema: Sistema | null): Href {
+  if (!sistema || sistema.posHabilitado !== false) return '/(tabs)/pos';
+  if (sistema.inventarioHabilitado !== false) return '/(tabs)/inventario';
+  if (sistema.facturacionHabilitada !== false) return '/(tabs)/facturas';
+  return '/(tabs)/configuracion';
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);

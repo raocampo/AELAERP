@@ -3,10 +3,10 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AuthProvider, useAuth } from '../context/AuthContext';
+import { AuthProvider, useAuth, primerTabDisponible } from '../context/AuthContext';
 
 function RouteGuard({ children }: { children: React.ReactNode }) {
-  const { usuario, cargando, empresaConfirmada } = useAuth();
+  const { usuario, cargando, empresaConfirmada, sistema } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -25,10 +25,10 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
       // Logueado pero sin empresa confirmada → selector de empresa
       if (!inEmpresa) router.replace('/empresa');
     } else {
-      // Sesión completa → tabs
-      if (inLogin || inEmpresa) router.replace('/(tabs)/pos');
+      // Sesión completa → tabs (al primer módulo habilitado)
+      if (inLogin || inEmpresa) router.replace(primerTabDisponible(sistema));
     }
-  }, [usuario, cargando, empresaConfirmada, segments, router]);
+  }, [usuario, cargando, empresaConfirmada, segments, router, sistema]);
 
   return <>{children}</>;
 }

@@ -4,6 +4,15 @@ import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 
+// `sistema` null/undefined (aún no cargó, o sesión vieja sin el campo) se
+// trata como habilitado — evita ocultar un tab por un instante mientras
+// recargarSistema() todavía no responde. Una vez que sistema llega, cada
+// módulo se oculta del tab bar (no se desmonta la ruta) si el tenant no lo
+// tiene contratado — mismo criterio que ModuleRoute en el frontend web.
+function hrefSiHabilitado(habilitado: boolean | undefined) {
+  return habilitado === false ? null : undefined;
+}
+
 function HeaderRight() {
   const { empresa } = useAuth();
   return (
@@ -24,6 +33,7 @@ const h = StyleSheet.create({
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { sistema } = useAuth();
 
   // Altura del tab bar: 56 fijos + inset inferior del dispositivo (botones de nav)
   const TAB_HEIGHT = 56 + insets.bottom;
@@ -53,6 +63,7 @@ export default function TabsLayout() {
         options={{
           title: 'Punto de Venta',
           tabBarLabel: 'POS',
+          href: hrefSiHabilitado(sistema?.posHabilitado),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cart-outline" size={size} color={color} />
           ),
@@ -63,6 +74,7 @@ export default function TabsLayout() {
         options={{
           title: 'Inventario',
           tabBarLabel: 'Inventario',
+          href: hrefSiHabilitado(sistema?.inventarioHabilitado),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cube-outline" size={size} color={color} />
           ),
@@ -73,6 +85,7 @@ export default function TabsLayout() {
         options={{
           title: 'Facturación',
           tabBarLabel: 'Facturas',
+          href: hrefSiHabilitado(sistema?.facturacionHabilitada),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="document-text-outline" size={size} color={color} />
           ),

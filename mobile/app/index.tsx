@@ -1,5 +1,7 @@
 import { Redirect } from 'expo-router';
+import { useAuth, primerTabDisponible } from '../context/AuthContext';
 
 export default function Index() {
-  return <Redirect href="/(tabs)/pos" />;
+  const { sistema } = useAuth();
+  return <Redirect href={primerTabDisponible(sistema)} />;
 }
