@@ -130,11 +130,12 @@ el resto del código.
 
 1. **Verificar visualmente en emulador** el gating de módulos de la app móvil
    (punto 3 arriba) — no se pudo hacer en este equipo.
-2. **Auditar el resto del código por el mismo patrón del punto 5**: buscar otras
-   consultas `facturas.aggregate()`/`facturas.count()` que no filtren `estadoSri`
-   y puedan estar inflando reportes con documentos rechazados/pendientes (ATS y
-   CxC ya se confirmaron correctos — filtran `AUTORIZADO` estrictamente; falta
-   revisar Reportes Tributarios, Declaraciones, y cualquier otro KPI).
+2. ✅ **RESUELTO 2026-08-04** (commit `58db3d7`) — Auditar el resto del código
+   por el mismo patrón del punto 5: encontrados 2 archivos más con el mismo
+   bug (`declaraciones.js` F104/F101/disponibles y `facturas.js GET
+   /reportes/tributario`, el backing real de la página "Reportes
+   Tributarios"), corregidos y verificados contra datos reales. Ver
+   `docs/pendientes-2026-08-04.md` para el detalle completo.
 3. **App móvil "onrender"** (punto 4) — recompilar con `eas build` y reinstalar
    para confirmar que ya toma la URL de Railway; si persiste, revisar env vars en
    expo.dev.
