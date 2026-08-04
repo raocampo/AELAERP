@@ -231,17 +231,23 @@ function formatearNumeroFactura(estab, ptoEmi, secuencial) {
 // ─── 2. GENERACIÓN XML ───────────────────────────────────────────────────────
 
 // RUC del proveedor del sistema de facturación electrónica (CorpSimtelec,
-// dueño de AELA) — Res. SRI NAC-DGERCGC26-00000027 (27-jul-2026): todo
+// dueño de AELA) — Res. SRI NAC-DGERCGC26-00000027 (27-jul-2026), Anexo 26
+// de la Ficha Técnica de Comprobantes Electrónicos Offline v2.34: todo
 // comprobante electrónico debe incluir en su información adicional el RUC
 // del proveedor del sistema/servicio de facturación electrónica usado por
 // el emisor. Es el mismo para todos los tenants (todos usan AELA).
+//
+// Nombre de campo CONFIRMADO contra el texto oficial del Anexo 26 (antes
+// era una etiqueta propia sin verificar, ver memoria persistente): el
+// atributo "nombre" del <campoAdicional> debe ser exactamente "RUC
+// Proveedor" (sin "Sistema").
 const RUC_PROVEEDOR_SISTEMA = '1103568240001';
 
 // Agrega el bloque <infoAdicional> con los campos propios del comprobante
 // más el RUC del proveedor de sistema (obligatorio en todos, incluso si no
 // hay ningún otro campo adicional que informar).
 function _agregarInfoAdicional(root, camposAd = []) {
-  const campos = [...camposAd, { nombre: 'RUC Proveedor Sistema', valor: RUC_PROVEEDOR_SISTEMA }];
+  const campos = [...camposAd, { nombre: 'RUC Proveedor', valor: RUC_PROVEEDOR_SISTEMA }];
   const infoAd = root.ele('infoAdicional');
   campos.forEach(c => infoAd.ele('campoAdicional', { nombre: c.nombre }).txt(c.valor));
 }
@@ -1398,7 +1404,7 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     if (factura.direccionComprador) camposIA.push({ n: 'Dirección',   v: factura.direccionComprador });
     if (factura.vendedor)           camposIA.push({ n: 'Vendedor',    v: factura.vendedor });
     if (factura.observaciones)      camposIA.push({ n: 'Observación', v: factura.observaciones });
-    camposIA.push({ n: 'Prov. Sistema Fact.', v: RUC_PROVEEDOR_SISTEMA });
+    camposIA.push({ n: 'RUC Proveedor', v: RUC_PROVEEDOR_SISTEMA });
 
     const IA_H    = 12;
     const LABEL_W = FP_W * 0.30;
@@ -1605,7 +1611,7 @@ async function generarRIDENotaCredito(nc, configSri, outputPath) {
 
     y += 24;
     doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
-      .text(`Prov. Sistema Fact.: ${RUC_PROVEEDOR_SISTEMA}`, 40, y);
+      .text(`RUC Proveedor: ${RUC_PROVEEDOR_SISTEMA}`, 40, y);
 
     doc.end();
     stream.on('finish', () => resolve(outputPath));
@@ -1671,7 +1677,7 @@ async function generarRIDENotaDebito(nd, configSri, outputPath) {
 
     y += 24;
     doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
-      .text(`Prov. Sistema Fact.: ${RUC_PROVEEDOR_SISTEMA}`, 40, y);
+      .text(`RUC Proveedor: ${RUC_PROVEEDOR_SISTEMA}`, 40, y);
 
     doc.end();
     stream.on('finish', () => resolve(outputPath));
@@ -2336,7 +2342,7 @@ async function generarRIDERetencion(retencion, configSri, outputPath) {
     }
 
     doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
-       .text(`Prov. Sistema Fact.: ${RUC_PROVEEDOR_SISTEMA}`, ML, y, { lineBreak: false });
+       .text(`RUC Proveedor: ${RUC_PROVEEDOR_SISTEMA}`, ML, y, { lineBreak: false });
     y += 12;
 
     y += 6;
@@ -2769,7 +2775,7 @@ async function generarRIDELiquidacionCompra(liq, configSri, outputPath) {
     }
 
     doc.fontSize(6.5).font('Helvetica').fillColor(GRIS)
-       .text(`Prov. Sistema Fact.: ${RUC_PROVEEDOR_SISTEMA}`, ML, y, { lineBreak: false });
+       .text(`RUC Proveedor: ${RUC_PROVEEDOR_SISTEMA}`, ML, y, { lineBreak: false });
     y += 12;
 
     y += 6;
