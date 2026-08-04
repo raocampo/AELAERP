@@ -653,6 +653,11 @@ const FIXES = [
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "valorIce" DECIMAL(14,2)`,
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "valorIsd" DECIMAL(14,2)`,
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "tributosAduanerosPagados" BOOLEAN NOT NULL DEFAULT false`,
+  // Sector transporte terrestre comercial (Res. NAC-DGERCGC26-00000024,
+  // Anexo 25 Ficha Técnica v2.34) — placa del vehículo + codigoAuxiliar
+  // H492001/H492002 (2026-08-04).
+  `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "sectorTransporte" VARCHAR(20)`,
+  `ALTER TABLE "facturas" ADD COLUMN IF NOT EXISTS "placaVehiculo" VARCHAR(10)`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

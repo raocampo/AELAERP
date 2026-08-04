@@ -92,6 +92,7 @@ const ConfiguracionSRI = () => {
     contribuyenteRimpe:    false,
     contribuyenteEspecial: false,   // se manda como "" o "SI"
     negocioPopular:        false,
+    sectorTransporte:      '',      // '' | 'OPERADORA' | 'SOCIO'
     obligadoContabilidad:  false,
     agenteRetencion:       false,   // se manda como "" o "SI"
     emailNotificaciones:   '',
@@ -202,6 +203,7 @@ const ConfiguracionSRI = () => {
           contribuyenteRimpe:    !!d.contribuyenteRimpe,
           contribuyenteEspecial: !!(d.contribuyenteEspecial && d.contribuyenteEspecial !== ''),
           negocioPopular:        !!d.negocioPopular,
+          sectorTransporte:      d.sectorTransporte      || '',
           obligadoContabilidad:  !!d.obligadoContabilidad,
           agenteRetencion:       !!(d.agenteRetencion && d.agenteRetencion !== ''),
           emailNotificaciones:   d.emailNotificaciones   || '',
@@ -653,6 +655,19 @@ const ConfiguracionSRI = () => {
                 checked={form.agenteRetencion} onChange={handleChange} />
               <span>Agente de Retención</span>
             </label>
+          </div>
+          <div className="form-group" style={{ marginTop: 12 }}>
+            <label>Sector Transporte Terrestre Comercial</label>
+            <select name="sectorTransporte" value={form.sectorTransporte} onChange={handleChange}>
+              <option value="">No aplica</option>
+              <option value="OPERADORA">Operadora de transporte (factura a sus clientes)</option>
+              <option value="SOCIO">Socio / accionista (factura a la operadora)</option>
+            </select>
+            <span className="field-hint">
+              Solo transporte terrestre comercial autorizado (carga, escolar, turístico,
+              mixto, alternativo — no taxis). Activa la placa del vehículo obligatoria y
+              el código auxiliar en cada factura (Res. SRI NAC-DGERCGC26-00000024).
+            </span>
           </div>
         </div>
 

@@ -526,7 +526,7 @@ router.put('/configuracion', permitirConfigurarSri, async (req, res) => {
     const {
       ruc, razonSocial, nombreComercial, dirMatriz, dirEstablecimiento,
       establecimiento, puntoEmision, ambiente, contribuyenteEspecial,
-      contribuyenteRimpe, negocioPopular,
+      contribuyenteRimpe, negocioPopular, sectorTransporte,
       obligadoContabilidad, agenteRetencion, emailNotificaciones, telefono,
       tipoCertificado,
     } = req.body;
@@ -540,6 +540,7 @@ router.put('/configuracion', permitirConfigurarSri, async (req, res) => {
       contribuyenteEspecial: contribuyenteEspecial || null,
       contribuyenteRimpe:   !!contribuyenteRimpe,
       negocioPopular:       !!negocioPopular,
+      sectorTransporte:     ['OPERADORA', 'SOCIO'].includes(sectorTransporte) ? sectorTransporte : null,
       obligadoContabilidad: !!obligadoContabilidad,
       agenteRetencion:      agenteRetencion || null,
       emailNotificaciones:  emailNotificaciones || null,
@@ -998,6 +999,7 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       establecimiento: establecimientoBody,
       puntoEmision: puntoEmisionBody,
       idempotencyKey,
+      placaVehiculo,
     } = req.body;
 
     // Venta encolada offline (POS sin internet, ver frontend/src/utils/
@@ -1030,6 +1032,20 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
     }
     if (!detalles || detalles.length === 0) {
       return res.status(400).json({ ok: false, error: 'Debe incluir al menos un detalle' });
+    }
+
+    // Sector transporte terrestre comercial (Res. NAC-DGERCGC26-00000024,
+    // Anexo 25 Ficha Técnica v2.34): la placa es obligatoria en el XML — se
+    // valida aquí, antes de consumir un secuencial, igual que el resto de
+    // validaciones del comprobante.
+    const placaVehiculoNormalizada = placaVehiculo ? String(placaVehiculo).toUpperCase().replace(/\s+/g, '') : null;
+    if (config.sectorTransporte) {
+      if (!placaVehiculoNormalizada) {
+        return res.status(400).json({ ok: false, error: 'La placa del vehículo es obligatoria para empresas del sector transporte comercial (Res. SRI NAC-DGERCGC26-00000024).' });
+      }
+      if (!/^[A-Z0-9]{5,8}$/.test(placaVehiculoNormalizada)) {
+        return res.status(400).json({ ok: false, error: 'Formato de placa inválido. Usa solo letras y números, sin espacios (ej. PCM4567).' });
+      }
     }
 
     const detallesFinales = detalles;
@@ -1098,6 +1114,7 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       razonSocialComprador, direccionComprador, emailComprador, telefonoComprador,
       detalles: detallesFinales, pagos, propina, observaciones,
       vendedor: req.usuario.nombre || null,
+      placaVehiculo: placaVehiculoNormalizada,
     }, config);
 
     // Guardar en BD
@@ -1137,6 +1154,7 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
           xmlGenerado: xml,
           observaciones: observaciones || null,
           vendedor: req.usuario.nombre || null,
+          placaVehiculo: placaVehiculoNormalizada,
           emisorId: req.usuario.id,
         },
       });

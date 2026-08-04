@@ -518,6 +518,12 @@ model configuracion_sri {
   contribuyenteRimpe    Boolean  @default(false)
   negocioPopular        Boolean  @default(false)
   // true = habilitado para nota de venta Lite
+  // Res. NAC-DGERCGC26-00000024, Anexo 25 Ficha Técnica v2.34: operadoras de
+  // transporte terrestre comercial (excepto taxis) y sus socios/accionistas
+  // deben incluir <placa> y <codigoAuxiliar> en sus facturas. null = no
+  // aplica; 'OPERADORA' → codigoAuxiliar H492001 (factura a cliente);
+  // 'SOCIO' → codigoAuxiliar H492002 (factura del socio a la operadora).
+  sectorTransporte      String?  @db.VarChar(20)
   obligadoContabilidad  Boolean  @default(false)
   agenteRetencion       String?  @db.VarChar(13)
   certificadoP12        String?  @db.VarChar(500)
@@ -597,6 +603,10 @@ model facturas {
   sincronizadoOffline         Boolean   @default(false)
   observaciones               String?
   origenRegistro              String    @default("MANUAL") @db.VarChar(30)
+  // Placa del vehículo con el que se prestó el servicio — obligatoria en el
+  // XML (<placa>, entre <moneda> y <pagos>) cuando configuracion_sri.
+  // sectorTransporte está seteado (Res. NAC-DGERCGC26-00000024, Anexo 25).
+  placaVehiculo                String?   @db.VarChar(10)
   emisorId                    Int?
   createdAt                   DateTime  @default(now())
   updatedAt                   DateTime  @updatedAt

@@ -270,7 +270,13 @@ function generarXMLFactura(data, config) {
     pagos,           // [{formaPago, total, plazo, unidadTiempo}]
     propina,
     observaciones,
+    placaVehiculo,   // Sector transporte comercial (Anexo 25) — ver config.sectorTransporte
   } = data;
+
+  // Res. NAC-DGERCGC26-00000024, Anexo 25 Ficha Técnica v2.34: operadoras de
+  // transporte terrestre comercial y sus socios/accionistas deben incluir
+  // <placa> (a nivel de comprobante) y <codigoAuxiliar> (por cada ítem).
+  const CODIGO_AUXILIAR_TRANSPORTE = config.sectorTransporte === 'SOCIO' ? 'H492002' : 'H492001';
 
   const d = new Date(fechaEmision);
   const fechaStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
@@ -405,6 +411,11 @@ function generarXMLFactura(data, config) {
   infoFact.ele('importeTotal').txt(importeTotal.toFixed(2));
   infoFact.ele('moneda').txt('DOLAR');
 
+  // Placa del vehículo — solo transporte comercial (Anexo 25)
+  if (config.sectorTransporte && placaVehiculo) {
+    infoFact.ele('placa').txt(String(placaVehiculo).toUpperCase().replace(/\s+/g, ''));
+  }
+
   // pagos
   const pagosEle = infoFact.ele('pagos');
   (pagos && pagos.length > 0 ? pagos : [{ formaPago: 'Efectivo', total: importeTotal }]).forEach(p => {
@@ -420,6 +431,9 @@ function generarXMLFactura(data, config) {
   detallesXML.forEach(det => {
     const detEle = detallesEle.ele('detalle');
     detEle.ele('codigoPrincipal').txt(det.codigoPrincipal);
+    if (config.sectorTransporte) {
+      detEle.ele('codigoAuxiliar').txt(CODIGO_AUXILIAR_TRANSPORTE);
+    }
     detEle.ele('descripcion').txt(det.descripcion);
     detEle.ele('cantidad').txt(det.cantidad);
     detEle.ele('precioUnitario').txt(det.precioUnitario);
@@ -1404,6 +1418,7 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     if (factura.direccionComprador) camposIA.push({ n: 'Dirección',   v: factura.direccionComprador });
     if (factura.vendedor)           camposIA.push({ n: 'Vendedor',    v: factura.vendedor });
     if (factura.observaciones)      camposIA.push({ n: 'Observación', v: factura.observaciones });
+    if (factura.placaVehiculo)      camposIA.push({ n: 'Placa Vehículo', v: factura.placaVehiculo });
     camposIA.push({ n: 'RUC Proveedor', v: RUC_PROVEEDOR_SISTEMA });
 
     const IA_H    = 12;

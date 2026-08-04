@@ -292,6 +292,17 @@ const FormFactura = () => {
   const [submitting,    setSubmitting] = useState(false);
   const [puntoVenta,    setPuntoVenta] = useState(null);
 
+  // Sector transporte terrestre comercial (Res. SRI NAC-DGERCGC26-00000024) —
+  // la placa del vehículo solo es obligatoria si la empresa está configurada
+  // como operadora o socio/accionista de transporte.
+  const [sectorTransporte, setSectorTransporte] = useState('');
+  const [placaVehiculo,    setPlacaVehiculo]    = useState('');
+  useEffect(() => {
+    api.get('/facturas/configuracion')
+      .then(res => setSectorTransporte(res.data?.data?.sectorTransporte || ''))
+      .catch(() => {});
+  }, []);
+
   const totales = calcularTotales(detalles);
 
   // ── Pre-llenado desde Proforma (location.state.proforma) ────────────────
@@ -541,6 +552,9 @@ const FormFactura = () => {
       return toast.error('Completa la descripción y precio de todos los ítems');
     }
     if (pagos.length === 0) return toast.error('Agrega al menos una forma de pago');
+    if (sectorTransporte && !placaVehiculo.trim()) {
+      return toast.error('La placa del vehículo es obligatoria (sector transporte comercial)');
+    }
 
     setSubmitting(true);
     try {
@@ -572,6 +586,7 @@ const FormFactura = () => {
         observaciones: observaciones || undefined,
         fechaEmision,
         clienteId: clienteId || undefined,
+        ...(sectorTransporte && { placaVehiculo: placaVehiculo.trim() }),
         ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
       });
 
@@ -927,6 +942,14 @@ const FormFactura = () => {
               <label>Fecha de emisión</label>
               <input type="date" value={fechaEmision} onChange={e => setFecha(e.target.value)} />
             </div>
+            {sectorTransporte && (
+              <div className="fact-field">
+                <label>Placa del vehículo *</label>
+                <input type="text" value={placaVehiculo}
+                  onChange={e => setPlacaVehiculo(e.target.value.toUpperCase().replace(/\s+/g, ''))}
+                  placeholder="Ej. PCM4567" maxLength={8} required />
+              </div>
+            )}
             <div className="fact-field full">
               <label>Observaciones</label>
               <textarea value={observaciones} onChange={e => setObs(e.target.value)}
