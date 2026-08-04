@@ -21,6 +21,12 @@ const {
 const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
 const { normalizarRol, tienePermiso } = require('../utils/roles');
 
+// Estados de factura que representan una venta real ya consumada — autorizada
+// por el SRI, o histórica importada sin envío al SRI (numeroAutorizacion nulo,
+// ver POST /facturas/importar-historicas). Excluye rechazadas, pendientes de
+// firma/envío o con error: esas nunca llegaron a ser una venta.
+const ESTADOS_FACTURA_VALIDOS = ['AUTORIZADO', 'HISTORICO'];
+
 // Helper: determina el rol del usuario en una empresa específica.
 // Devuelve el rol de usuario_empresas si existe, o el rol base si es su empresa default.
 async function rolEnEmpresa(prisma, usuarioId, baseEmpresaId, baseRol, empresaIdTarget) {
@@ -205,9 +211,11 @@ router.get('/estadisticas', proteger, async (req, res) => {
       facturasAñoSum, notasVentaAñoSum,
       configSriRimpe,
     ] = await Promise.all([
-      // Conteo anual
+      // Conteo anual — solo facturas que representan una venta real (autorizada
+      // por el SRI, o histórica sin envío al SRI). Excluye rechazadas, en
+      // proceso de firma/envío, con error, etc.
       req.prisma.facturas.count({
-        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lte: finAño } },
+        where: { empresaId: eId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS }, fechaEmision: { gte: inicioAño, lte: finAño } },
       }),
       req.prisma.notas_venta.count({
         where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lte: finAño } },
@@ -215,7 +223,7 @@ router.get('/estadisticas', proteger, async (req, res) => {
 
       // Ventas del mes (suma importeTotal / total)
       req.prisma.facturas.aggregate({
-        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioMes, lte: finMes } },
+        where: { empresaId: eId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS }, fechaEmision: { gte: inicioMes, lte: finMes } },
         _sum: { importeTotal: true },
         _count: { id: true },
       }),
@@ -250,7 +258,7 @@ router.get('/estadisticas', proteger, async (req, res) => {
 
       // Ingresos acumulados del año (para validar tope de régimen RIMPE)
       req.prisma.facturas.aggregate({
-        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lte: finAño } },
+        where: { empresaId: eId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS }, fechaEmision: { gte: inicioAño, lte: finAño } },
         _sum: { importeTotal: true },
       }),
       req.prisma.notas_venta.aggregate({
