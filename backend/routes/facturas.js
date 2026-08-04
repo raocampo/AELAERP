@@ -1851,8 +1851,11 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
     const filtroFecha = { gte: desde, lte: hasta };
 
     // ── Facturas del período (ventas) ─────────────────────────────────────────
+    // Solo AUTORIZADO/HISTORICO son ventas reales — mismo criterio que
+    // Dashboard (empresas.js) y declaraciones.js. Una factura RECHAZADA o
+    // atascada en PENDIENTE_FIRMA/ENVIADO/ERROR nunca llegó a ser válida.
     const facturas = await db.facturas.findMany({
-      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: { in: ['AUTORIZADO', 'HISTORICO'] } },
       select: {
         id: true, numeroFactura: true, fechaEmision: true,
         razonSocialComprador: true, identificacionComprador: true,
@@ -1864,7 +1867,7 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
 
     // ── Notas de crédito emitidas del período ─────────────────────────────────
     const notasCredito = await db.notas_credito.findMany({
-      where: { empresaId, fechaEmision: filtroFecha },
+      where: { empresaId, fechaEmision: filtroFecha, estadoSri: 'AUTORIZADO' },
       select: {
         id: true, numeroNC: true, fechaEmision: true,
         razonSocialComprador: true, identificacionComprador: true,
@@ -1876,7 +1879,7 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
 
     // ── Retenciones emitidas del período (a proveedores — obligación F103) ────
     const retenciones = await db.retenciones.findMany({
-      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: 'AUTORIZADO' },
       select: {
         id: true, numeroRetencion: true, fechaEmision: true,
         razonSocialProveedor: true, identificacionProveedor: true,
@@ -1906,7 +1909,7 @@ router.get('/reportes/tributario', permitirReportesTributarios, async (req, res)
 
     // ── Liquidaciones de compra del período (crédito fiscal adicional) ────────
     const liquidaciones = await db.liquidaciones_compra.findMany({
-      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: 'AUTORIZADO' },
       select: { subtotal0: true, subtotal12: true, subtotal15: true, totalIva: true },
     });
 

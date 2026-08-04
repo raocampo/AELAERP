@@ -22,6 +22,14 @@ router.use(proteger);
 router.use(requiereModulo('tributarioHabilitado'));
 router.use(autorizarPermiso('tributario.reportes'));
 
+// Estados de factura que representan una venta real declarable — igual
+// criterio que el Dashboard (routes/empresas.js): AUTORIZADO (SRI la
+// aceptó) o HISTORICO (venta real importada de un período anterior, sin
+// flujo de autorización SRI). Cualquier otro estado (PENDIENTE_FIRMA,
+// ENVIADO, ERROR, RECHAZADO) nunca llegó a ser una venta válida y no debe
+// contarse en un formulario de declaración tributaria.
+const ESTADOS_FACTURA_VALIDOS = ['AUTORIZADO', 'HISTORICO'];
+
 // ─── Helpers de rango de fechas ────────────────────────────────────────────────
 function rangoMes(anio, mes) {
   const desde = new Date(anio, mes - 1, 1, 0, 0, 0);
@@ -52,11 +60,12 @@ router.get('/f104', async (req, res) => {
     const db = req.prisma || prisma;
 
     const facturas = await db.facturas.findMany({
-      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS } },
       select: {
         subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
         totalIva: true, importeTotal: true,
         notas_credito: {
+          where: { estadoSri: 'AUTORIZADO' },
           select: {
             totalSinImpuestos: true, totalIva: true, importeTotal: true,
           },
@@ -142,7 +151,7 @@ router.get('/f104', async (req, res) => {
 
     // ── LIQUIDACIONES DE COMPRA ─────────────────────────────────────────────────
     const liquidaciones = await db.liquidaciones_compra.findMany({
-      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: 'AUTORIZADO' },
       select: { subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, totalIva: true },
     });
 
@@ -443,7 +452,7 @@ router.get('/f101', async (req, res) => {
 
     const [facturas, compras, retenciones] = await Promise.all([
       db.facturas.aggregate({
-        where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+        where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS } },
         _sum:   { importeTotal: true, totalIva: true },
         _count: { id: true },
       }),
@@ -493,7 +502,7 @@ router.get('/disponibles', async (req, res) => {
     // Obtener meses con facturas
     const facturas = await db.facturas.groupBy({
       by: ['fechaEmision'],
-      where: { empresaId, anulada: false },
+      where: { empresaId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS } },
       _count: { id: true },
     });
 
