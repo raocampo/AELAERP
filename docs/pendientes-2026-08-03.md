@@ -148,11 +148,10 @@ el resto del código.
    Impuesto a la Renta, Anexo RDEP, avisos de entrada/salida IESS, F101 completo
    (hoy solo resumen orientativo), notas a los EEFF, apertura automática del año
    siguiente tras el cierre de ejercicio.
-7. **Nombre exacto del campo "RUC Proveedor Sistema"** (Res.
-   NAC-DGERCGC26-00000027) no verificado contra ninguna ficha técnica del SRI
-   publicada — el mecanismo es correcto, la etiqueta es una elección razonable
-   propia. Revisar si el SRI publica una ficha técnica actualizada que la
-   especifique.
+7. ✅ **RESUELTO 2026-08-04** (commit `397cf73`) — nombre exacto del campo
+   confirmado contra la Ficha Técnica oficial v2.34, Anexo 26: es "RUC
+   Proveedor" (no "RUC Proveedor Sistema"). Ver `docs/pendientes-2026-08-04.md`
+   Parte 2.
 8. **Utilidades 15% y Liquidación de haberes** (nómina) — implementadas pero no
    se alcanzaron a probar en navegador real. Pendiente si se quiere verificar
    antes de que un cliente las use.
