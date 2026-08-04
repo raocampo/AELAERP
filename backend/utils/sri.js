@@ -1185,8 +1185,8 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
 
     if (tienelogo) {
       try {
-        doc.image(logoData, ML, yL, { fit: [LP - 4, 65] });
-        yL += 70;
+        doc.image(logoData, ML, yL, { fit: [LP - 4, 85] });
+        yL += 90;
       } catch(e) { /* logo corrupto → omitir */ }
     }
 
@@ -1232,12 +1232,10 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     // ── Panel derecho (sin recuadro exterior) ──
     let yR = y;
 
-    // RUC
-    doc.fontSize(7).font('Helvetica-Bold').fillColor(GRIS)
-       .text('R.U.C.:', RP_X, yR, { lineBreak: false });
-    doc.fontSize(7).font('Helvetica').fillColor(NEGRO)
-       .text(`  ${config.ruc || ''}`, RP_X + 32, yR, { lineBreak: false });
-    yR += 13;
+    // RUC — grande y centrado para que resalte frente al resto de datos
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(NEGRO)
+       .text(`R.U.C.: ${config.ruc || ''}`, RP_X, yR, { width: RP_W, align: 'center', lineBreak: false });
+    yR += 17;
 
     // FACTURA (título grande centrado)
     doc.fontSize(14).font('Helvetica-Bold').fillColor(NEGRO)
@@ -1440,7 +1438,28 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     const TOT_ROWS_N = 10; // filas fijas de la caja de totales SRI
     const TOT_BOX_H  = TOT_ROWS_N * TR_H + 4;
 
-    const footerLeftH  = iaTotalH + 11 + PG_H * (1 + pagos.length);
+    const formaPagoDesc = {
+      '01': '01 - EFECTIVO', '02': '02 - CHEQUE PROPIO', '03': '03 - DÉBITO BANCARIO',
+      '15': '15 - COMPENSACIÓN DE DEUDAS', '16': '16 - TARJETA DE CRÉDITO',
+      '17': '17 - TARJETA DE DÉBITO', '18': '18 - DINERO ELECTRÓNICO',
+      '19': '19 - TARJETA PREPAGO', '20': '20 - OTROS CON UTILIZACION DEL SISTEMA FINANCIERO',
+      '21': '21 - ENDOSO DE TÍTULOS',
+    };
+
+    // Alto dinámico por fila (igual patrón que iaRows): la descripción de
+    // "Otros con utilización del sistema financiero" no cabe en una sola
+    // línea en la columna angosta y antes desbordaba la caja de la fila.
+    doc.fontSize(6.5).font('Helvetica');
+    const pagoRows = pagos.map((p) => {
+      const fpLabel = formaPagoDesc[p.formaPago] || p.formaPago || 'Efectivo';
+      return {
+        fpLabel,
+        total: p.total,
+        h: Math.max(PG_H, doc.heightOfString(fpLabel, { width: PG_WS[0] - 6 }) + 4),
+      };
+    });
+
+    const footerLeftH  = iaTotalH + 11 + PG_H + pagoRows.reduce((s, r) => s + r.h, 0);
     const footerNeedH  = Math.max(footerLeftH, TOT_BOX_H);
 
     // Si el footer (Información Adicional + Forma de pago + Totales) no cabe
@@ -1489,25 +1508,14 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     });
     yLeft += PG_H;
 
-    const formaPagoDesc = {
-      '01': '01 - EFECTIVO', '02': '02 - CHEQUE PROPIO', '03': '03 - DÉBITO BANCARIO',
-      '15': '15 - COMPENSACIÓN DE DEUDAS', '16': '16 - TARJETA DE CRÉDITO',
-      '17': '17 - TARJETA DE DÉBITO', '18': '18 - DINERO ELECTRÓNICO',
-      '19': '19 - TARJETA PREPAGO', '20': '20 - OTROS CON UTILIZACION DEL SISTEMA FINANCIERO',
-      '21': '21 - ENDOSO DE TÍTULOS',
-    };
-
-    pagos.forEach((p, idx) => {
-      doc.rect(ML, yLeft, FP_W, PG_H).fill(idx % 2 === 0 ? BLANCO : BG_ALT);
-      doc.rect(ML, yLeft, FP_W, PG_H).lineWidth(0.2).stroke('#DDDDDD');
-      const fpLabel = formaPagoDesc[p.formaPago] || p.formaPago || 'Efectivo';
-      px = ML;
-      [fpLabel, `$${parseFloat(p.total).toFixed(2)}`].forEach((pv, i) => {
-        doc.fontSize(6.5).font('Helvetica').fillColor(NEGRO)
-           .text(pv, px + 3, yLeft + 3, { width: PG_WS[i] - 6, align: i === 0 ? 'left' : 'right', lineBreak: false });
-        px += PG_WS[i];
-      });
-      yLeft += PG_H;
+    pagoRows.forEach((row, idx) => {
+      doc.rect(ML, yLeft, FP_W, row.h).fill(idx % 2 === 0 ? BLANCO : BG_ALT);
+      doc.rect(ML, yLeft, FP_W, row.h).lineWidth(0.2).stroke('#DDDDDD');
+      doc.fontSize(6.5).font('Helvetica').fillColor(NEGRO)
+         .text(row.fpLabel, ML + 3, yLeft + 3, { width: PG_WS[0] - 6, align: 'left' });
+      doc.fontSize(6.5).font('Helvetica').fillColor(NEGRO)
+         .text(`$${parseFloat(row.total).toFixed(2)}`, ML + PG_WS[0] + 3, yLeft + 3, { width: PG_WS[1] - 6, align: 'right', lineBreak: false });
+      yLeft += row.h;
     });
 
     // ── Caja de totales SRI ───────────────────────────────────────────────────
@@ -2140,7 +2148,7 @@ async function generarRIDERetencion(retencion, configSri, outputPath) {
 
     let yL = y;
     if (tienelogo) {
-      try { doc.image(logoData, ML, yL, { fit: [LP - 4, 65] }); yL += 70; } catch(e) {}
+      try { doc.image(logoData, ML, yL, { fit: [LP - 4, 85] }); yL += 90; } catch(e) {}
     }
 
     doc.fontSize(8.5).font('Helvetica-Bold').fillColor(NEGRO)
@@ -2169,11 +2177,9 @@ async function generarRIDERetencion(retencion, configSri, outputPath) {
     }
 
     let yR = y;
-    doc.fontSize(7).font('Helvetica-Bold').fillColor(GRIS)
-       .text('R.U.C.:', RP_X, yR, { lineBreak: false });
-    doc.fontSize(7).font('Helvetica').fillColor(NEGRO)
-       .text(`  ${config.ruc || ''}`, RP_X + 32, yR, { lineBreak: false });
-    yR += 13;
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(NEGRO)
+       .text(`R.U.C.: ${config.ruc || ''}`, RP_X, yR, { width: RP_W, align: 'center', lineBreak: false });
+    yR += 17;
 
     doc.fontSize(14).font('Helvetica-Bold').fillColor(NEGRO)
        .text('COMPROBANTE DE RETENCIÓN', RP_X, yR, { width: RP_W, align: 'center', lineBreak: false });
@@ -2593,7 +2599,7 @@ async function generarRIDELiquidacionCompra(liq, configSri, outputPath) {
     // Panel izquierdo: logo + datos emisor
     let yL = y;
     if (tienelogo) {
-      try { doc.image(logoData, ML, yL, { fit: [LP - 4, 65] }); yL += 70; } catch(e) {}
+      try { doc.image(logoData, ML, yL, { fit: [LP - 4, 85] }); yL += 90; } catch(e) {}
     }
     doc.fontSize(8.5).font('Helvetica-Bold').fillColor(NEGRO)
        .text((config.razonSocial || '').toUpperCase(), ML, yL, { width: LP - 4, lineBreak: false });
@@ -2614,9 +2620,9 @@ async function generarRIDELiquidacionCompra(liq, configSri, outputPath) {
 
     // Panel derecho: RUC + título + autorización + barcode
     let yR = y;
-    doc.fontSize(7).font('Helvetica-Bold').fillColor(GRIS).text('R.U.C.:', RP_X, yR, { lineBreak: false });
-    doc.fontSize(7).font('Helvetica').fillColor(NEGRO).text(`  ${config.ruc || ''}`, RP_X + 32, yR, { lineBreak: false });
-    yR += 13;
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(NEGRO)
+       .text(`R.U.C.: ${config.ruc || ''}`, RP_X, yR, { width: RP_W, align: 'center', lineBreak: false });
+    yR += 17;
 
     doc.fontSize(12).font('Helvetica-Bold').fillColor(NEGRO)
        .text('LIQUIDACIÓN DE COMPRA', RP_X, yR, { width: RP_W, align: 'center', lineBreak: false });
