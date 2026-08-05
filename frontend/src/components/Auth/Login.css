@@ -346,9 +346,9 @@
     padding: 32px 24px;
   }
 
-  .login-brand { margin: 0; }
-  .login-brand-tagline { display: none; }
-  .login-brand-footer { display: none; }
+  .login-brand { margin: 0; gap: 4px; }
+  .login-brand-tagline { margin-top: 14px; }
+  .login-brand-footer { margin-top: 12px; }
 
   .login-panel-right {
     padding: 32px 24px;
