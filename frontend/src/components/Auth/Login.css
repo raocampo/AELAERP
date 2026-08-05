@@ -358,11 +358,11 @@
 }
 
 @media (max-width: 480px) {
-  .login-page { padding: 0; }
+  .login-page { padding: 16px; }
 
   .login-shell {
-    border-radius: 0;
-    min-height: 100vh;
+    border-radius: 18px;
+    min-height: 0;
   }
 
   .login-grid {
