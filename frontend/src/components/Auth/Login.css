@@ -25,13 +25,13 @@
 }
 
 .login-shell-setup .login-panel-left {
-  flex-basis: 34%;
+  flex-basis: 50%;
 }
 
 /* ── Panel izquierdo — marca AELA + nombre del tenant ─────────────────── */
 
 .login-panel-left {
-  flex: 0 0 42%;
+  flex: 0 0 50%;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
