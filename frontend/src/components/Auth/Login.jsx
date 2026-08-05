@@ -17,16 +17,19 @@ import './Login.css';
 // largo del nombre en vez de un tamaño único para todos los casos.
 function claseSiglaPorLargo(nombre) {
   const largo = (nombre || 'AELA').length;
-  if (largo > 30) return 'login-logo-sigla--xs';
-  if (largo > 18) return 'login-logo-sigla--sm';
+  if (largo > 30) return 'login-brand-nombre--xs';
+  if (largo > 18) return 'login-brand-nombre--sm';
   return '';
 }
+
+const RECORDAR_KEY = 'aela_login_recordado';
 
 export default function Login() {
   const { login, bootstrap } = useAuth();
   const navigate         = useNavigate();
-  const [loginId, setLoginId]   = useState('');
+  const [loginId, setLoginId]   = useState(() => localStorage.getItem(RECORDAR_KEY) || '');
   const [password, setPassword] = useState('');
+  const [recordar, setRecordar] = useState(() => Boolean(localStorage.getItem(RECORDAR_KEY)));
   const [cargando, setCargando] = useState(false);
   const [verificandoSetup, setVerificandoSetup] = useState(true);
   const [branding, setBranding] = useState({ nombre: null, logoUrl: null });
@@ -110,6 +113,8 @@ export default function Login() {
     try {
       const res = await login(loginId, password);
       if (res.success) {
+        if (recordar) localStorage.setItem(RECORDAR_KEY, loginId);
+        else localStorage.removeItem(RECORDAR_KEY);
         toast.success(`Bienvenido, ${res.usuario.nombre}`);
         navigate('/dashboard');
       } else {
@@ -213,37 +218,40 @@ export default function Login() {
     }
   };
 
-  const cardClassName = `login-card ${setupRequired ? 'login-card-setup' : ''}`;
+  const cardClassName = `login-panel-right ${setupRequired ? 'login-panel-right-setup' : ''}`;
+  const shellClassName = `login-shell ${setupRequired ? 'login-shell-setup' : ''}`;
 
   return (
-    <div className="login-root">
-      <div className={cardClassName}>
-        <div className="login-logo">
-          {branding.logoUrl ? (
-            <img
-              src={branding.logoUrl}
-              alt="Logo empresa"
-              className="login-logo-cliente"
-            />
-          ) : (
-            <svg width="52" height="52" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style={{display:'block',margin:'0 auto 10px'}}>
-              <defs>
-                <linearGradient id="lg-login" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-                  <stop offset="0%" stopColor="#7C3AED"/>
-                  <stop offset="100%" stopColor="#06B6D4"/>
-                </linearGradient>
-              </defs>
-              <rect width="64" height="64" rx="14" fill="url(#lg-login)"/>
-              <rect x="14" y="18" width="36" height="25" rx="5" fill="none" stroke="white" strokeWidth="2.5"/>
-              <rect x="22" y="35" width="20" height="16" rx="4" fill="white" opacity="0.95"/>
-              <circle cx="32" cy="29" r="4.5" fill="white"/>
-            </svg>
-          )}
-          <span className={`login-logo-sigla ${claseSiglaPorLargo(branding.nombre)}`}>
-            {branding.nombre || 'AELA'}
-          </span>
-          <span className="login-logo-sub">AELA ERP Ecuador · by CorpSimtelec</span>
+    <div className="login-page">
+      <div className={shellClassName}>
+        <div className="login-panel-left">
+          <div className="login-brand">
+            {branding.logoUrl ? (
+              <img
+                src={branding.logoUrl}
+                alt="Logo empresa"
+                className="login-logo-cliente"
+              />
+            ) : (
+              <div className="login-brand-icon">
+                <svg width="40" height="40" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="14" y="18" width="36" height="25" rx="5" fill="none" stroke="white" strokeWidth="2.5"/>
+                  <rect x="22" y="35" width="20" height="16" rx="4" fill="white" opacity="0.95"/>
+                  <circle cx="32" cy="29" r="4.5" fill="white"/>
+                </svg>
+              </div>
+            )}
+            <span className={`login-brand-nombre ${claseSiglaPorLargo(branding.nombre)}`}>
+              {branding.nombre || 'AELA'}
+            </span>
+            <span className="login-brand-sub">AELA ERP Ecuador</span>
+            <div className="login-brand-tagline">Facturación Electrónica · Contabilidad · Nómina</div>
+          </div>
+          <p className="login-brand-footer">
+            Desarrollado por CorpSimtelec © {new Date().getFullYear()}
+          </p>
         </div>
+        <div className={cardClassName}>
         {verificandoSetup ? (
           <div className="login-status-box">
             <h2 className="login-titulo">Verificando sistema</h2>
@@ -414,18 +422,18 @@ export default function Login() {
           </>
         ) : (
           <>
-            <h2 className="login-titulo">Iniciar Sesión</h2>
+            <h2 className="login-titulo">Bienvenido de vuelta</h2>
             <p className="login-subtitulo">
-              Ingresa con tu usuario o con tu correo electrónico, según cómo se haya creado tu cuenta.
+              Ingresa con tu usuario o correo electrónico para acceder al sistema.
             </p>
             <form onSubmit={handleSubmit} className="login-form">
               <div className="login-field">
-                <label>Usuario o correo electrónico</label>
+                <label>Correo o usuario</label>
                 <input
                   type="text"
                   value={loginId}
                   onChange={e => setLoginId(e.target.value)}
-                  placeholder="admin o usuario@empresa.com"
+                  placeholder="usuario@empresa.com o nombre_usuario"
                   required
                   autoFocus
                 />
@@ -440,18 +448,27 @@ export default function Login() {
                   required
                 />
               </div>
+              <div className="login-row-recordar">
+                <label className="login-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={recordar}
+                    onChange={e => setRecordar(e.target.checked)}
+                  />
+                  Recordarme
+                </label>
+                <button
+                  type="button"
+                  className="login-link-btn"
+                  onClick={() => setMostrarOlvidePassword(!mostrarOlvidePassword)}
+                >
+                  ¿Olvidó su contraseña?
+                </button>
+              </div>
               <button type="submit" className="login-btn" disabled={cargando}>
-                {cargando ? 'Ingresando...' : 'Ingresar'}
+                {cargando ? 'Ingresando...' : 'Iniciar Sesión'}
               </button>
             </form>
-            <div style={{ textAlign: 'center', marginTop: 16 }}>
-              <button
-                className="login-link-btn"
-                onClick={() => setMostrarOlvidePassword(!mostrarOlvidePassword)}
-              >
-                ¿Olvidaste tu contraseña?
-              </button>
-            </div>
             {mostrarOlvidePassword && (
               <div className="login-olvide-box">
                 <p style={{ fontWeight: 700, marginBottom: 8 }}>¿Cómo recuperar el acceso?</p>
@@ -470,9 +487,16 @@ export default function Login() {
                 </p>
               </div>
             )}
+            <p className="login-contacto">
+              ¿No tienes una cuenta?{' '}
+              <a href="mailto:info@corpsimtelec.com">Contáctanos</a>
+            </p>
           </>
         )}
-        <p className="login-footer">AELA ERP © {new Date().getFullYear()} · <a href="https://corpsimtelec.com" target="_blank" rel="noopener noreferrer" style={{color:'#7C3AED',textDecoration:'none'}}>CorpSimtelec</a></p>
+        <p className="login-footer">
+          AELA ERP — Sistema de Facturación y Contabilidad Electrónica
+        </p>
+        </div>
       </div>
     </div>
   );
