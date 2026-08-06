@@ -1,6 +1,85 @@
-# AELA ERP — Sesión 2026-08-06 — Inventario/gasto personal, duplicados, modal, decimales
+# AELA ERP — Sesión 2026-08-06 — Inventario/gasto personal, duplicados, modal, decimales, módulo Restaurante
 
-## Contexto
+## Parte 2 — Módulo nuevo: Mesas y Comandas (commit `393df9e`)
+
+El usuario tiene un cliente nuevo que es un restaurante y pidió agregar
+"el pequeño detalle de la orden por mesa" y el envío a cocina, "sin dañar
+lo que ya se tiene funcionando". Investigado primero con 2 agentes en
+paralelo (solo lectura) el flujo de POS, el patrón de módulo activable,
+la impresión ESC/POS y los roles/permisos, para diseñar reutilizando al
+máximo lo existente antes de escribir código.
+
+### Diseño
+
+- **Cobrar la mesa NO reimplementa la emisión SRI.** El "Cobrar mesa" de
+  `ComandaMesa.jsx` navega a `PuntoVenta.jsx` (el POS de siempre) con el
+  carrito precargado desde la comanda; esa pantalla emite con el mismo
+  `POST /facturas`/`POST /notas-venta` de toda la vida. Un endpoint nuevo,
+  chico (`POST /mesas/comandas/:id/cerrar`), solo enlaza el documento ya
+  creado y libera la mesa — cero código nuevo tocando SRI, inventario o
+  contabilidad. `PuntoVenta.jsx` solo tiene 3 cambios aditivos (precarga
+  desde `location.state.comandaParaCobrar`, banner de aviso, y una llamada
+  extra al cerrar) — si no viene de una mesa, el flujo normal de POS queda
+  exactamente igual que antes.
+- **Nuevos modelos** `restaurante_mesas` y `restaurante_comandas` (items
+  en JSON, mismo patrón que `facturas`/`notas_venta`/`facturas_compra` —
+  no se creó una tabla relacional de detalle nueva).
+- **Envío a cocina**: nueva función `generarTicketCocina()` en
+  `utils/impresoraEscPos.js` (reutiliza toda la infraestructura ESC/POS ya
+  probada del recibo POS y las etiquetas) — imprime SIN precios ni
+  totales, solo mesa + ítems + notas. IP de impresora de cocina
+  independiente de la impresora principal (son equipos físicos distintos:
+  una en caja, otra en cocina). Solo reenvía los ítems nuevos desde el
+  último envío. Si la impresora falla, el pedido queda igual marcado como
+  enviado (no bloquea al mesero) pero se avisa del error para que avise a
+  cocina de otra forma.
+- **Módulo activable** (`restauranteHabilitado` en `configuracion_sistema`,
+  apagado por defecto — no afecta a ningún tenant existente), mismo patrón
+  que Sucursales/Compras de Importación (sin gating por plan). Nueva
+  sección en Configuración del Sistema.
+- **Permisos**: `mesas.gestionar` (mismos roles que ya usan el POS) y
+  `mesas.administrar` (admin/supervisor, para el mapa de mesas). Alias
+  `mesero→operador` agregado en ambas copias de la matriz de roles
+  (backend `utils/roles.js` y frontend `utils/roles.js` — son archivos
+  separados que se mantienen en paralelo), mismo patrón ya usado para
+  otros rubros de cliente (`medico→facturador` para clínicas).
+
+### Archivos nuevos
+- `backend/routes/mesas.js` — CRUD de mesas + comandas (abrir, agregar
+  ítems, enviar a cocina, cerrar, anular).
+- `frontend/src/components/Restaurante/MapaMesas.jsx` — grid de mesas
+  (libre/ocupada con total) + administración de mesas (crear/editar).
+- `frontend/src/components/Restaurante/ComandaMesa.jsx` — pantalla de
+  pedido por mesa: buscar producto, cantidad, nota para cocina, enviar a
+  cocina, cobrar.
+
+### Verificado
+`node --test`: 29/29. `vite build`: sin errores (nuevos chunks
+`MapaMesas`/`ComandaMesa` confirmados en el build). Flujo end-to-end
+completo contra `aela_db` real (no HTTP+JWT, mismo patrón de script
+directo contra Prisma ya usado en la Parte 1 de este documento para
+duplicados): crear mesa → abrir comanda → agregar 2 ítems (subtotal/IVA
+verificados) → generar ticket de cocina (confirmado que NO contiene "$")
+→ marcar enviado → cerrar enlazando una factura real existente → mesa
+vuelve a `LIBRE`. Datos de prueba eliminados al final.
+
+**No verificado visualmente en navegador** (no se pudo levantar sesión
+autenticada completa en este entorno) — recomendable que el usuario
+pruebe el flujo real (crear una mesa, tomar un pedido, cobrar) antes de
+dárselo al cliente restaurante.
+
+### Pendiente / backlog fuera de alcance de esta sesión
+- Dividir cuenta (split bill) entre varios pagos/documentos por mesa.
+- Transferir/fusionar mesas.
+- Pantalla de cocina en vivo (KDS) — hoy es solo ticket impreso, que es lo
+  que la mayoría de restaurantes chicos/medianos usan.
+- Impresión por categoría (ej. bebidas a la barra, comida a cocina) — hoy
+  todo va a una sola impresora de cocina.
+- Reservas de mesa.
+
+## Parte 1 — Inventario/gasto personal, duplicados, modal, decimales
+
+### Contexto
 
 El usuario reportó 4 problemas en un solo mensaje:
 1. Una compra de medicina (gasto personal, no para reventa) se cargó en inventario.
