@@ -658,6 +658,12 @@ const FIXES = [
   // H492001/H492002 (2026-08-04).
   `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "sectorTransporte" VARCHAR(20)`,
   `ALTER TABLE "facturas" ADD COLUMN IF NOT EXISTS "placaVehiculo" VARCHAR(10)`,
+  // Detección de posibles productos duplicados al importar compras (ej.
+  // "cable #8 THHN" del XML vs "cable # 8 color verde" ya en catálogo) —
+  // reutiliza la cola de items_compra_pendientes (antes solo para regalos a
+  // $0) con un nuevo motivo y una sugerencia de producto (2026-08-06).
+  `ALTER TABLE "items_compra_pendientes" ADD COLUMN IF NOT EXISTS "motivo" VARCHAR(20) NOT NULL DEFAULT 'REGALO'`,
+  `ALTER TABLE "items_compra_pendientes" ADD COLUMN IF NOT EXISTS "productoSugeridoId" INTEGER`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

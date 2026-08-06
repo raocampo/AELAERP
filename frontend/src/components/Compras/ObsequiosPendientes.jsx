@@ -19,6 +19,12 @@ const ESTADOS = [
   { value: 'TODOS', label: 'Todos' },
 ];
 
+const MOTIVOS = [
+  { value: 'TODOS', label: 'Todos los motivos' },
+  { value: 'POSIBLE_DUPLICADO', label: '⚠️ Posibles duplicados' },
+  { value: 'REGALO', label: '🎁 Obsequios/combos' },
+];
+
 // ─── Modal: asignar a un producto existente ──────────────────────────────────
 function ModalAsignar({ item, onClose, onAsignado }) {
   const [busqueda, setBusqueda] = useState('');
@@ -129,7 +135,7 @@ function ModalCrearProducto({ item, onClose, onCreado }) {
         </p>
         <label style={{ display: 'block', marginBottom: '0.5rem' }}>
           Precio de venta (PVP)
-          <input type="number" step="0.01" value={precioUnitario} onChange={(e) => setPrecioUnitario(e.target.value)} />
+          <input type="number" step="0.0001" value={precioUnitario} onChange={(e) => setPrecioUnitario(e.target.value)} />
         </label>
         <label style={{ display: 'block', marginBottom: '0.5rem' }}>
           % IVA
@@ -157,29 +163,31 @@ function ModalCrearProducto({ item, onClose, onCreado }) {
 export default function ObsequiosPendientes() {
   const navigate = useNavigate();
   const [estado, setEstado] = useState('PENDIENTE');
+  const [motivo, setMotivo] = useState('TODOS');
   const [busqueda, setBusqueda] = useState('');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalAsignar, setModalAsignar] = useState(null);
   const [modalCrear, setModalCrear] = useState(null);
+  const [asignandoRapido, setAsignandoRapido] = useState(null);
 
   const cargar = () => {
     setLoading(true);
-    api.get('/compras/pendientes', { params: { estado, busqueda: busqueda || undefined } })
+    api.get('/compras/pendientes', { params: { estado, motivo, busqueda: busqueda || undefined } })
       .then((r) => setItems(r.data?.data || []))
-      .catch((err) => toast.error(err.response?.data?.mensaje || 'Error al cargar obsequios pendientes'))
+      .catch((err) => toast.error(err.response?.data?.mensaje || 'Error al cargar ítems pendientes'))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     let ignore = false;
     setLoading(true);
-    api.get('/compras/pendientes', { params: { estado, busqueda: busqueda || undefined } })
+    api.get('/compras/pendientes', { params: { estado, motivo, busqueda: busqueda || undefined } })
       .then((r) => { if (!ignore) setItems(r.data?.data || []); })
-      .catch((err) => { if (!ignore) toast.error(err.response?.data?.mensaje || 'Error al cargar obsequios pendientes'); })
+      .catch((err) => { if (!ignore) toast.error(err.response?.data?.mensaje || 'Error al cargar ítems pendientes'); })
       .finally(() => { if (!ignore) setLoading(false); });
     return () => { ignore = true; };
-  }, [estado, busqueda]);
+  }, [estado, motivo, busqueda]);
 
   const ignorar = async (item) => {
     if (!window.confirm(`¿Ignorar "${item.descripcion}"? No se moverá inventario.`)) return;
@@ -192,15 +200,30 @@ export default function ObsequiosPendientes() {
     }
   };
 
+  const usarSugerido = async (item) => {
+    if (!item.productoSugerido) return;
+    setAsignandoRapido(item.id);
+    try {
+      const res = await api.post(`/compras/pendientes/${item.id}/asignar`, { productoId: item.productoSugerido.id });
+      toast.success(res.data?.mensaje || `Sumado al stock de ${item.productoSugerido.nombre}`);
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al asignar el ítem');
+    } finally {
+      setAsignandoRapido(null);
+    }
+  };
+
   return (
     <div className="compras-page">
       <div className="compras-header">
         <div>
-          <h1>Obsequios pendientes</h1>
+          <h1>Ítems de compra por revisar</h1>
           <p>
-            Ítems de compra facturados a $0.00 (regalos/combos de proveedor) que no se pudieron emparejar
-            automáticamente con un producto. Elige a qué producto sumar la cantidad, ignóralos, o crea un
-            producto nuevo si corresponde.
+            Ítems de detalle de una compra que necesitan tu confirmación antes de afectar el inventario:
+            regalos/combos facturados a $0.00 sin emparejar, y posibles productos duplicados (nombre parecido
+            a uno que ya tienes en catálogo, ej. "cable #8 THHN" vs "cable # 8 color verde"). Asigna al
+            producto correcto, ignora, o crea uno nuevo si de verdad corresponde.
           </p>
         </div>
         <div className="compras-header-actions">
@@ -218,6 +241,11 @@ export default function ObsequiosPendientes() {
             {e.label}
           </button>
         ))}
+        <select value={motivo} onChange={(e) => setMotivo(e.target.value)} style={{ marginLeft: '.5rem' }}>
+          {MOTIVOS.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
         <input
           placeholder="Buscar por código o descripción..."
           value={busqueda}
@@ -236,7 +264,7 @@ export default function ObsequiosPendientes() {
               <thead>
                 <tr>
                   <th>Fecha</th><th>Factura</th><th>Proveedor</th>
-                  <th>Código</th><th>Descripción</th><th>Cantidad</th><th>Prefijo</th><th>Acciones</th>
+                  <th>Código</th><th>Descripción</th><th>Cantidad</th><th>Motivo / Sugerencia</th><th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -248,14 +276,34 @@ export default function ObsequiosPendientes() {
                     <td data-label="Código"><strong>{item.codigoPrincipal}</strong></td>
                     <td data-label="Descripción">{item.descripcion}</td>
                     <td data-label="Cantidad">{Number(item.cantidad).toFixed(3)}</td>
-                    <td data-label="Prefijo">
-                      {item.prefijoDetectado
-                        ? <span title="Prefijo detectado">{item.prefijoDetectado}</span>
-                        : <span className="compras-muted">—</span>}
+                    <td data-label="Motivo / Sugerencia">
+                      {item.motivo === 'POSIBLE_DUPLICADO' ? (
+                        <div>
+                          <span style={{ color: '#b45309', fontWeight: 600 }}>⚠️ Posible duplicado</span>
+                          {item.productoSugerido && (
+                            <div style={{ fontSize: '.8rem', marginTop: 2 }}>
+                              ¿Es <strong>{item.productoSugerido.codigoPrincipal}</strong> — {item.productoSugerido.nombre}?
+                            </div>
+                          )}
+                        </div>
+                      ) : item.prefijoDetectado ? (
+                        <span title="Prefijo detectado">🎁 Prefijo {item.prefijoDetectado}</span>
+                      ) : (
+                        <span className="compras-muted">🎁 Regalo/combo</span>
+                      )}
                     </td>
                     <td data-label="Acciones">
                       {item.estado === 'PENDIENTE' ? (
                         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          {item.productoSugerido && (
+                            <button
+                              className="btn-primary"
+                              disabled={asignandoRapido === item.id}
+                              onClick={() => usarSugerido(item)}
+                            >
+                              {asignandoRapido === item.id ? 'Asignando...' : 'Sí, es el mismo'}
+                            </button>
+                          )}
                           <button className="btn-secondary" onClick={() => setModalAsignar(item)}>Asignar</button>
                           <button className="btn-secondary" onClick={() => setModalCrear(item)}>Crear producto</button>
                           <button className="btn-secondary" onClick={() => ignorar(item)}>Ignorar</button>

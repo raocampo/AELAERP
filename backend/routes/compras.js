@@ -1175,6 +1175,16 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, mensaje: 'El número de factura de compra es requerido' });
     }
 
+    // Blindaje en backend: un gasto personal (ej. medicina para consumo
+    // propio) nunca debe crear productos ni afectar el inventario de
+    // reventa, sin importar lo que envíe el cliente — no basta con que el
+    // frontend desactive los checkboxes, porque el usuario puede marcar
+    // "gasto personal" después de importar y antes de eso ya se habría
+    // corrido este mismo POST con los valores originales.
+    const esGastoPersonalBool = toBoolean(esGastoPersonal, false);
+    const registrarInventarioEfectivo = esGastoPersonalBool ? false : registrarInventario;
+    const crearProductosFaltantesEfectivo = esGastoPersonalBool ? false : crearProductosFaltantes;
+
     const detallesNormalizados = ensureArray(detalles).map((detalle, index) => normalizarDetalle(detalle, index));
     if (detallesNormalizados.length === 0) {
       return res.status(400).json({ success: false, mensaje: 'Debes incluir al menos una línea de detalle' });
@@ -1278,14 +1288,19 @@ router.post('/', async (req, res) => {
           empresaId: req.empresa.id,
           detalle,
           detallesTodos: detallesNormalizados,
-          crearProductosFaltantes: toBoolean(crearProductosFaltantes, false),
+          crearProductosFaltantes: toBoolean(crearProductosFaltantesEfectivo, false),
           actualizarProductosExistentes: toBoolean(actualizarProductosExistentes, true),
           prefijosRegalo,
         });
 
         if (resolucion?.creado) productosCreados += 1;
         if (resolucion?.actualizado) productosActualizados += 1;
-        if (resolucion?.pendiente) pendientes.push({ detalle, prefijoDetectado: resolucion.prefijoDetectado });
+        if (resolucion?.pendiente) {
+          pendientes.push({
+            detalle, prefijoDetectado: resolucion.prefijoDetectado,
+            motivo: resolucion.motivo, productoSugeridoId: resolucion.productoSugeridoId,
+          });
+        }
 
         detallesProcesados.push({
           ...detalle,
@@ -1322,8 +1337,8 @@ router.post('/', async (req, res) => {
           detalles: detallesProcesados,
           pagos: pagosFinales,
           origenRegistro: limpiarTexto(origenRegistro || 'MANUAL').toUpperCase(),
-          registraInventario: toBoolean(registrarInventario, false),
-          creaProductos: toBoolean(crearProductosFaltantes, false),
+          registraInventario: toBoolean(registrarInventarioEfectivo, false),
+          creaProductos: toBoolean(crearProductosFaltantesEfectivo, false),
           xmlOrigen: limpiarTexto(xmlOrigen) || null,
           observaciones: limpiarTexto(observaciones) || null,
           tipoGasto: limpiarTexto(tipoGasto) || null,
@@ -1333,14 +1348,15 @@ router.post('/', async (req, res) => {
         },
       });
 
-      for (const { detalle, prefijoDetectado } of pendientes) {
+      for (const { detalle, prefijoDetectado, motivo, productoSugeridoId } of pendientes) {
         await registrarItemCompraPendiente({
           tx, empresaId: req.empresa.id, compraId: creada.id, detalle, prefijoDetectado,
+          motivo, productoSugeridoId,
         });
       }
 
       let movimientosInventario = 0;
-      if (toBoolean(registrarInventario, false)) {
+      if (toBoolean(registrarInventarioEfectivo, false)) {
         for (const detalle of detallesProcesados) {
           if (!detalle.productoId || !detalle.inventariable) continue;
 
@@ -1789,6 +1805,9 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
     });
     if (!compra) return res.status(404).json({ success: false, mensaje: 'Compra no encontrada' });
     if (compra.anulada) return res.status(400).json({ success: false, mensaje: 'La compra está anulada' });
+    if (compra.esGastoPersonal) {
+      return res.status(400).json({ success: false, mensaje: 'Esta compra está marcada como gasto personal — no puede afectar el inventario de reventa' });
+    }
     if ((compra.movimientosInventario || 0) > 0) {
       return res.status(400).json({ success: false, mensaje: 'Esta compra ya tiene movimientos de inventario registrados' });
     }
@@ -1826,7 +1845,10 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
         if (resolucion.creado) productosCreados++;
 
         if (resolucion.pendiente) {
-          await registrarItemCompraPendiente({ tx, empresaId, compraId, detalle: det, prefijoDetectado: resolucion.prefijoDetectado });
+          await registrarItemCompraPendiente({
+            tx, empresaId, compraId, detalle: det, prefijoDetectado: resolucion.prefijoDetectado,
+            motivo: resolucion.motivo, productoSugeridoId: resolucion.productoSugeridoId,
+          });
           itemsPendientes++;
           continue;
         }

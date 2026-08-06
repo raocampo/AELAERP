@@ -372,7 +372,10 @@ async function importarDocumentoRecibido({
         });
 
         if (resolucion.pendiente) {
-          await registrarItemCompraPendiente({ tx, empresaId, compraId: nuevaCompra.id, detalle: det, prefijoDetectado: resolucion.prefijoDetectado });
+          await registrarItemCompraPendiente({
+            tx, empresaId, compraId: nuevaCompra.id, detalle: det, prefijoDetectado: resolucion.prefijoDetectado,
+            motivo: resolucion.motivo, productoSugeridoId: resolucion.productoSugeridoId,
+          });
           continue;
         }
 

@@ -88,6 +88,8 @@ export default function FormCompra() {
     formaPago: '20',
     observaciones: '',
     tipoGasto: '',
+    esGastoPersonal: false,
+    categoriaGastoPersonal: '',
     origenRegistro: 'MANUAL',
     xmlOrigen: '',
     crearProductosFaltantes: true,
@@ -166,6 +168,8 @@ export default function FormCompra() {
       observaciones: '',
       origenRegistro: 'MANUAL',
       xmlOrigen: '',
+      esGastoPersonal: false,
+      categoriaGastoPersonal: '',
       crearProductosFaltantes: true,
       actualizarProductosExistentes: true,
       registrarInventario: Boolean(sistema?.inventarioHabilitado),
@@ -486,11 +490,13 @@ export default function FormCompra() {
         fechaEmision: form.fechaEmision,
         observaciones: form.observaciones.trim(),
         tipoGasto: form.tipoGasto || null,
+        esGastoPersonal: form.esGastoPersonal,
+        categoriaGastoPersonal: form.esGastoPersonal ? (form.categoriaGastoPersonal || null) : null,
         origenRegistro: form.origenRegistro,
         xmlOrigen: form.xmlOrigen,
-        crearProductosFaltantes: form.crearProductosFaltantes,
+        crearProductosFaltantes: form.esGastoPersonal ? false : form.crearProductosFaltantes,
         actualizarProductosExistentes: form.actualizarProductosExistentes,
-        registrarInventario: sistema?.inventarioHabilitado ? form.registrarInventario : false,
+        registrarInventario: (sistema?.inventarioHabilitado && !form.esGastoPersonal) ? form.registrarInventario : false,
         registrarEgresoCaja: sistema?.cajaDiariaHabilitada ? form.registrarEgresoCaja : false,
         ...(form.tipoComprobante === 'IMPORTACION' ? {
           numeroDim: form.numeroDim.trim(),
@@ -776,6 +782,38 @@ export default function FormCompra() {
                 <option value="OTROS">📦 Otros deducibles</option>
               </select>
             </label>
+            <label className="compra-check wide" style={{ borderTop: '1px dashed #e2e8f0', paddingTop: '.6rem' }}>
+              <input
+                type="checkbox"
+                checked={form.esGastoPersonal}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setForm((prev) => ({
+                    ...prev,
+                    esGastoPersonal: checked,
+                    categoriaGastoPersonal: checked ? prev.categoriaGastoPersonal : '',
+                    // Un gasto personal (ej. medicina para consumo propio) nunca
+                    // debe crear productos ni entrar al inventario de reventa.
+                    crearProductosFaltantes: checked ? false : prev.crearProductosFaltantes,
+                    registrarInventario: checked ? false : prev.registrarInventario,
+                  }));
+                }}
+              />
+              <span>Es gasto personal (excluir de declaración IVA F104, no afecta inventario)</span>
+            </label>
+            {form.esGastoPersonal && (
+              <label className="wide">
+                <span>Categoría de gasto personal</span>
+                <select value={form.categoriaGastoPersonal} onChange={(e) => actualizarForm('categoriaGastoPersonal', e.target.value)}>
+                  <option value="">— Seleccione categoría —</option>
+                  <option value="alimentacion">Alimentación</option>
+                  <option value="salud">Salud</option>
+                  <option value="vivienda">Vivienda</option>
+                  <option value="vestimenta">Vestimenta</option>
+                  <option value="educacion">Educación y arte</option>
+                </select>
+              </label>
+            )}
             <label className="wide">
               <span>Observaciones</span>
               <textarea value={form.observaciones} onChange={(e) => actualizarForm('observaciones', e.target.value)} rows={3} />
@@ -963,8 +1001,18 @@ export default function FormCompra() {
 
         <section className="compra-card">
           <h2>Automatizaciones</h2>
+          {form.esGastoPersonal && (
+            <p style={{ color: '#b45309', fontSize: '.85rem', marginTop: 0 }}>
+              Marcada como gasto personal — no se crearán productos ni movimientos de inventario.
+            </p>
+          )}
           <label className="compra-check">
-            <input type="checkbox" checked={form.crearProductosFaltantes} onChange={(e) => actualizarForm('crearProductosFaltantes', e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={form.crearProductosFaltantes}
+              onChange={(e) => actualizarForm('crearProductosFaltantes', e.target.checked)}
+              disabled={form.esGastoPersonal}
+            />
             <span>Crear productos faltantes automáticamente</span>
           </label>
           <label className="compra-check">
@@ -976,7 +1024,7 @@ export default function FormCompra() {
               type="checkbox"
               checked={form.registrarInventario}
               onChange={(e) => actualizarForm('registrarInventario', e.target.checked)}
-              disabled={!sistema?.inventarioHabilitado}
+              disabled={!sistema?.inventarioHabilitado || form.esGastoPersonal}
             />
             <span>Registrar entrada en inventario</span>
           </label>

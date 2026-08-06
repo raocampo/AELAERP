@@ -16,10 +16,11 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const empresaId = req.empresa.id;
-    const { estado = 'PENDIENTE', compraId, busqueda } = req.query;
+    const { estado = 'PENDIENTE', compraId, busqueda, motivo } = req.query;
 
     const where = { empresaId };
     if (estado && estado !== 'TODOS') where.estado = String(estado).toUpperCase();
+    if (motivo && motivo !== 'TODOS') where.motivo = String(motivo).toUpperCase();
     if (compraId) where.compraId = parseInt(compraId, 10);
     if (busqueda) {
       where.OR = [
@@ -33,6 +34,7 @@ router.get('/', async (req, res) => {
       include: {
         compra: { select: { numeroFactura: true, razonSocialProveedor: true, fechaEmision: true } },
         productoAsignado: { select: { id: true, codigoPrincipal: true, nombre: true } },
+        productoSugerido: { select: { id: true, codigoPrincipal: true, nombre: true, stockActual: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -80,7 +82,9 @@ router.post('/:id/asignar', async (req, res) => {
         tipo: 'ENTRADA',
         deltaCantidad: item.cantidad,
         referencia: item.codigoPrincipal,
-        observacion: `Entrada por regalo/combo asignado manualmente (ítem pendiente #${item.id})`,
+        observacion: item.motivo === 'POSIBLE_DUPLICADO'
+          ? `Entrada por posible duplicado confirmado (ítem pendiente #${item.id})`
+          : `Entrada por regalo/combo asignado manualmente (ítem pendiente #${item.id})`,
         metadata: { itemPendienteId: item.id, compraId: item.compraId },
       });
 

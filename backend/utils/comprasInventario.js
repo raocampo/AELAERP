@@ -32,6 +32,71 @@ function normalizarCodigoSinPrefijo(codigo, prefijos = PREFIJOS_REGALO_DEFAULT) 
   return { codigoBase: c, prefijo: null };
 }
 
+// ─── Similitud de nombres (detección de posibles duplicados) ─────────────────
+// El matching exacto por código no detecta el caso típico "cable #8 THHN"
+// (descripción del proveedor en el XML) vs "cable # 8 color verde" (nombre
+// que el usuario ya usa en su catálogo) — mismo producto, código y
+// descripción distintos. Se usa una similitud por conjunto de palabras
+// (Jaccard) sobre el nombre normalizado: no es perfecta, pero es suficiente
+// para frenar la creación automática y pedirle al usuario que confirme.
+const STOPWORDS_PRODUCTO = new Set([
+  'DE', 'LA', 'EL', 'LOS', 'LAS', 'Y', 'A', 'PARA', 'CON', 'DEL', 'UND', 'UNIDAD',
+  'UN', 'UNA', 'X',
+]);
+
+function normalizarNombreProducto(nombre) {
+  return String(nombre || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quitar tildes
+    .toUpperCase()
+    .replace(/[#.,:;()/\\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokensSignificativos(nombre) {
+  return normalizarNombreProducto(nombre)
+    .split(' ')
+    .filter((t) => t && !STOPWORDS_PRODUCTO.has(t));
+}
+
+// Similitud Jaccard (0..1) sobre tokens significativos. Exportada para poder
+// testearla de forma aislada.
+function similitudNombres(nombreA, nombreB) {
+  const tokensA = new Set(tokensSignificativos(nombreA));
+  const tokensB = new Set(tokensSignificativos(nombreB));
+  if (tokensA.size === 0 || tokensB.size === 0) return 0;
+
+  let interseccion = 0;
+  for (const t of tokensA) if (tokensB.has(t)) interseccion += 1;
+  if (interseccion < 2) return 0; // exigir al menos 2 palabras en común
+
+  const union = new Set([...tokensA, ...tokensB]).size;
+  return interseccion / union;
+}
+
+const UMBRAL_POSIBLE_DUPLICADO = 0.34;
+
+// Busca, entre los productos activos de la empresa, el más parecido por
+// nombre al de la línea de compra. Devuelve { producto, score } o null si
+// nada supera el umbral. No se ejecuta si ya hubo match exacto por código.
+async function buscarPosibleDuplicadoPorNombre(tx, empresaId, descripcion) {
+  if (!descripcion || !descripcion.trim()) return null;
+
+  const candidatos = await tx.productos_servicios.findMany({
+    where: { empresaId, activo: true },
+    select: { id: true, codigoPrincipal: true, nombre: true },
+  });
+
+  let mejor = null;
+  for (const candidato of candidatos) {
+    const score = similitudNombres(descripcion, candidato.nombre);
+    if (score >= UMBRAL_POSIBLE_DUPLICADO && (!mejor || score > mejor.score)) {
+      mejor = { producto: candidato, score };
+    }
+  }
+  return mejor;
+}
+
 // ─── Match exacto (productoId / codigoPrincipal / codigoAuxiliar) ────────────
 // Comportamiento sin cambios respecto al histórico buscarProductoCoincidente.
 async function buscarProductoCoincidente(tx, empresaId, detalle) {
@@ -174,6 +239,15 @@ async function resolverOMarcarPendiente({
   }
 
   if (crearProductosFaltantes) {
+    const posibleDuplicado = await buscarPosibleDuplicadoPorNombre(tx, empresaId, detalle.descripcion);
+    if (posibleDuplicado) {
+      return {
+        producto: null, creado: false, actualizado: false, esRegaloMatcheado: false,
+        pendiente: true, prefijoDetectado: null,
+        motivo: 'POSIBLE_DUPLICADO', productoSugeridoId: posibleDuplicado.producto.id,
+      };
+    }
+
     const creado = await tx.productos_servicios.create({
       data: {
         empresaId,
@@ -199,7 +273,10 @@ async function resolverOMarcarPendiente({
   return { producto: null, creado: false, actualizado: false, esRegaloMatcheado: false, pendiente: false, prefijoDetectado: null };
 }
 
-async function registrarItemCompraPendiente({ tx, empresaId, compraId, detalle, prefijoDetectado }) {
+async function registrarItemCompraPendiente({
+  tx, empresaId, compraId, detalle, prefijoDetectado,
+  motivo = 'REGALO', productoSugeridoId = null,
+}) {
   return tx.items_compra_pendientes.create({
     data: {
       empresaId,
@@ -209,6 +286,8 @@ async function registrarItemCompraPendiente({ tx, empresaId, compraId, detalle, 
       descripcion: detalle.descripcion,
       cantidad: detalle.cantidad,
       prefijoDetectado: prefijoDetectado || null,
+      motivo,
+      productoSugeridoId,
       estado: 'PENDIENTE',
     },
   });
@@ -220,4 +299,6 @@ module.exports = {
   resolverOMarcarPendiente,
   registrarItemCompraPendiente,
   normalizarCodigoSinPrefijo,
+  similitudNombres,
+  buscarPosibleDuplicadoPorNombre,
 };

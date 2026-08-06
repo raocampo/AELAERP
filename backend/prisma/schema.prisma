@@ -258,7 +258,8 @@ model productos_servicios {
 
   empresa               empresas                  @relation(fields: [empresaId], references: [id])
   movimientosInventario movimientos_inventario[]
-  itemsCompraAsignados  items_compra_pendientes[]
+  itemsCompraAsignados  items_compra_pendientes[] @relation("ItemPendienteAsignado")
+  itemsCompraSugeridos  items_compra_pendientes[] @relation("ItemPendienteSugerido")
 
   @@unique([empresaId, codigoPrincipal])
   @@index([empresaId])
@@ -480,6 +481,12 @@ model items_compra_pendientes {
   prefijoDetectado       String?   @db.VarChar(20)
   estado                 String    @default("PENDIENTE") @db.VarChar(20)
   // PENDIENTE | RESUELTO | IGNORADO
+  motivo                 String    @default("REGALO") @db.VarChar(20)
+  // REGALO (ítem a $0 sin match por prefijo) | POSIBLE_DUPLICADO (nombre
+  // parecido a un producto ya existente, ej. "cable #8 THHN" vs "cable # 8
+  // color verde" — se evita crear un producto duplicado y se deja para que
+  // el usuario confirme si es el mismo producto o uno nuevo)
+  productoSugeridoId     Int?
   productoAsignadoId     Int?
   usuarioResuelveId      Int?
   movimientoInventarioId Int?
@@ -489,7 +496,8 @@ model items_compra_pendientes {
 
   empresa              empresas                @relation(fields: [empresaId], references: [id])
   compra               facturas_compra         @relation(fields: [compraId], references: [id], onDelete: Cascade)
-  productoAsignado     productos_servicios?    @relation(fields: [productoAsignadoId], references: [id])
+  productoSugerido     productos_servicios?    @relation("ItemPendienteSugerido", fields: [productoSugeridoId], references: [id])
+  productoAsignado     productos_servicios?    @relation("ItemPendienteAsignado", fields: [productoAsignadoId], references: [id])
   usuarioResuelve      usuarios?               @relation(fields: [usuarioResuelveId], references: [id])
   movimientoInventario movimientos_inventario? @relation(fields: [movimientoInventarioId], references: [id])
 
