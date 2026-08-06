@@ -202,6 +202,49 @@ function generarEtiquetaProducto(producto, { ancho = 58, copias = 1 } = {}) {
   return Buffer.concat(parts);
 }
 
+// ── Ticket de cocina (módulo Mesas y Comandas) ─────────────────
+/**
+ * Genera el ticket de comanda para cocina: solo mesa, ítems y notas — SIN
+ * precios ni totales (no es un documento de venta, es una orden de
+ * preparación). Letra grande para que se lea de lejos en la cocina.
+ * @param {object} mesa - { nombre }
+ * @param {Array} items - [{ descripcion, cantidad, nota }] — ya filtrados a
+ *   solo los ítems nuevos que se están enviando en este envío
+ * @param {object} opciones - { ancho: 58|80, numeroComensales, mesero }
+ */
+function generarTicketCocina(mesa, items, { ancho = 80, numeroComensales, mesero } = {}) {
+  const chars = ancho === 58 ? 32 : 42;
+  const sep   = separador(chars);
+  const parts = [];
+  const add = (...i) => i.forEach(x => parts.push(x));
+
+  add(CMD.INIT);
+  add(CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_ON);
+  add(linea('COCINA'));
+  add(CMD.DOUBLE_OFF);
+  add(linea(truncar(mesa?.nombre || 'Mesa', chars)));
+  add(CMD.BOLD_OFF);
+  add(linea(new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })));
+  if (numeroComensales) add(linea(`Comensales: ${numeroComensales}`));
+  if (mesero) add(linea(`Mesero: ${truncar(mesero, chars - 8)}`));
+  add(sep);
+
+  add(CMD.ALIGN_LEFT);
+  for (const item of items) {
+    add(CMD.BOLD_ON, CMD.DOUBLE_ON);
+    add(linea(`${Number(item.cantidad || 1)}x ${truncar(item.descripcion || '', chars - 6)}`));
+    add(CMD.DOUBLE_OFF, CMD.BOLD_OFF);
+    if (item.nota) add(linea(`  * ${truncar(item.nota, chars - 4)}`));
+  }
+
+  add(sep);
+  add(CMD.ALIGN_CENTER);
+  add(CMD.FEED_3);
+  add(CMD.CUT_FULL);
+
+  return Buffer.concat(parts);
+}
+
 // ── Envío TCP ─────────────────────────────────────────────────
 /**
  * Envía un buffer ESC/POS a la impresora por TCP.
@@ -301,5 +344,5 @@ async function imprimirBuffer(ip, puerto = 9100, buffer) {
 module.exports = {
   imprimirRecibo, abrirCajon, probarConexion, generarRecibo,
   generarBarcode128, generarEtiquetaProducto, imprimirBuffer,
-  generarComandoCajon, generarTicketPrueba,
+  generarComandoCajon, generarTicketPrueba, generarTicketCocina,
 };

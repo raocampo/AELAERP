@@ -39,6 +39,8 @@ const ROLE_ALIASES = {
   medico: 'facturador',
   gerente: 'supervisor',
   visor: 'supervisor',
+  mesero: 'operador',
+  mesera: 'operador',
 };
 
 const PERMISSIONS = {
@@ -94,6 +96,10 @@ const PERMISSIONS = {
   'proformas.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],
   'proformas.convertir':  ['admin', 'supervisor', 'facturador'],
   'proformas.anular':     ['admin', 'supervisor'],
+
+  // Mesas y Comandas (restaurantes) — mismos roles que ya usan el POS.
+  'mesas.gestionar':     ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
+  'mesas.administrar':   ['admin', 'supervisor'],
 };
 
 const DEFAULT_ROLE = 'operador';

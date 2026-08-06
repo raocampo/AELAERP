@@ -32,6 +32,9 @@ router.get('/config', async (req, res) => {
         cajaDineroHabilitada: true,
         impresionAutoReciboPos: true,
         impresionAutoMobile: true,
+        impresoraCocinaHabilitada: true,
+        impresoraCocinaIp:         true,
+        impresoraCocinaPuerto:     true,
       },
     });
     res.json({ success: true, data: cfg || {} });
@@ -53,6 +56,9 @@ router.put('/config', async (req, res) => {
       cajaDineroHabilitada,
       impresionAutoReciboPos,
       impresionAutoMobile,
+      impresoraCocinaHabilitada,
+      impresoraCocinaIp,
+      impresoraCocinaPuerto,
     } = req.body;
 
     const data = {};
@@ -66,6 +72,11 @@ router.put('/config', async (req, res) => {
     if (cajaDineroHabilitada  !== undefined) data.cajaDineroHabilitada  = Boolean(cajaDineroHabilitada);
     if (impresionAutoReciboPos !== undefined) data.impresionAutoReciboPos = Boolean(impresionAutoReciboPos);
     if (impresionAutoMobile   !== undefined) data.impresionAutoMobile   = Boolean(impresionAutoMobile);
+    // Impresora de cocina (módulo Mesas y Comandas) — equipo físico distinto
+    // al de la impresora principal, por eso IP/puerto separados.
+    if (impresoraCocinaHabilitada !== undefined) data.impresoraCocinaHabilitada = Boolean(impresoraCocinaHabilitada);
+    if (impresoraCocinaIp         !== undefined) data.impresoraCocinaIp         = impresoraCocinaIp?.trim() || null;
+    if (impresoraCocinaPuerto     !== undefined) data.impresoraCocinaPuerto     = parseInt(impresoraCocinaPuerto) || 9100;
 
     await prisma.configuracion_sistema.upsert({
       where: { empresaId: req.empresa.id },

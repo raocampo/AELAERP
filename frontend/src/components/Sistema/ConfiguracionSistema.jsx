@@ -12,6 +12,9 @@ const IMPRESORA_INICIAL = {
   impresoraPuerto: 9100,
   impresoraAncho: 80,
   cajaDineroHabilitada: false,
+  impresoraCocinaHabilitada: false,
+  impresoraCocinaIp: '',
+  impresoraCocinaPuerto: 9100,
 };
 
 const PLANES = {
@@ -62,6 +65,7 @@ const FORM_INICIAL = {
   sbuEcuador: '480.00',
   regimenDecimoCuarto: 'sierra',
   importacionesHabilitado: false,
+  restauranteHabilitado: false,
 };
 
 export default function ConfiguracionSistema() {
@@ -409,6 +413,24 @@ export default function ConfiguracionSistema() {
           </label>
         </section>
 
+        {/* ── Mesas y Comandas (restaurante) ───────────────────────────── */}
+        <section className="syscfg-card">
+          <h2>Mesas y Comandas</h2>
+          <p className="syscfg-note">
+            Para negocios de restaurante: mapa de mesas, toma de pedidos y
+            envío a cocina antes de cobrar. Si tu negocio no es un
+            restaurante, déjalo desactivado.
+          </p>
+          <label className="syscfg-check">
+            <input
+              type="checkbox"
+              checked={form.restauranteHabilitado}
+              onChange={(e) => actualizar('restauranteHabilitado', e.target.checked)}
+            />
+            <span>Habilitar Mesas y Comandas</span>
+          </label>
+        </section>
+
         {/* ── Impresión y kiosko ────────────────────────────────────────── */}
         <section className="syscfg-card">
           <h2>Impresión y kiosko</h2>
@@ -528,6 +550,52 @@ export default function ConfiguracionSistema() {
               </>
             )}
           </div>
+
+          {/* ── Impresora de cocina (módulo Mesas y Comandas) ── */}
+          {form.restauranteHabilitado && (
+            <div className="syscfg-subsection">
+              <h3>Impresora de cocina</h3>
+              <p className="syscfg-note">
+                Equipo físico aparte, ubicado en cocina — imprime el ticket cada vez
+                que un mesero envía un pedido, sin precios ni totales. Si no la
+                configuras, igual puedes usar Mesas y Comandas, pero tendrás que
+                avisar a cocina de otra forma.
+              </p>
+              <label className="syscfg-check">
+                <input
+                  type="checkbox"
+                  checked={impCfg.impresoraCocinaHabilitada}
+                  onChange={(e) => actualizarImp('impresoraCocinaHabilitada', e.target.checked)}
+                />
+                <span>Habilitar impresora de cocina</span>
+              </label>
+              {impCfg.impresoraCocinaHabilitada && (
+                <div className="syscfg-inline-fields">
+                  <label className="syscfg-field">
+                    <span>IP de la impresora de cocina</span>
+                    <input
+                      value={impCfg.impresoraCocinaIp || ''}
+                      onChange={(e) => actualizarImp('impresoraCocinaIp', e.target.value)}
+                      placeholder="192.168.1.101"
+                    />
+                  </label>
+                  <label className="syscfg-field">
+                    <span>Puerto</span>
+                    <input
+                      type="number"
+                      value={impCfg.impresoraCocinaPuerto}
+                      onChange={(e) => actualizarImp('impresoraCocinaPuerto', parseInt(e.target.value, 10) || 9100)}
+                    />
+                  </label>
+                </div>
+              )}
+              <div className="syscfg-inline-actions">
+                <button type="button" className="btn-primary" onClick={guardarImpresora} disabled={guardandoImpresora}>
+                  {guardandoImpresora ? 'Guardando...' : 'Guardar impresoras'}
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ── Inventario ────────────────────────────────────────────────── */}

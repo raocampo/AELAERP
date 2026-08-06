@@ -108,6 +108,8 @@ model empresas {
   anticiposCliente                 anticipos_cliente[]
   anticiposProveedor               anticipos_proveedor[]
   itemsCompraPendientes            items_compra_pendientes[]
+  restauranteMesas                 restaurante_mesas[]
+  restauranteComandas              restaurante_comandas[]
 
   @@map("empresas")
 }
@@ -147,6 +149,7 @@ model usuarios {
   cajasChicaResponsable cajas_chicas[]            @relation("CajaChicaResponsable")
   movimientosCajaChica  movimientos_caja_chica[]  @relation("MovCajaChicaUsuario")
   itemsCompraResueltos  items_compra_pendientes[]
+  comandasMesero        restaurante_comandas[]
 
   empresasAcceso usuario_empresas[]
 
@@ -321,11 +324,79 @@ model configuracion_sistema {
   // Compras de importación (DIM/DAU, tributos aduaneros) — apagado por
   // defecto, se activa solo para el cliente que de verdad importa mercadería.
   importacionesHabilitado  Boolean  @default(false)
+  // Mesas y Comandas (restaurantes) — apagado por defecto, se activa solo
+  // para el cliente cuyo negocio es un restaurante. La impresora de cocina
+  // es independiente de la impresora principal (impresoraIp de arriba, que
+  // imprime el recibo de venta) porque físicamente son equipos distintos:
+  // una en caja, otra en cocina.
+  restauranteHabilitado      Boolean @default(false)
+  impresoraCocinaIp          String? @db.VarChar(50)
+  impresoraCocinaPuerto      Int?    @default(9100)
+  impresoraCocinaHabilitada  Boolean @default(false)
   updatedAt                DateTime @updatedAt
 
   empresa empresas @relation(fields: [empresaId], references: [id])
 
   @@map("configuracion_sistema")
+}
+
+// ====================================
+// MESAS Y COMANDAS (módulo restaurante)
+// Pedido abierto por mesa que se va enviando a cocina por partes; al cobrar
+// se convierte en una factura o nota de venta REAL usando exactamente el
+// mismo POST /facturas / POST /notas-venta que ya usa PuntoVenta.jsx — este
+// módulo no reimplementa nada de la emisión SRI, solo la etapa previa
+// (tomar el pedido en la mesa) que hoy no existe.
+// ====================================
+model restaurante_mesas {
+  id        Int      @id @default(autoincrement())
+  empresaId Int
+  nombre    String   @db.VarChar(50)
+  capacidad Int?
+  estado    String   @default("LIBRE") @db.VarChar(20)
+  // LIBRE | OCUPADA
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  empresa  empresas               @relation(fields: [empresaId], references: [id])
+  comandas restaurante_comandas[]
+
+  @@unique([empresaId, nombre])
+  @@index([empresaId])
+  @@map("restaurante_mesas")
+}
+
+model restaurante_comandas {
+  id        Int      @id @default(autoincrement())
+  empresaId Int
+  mesaId    Int
+  estado    String   @default("ABIERTA") @db.VarChar(20)
+  // ABIERTA (tomando pedido / en cocina) | CERRADA (cobrada) | ANULADA
+  items     Json
+  // [{codigoPrincipal, descripcion, cantidad, precioUnitario, ivaPorcentaje,
+  //   nota, enviadoCocina, enviadoCocinaEn}]
+  numeroComensales Int?
+  observaciones    String?
+  meseroId         Int?
+  facturaId        Int?
+  notaVentaId      Int?
+  motivoAnulacion  String?
+  abiertaEn        DateTime  @default(now())
+  cerradaEn        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  empresa   empresas          @relation(fields: [empresaId], references: [id])
+  mesa      restaurante_mesas @relation(fields: [mesaId], references: [id])
+  mesero    usuarios?         @relation(fields: [meseroId], references: [id])
+  factura   facturas?         @relation(fields: [facturaId], references: [id])
+  notaVenta notas_venta?      @relation(fields: [notaVentaId], references: [id])
+
+  @@index([empresaId])
+  @@index([mesaId])
+  @@index([estado])
+  @@map("restaurante_comandas")
 }
 
 // ====================================
@@ -626,6 +697,7 @@ model facturas {
   retencionesRecibidas retenciones_recibidas[]
   asientos             asientos_contables[]
   cobros               cobros_cliente[]
+  comandas             restaurante_comandas[]
 
   @@index([empresaId])
   @@index([estadoSri])
@@ -1073,6 +1145,7 @@ model notas_venta {
   empresa empresas? @relation(fields: [empresaId], references: [id])
   cliente clientes? @relation(fields: [clienteId], references: [id])
   emisor  usuarios? @relation(fields: [emisorId], references: [id])
+  comandas restaurante_comandas[]
 
   @@unique([empresaId, secuencial])
   @@index([empresaId])

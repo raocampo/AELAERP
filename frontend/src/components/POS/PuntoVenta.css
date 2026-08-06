@@ -3,6 +3,25 @@
   margin: 0 auto;
 }
 
+.pos-comanda-banner {
+  background: #fffbeb;
+  border: 1.5px solid #f59e0b;
+  color: #92400e;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pos-comanda-banner {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.4);
+  }
+}
+
 .pos-topbar {
   display: flex;
   justify-content: space-between;

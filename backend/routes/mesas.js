@@ -1,0 +1,398 @@
+// ====================================
+// routes/mesas.js — AELA
+// Mesas y Comandas (módulo restaurante). El pedido se toma aquí por mesa y
+// se envía a cocina por partes; al COBRAR se crea una factura o nota de
+// venta REAL con el POST /facturas o POST /notas-venta que YA existe (el
+// frontend hace esa llamada directamente, igual que PuntoVenta.jsx) — este
+// archivo solo hace de "pre-cuenta" y después enlaza el documento ya creado
+// vía POST /comandas/:id/cerrar. No reimplementa nada de la emisión SRI.
+// ====================================
+const express = require('express');
+const router  = express.Router();
+const prisma  = require('../config/prisma');
+const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { requiereModulo } = require('../middleware/modulos');
+const { generarTicketCocina, imprimirBuffer } = require('../utils/impresoraEscPos');
+
+router.use(proteger);
+router.use(requiereModulo('restauranteHabilitado'));
+
+function parseItems(comanda) {
+  return typeof comanda.items === 'string' ? JSON.parse(comanda.items || '[]') : (comanda.items || []);
+}
+
+function calcularTotales(items) {
+  let subtotal = 0;
+  let totalIva = 0;
+  for (const it of items) {
+    const cant   = Number(it.cantidad) || 0;
+    const precio = Number(it.precioUnitario) || 0;
+    const base   = cant * precio;
+    subtotal += base;
+    const pct = Number(it.ivaPorcentaje) || 0;
+    if (pct > 0) totalIva += base * (pct / 100);
+  }
+  subtotal = Number(subtotal.toFixed(2));
+  totalIva = Number(totalIva.toFixed(2));
+  return { subtotal, totalIva, total: Number((subtotal + totalIva).toFixed(2)) };
+}
+
+// ─── MESAS ──────────────────────────────────────────────────────────────────
+
+// GET /api/mesas — mapa de mesas con resumen de su comanda abierta (si tiene)
+router.get('/', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const mesas = await prisma.restaurante_mesas.findMany({
+      where: { empresaId, activo: true },
+      orderBy: { nombre: 'asc' },
+    });
+
+    const comandasAbiertas = await prisma.restaurante_comandas.findMany({
+      where: { empresaId, estado: 'ABIERTA', mesaId: { in: mesas.map((m) => m.id) } },
+    });
+    const porMesa = new Map(comandasAbiertas.map((c) => [c.mesaId, c]));
+
+    const data = mesas.map((m) => {
+      const comanda = porMesa.get(m.id);
+      if (!comanda) return { ...m, comanda: null };
+      const items = parseItems(comanda);
+      const totales = calcularTotales(items);
+      return {
+        ...m,
+        comanda: {
+          id: comanda.id,
+          numeroComensales: comanda.numeroComensales,
+          abiertaEn: comanda.abiertaEn,
+          cantidadItems: items.length,
+          pendientesCocina: items.filter((it) => !it.enviadoCocina).length,
+          ...totales,
+        },
+      };
+    });
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('GET /mesas:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudieron obtener las mesas' });
+  }
+});
+
+// POST /api/mesas — crear mesa (solo administración del local)
+router.post('/', autorizarPermiso('mesas.administrar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const { nombre, capacidad } = req.body || {};
+    if (!nombre?.trim()) {
+      return res.status(400).json({ success: false, mensaje: 'El nombre de la mesa es requerido' });
+    }
+
+    const mesa = await prisma.restaurante_mesas.create({
+      data: {
+        empresaId,
+        nombre: nombre.trim(),
+        capacidad: capacidad ? parseInt(capacidad, 10) : null,
+      },
+    });
+    res.status(201).json({ success: true, data: mesa });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, mensaje: 'Ya existe una mesa con ese nombre' });
+    }
+    console.error('POST /mesas:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo crear la mesa' });
+  }
+});
+
+// PUT /api/mesas/:id — editar mesa
+router.put('/:id', autorizarPermiso('mesas.administrar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const id = parseInt(req.params.id, 10);
+    const { nombre, capacidad, activo } = req.body || {};
+
+    const mesa = await prisma.restaurante_mesas.findFirst({ where: { id, empresaId } });
+    if (!mesa) return res.status(404).json({ success: false, mensaje: 'Mesa no encontrada' });
+
+    const data = {};
+    if (nombre !== undefined) data.nombre = String(nombre).trim();
+    if (capacidad !== undefined) data.capacidad = capacidad ? parseInt(capacidad, 10) : null;
+    if (activo !== undefined) data.activo = Boolean(activo);
+
+    const actualizada = await prisma.restaurante_mesas.update({ where: { id }, data });
+    res.json({ success: true, data: actualizada });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, mensaje: 'Ya existe una mesa con ese nombre' });
+    }
+    console.error('PUT /mesas/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo actualizar la mesa' });
+  }
+});
+
+// DELETE /api/mesas/:id — solo si nunca tuvo comandas (si ya tuvo, desactivar en su lugar)
+router.delete('/:id', autorizarPermiso('mesas.administrar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const id = parseInt(req.params.id, 10);
+
+    const mesa = await prisma.restaurante_mesas.findFirst({ where: { id, empresaId } });
+    if (!mesa) return res.status(404).json({ success: false, mensaje: 'Mesa no encontrada' });
+
+    const tieneHistorial = await prisma.restaurante_comandas.count({ where: { mesaId: id } });
+    if (tieneHistorial > 0) {
+      return res.status(400).json({
+        success: false,
+        mensaje: 'Esta mesa ya tiene comandas registradas — desactívala en vez de eliminarla',
+      });
+    }
+
+    await prisma.restaurante_mesas.delete({ where: { id } });
+    res.json({ success: true, mensaje: 'Mesa eliminada' });
+  } catch (error) {
+    console.error('DELETE /mesas/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo eliminar la mesa' });
+  }
+});
+
+// ─── COMANDAS ───────────────────────────────────────────────────────────────
+
+// GET /api/mesas/:id/comanda — comanda abierta de la mesa (o null)
+router.get('/:id/comanda', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const mesaId = parseInt(req.params.id, 10);
+
+    const comanda = await prisma.restaurante_comandas.findFirst({
+      where: { empresaId, mesaId, estado: 'ABIERTA' },
+      include: { mesa: true, mesero: { select: { id: true, nombre: true } } },
+    });
+    if (!comanda) return res.json({ success: true, data: null });
+
+    const items = parseItems(comanda);
+    res.json({ success: true, data: { ...comanda, items, ...calcularTotales(items) } });
+  } catch (error) {
+    console.error('GET /mesas/:id/comanda:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo obtener la comanda' });
+  }
+});
+
+// POST /api/mesas/:id/comanda — abrir una comanda nueva (la mesa debe estar LIBRE)
+router.post('/:id/comanda', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const mesaId = parseInt(req.params.id, 10);
+    const { numeroComensales, observaciones } = req.body || {};
+
+    const mesa = await prisma.restaurante_mesas.findFirst({ where: { id: mesaId, empresaId, activo: true } });
+    if (!mesa) return res.status(404).json({ success: false, mensaje: 'Mesa no encontrada' });
+    if (mesa.estado === 'OCUPADA') {
+      return res.status(400).json({ success: false, mensaje: 'La mesa ya tiene una comanda abierta' });
+    }
+
+    const resultado = await prisma.$transaction(async (tx) => {
+      const comanda = await tx.restaurante_comandas.create({
+        data: {
+          empresaId,
+          mesaId,
+          items: [],
+          numeroComensales: numeroComensales ? parseInt(numeroComensales, 10) : null,
+          observaciones: observaciones?.trim() || null,
+          meseroId: req.usuario.id,
+        },
+      });
+      await tx.restaurante_mesas.update({ where: { id: mesaId }, data: { estado: 'OCUPADA' } });
+      return comanda;
+    });
+
+    res.status(201).json({ success: true, data: resultado });
+  } catch (error) {
+    console.error('POST /mesas/:id/comanda:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo abrir la comanda' });
+  }
+});
+
+// PUT /api/mesas/comandas/:id — reemplaza la lista de ítems (agregar/quitar/editar)
+router.put('/comandas/:id', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const id = parseInt(req.params.id, 10);
+    const { items } = req.body || {};
+
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ success: false, mensaje: 'items debe ser un arreglo' });
+    }
+
+    const comanda = await prisma.restaurante_comandas.findFirst({ where: { id, empresaId } });
+    if (!comanda) return res.status(404).json({ success: false, mensaje: 'Comanda no encontrada' });
+    if (comanda.estado !== 'ABIERTA') {
+      return res.status(400).json({ success: false, mensaje: 'Esta comanda ya está cerrada' });
+    }
+
+    // Preservar el estado enviadoCocina de los ítems que ya existían — el
+    // mesero puede reordenar/editar cantidades sin que se vuelvan a marcar
+    // como "nuevos" para cocina.
+    const itemsAnteriores = parseItems(comanda);
+    const itemsNormalizados = items.map((it) => {
+      const previo = itemsAnteriores.find((p) => p.codigoPrincipal === it.codigoPrincipal && p.nota === it.nota);
+      return {
+        codigoPrincipal: String(it.codigoPrincipal || ''),
+        descripcion: String(it.descripcion || ''),
+        cantidad: Number(it.cantidad) || 0,
+        precioUnitario: Number(it.precioUnitario) || 0,
+        ivaPorcentaje: Number(it.ivaPorcentaje) || 0,
+        nota: it.nota?.trim() || null,
+        enviadoCocina: previo ? Boolean(previo.enviadoCocina) : false,
+        enviadoCocinaEn: previo?.enviadoCocinaEn || null,
+      };
+    }).filter((it) => it.codigoPrincipal && it.cantidad > 0);
+
+    const actualizada = await prisma.restaurante_comandas.update({
+      where: { id },
+      data: { items: itemsNormalizados },
+    });
+
+    res.json({ success: true, data: { ...actualizada, items: itemsNormalizados, ...calcularTotales(itemsNormalizados) } });
+  } catch (error) {
+    console.error('PUT /mesas/comandas/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo actualizar la comanda' });
+  }
+});
+
+// POST /api/mesas/comandas/:id/enviar-cocina — imprime solo los ítems nuevos
+router.post('/comandas/:id/enviar-cocina', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const id = parseInt(req.params.id, 10);
+
+    const comanda = await prisma.restaurante_comandas.findFirst({
+      where: { id, empresaId },
+      include: { mesa: true },
+    });
+    if (!comanda) return res.status(404).json({ success: false, mensaje: 'Comanda no encontrada' });
+    if (comanda.estado !== 'ABIERTA') {
+      return res.status(400).json({ success: false, mensaje: 'Esta comanda ya está cerrada' });
+    }
+
+    const items = parseItems(comanda);
+    const nuevos = items.filter((it) => !it.enviadoCocina);
+    if (nuevos.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'No hay ítems nuevos para enviar a cocina' });
+    }
+
+    const ahora = new Date();
+    const itemsActualizados = items.map((it) => (
+      it.enviadoCocina ? it : { ...it, enviadoCocina: true, enviadoCocinaEn: ahora }
+    ));
+    await prisma.restaurante_comandas.update({ where: { id }, data: { items: itemsActualizados } });
+
+    // Imprimir — best effort: si falla la impresora, la comanda ya quedó
+    // marcada como enviada (el mesero sigue tomando pedidos), pero se avisa
+    // del fallo para que avise a cocina de otra forma.
+    let impreso = false;
+    let mensajeImpresion = null;
+    try {
+      const cfg = req.configuracionSistema;
+      const ip = cfg?.impresoraCocinaHabilitada ? cfg.impresoraCocinaIp : null;
+      if (ip) {
+        const buffer = generarTicketCocina(comanda.mesa, nuevos, {
+          ancho: cfg.impresoraAncho || 80,
+          numeroComensales: comanda.numeroComensales,
+          mesero: req.usuario.nombre,
+        });
+        await imprimirBuffer(ip, cfg.impresoraCocinaPuerto || 9100, buffer);
+        impreso = true;
+      } else {
+        mensajeImpresion = 'Impresora de cocina no configurada — avisa a cocina manualmente';
+      }
+    } catch (errImpresion) {
+      mensajeImpresion = `No se pudo imprimir: ${errImpresion.message}`;
+    }
+
+    res.json({
+      success: true,
+      impreso,
+      mensaje: impreso ? `${nuevos.length} ítem(s) enviados a cocina` : mensajeImpresion,
+      data: { items: itemsActualizados },
+    });
+  } catch (error) {
+    console.error('POST /mesas/comandas/:id/enviar-cocina:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo enviar a cocina' });
+  }
+});
+
+// POST /api/mesas/comandas/:id/cerrar — enlaza la factura/nota de venta ya
+// creada (por el POS reutilizado) y libera la mesa.
+router.post('/comandas/:id/cerrar', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const id = parseInt(req.params.id, 10);
+    const { tipo, documentoId } = req.body || {};
+
+    if (!['factura', 'nota_venta'].includes(tipo) || !documentoId) {
+      return res.status(400).json({ success: false, mensaje: 'tipo y documentoId son requeridos' });
+    }
+
+    const comanda = await prisma.restaurante_comandas.findFirst({ where: { id, empresaId } });
+    if (!comanda) return res.status(404).json({ success: false, mensaje: 'Comanda no encontrada' });
+    if (comanda.estado !== 'ABIERTA') {
+      return res.status(400).json({ success: false, mensaje: 'Esta comanda ya está cerrada' });
+    }
+
+    // Verificar que el documento exista y pertenezca a esta empresa antes de enlazarlo.
+    const docId = parseInt(documentoId, 10);
+    const doc = tipo === 'factura'
+      ? await prisma.facturas.findFirst({ where: { id: docId, empresaId } })
+      : await prisma.notas_venta.findFirst({ where: { id: docId, empresaId } });
+    if (!doc) return res.status(404).json({ success: false, mensaje: 'El documento indicado no existe' });
+
+    const resultado = await prisma.$transaction(async (tx) => {
+      const actualizada = await tx.restaurante_comandas.update({
+        where: { id },
+        data: {
+          estado: 'CERRADA',
+          cerradaEn: new Date(),
+          facturaId: tipo === 'factura' ? docId : null,
+          notaVentaId: tipo === 'nota_venta' ? docId : null,
+        },
+      });
+      await tx.restaurante_mesas.update({ where: { id: comanda.mesaId }, data: { estado: 'LIBRE' } });
+      return actualizada;
+    });
+
+    res.json({ success: true, data: resultado, mensaje: 'Mesa cobrada y liberada' });
+  } catch (error) {
+    console.error('POST /mesas/comandas/:id/cerrar:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo cerrar la comanda' });
+  }
+});
+
+// POST /api/mesas/comandas/:id/anular — cierra sin cobrar (mesa se va sin consumir, error, etc.)
+router.post('/comandas/:id/anular', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const id = parseInt(req.params.id, 10);
+    const { motivo } = req.body || {};
+
+    const comanda = await prisma.restaurante_comandas.findFirst({ where: { id, empresaId } });
+    if (!comanda) return res.status(404).json({ success: false, mensaje: 'Comanda no encontrada' });
+    if (comanda.estado !== 'ABIERTA') {
+      return res.status(400).json({ success: false, mensaje: 'Esta comanda ya está cerrada' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.restaurante_comandas.update({
+        where: { id },
+        data: { estado: 'ANULADA', cerradaEn: new Date(), motivoAnulacion: motivo?.trim() || null },
+      });
+      await tx.restaurante_mesas.update({ where: { id: comanda.mesaId }, data: { estado: 'LIBRE' } });
+    });
+
+    res.json({ success: true, mensaje: 'Comanda anulada y mesa liberada' });
+  } catch (error) {
+    console.error('POST /mesas/comandas/:id/anular:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo anular la comanda' });
+  }
+});
+
+module.exports = router;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
@@ -29,7 +29,13 @@ const FORMAS_NOTA = ['Efectivo', 'Transferencia', 'Tarjeta débito', 'Tarjeta cr
 
 export default function PuntoVenta() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { sistema } = useAuth();
+  // Mesas y Comandas (restaurante): si venimos de "Cobrar mesa", precarga el
+  // carrito con lo ya pedido y, al emitir con éxito, cierra la comanda y
+  // libera la mesa — ver ComandaMesa.jsx. En el flujo normal de POS esto
+  // queda en null y no cambia nada del comportamiento existente.
+  const [comandaOrigen, setComandaOrigen] = useState(location.state?.comandaParaCobrar || null);
   const [tipoDocumento, setTipoDocumento] = useState(sistema?.documentoPosDefault || 'factura');
   const [tipoId, setTipoId] = useState('07');
   const [identificacion, setIdentificacion] = useState('9999999999999');
@@ -49,7 +55,15 @@ export default function PuntoVenta() {
   const [codigoBarras, setCodigoBarras] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState([]);
-  const [carrito, setCarrito] = useState([]);
+  const [carrito, setCarrito] = useState(() => (
+    location.state?.comandaParaCobrar?.items?.map((it) => ({
+      codigoPrincipal: it.codigoPrincipal,
+      descripcion: it.descripcion,
+      cantidad: Number(it.cantidad || 1),
+      precioUnitario: Number(it.precioUnitario || 0),
+      ivaPorcentaje: Number(it.ivaPorcentaje || 0),
+    })) || []
+  ));
   const [telefono, setTelefono] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [buscandoSRI, setBuscandoSRI] = useState(false);
@@ -330,6 +344,21 @@ export default function PuntoVenta() {
     }
   };
 
+  // Mesas y Comandas: si esta venta viene de "Cobrar mesa", enlaza el
+  // documento recién emitido con la comanda y libera la mesa. Best-effort —
+  // si falla, la venta YA está hecha (es lo importante); solo avisa para
+  // que se libere la mesa a mano desde Mesas.
+  const cerrarComandaSiCorresponde = async (tipo, documentoId) => {
+    if (!comandaOrigen || !documentoId) return;
+    try {
+      await api.post(`/mesas/comandas/${comandaOrigen.id}/cerrar`, { tipo, documentoId });
+      toast.success(`Mesa ${comandaOrigen.mesaNombre || ''} liberada`);
+      setComandaOrigen(null);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'La venta se registró, pero no se pudo liberar la mesa automáticamente');
+    }
+  };
+
   const emitirDocumento = async () => {
     if (carrito.length === 0) {
       toast.error('Agrega al menos un producto al carrito');
@@ -426,6 +455,7 @@ export default function PuntoVenta() {
           if (sistema?.impresionAutoReciboPos && creada?.id) {
             void abrirReciboEmitido(creada.id, 'nota_venta');
           }
+          void cerrarComandaSiCorresponde('nota_venta', creada?.id);
         }
       } else {
         const resp = await apiOffline('/facturas', {
@@ -477,6 +507,7 @@ export default function PuntoVenta() {
           if (sistema?.impresionAutoReciboPos && creada?.id) {
             void abrirReciboEmitido(creada.id, 'factura');
           }
+          void cerrarComandaSiCorresponde('factura', creada?.id);
         }
       }
     } catch (error) {
@@ -489,6 +520,11 @@ export default function PuntoVenta() {
   return (
     <>
     <div className="pos-page">
+      {comandaOrigen && (
+        <div className="pos-comanda-banner">
+          🍽️ Cobrando {comandaOrigen.mesaNombre || 'mesa'} — al emitir se libera la mesa automáticamente.
+        </div>
+      )}
       <div className="pos-topbar">
         <div>
           <h1>Punto de Venta</h1>

@@ -300,6 +300,9 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
                                 ? reqBody.regimenDecimoCuarto
                                 : (actual.regimenDecimoCuarto || 'sierra'),
     importacionesHabilitado:  Boolean(reqBody.importacionesHabilitado !== undefined ? reqBody.importacionesHabilitado : actual.importacionesHabilitado),
+    // Mesas y Comandas (restaurantes) — sin flag(), igual que sucursales/importaciones:
+    // no gateado por plan, cualquier tenant puede activarlo si su negocio lo necesita.
+    restauranteHabilitado:    Boolean(reqBody.restauranteHabilitado !== undefined ? reqBody.restauranteHabilitado : actual.restauranteHabilitado),
   };
 }
 

@@ -20,6 +20,8 @@ const ROLE_ALIASES = {
   medico: 'facturador',
   gerente: 'supervisor',
   visor: 'supervisor',
+  mesero: 'operador',
+  mesera: 'operador',
 };
 
 const PERMISSIONS = {
@@ -72,6 +74,9 @@ const PERMISSIONS = {
   'proformas.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],
   'proformas.convertir':  ['admin', 'supervisor', 'facturador'],
   'proformas.anular':     ['admin', 'supervisor'],
+
+  'mesas.gestionar':   ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
+  'mesas.administrar': ['admin', 'supervisor'],
 };
 
 export const normalizarRol = (rol) => {
@@ -103,6 +108,7 @@ export const PERMISOS_POR_MODULO = [
   { modulo: 'Productos',       permisos: ['productos.ver', 'productos.gestionar', 'productos.eliminar'] },
   { modulo: 'Proformas',        permisos: ['proformas.gestionar', 'proformas.convertir', 'proformas.anular'] },
   { modulo: 'Ventas / Caja',   permisos: ['notasVenta.gestionar', 'caja.ver', 'caja.gestionar', 'pos.usar'] },
+  { modulo: 'Mesas y Comandas', permisos: ['mesas.gestionar', 'mesas.administrar'] },
   { modulo: 'Inventario',      permisos: ['inventario.ver', 'inventario.gestionar'] },
   { modulo: 'RRHH / Nómina',   permisos: ['rrhh.ver', 'rrhh.gestionar', 'rrhh.nomina'] },
 ];
@@ -144,4 +150,6 @@ export const PERMISO_LABELS = {
   'proformas.gestionar':   'Gestionar proformas',
   'proformas.convertir':   'Convertir proforma a factura',
   'proformas.anular':      'Anular proformas',
+  'mesas.gestionar':       'Tomar y cobrar pedidos de mesa',
+  'mesas.administrar':     'Crear/editar mesas del local',
 };

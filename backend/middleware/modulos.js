@@ -10,6 +10,7 @@ const MENSAJES = {
   buzonSriHabilitado: 'El modulo de Buzon SRI esta deshabilitado en la configuracion del sistema',
   tributarioHabilitado: 'El modulo Tributario esta deshabilitado en la configuracion del sistema',
   bancosHabilitado: 'El modulo de Bancos esta deshabilitado en la configuracion del sistema',
+  restauranteHabilitado: 'El modulo de Mesas y Comandas esta deshabilitado en la configuracion del sistema',
 };
 
 const requiereModulo = (campo, mensajePersonalizado = null) => async (req, res, next) => {

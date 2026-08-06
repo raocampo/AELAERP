@@ -151,6 +151,7 @@ export function obtenerModulosHabilitados(sistema) {
     tributario: Boolean(sistema?.tributarioHabilitado),
     bancos: Boolean(sistema?.bancosHabilitado),
     talentoHumano: Boolean(sistema?.talentoHumanoHabilitado),
+    restaurante: Boolean(sistema?.restauranteHabilitado),
   };
 }
 

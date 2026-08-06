@@ -91,6 +91,7 @@ function usePendientesSRI() {
 const ITEMS_SUELTOS = [
   { to: '/dashboard', icon: '🏠', label: 'Dashboard' },
   { to: '/pos',       icon: '🛍️', label: 'POS', permiso: 'pos.usar', modulo: 'posHabilitado' },
+  { to: '/restaurante/mesas', icon: '🍽️', label: 'Mesas', permiso: 'mesas.gestionar', modulo: 'restauranteHabilitado' },
   { to: '/ayuda',     icon: '❓', label: 'Ayuda' },
 ];
 
