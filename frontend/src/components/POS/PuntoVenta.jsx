@@ -667,7 +667,7 @@ export default function PuntoVenta() {
                       <input type="number" min="1" step="1" value={item.cantidad} onChange={(e) => actualizarLinea(item.codigoPrincipal, 'cantidad', Number(e.target.value))} />
                     </td>
                     <td>
-                      <input type="number" min="0" step="0.01" value={item.precioUnitario} onChange={(e) => actualizarLinea(item.codigoPrincipal, 'precioUnitario', Number(e.target.value))} />
+                      <input type="number" min="0" step="0.0001" value={item.precioUnitario} onChange={(e) => actualizarLinea(item.codigoPrincipal, 'precioUnitario', Number(e.target.value))} />
                     </td>
                     <td>${(Number(item.cantidad || 0) * Number(item.precioUnitario || 0)).toFixed(2)}</td>
                     <td><button type="button" className="btn-link danger" onClick={() => quitarLinea(item.codigoPrincipal)}>Quitar</button></td>

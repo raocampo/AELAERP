@@ -639,7 +639,7 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
 
       {/* ── MODAL PRODUCTO ── */}
       {modalProducto && (
-        <div className="prod-modal-overlay" onClick={() => setModalProducto(false)}>
+        <div className="prod-modal-overlay">
           <div className="prod-modal" onClick={(e) => e.stopPropagation()}>
             <div className="prod-modal-head">
               <h2>{form.id ? 'Editar producto' : 'Nuevo producto'}</h2>
@@ -660,11 +660,11 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
               </label>
               <label>
                 <span>Precio de venta</span>
-                <input type="number" min="0" step="0.01" value={form.precioUnitario} onChange={(e) => setForm((prev) => ({ ...prev, precioUnitario: e.target.value }))} required />
+                <input type="number" min="0" step="0.0001" placeholder="0.0000" value={form.precioUnitario} onChange={(e) => setForm((prev) => ({ ...prev, precioUnitario: e.target.value }))} required />
               </label>
               <label>
                 <span>Costo unitario</span>
-                <input type="number" min="0" step="0.01" value={form.costoUnitario} onChange={(e) => setForm((prev) => ({ ...prev, costoUnitario: e.target.value }))} />
+                <input type="number" min="0" step="0.0001" placeholder="0.0000" value={form.costoUnitario} onChange={(e) => setForm((prev) => ({ ...prev, costoUnitario: e.target.value }))} />
               </label>
               <label>
                 <span>IVA</span>
@@ -750,7 +750,7 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
               </label>
               <label>
                 <span>Costo unitario</span>
-                <input type="number" min="0" step="0.01" value={movimientoForm.costoUnitario}
+                <input type="number" min="0" step="0.0001" value={movimientoForm.costoUnitario}
                   onChange={(e) => setMovimientoForm((prev) => ({ ...prev, costoUnitario: e.target.value }))} />
               </label>
               <label>

@@ -262,9 +262,9 @@ export default function FormLiquidacion() {
                           className="lf-det-input lf-det-num" placeholder="0" />
                       </td>
                       <td>
-                        <input type="number" step="0.01" min="0" value={det.precioUnitario}
+                        <input type="number" step="0.0001" min="0" value={det.precioUnitario}
                           onChange={e => handleDetalle(idx, 'precioUnitario', e.target.value)}
-                          className="lf-det-input lf-det-num" placeholder="0.00" />
+                          className="lf-det-input lf-det-num" placeholder="0.0000" />
                       </td>
                       <td>
                         <select value={det.porcentajeIva}
