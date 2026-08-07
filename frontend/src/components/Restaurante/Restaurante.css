@@ -324,7 +324,11 @@
   .rest-buscar-item { border-bottom-color: #334155; color: #f1f5f9; }
   .rest-buscar-item:hover { background: #0f172a; }
   .rest-item-row { background: #1e293b; }
-  .rest-item-row.nuevo { background: rgba(245, 158, 11, 0.12); }
+  /* Capa de color plana (#1e293b) detrás del tinte translúcido — .rest-page
+     no define su propio fondo oscuro (hereda el gris claro de .layout-main),
+     así que un rgba() solo se componía sobre ese gris y quedaba casi
+     invisible en vez de sobre una superficie oscura real. */
+  .rest-item-row.nuevo { background: linear-gradient(rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.12)), #1e293b; }
   .rest-item-nombre, .rest-item-precio { color: #f1f5f9; }
   .rest-item-cant button { background: #0f172a; border-color: #334155; color: #f1f5f9; }
   .rest-comanda-footer { background: #1e293b; }
