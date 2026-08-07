@@ -274,6 +274,11 @@ router.post('/', permitirGestionarProductos, checkLimiteProductos, async (req, r
       stockActual,
       stockMinimo,
       activo,
+      categoriaMenu,
+      descripcionMenu,
+      imagenMenuUrl,
+      visibleEnMenu,
+      ordenMenu,
     } = req.body || {};
 
     if (!codigoPrincipal || !nombre || precioUnitario === undefined) {
@@ -295,6 +300,11 @@ router.post('/', permitirGestionarProductos, checkLimiteProductos, async (req, r
         stockActual: parseFloat(stockActual ?? 0),
         stockMinimo: parseFloat(stockMinimo ?? 0),
         activo: activo !== undefined ? Boolean(activo) : true,
+        categoriaMenu: categoriaMenu?.trim() || null,
+        descripcionMenu: descripcionMenu?.trim() || null,
+        imagenMenuUrl: imagenMenuUrl || null,
+        visibleEnMenu: Boolean(visibleEnMenu),
+        ordenMenu: parseInt(ordenMenu ?? 0, 10) || 0,
       },
     });
     res.status(201).json({ data: item, mensaje: 'Producto creado' });
@@ -321,6 +331,11 @@ router.put('/:id', permitirGestionarProductos, async (req, res) => {
       inventariable,
       stockActual,
       stockMinimo,
+      categoriaMenu,
+      descripcionMenu,
+      imagenMenuUrl,
+      visibleEnMenu,
+      ordenMenu,
     } = req.body || {};
 
     const actual = await prisma.productos_servicios.findFirst({
@@ -343,6 +358,11 @@ router.put('/:id', permitirGestionarProductos, async (req, res) => {
         ...(inventariable !== undefined ? { inventariable: Boolean(inventariable) } : {}),
         ...(stockActual !== undefined ? { stockActual: parseFloat(stockActual) } : {}),
         ...(stockMinimo !== undefined ? { stockMinimo: parseFloat(stockMinimo) } : {}),
+        ...(categoriaMenu !== undefined ? { categoriaMenu: categoriaMenu?.trim() || null } : {}),
+        ...(descripcionMenu !== undefined ? { descripcionMenu: descripcionMenu?.trim() || null } : {}),
+        ...(imagenMenuUrl !== undefined ? { imagenMenuUrl: imagenMenuUrl || null } : {}),
+        ...(visibleEnMenu !== undefined ? { visibleEnMenu: Boolean(visibleEnMenu) } : {}),
+        ...(ordenMenu !== undefined ? { ordenMenu: parseInt(ordenMenu, 10) || 0 } : {}),
       },
     });
 

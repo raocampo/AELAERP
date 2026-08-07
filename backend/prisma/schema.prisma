@@ -256,6 +256,15 @@ model productos_servicios {
   stockMinimo     Decimal  @default(0) @db.Decimal(14, 3)
   infoAdicional   String?
   activo          Boolean  @default(true)
+  // ── Menú digital (módulo restaurante) ── campos opcionales, sin efecto
+  // fuera del menú público por QR (ver restaurante_mesas). visibleEnMenu
+  // es un opt-in explícito por producto: no basta con activar el módulo,
+  // el dueño elige qué platos mostrar al público.
+  categoriaMenu    String?  @db.VarChar(80)
+  descripcionMenu  String?  @db.Text
+  imagenMenuUrl    String?  @db.Text
+  visibleEnMenu    Boolean  @default(false)
+  ordenMenu        Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

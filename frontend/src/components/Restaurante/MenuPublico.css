@@ -1,0 +1,118 @@
+.menu-pub-page {
+  max-width: 640px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: #fff;
+  padding-bottom: 40px;
+}
+
+.menu-pub-loading {
+  padding: 60px 20px;
+  text-align: center;
+  color: #64748b;
+  font-size: 15px;
+}
+
+.menu-pub-header {
+  text-align: center;
+  padding: 32px 20px 22px;
+  background: linear-gradient(135deg, #4C1D95 0%, #6D28D9 55%, #0891B2 100%);
+  color: #fff;
+}
+
+.menu-pub-logo {
+  max-height: 70px;
+  max-width: 180px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 10px;
+  padding: 6px;
+  margin-bottom: 10px;
+}
+
+.menu-pub-header h1 {
+  margin: 0 0 2px;
+  font-size: 22px;
+}
+
+.menu-pub-header p {
+  margin: 0;
+  opacity: 0.85;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.menu-pub-categoria {
+  padding: 20px 18px 4px;
+}
+
+.menu-pub-categoria h2 {
+  font-size: 16px;
+  color: #7C3AED;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.menu-pub-items {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.menu-pub-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.menu-pub-item-img {
+  width: 58px;
+  height: 58px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #f1f5f9;
+}
+
+.menu-pub-item-info { min-width: 0; }
+
+.menu-pub-item-nombre {
+  font-weight: 700;
+  font-size: 15px;
+  color: #1e293b;
+}
+
+.menu-pub-item-desc {
+  font-size: 12.5px;
+  color: #64748b;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.menu-pub-item-precio {
+  font-weight: 800;
+  color: #7C3AED;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.menu-pub-footer {
+  text-align: center;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 30px;
+  padding: 0 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .menu-pub-page { background: #0f172a; }
+  .menu-pub-categoria h2 { border-bottom-color: #1e293b; }
+  .menu-pub-item-nombre { color: #f1f5f9; }
+  .menu-pub-item-desc { color: #94a3b8; }
+  .menu-pub-item-img { background: #1e293b; }
+  .menu-pub-loading, .menu-pub-footer { color: #94a3b8; }
+}

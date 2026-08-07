@@ -2,7 +2,65 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { useAuth } from '../../context/useAuth';
 import './Restaurante.css';
+
+function ModalMenuQR({ onClose }) {
+  const { empresa } = useAuth();
+  const [qrUrl, setQrUrl] = useState(null);
+  const [urlPublica, setUrlPublica] = useState('');
+
+  useEffect(() => {
+    const slug = localStorage.getItem('aela_tenant_slug') || '';
+    const publica = `${window.location.origin}/menu/${slug}/${empresa?.id}`;
+    setUrlPublica(publica);
+
+    let objectUrl = null;
+    api.get('/mesas/menu/qr', { params: { url: publica }, responseType: 'blob' })
+      .then((res) => {
+        objectUrl = URL.createObjectURL(res.data);
+        setQrUrl(objectUrl);
+      })
+      .catch(() => toast.error('No se pudo generar el código QR'));
+
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [empresa?.id]);
+
+  const copiarUrl = () => {
+    navigator.clipboard?.writeText(urlPublica);
+    toast.success('Enlace copiado');
+  };
+
+  return (
+    <div className="rest-modal-overlay">
+      <div className="rest-modal" onClick={(e) => e.stopPropagation()}>
+        <h2>📋 Menú Digital</h2>
+        <p style={{ color: '#64748b', fontSize: '.85rem', marginTop: -8 }}>
+          Imprime este código y pégalo en las mesas — tus clientes lo escanean con la cámara
+          de su celular y ven el menú al instante, sin instalar nada.
+        </p>
+        {qrUrl ? (
+          <img src={qrUrl} alt="QR del menú digital" style={{ display: 'block', margin: '0 auto', width: 220, height: 220 }} />
+        ) : (
+          <div className="rest-empty">Generando código QR...</div>
+        )}
+        <label style={{ marginTop: 12 }}>
+          <span style={{ fontSize: '.8rem', color: '#64748b', fontWeight: 600 }}>Enlace del menú</span>
+          <input value={urlPublica} readOnly onClick={(e) => e.target.select()} style={{ width: '100%', marginTop: 4 }} />
+        </label>
+        <div className="rest-form-actions">
+          <button type="button" className="btn-secondary" onClick={copiarUrl}>Copiar enlace</button>
+          {qrUrl && (
+            <a href={qrUrl} download="menu-qr.png" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+              Descargar QR
+            </a>
+          )}
+          <button type="button" className="btn-secondary" onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ModalMesa({ mesa, onClose, onGuardado }) {
   const [nombre, setNombre] = useState(mesa?.nombre || '');
@@ -59,6 +117,7 @@ export default function MapaMesas() {
   const [modalMesa, setModalMesa] = useState(null); // null=cerrado, {}=nueva, {...}=editar
   const [modoAdmin, setModoAdmin] = useState(false);
   const [abriendo, setAbriendo] = useState(null);
+  const [modalQR, setModalQR] = useState(false);
 
   const cargar = () => {
     setLoading(true);
@@ -94,6 +153,7 @@ export default function MapaMesas() {
           <p>Toca una mesa libre para abrirla, o una ocupada para ver/editar su pedido.</p>
         </div>
         <div className="rest-header-actions">
+          <button className="btn-secondary" onClick={() => setModalQR(true)}>📋 Menú Digital (QR)</button>
           <button className="btn-secondary" onClick={() => setModoAdmin((v) => !v)}>
             {modoAdmin ? 'Salir de edición' : '⚙️ Administrar mesas'}
           </button>
@@ -149,6 +209,7 @@ export default function MapaMesas() {
           onGuardado={() => { setModalMesa(null); cargar(); }}
         />
       )}
+      {modalQR && <ModalMenuQR onClose={() => setModalQR(false)} />}
     </div>
   );
 }

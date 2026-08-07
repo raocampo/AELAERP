@@ -72,6 +72,7 @@ const CajaDiaria = lazy(() => import('./components/Caja/CajaDiaria'));
 const PuntoVenta = lazy(() => import('./components/POS/PuntoVenta'));
 const MapaMesas = lazy(() => import('./components/Restaurante/MapaMesas'));
 const ComandaMesa = lazy(() => import('./components/Restaurante/ComandaMesa'));
+const MenuPublico = lazy(() => import('./components/Restaurante/MenuPublico'));
 const ConfiguracionSistema = lazy(() => import('./components/Sistema/ConfiguracionSistema'));
 const TablaUtilidades      = lazy(() => import('./components/Configuracion/TablaUtilidades'));
 const Sucursales           = lazy(() => import('./components/Configuracion/Sucursales'));
@@ -193,6 +194,7 @@ function App() {
           <Routes>
               {/* Pública */}
               <Route path="/login" element={<Login />} />
+              <Route path="/menu/:slug/:empresaId" element={<MenuPublico />} />
 
               {/* Protegidas dentro del Layout */}
               <Route path="/" element={

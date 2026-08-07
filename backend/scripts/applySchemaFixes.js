@@ -708,6 +708,13 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "restaurante_comandas_empresaId_idx" ON "restaurante_comandas"("empresaId")`,
   `CREATE INDEX IF NOT EXISTS "restaurante_comandas_mesaId_idx" ON "restaurante_comandas"("mesaId")`,
   `CREATE INDEX IF NOT EXISTS "restaurante_comandas_estado_idx" ON "restaurante_comandas"("estado")`,
+  // Menú digital por QR (módulo restaurante) — campos opcionales en
+  // productos, sin efecto fuera del menú público (2026-08-06).
+  `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "categoriaMenu" VARCHAR(80)`,
+  `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "descripcionMenu" TEXT`,
+  `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "imagenMenuUrl" TEXT`,
+  `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "visibleEnMenu" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "ordenMenu" INTEGER NOT NULL DEFAULT 0`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

@@ -21,6 +21,11 @@ const FORM_INICIAL = {
   stockMinimo: '0',
   infoAdicional: '',
   activo: true,
+  categoriaMenu: '',
+  descripcionMenu: '',
+  imagenMenuUrl: '',
+  visibleEnMenu: false,
+  ordenMenu: 0,
 };
 
 const MOVIMIENTO_INICIAL = {
@@ -114,6 +119,11 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       stockMinimo: producto.stockMinimo ?? '0',
       infoAdicional: producto.infoAdicional || '',
       activo: Boolean(producto.activo),
+      categoriaMenu: producto.categoriaMenu || '',
+      descripcionMenu: producto.descripcionMenu || '',
+      imagenMenuUrl: producto.imagenMenuUrl || '',
+      visibleEnMenu: Boolean(producto.visibleEnMenu),
+      ordenMenu: producto.ordenMenu ?? 0,
     });
     setModalProducto(true);
   };
@@ -704,6 +714,67 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 <input type="checkbox" checked={form.activo} onChange={(e) => setForm((prev) => ({ ...prev, activo: e.target.checked }))} />
                 <span>Producto activo</span>
               </label>
+
+              {sistema?.restauranteHabilitado && (
+                <div className="prod-menu-digital full">
+                  <h3>Menú Digital (QR)</h3>
+                  <label className="prod-check full">
+                    <input
+                      type="checkbox"
+                      checked={form.visibleEnMenu}
+                      onChange={(e) => setForm((prev) => ({ ...prev, visibleEnMenu: e.target.checked }))}
+                    />
+                    <span>Mostrar este plato en el menú digital público</span>
+                  </label>
+                  {form.visibleEnMenu && (
+                    <>
+                      <label>
+                        <span>Categoría</span>
+                        <input
+                          value={form.categoriaMenu}
+                          onChange={(e) => setForm((prev) => ({ ...prev, categoriaMenu: e.target.value }))}
+                          placeholder="Entradas, Platos Fuertes, Bebidas, Postres..."
+                        />
+                      </label>
+                      <label>
+                        <span>Orden dentro de la categoría</span>
+                        <input
+                          type="number"
+                          value={form.ordenMenu}
+                          onChange={(e) => setForm((prev) => ({ ...prev, ordenMenu: parseInt(e.target.value, 10) || 0 }))}
+                        />
+                      </label>
+                      <label className="full">
+                        <span>Descripción para el cliente</span>
+                        <textarea
+                          rows="2"
+                          value={form.descripcionMenu}
+                          onChange={(e) => setForm((prev) => ({ ...prev, descripcionMenu: e.target.value }))}
+                          placeholder="Ej. Pollo a la plancha con arroz, ensalada y patacones"
+                        />
+                      </label>
+                      <label className="full">
+                        <span>Foto del plato</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = () => setForm((prev) => ({ ...prev, imagenMenuUrl: reader.result }));
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                        {form.imagenMenuUrl && (
+                          <img src={form.imagenMenuUrl} alt="Vista previa" className="prod-menu-preview" />
+                        )}
+                      </label>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="prod-actions full">
                 <button type="button" className="btn-secondary" onClick={limpiarForm}>Limpiar</button>
                 <button type="submit" className="btn-primary" disabled={guardando}>

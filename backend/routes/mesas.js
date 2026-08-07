@@ -13,9 +13,32 @@ const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
 const { generarTicketCocina, imprimirBuffer } = require('../utils/impresoraEscPos');
+const bwipjs = require('bwip-js');
 
 router.use(proteger);
 router.use(requiereModulo('restauranteHabilitado'));
+
+// GET /api/mesas/menu/qr?url=... — PNG del código QR del menú digital
+// público, para que el dueño lo descargue/imprima y lo pegue en las mesas.
+// bwip-js ya es dependencia (mismo generador que el barcode del RIDE).
+router.get('/menu/qr', autorizarPermiso('mesas.administrar'), async (req, res) => {
+  try {
+    const url = String(req.query.url || '').trim();
+    if (!url) return res.status(400).json({ success: false, mensaje: 'Falta la URL a codificar' });
+
+    const png = await bwipjs.toBuffer({
+      bcid: 'qrcode',
+      text: url,
+      scale: 6,
+      includetext: false,
+    });
+    res.set('Content-Type', 'image/png');
+    res.send(png);
+  } catch (error) {
+    console.error('GET /mesas/menu/qr:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo generar el código QR' });
+  }
+});
 
 function parseItems(comanda) {
   return typeof comanda.items === 'string' ? JSON.parse(comanda.items || '[]') : (comanda.items || []);
@@ -291,6 +314,10 @@ router.post('/comandas/:id/enviar-cocina', autorizarPermiso('mesas.gestionar'), 
     // del fallo para que avise a cocina de otra forma.
     let impreso = false;
     let mensajeImpresion = null;
+    // motivo distingue "no hay impresora configurada" (esperado, no es un
+    // error — el pedido igual queda guardado y marcado como enviado) de un
+    // fallo real de conexión con la impresora (sí hay que avisarlo como error).
+    let motivo = 'OK';
     try {
       const cfg = req.configuracionSistema;
       const ip = cfg?.impresoraCocinaHabilitada ? cfg.impresoraCocinaIp : null;
@@ -303,15 +330,18 @@ router.post('/comandas/:id/enviar-cocina', autorizarPermiso('mesas.gestionar'), 
         await imprimirBuffer(ip, cfg.impresoraCocinaPuerto || 9100, buffer);
         impreso = true;
       } else {
-        mensajeImpresion = 'Impresora de cocina no configurada — avisa a cocina manualmente';
+        motivo = 'NO_CONFIGURADA';
+        mensajeImpresion = 'Pedido guardado. No tienes una impresora de cocina configurada — avisa a cocina de otra forma.';
       }
     } catch (errImpresion) {
-      mensajeImpresion = `No se pudo imprimir: ${errImpresion.message}`;
+      motivo = 'ERROR_IMPRESION';
+      mensajeImpresion = `Pedido guardado, pero no se pudo imprimir: ${errImpresion.message}`;
     }
 
     res.json({
       success: true,
       impreso,
+      motivo,
       mensaje: impreso ? `${nuevos.length} ítem(s) enviados a cocina` : mensajeImpresion,
       data: { items: itemsActualizados },
     });

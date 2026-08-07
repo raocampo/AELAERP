@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { useAuth } from '../../context/useAuth';
 import './Restaurante.css';
 
 export default function ComandaMesa() {
   const { mesaId } = useParams();
   const navigate = useNavigate();
+  const { sistema } = useAuth();
+  const hayImpresoraCocina = Boolean(sistema?.impresoraCocinaHabilitada);
   const [comanda, setComanda] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
@@ -107,11 +110,15 @@ export default function ComandaMesa() {
     setEnviandoCocina(true);
     try {
       const res = await api.post(`/mesas/comandas/${comanda.id}/enviar-cocina`);
+      // "No hay impresora configurada" no es un error — el pedido ya quedó
+      // guardado y marcado como enviado, solo no se imprimió nada. Un fallo
+      // real de conexión con la impresora sí se avisa como error.
       if (res.data?.impreso) toast.success(res.data.mensaje);
-      else toast.error(res.data?.mensaje || 'No se imprimió el ticket de cocina');
+      else if (res.data?.motivo === 'ERROR_IMPRESION') toast.error(res.data.mensaje);
+      else toast(res.data?.mensaje || 'Pedido guardado', { icon: '✅' });
       setComanda((prev) => ({ ...prev, items: res.data.data.items }));
     } catch (err) {
-      toast.error(err.response?.data?.mensaje || 'No se pudo enviar a cocina');
+      toast.error(err.response?.data?.mensaje || 'No se pudo guardar el pedido');
     } finally {
       setEnviandoCocina(false);
     }
@@ -223,7 +230,11 @@ export default function ComandaMesa() {
               onClick={enviarCocina}
               disabled={enviandoCocina || pendientes === 0}
             >
-              {enviandoCocina ? 'Enviando...' : `🔥 Enviar a cocina${pendientes ? ` (${pendientes})` : ''}`}
+              {enviandoCocina
+                ? 'Guardando...'
+                : hayImpresoraCocina
+                  ? `🔥 Enviar a cocina${pendientes ? ` (${pendientes})` : ''}`
+                  : `✅ Marcar pedido completo${pendientes ? ` (${pendientes})` : ''}`}
             </button>
             <button className="btn-primary" onClick={irACobrar}>💳 Cobrar mesa</button>
           </div>
