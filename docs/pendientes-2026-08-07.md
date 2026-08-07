@@ -96,6 +96,33 @@ activos + resueltos recientes + referencias rápidas), manteniendo el detalle
 histórico completo en los `docs/pendientes-YYYY-MM-DD.md` del repo (que ya
 cumplen esa función).
 
+## 5. Consultado por el usuario: agregar ítems por rondas y adicionar después del primer pedido — YA FUNCIONABA, sin cambios de código
+
+El usuario pidió que en Mesas, cada ítem se agregue individualmente
+("agregar/adicionar"), que exista un "confirmar pedido"/"pedido completo",
+y que después de esa primera confirmación se pueda seguir adicionando más
+ítems (rondas siguientes). Antes de tocar código se verificó en navegador
+real si esto ya estaba cubierto por el diseño del 08-06 (que documentaba
+explícitamente el envío por lote) — **sí lo estaba, sin necesidad de ningún
+cambio**:
+
+1. Mesa nueva → Comanda #2 → agregar "Almuerzo Ejecutivo" (ronda 1) →
+   "Marcar pedido completo" → toast correcto, botón se deshabilita.
+2. Recargar la comanda (simula volver más tarde) → agregar "Jugo Natural"
+   (ronda 2) → el ítem de la ronda 1 se mantiene con su check ✅, el nuevo
+   aparece resaltado con etiqueta "NEW" 🆕, y el botón se **reactiva**
+   mostrando "Marcar pedido completo (1)" — solo cuenta los pendientes.
+3. Totales combinan ambas rondas correctamente ($3.50+$1.50=$5.00 +
+   $0.75 IVA = $5.75).
+4. "Marcar pedido completo" de la ronda 2 → "Cobrar mesa" → el carrito del
+   POS trae **ambos** ítems de las dos rondas con el total correcto.
+
+El backend ya soporta esto por diseño: `PUT /mesas/comandas/:id` solo
+bloquea si `comanda.estado !== 'ABIERTA'` (se cierra recién al cobrar o
+anular, nunca al "enviar a cocina"), y preserva el flag `enviadoCocina` de
+los ítems ya confirmados al guardar la lista completa. No se hizo ningún
+cambio — se confirmó el comportamiento y se limpiaron los datos de prueba.
+
 ## Commits de esta sesión (2026-08-07)
 `06246f5` fix menú digital monoinstancia.
 
