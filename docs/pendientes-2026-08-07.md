@@ -123,8 +123,47 @@ anular, nunca al "enviar a cocina"), y preserva el flag `enviadoCocina` de
 los ítems ya confirmados al guardar la lista completa. No se hizo ningún
 cambio — se confirmó el comportamiento y se limpiaron los datos de prueba.
 
+## 6. Bug real encontrado y corregido: modo oscuro ilegible en Mesas y POS (commit `f611230`)
+
+El usuario reportó con captura que el ítem "nuevo" (aún no enviado a cocina)
+de una comanda se veía casi invisible en modo oscuro — texto claro sobre un
+fondo prácticamente del mismo tono.
+
+**Causa raíz**: ni `.rest-page` (Mesas) ni `.pos-page` (POS) definen un fondo
+oscuro propio — ambas heredan el gris claro fijo de `.layout-main`
+(`#f8fafc`, sin variante para `prefers-color-scheme: dark` en ningún archivo
+del layout general). El override de modo oscuro de ambos elementos usaba
+`background: rgba(245, 158, 11, 0.12)` — un tinte ámbar translúcido pensado
+para componerse sobre una superficie oscura — pero al no haber ninguna
+superficie oscura real detrás, se componía sobre ese gris claro heredado y
+quedaba casi blanco sobre blanco, con el texto claro (`#f1f5f9`/`#fbbf24`)
+encima ilegible.
+
+**Mismo bug en 2 lugares**, ambos de la misma sesión de origen (08-06): el
+ítem "nuevo" en `ComandaMesa.jsx`/`Restaurante.css`, y el banner "Cobrando
+Mesa X" en `PuntoVenta.jsx`/`PuntoVenta.css` (agregado como parte del mismo
+feature de Mesas y Comandas).
+
+**Fix**: el `background` de ambos elementos ahora apila el mismo tinte
+translúcido sobre una capa sólida `#1e293b` explícita (
+`linear-gradient(rgba(245,158,11,0.12), rgba(245,158,11,0.12)), #1e293b`)
+en vez de depender del fondo heredado — mismo tono oscuro que ya usa el
+resto de elementos de ambos módulos.
+
+**Verificado** con Playwright (`colorScheme: 'dark'` emulado) contra
+`scfi_dev` real: el ítem de ejemplo y el banner de cobro ahora se leen
+correctamente. `vite build`: sin errores. `node --test`: 29/29.
+
+**Patrón a vigilar, sin auditar todavía**: cualquier componente que use
+`rgba(...)` como fondo dentro de un bloque `@media (prefers-color-scheme:
+dark)` corre el mismo riesgo si la página contenedora no define su propio
+fondo oscuro. Solo se corrigieron los 2 casos reportados/encontrados hoy —
+no se hizo una búsqueda sistemática de `rgba(` dentro de bloques dark en el
+resto del código.
+
 ## Commits de esta sesión (2026-08-07)
-`06246f5` fix menú digital monoinstancia.
+`06246f5` fix menú digital monoinstancia · `f611230` fix modo oscuro
+Mesas/POS.
 
 `node --test`: 29/29. `vite build`: sin errores.
 
@@ -145,3 +184,6 @@ cambio — se confirmó el comportamiento y se limpiaron los datos de prueba.
 8. Detección de duplicados no cubre Buzón SRI con "gasto personal" marcado
    a nivel de factura individual dentro de un lote.
 9. 2 bugs de timezone/drift de bajo impacto, documentados hace semanas.
+10. **Nuevo — auditar el patrón `rgba(...)` en modo oscuro** (punto 6) en el
+    resto del código, para adelantarse a otros componentes con el mismo
+    problema de contraste antes de que el cliente lo reporte.
