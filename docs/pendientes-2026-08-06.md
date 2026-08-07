@@ -190,3 +190,69 @@ sugerencia).
   datos reales de producción — si en la práctica genera demasiados falsos
   positivos/negativos, ajustar `UMBRAL_POSIBLE_DUPLICADO` en
   `comprasInventario.js`.
+
+## Parte 3 — Menú digital con QR (commit `2a6fe85`)
+
+Sobre el módulo de Mesas y Comandas de la Parte 2, se agregó un **menú
+digital público** para que el restaurante pueda ponerlo en las mesas como
+código QR (además del menú físico), sin cambiar en nada cómo el mesero
+toma el pedido. Se evaluaron 3 alcances posibles (solo consulta / consulta
++ notificar al mesero / autopedido completo del cliente); el usuario eligió
+**"Solo consulta"**, el más simple y de menor riesgo.
+
+**Qué se agregó**:
+- `productos_servicios` gana 5 campos opcionales: `categoriaMenu`,
+  `descripcionMenu`, `imagenMenuUrl` (foto en base64, mismo patrón que el
+  logo de `configuracion_sri.logoUrl`), `visibleEnMenu`, `ordenMenu`.
+  Migración `20260806180000_menu_digital_productos` +
+  `applySchemaFixes.js`.
+- `GestionProductos.jsx` — nueva sección "Menú Digital (QR)" en el
+  formulario de producto (solo visible si `restauranteHabilitado`): checkbox
+  para publicar el plato, categoría, orden, descripción y foto.
+- Endpoint público **sin autenticación** `GET /api/menu-publico/:empresaId`
+  (`backend/routes/menuPublico.js`) — valida el header `X-Tenant-Slug` para
+  resolver el tenant, y por separado comprueba que
+  `configuracion_sistema.restauranteHabilitado` esté activo para ese
+  `empresaId` exacto (deliberadamente **no** usa el middleware
+  `requiereModulo()`, porque ese depende de `req.empresa` que solo existe
+  con JWT — usarlo aquí habría revisado el flag de la empresa equivocada).
+  Solo devuelve productos con `visibleEnMenu: true`, agrupados por
+  categoría y ordenados.
+- QR generado en el backend (`GET /mesas/menu/qr`, protegido) reutilizando
+  `bwip-js` (ya era dependencia para el código de barras del RIDE) con
+  `bcid: 'qrcode'`.
+- `MapaMesas.jsx` — botón "📋 Menú Digital (QR)" que abre un modal con el
+  QR y el enlace, para descargar/copiar e imprimir en las mesas.
+- `MenuPublico.jsx` (nueva página pública, ruta `/menu/:slug/:empresaId`,
+  fuera del layout autenticado) — usa una instancia de `axios` **separada**
+  del servicio `api` compartido, para no tocar
+  `localStorage.aela_tenant_slug` (evita corromper la sesión de un admin
+  logueado en el mismo navegador si abre el link del menú).
+
+**Ajuste adicional pedido en la misma sesión**: al revisar el envío a
+cocina, se confirmó que el código ya enviaba por lote (solo al pulsar
+"Enviar a Cocina", nunca por cada ítem agregado) — no era un bug. Se
+refinó igual la UX: el backend ahora distingue `motivo: 'OK' |
+'NO_CONFIGURADA' | 'ERROR_IMPRESION'`, y el frontend muestra un toast
+neutral (no de error) cuando simplemente no hay impresora configurada. El
+botón cambia de texto según haya impresora: `🔥 Enviar a cocina` vs
+`✅ Marcar pedido completo`.
+
+**Verificado end-to-end** contra `aela_db` real (empresaId=1): se activó
+`restauranteHabilitado` temporalmente, se crearon 3 productos de prueba (2
+visibles en 2 categorías distintas, 1 explícitamente oculto) y se consultó
+`GET /menu-publico/1` en un backend aislado (puerto 5601) — confirmado que
+agrupa correctamente por categoría/orden, que el producto oculto NO
+aparece, y que nombre/logo del restaurante se muestran bien. Todo el dato
+de prueba fue eliminado y `restauranteHabilitado` revertido a `false` al
+terminar (el módulo sigue apagado por defecto, para activar solo cuando el
+cliente del restaurante lo necesite).
+
+`node --test`: 29/29. `vite build`: sin errores.
+
+### Pendiente sin resolver (no se pidió implementar)
+
+- El buscador de productos en `ComandaMesa.jsx` no tiene manejo de tecla
+  Enter para lector de código de barras láser (a diferencia de
+  `PuntoVenta.jsx`, que sí lo tiene). Se le preguntó al usuario si quería
+  agregarlo y no respondió — no implementar sin confirmación explícita.
