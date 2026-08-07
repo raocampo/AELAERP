@@ -194,6 +194,10 @@ function App() {
           <Routes>
               {/* Pública */}
               <Route path="/login" element={<Login />} />
+              {/* :slug solo aplica a instancias SaaS multi-tenant reales — en
+                  monoinstancia (Railway dedicado por cliente) no hay slug, por
+                  eso el segmento es opcional en vez de exigirlo en la ruta. */}
+              <Route path="/menu/:empresaId" element={<MenuPublico />} />
               <Route path="/menu/:slug/:empresaId" element={<MenuPublico />} />
 
               {/* Protegidas dentro del Layout */}

@@ -17,8 +17,12 @@ export default function MenuPublico() {
     // abre un cliente sin cuenta en su celular, y no debe interferir con
     // una sesión de administrador que pueda estar abierta en el mismo
     // navegador (ver nota en backend/routes/menuPublico.js).
+    // `slug` es undefined en monoinstancia (ruta /menu/:empresaId, sin
+    // segmento de slug) — no mandar el header en ese caso, para que
+    // resolverTenant caiga al modo monoinstancia en vez de buscar un tenant
+    // que no existe.
     axios.get(`${API_URL}/menu-publico/${empresaId}`, {
-      headers: { 'X-Tenant-Slug': slug },
+      headers: slug ? { 'X-Tenant-Slug': slug } : {},
     })
       .then((res) => { if (!ignore) setDatos(res.data?.data || null); })
       .catch((err) => { if (!ignore) setError(err.response?.data?.mensaje || 'No se pudo cargar el menú'); })

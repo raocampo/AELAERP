@@ -11,8 +11,12 @@ function ModalMenuQR({ onClose }) {
   const [urlPublica, setUrlPublica] = useState('');
 
   useEffect(() => {
+    // Sin slug (monoinstancia — Railway dedicado por cliente, sin SaaS
+    // multi-tenant) la ruta es /menu/:empresaId a secas; con slug real
+    // (SaaS) es /menu/:slug/:empresaId. Ver App.jsx — un slug vacío en el
+    // path produce /menu//1, que no matchea ninguna ruta.
     const slug = localStorage.getItem('aela_tenant_slug') || '';
-    const publica = `${window.location.origin}/menu/${slug}/${empresa?.id}`;
+    const publica = `${window.location.origin}/menu/${slug ? `${slug}/` : ''}${empresa?.id}`;
     setUrlPublica(publica);
 
     let objectUrl = null;
