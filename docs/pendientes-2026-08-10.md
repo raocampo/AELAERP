@@ -134,6 +134,56 @@ filas. Re-subir el mismo archivo dos veces no duplicó nada (segunda subida:
 0 creados, todo actualizado). Datos y usuarios de prueba eliminados al
 terminar. `node --test`: 29/29.
 
+## 5. Bug real encontrado y corregido: importación perdía precios y códigos de barra largos (tenant Comercial S&S)
+
+El usuario reportó (con captura, tenant `aela_sys` — Comercial S&S) que al
+importar su plantilla real todos los precios quedaban en $0.00 aunque el
+archivo sí los tenía, y por separado que algunos códigos de barra se
+guardaban truncados como `7.80223E+12`.
+
+**Causa 1 — precios en $0.00**: el encabezado real del archivo del usuario
+es `precio de venta` (con espacios), no `precioVenta`. `normalizarTexto()`
+quita los espacios (`preciodeventa`) pero ese alias faltaba en
+`HEADERS.precioUnitario` (`backend/utils/importacionProductos.js`) — nunca
+emparejaba con ninguna columna y el precio caía al default 0. Fix:
+agregado `preciodeventa` (y `preciodecompra` para costo, mismo patrón).
+
+**Causa 2 — códigos en notación científica**: códigos EAN-13 guardados como
+número sin formato de Texto se muestran en notación científica bajo
+formato "General" de Excel. `leerFilasDesdeExcel()` lee con `raw:false`
+(necesario para precios — el archivo trae fórmulas con muchos decimales,
+ej. `0.8695652173913044`, y el valor mostrado `0.87` es el correcto), y
+ese mismo modo trunca los códigos largos a su forma mostrada. Fix: se lee
+también en paralelo con `raw:true`, y solo cuando el valor formateado luce
+como notación científica (regex) se reconstruye el entero completo desde
+el valor numérico crudo — el resto de columnas no coincide con el patrón y
+no se toca.
+
+**Verificado** contra el archivo real del usuario (642 filas, sin escribir
+a ninguna BD — solo parseo puro): 0 productos con precio 0 tras el fix
+(antes 642/642), 0 códigos con notación científica restante, precios
+siguen redondeados igual que antes (ej. `0.26`, no `0.2608695652...`). 2
+tests de regresión nuevos (`test/importacionProductos.test.js`).
+`node --test`: 31/31.
+
+**🔴 Aviso para el usuario, no es un bug de código — dato del archivo**:
+al revisar el archivo se encontraron **4 códigos repetidos dentro del
+mismo archivo**; al importar, cada fila con un código repetido
+sobrescribe a la anterior con el mismo código y solo queda la última:
+
+- `7861055904049` — fila 180 "NUTRI LECHE F 900ML ENTERA" vs fila 183
+  "NUTRI LECHE FUNDA POLITELENO 900ML ENTERA"
+- `ARROCILLO` — fila 187 "*ARROCILLO DULCE" vs fila 492 "ARROCILLO"
+- `7861001719789` — fila 285 "ACEITE ALESOL FUNDA 900ML X 12" vs fila 358
+  "ALESOL DE 1LT"
+- `TARJETA` — filas 615-618, las 4 tarjetas Claro (5.50, 1.10, 3.50, 2.50)
+  comparten el código literal `TARJETA` en vez de uno único por monto
+
+**Recomendación**: antes de subir el archivo, asignar un código único a
+cada una de esas filas (especialmente las 4 tarjetas Claro, que son
+productos con precios distintos) — si no, después de importar solo
+quedará uno de cada grupo.
+
 ## 🔴 PARA RETOMAR MAÑANA
 
 1. **Completar los 3 productos `RESTAURAR-1/2/3`** en Productos > Lista
@@ -142,7 +192,10 @@ terminar. `node --test`: 29/29.
    con precio/costo en $0 y un código temporal — el sistema los deja
    operar así, pero cualquier venta de esos productos hoy factura a $0
    hasta que se corrijan.
-2. El resto del backlog general (Buzón SRI descarga automática en
+2. **Corregir en el archivo real** (Comercial S&S) los 4 códigos duplicados
+   listados en el punto 5 antes de volver a subirlo — de lo contrario se
+   pierde un producto por cada par/grupo repetido.
+3. El resto del backlog general (Buzón SRI descarga automática en
    producción, app móvil sin verificar en emulador, 16 registros de
    Puchaicela esperando a la contadora, auditoría del patrón `rgba(...)` en
    modo oscuro, etc.) sigue abierto — ver la memoria persistente
