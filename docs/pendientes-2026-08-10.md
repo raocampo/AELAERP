@@ -245,3 +245,50 @@ automáticamente.
    modo oscuro, etc.) sigue abierto — ver la memoria persistente
    `project_aela_estado.md` sección "Pendientes críticos" para el detalle
    completo, no se tocó nada de eso hoy.
+
+## 7. Continuación de la sesión — precios truncados, exportar inventario, códigos científicos fuera del import de Excel
+
+El usuario volvió con 3 pedidos más sobre el mismo caso de Comercial S&S:
+
+**a) Precios truncados a 2 decimales rompían el IVA al facturar.** Un
+producto con PVP real $0.50 (precio sin IVA por fórmula: 0.4347826086956522)
+quedaba guardado como $0.43 — en el POS, 0.43 × 1.15 = $0.49, nunca $0.50.
+Causa: `leerFilasDesdeExcel()` usaba el valor FORMATEADO de la celda
+(`raw:false`) para todas las columnas, incluido precio — Excel lo muestra
+redondeado a los decimales del formato de celda, aunque el valor guardado
+internamente tiene más precisión. Fix: se invierte la prioridad — ahora se
+prefiere el valor numérico CRUDO cuando la celda es un número real, y la
+columna `Decimal(14,4)` de la base de datos aplica el redondeo final a 4
+decimales. Esto además simplificó el fix de notación científica del punto
+anterior (ya no hace falta el regex "E+": al preferir el crudo para toda
+celda numérica, un código de barras largo nunca pasa por la versión
+truncada). Verificado con el archivo real: precio en BD pasa a `0.4348`,
+PVP recalculado `$0.50` exacto.
+
+**b) Exportar inventario a Excel — no existía, se agregó.** Nuevo `GET
+/api/productos/exportar/excel` (permiso `productos.ver`) +
+`crearExportacionProductosXlsx()`, mismos encabezados que la plantilla de
+importación — el archivo se puede editar y volver a subir directo sin
+tocar columnas. Botón `⬇ Exportar inventario (Excel)` en el tab
+Inventario. Verificado que el archivo exportado es re-importable de forma
+idempotente (0 creados, todo actualizado, 0 movimientos falsos).
+
+**c) 28 productos con códigos en notación científica sobrevivieron a
+"Eliminar todo el inventario"** — no era un bug de esa función: son
+productos con `inventariable:false` (fuera de su alcance por diseño), con
+códigos tipo `7.80223E+12` que llegaron corruptos por una vía DISTINTA a
+la importación de Excel de productos (ya corregida) — probablemente un
+barcode pegado desde una celda de Excel sin formato de Texto en un
+formulario de compra, o creado automáticamente al procesar una factura de
+compra. El usuario decidió borrarlos manualmente uno por uno para
+recargarlo todo. Se generalizó la protección (`pareceNotacionCientifica`)
+a los otros 2 puntos donde un código externo puede llegar a
+`productos_servicios`: en `comprasInventario.js` (auto-creación desde
+compras) se sustituye por un código generado desde la descripción sin
+bloquear el registro de la compra; en la creación/edición manual de
+productos (`POST`/`PUT /productos`) se rechaza con 400 antes de guardar.
+4 tests nuevos. `node --test`: 38/38.
+
+**Nota**: los 28 productos ya existentes en Comercial S&S con este problema
+NO se tocaron desde aquí (no hay acceso a esa BD) — el usuario los está
+depurando manualmente por la UI.
