@@ -17,7 +17,22 @@ const {
   parsearProductosDesdeXmlFactura,
   obtenerXmlDesdeAutorizacion,
   importarProductos,
+  pareceNotacionCientifica,
 } = require('../utils/importacionProductos');
+
+// Alguien pegando un barcode copiado de una celda de Excel sin formato de
+// Texto puede pegar literalmente "7.80223E+12" en el formulario — se
+// rechaza antes de guardar en vez de crear un producto con un código
+// inservible (mismo problema que se corrigió en la importación por Excel y
+// en la creación automática desde compras).
+function validarCodigosNoCientificos(res, { codigoPrincipal, codigoAuxiliar }) {
+  const campo = pareceNotacionCientifica(codigoPrincipal) ? 'Código principal' : pareceNotacionCientifica(codigoAuxiliar) ? 'Código auxiliar' : null;
+  if (!campo) return true;
+  res.status(400).json({
+    error: `${campo} inválido: parece un número en notación científica (ej. "7.80223E+12"), probablemente pegado desde una celda de Excel sin formato de Texto. Pega el código completo como texto.`,
+  });
+  return false;
+}
 
 router.use(proteger);
 
@@ -317,6 +332,7 @@ router.post('/', permitirGestionarProductos, checkLimiteProductos, async (req, r
     if (!codigoPrincipal || !nombre || precioUnitario === undefined) {
       return res.status(400).json({ error: 'Código, nombre y precio son obligatorios' });
     }
+    if (!validarCodigosNoCientificos(res, { codigoPrincipal, codigoAuxiliar })) return;
 
     const item = await prisma.productos_servicios.create({
       data: {
@@ -375,6 +391,7 @@ router.put('/:id', permitirGestionarProductos, async (req, res) => {
       where: { id: parseInt(req.params.id, 10), empresaId: req.empresa.id },
     });
     if (!actual) return res.status(404).json({ error: 'Producto no encontrado' });
+    if (!validarCodigosNoCientificos(res, { codigoPrincipal, codigoAuxiliar })) return;
 
     const item = await prisma.productos_servicios.update({
       where: { id: actual.id },

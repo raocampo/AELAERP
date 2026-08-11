@@ -116,6 +116,18 @@ function generarCodigoDesdeTexto(texto, index = 0) {
   return base || `IMP-${String(index + 1).padStart(3, '0')}`;
 }
 
+// Detecta un c\u00f3digo pegado/tipeado como texto que qued\u00f3 en notaci\u00f3n
+// cient\u00edfica (ej. "7.80223E+12") \u2014 t\u00edpicamente un barcode copiado desde una
+// celda de Excel sin formato de Texto. A diferencia del import de Excel
+// (leerFilasDesdeExcel), ac\u00e1 ya no hay un valor num\u00e9rico crudo de respaldo
+// disponible \u2014 el texto ya lleg\u00f3 truncado \u2014 as\u00ed que solo se puede detectar y
+// evitar guardarlo, no reconstruirlo.
+const RE_NOTACION_CIENTIFICA = /^-?\d+(\.\d+)?[eE][+-]?\d+$/;
+
+function pareceNotacionCientifica(valor) {
+  return typeof valor === 'string' && RE_NOTACION_CIENTIFICA.test(valor.trim());
+}
+
 function mapearFilaProducto(fila, index = 0) {
   const codigoPrincipal = limpiarCodigo(
     obtenerValorFila(fila, HEADERS.codigoPrincipal)
@@ -701,4 +713,6 @@ module.exports = {
   obtenerXmlDesdeAutorizacion,
   importarProductos,
   pareceGastoOServicio,
+  pareceNotacionCientifica,
+  generarCodigoDesdeTexto,
 };

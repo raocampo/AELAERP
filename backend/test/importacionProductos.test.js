@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const XLSX = require('xlsx');
-const { mapearFilaProducto, leerFilasDesdeExcel, desambiguarCodigosDuplicados } = require('../utils/importacionProductos');
+const { mapearFilaProducto, leerFilasDesdeExcel, desambiguarCodigosDuplicados, pareceNotacionCientifica } = require('../utils/importacionProductos');
 
 test('mapearFilaProducto reconoce encabezados "precio de venta" / "stock actual" con espacios', () => {
   const fila = { codigoPrincipal: 'P001', nombre: 'Test', 'precio de venta': '0.87', 'stock actual': '5' };
@@ -77,4 +77,13 @@ test('desambiguarCodigosDuplicados no genera un código que ya existe en el arch
 
   assert.equal(productos[1].codigoPrincipal, 'X-3');
   assert.equal(cambios[0].codigoNuevo, 'X-3');
+});
+
+test('pareceNotacionCientifica detecta un código pegado en notación científica y no falsos positivos', () => {
+  assert.equal(pareceNotacionCientifica('7.80223E+12'), true);
+  assert.equal(pareceNotacionCientifica('7.8621e+12'), true);
+  assert.equal(pareceNotacionCientifica('7802225427777'), false);
+  assert.equal(pareceNotacionCientifica('ARROCILLO'), false);
+  assert.equal(pareceNotacionCientifica(7802225427777), false); // número, no texto — no aplica
+  assert.equal(pareceNotacionCientifica(undefined), false);
 });

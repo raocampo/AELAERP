@@ -13,9 +13,24 @@
 // items_compra_pendientes en vez de crear un producto huérfano.
 // ====================================
 const { PREFIJOS_REGALO_DEFAULT } = require('./configuracionSistema');
+const { pareceNotacionCientifica, generarCodigoDesdeTexto } = require('./importacionProductos');
 
 function limpiarCodigo(valor) {
   return String(valor || '').trim().toUpperCase();
+}
+
+// El código de una línea de compra puede venir de un XML del proveedor
+// (Buzón SRI) o de un formulario donde alguien pegó un barcode copiado de
+// una hoja de Excel — si ese Excel de origen no le dio formato de Texto a la
+// celda, el texto pegado ya llega truncado en notación científica (ej.
+// "7.80223E+12", mismo síntoma que se corrigió en leerFilasDesdeExcel para
+// la importación de productos). Acá ya no hay valor numérico crudo de
+// respaldo — el texto ya llegó truncado — solo se puede detectar y evitar
+// guardar un código inservible, cayendo al mismo patrón de auto-generar
+// desde la descripción que ya usa esa importación.
+function sanearCodigoCompra(codigo, descripcion) {
+  if (!pareceNotacionCientifica(codigo)) return { codigo: codigo || null, corregido: false };
+  return { codigo: generarCodigoDesdeTexto(descripcion), corregido: true };
 }
 
 // Quita el primer prefijo de la lista que matchee al inicio del código
@@ -136,11 +151,13 @@ async function resolverProductoCompra({
   if (!producto && !crearProductosFaltantes) return null;
 
   if (!producto) {
+    const codigoSaneado = sanearCodigoCompra(detalle.codigoPrincipal, detalle.descripcion);
+    const auxiliarSaneado = pareceNotacionCientifica(detalle.codigoAuxiliar) ? null : (detalle.codigoAuxiliar || null);
     producto = await tx.productos_servicios.create({
       data: {
         empresaId,
-        codigoPrincipal: detalle.codigoPrincipal,
-        codigoAuxiliar: detalle.codigoAuxiliar || null,
+        codigoPrincipal: codigoSaneado.codigo,
+        codigoAuxiliar: auxiliarSaneado,
         nombre: detalle.descripcion,
         precioUnitario: detalle.precioVentaReferencial,
         costoUnitario: detalle.precioUnitario,
@@ -150,7 +167,9 @@ async function resolverProductoCompra({
         stockActual: 0,
         stockMinimo: 0,
         activo: true,
-        infoAdicional: 'Creado automaticamente desde factura de compra',
+        infoAdicional: codigoSaneado.corregido
+          ? `Creado automaticamente desde factura de compra. Código original ilegible (notación científica): "${detalle.codigoPrincipal}" — verificar el código de barras real.`
+          : 'Creado automaticamente desde factura de compra',
       },
     });
     return { producto, creado: true, actualizado: false };
@@ -248,11 +267,13 @@ async function resolverOMarcarPendiente({
       };
     }
 
+    const codigoSaneado = sanearCodigoCompra(detalle.codigoPrincipal, detalle.descripcion);
+    const auxiliarSaneado = pareceNotacionCientifica(detalle.codigoAuxiliar) ? null : (detalle.codigoAuxiliar || null);
     const creado = await tx.productos_servicios.create({
       data: {
         empresaId,
-        codigoPrincipal: detalle.codigoPrincipal,
-        codigoAuxiliar: detalle.codigoAuxiliar || null,
+        codigoPrincipal: codigoSaneado.codigo,
+        codigoAuxiliar: auxiliarSaneado,
         nombre: detalle.descripcion,
         // precioVentaReferencial no siempre viene poblado (ej. detalles parseados
         // directo de un XML del Buzón SRI) — usar el costo como fallback de PVP.
@@ -264,7 +285,9 @@ async function resolverOMarcarPendiente({
         stockActual: 0,
         stockMinimo: 0,
         activo: true,
-        infoAdicional: 'Creado automaticamente desde factura de compra',
+        infoAdicional: codigoSaneado.corregido
+          ? `Creado automaticamente desde factura de compra. Código original ilegible (notación científica): "${detalle.codigoPrincipal}" — verificar el código de barras real.`
+          : 'Creado automaticamente desde factura de compra',
       },
     });
     return { producto: creado, creado: true, actualizado: false, esRegaloMatcheado: false, pendiente: false, prefijoDetectado: null };
