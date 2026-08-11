@@ -71,6 +71,35 @@ acción masiva/destructiva (eliminar-todo, reset, borrado en lote), aislar
 completamente el efecto de la prueba — nunca asumir que una BD local es
 descartable solo por ser local; verificar primero cuántos registros reales
 existen en el alcance de la acción, o crear una empresa/tenant de prueba
-separada en vez de usar `empresaId=1`.
+separada en vez de usar `empresaId=1`. Ver
+[[feedback-no-probar-destructivo-en-bd-real]].
 
 `node --test`: 29/29. `vite build`: sin errores.
+
+## 3. Confirmado a pedido del usuario: aislamiento multi-tenant de "eliminar-todo"
+
+El usuario preguntó si la acción podía afectar a otros tenants. Confirmado
+que no: `POST /api/inventario/eliminar-todo` filtra siempre por
+`empresaId: req.empresa.id` (`backend/routes/inventario.js:167-169`), y
+`req.empresa` lo resuelve `middleware/auth.js:57-89` server-side a partir
+del JWT de la sesión (o el `empresaId` del usuario en BD) — nunca desde el
+body/query de la petición. Mismo patrón que el resto de rutas del archivo
+(`/resumen`, `/movimientos`, etc.) y de todo el backend. Es justamente por
+esto que el incidente del punto 2 solo afectó a Corp Simtelec (la única
+empresa contra la que estaba logueada la sesión de prueba) y no tocó datos
+de Puchaicela ni de ningún otro tenant en la misma BD local.
+
+## 🔴 PARA RETOMAR MAÑANA
+
+1. **Completar los 3 productos `RESTAURAR-1/2/3`** en Productos > Lista
+   (búscalos por ese código): ponerles el código real, código auxiliar
+   (barras) si tienen, precio de venta, costo y IVA correctos. Hoy quedaron
+   con precio/costo en $0 y un código temporal — el sistema los deja
+   operar así, pero cualquier venta de esos productos hoy factura a $0
+   hasta que se corrijan.
+2. El resto del backlog general (Buzón SRI descarga automática en
+   producción, app móvil sin verificar en emulador, 16 registros de
+   Puchaicela esperando a la contadora, auditoría del patrón `rgba(...)` en
+   modo oscuro, etc.) sigue abierto — ver la memoria persistente
+   `project_aela_estado.md` sección "Pendientes críticos" para el detalle
+   completo, no se tocó nada de eso hoy.
