@@ -27,12 +27,14 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // Importar productos recorre fila por fila (varias queries c/u: buscar
 // existente, actualizar/crear, movimiento de inventario) dentro de UNA sola
-// transacción interactiva — con una plantilla de tamaño real (decenas de
-// productos) el timeout por defecto de Prisma (5000 ms) se cumple antes de
-// terminar y la transacción se cierra a mitad de camino ("Transaction API
-// error: Transaction already closed"). Se sube a un techo generoso para
-// lotes grandes.
-const TX_OPTIONS_IMPORTACION = { maxWait: 10000, timeout: 120000 };
+// transacción interactiva — con una plantilla de tamaño real (cientos o
+// miles de productos) el timeout por defecto de Prisma (5000 ms) se cumple
+// antes de terminar y la transacción se cierra a mitad de camino
+// ("Transaction API error: Transaction already closed"). Medido: ~6-7ms por
+// fila en el peor caso (fila con movimiento de inventario), así que 1000
+// filas toman ~7s — 300s da margen amplio incluso para catálogos de varios
+// miles de productos.
+const TX_OPTIONS_IMPORTACION = { maxWait: 10000, timeout: 300000 };
 
 // ─── GET /api/productos  (lista con búsqueda y paginación) ───────────────────
 router.get('/', permitirVerProductos, async (req, res) => {

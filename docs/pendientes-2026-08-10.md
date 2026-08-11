@@ -106,8 +106,8 @@ terminar y Postgres cierra la transacción a mitad de camino.
 
 **Fix** (`backend/routes/productos.js`): las 3 rutas de importación
 (`/importacion/excel`, `/importacion/xml`, `/importacion/autorizacion`)
-ahora pasan `{ maxWait: 10000, timeout: 120000 }` como opciones de
-`$transaction`, dándole hasta 2 minutos a un lote grande.
+ahora pasan `{ maxWait: 10000, timeout: 300000 }` como opciones de
+`$transaction`, dándole hasta 5 minutos a un lote grande.
 
 **Bug adicional encontrado de paso (mismo síntoma, distinta causa)**: al
 reproducir el error localmente sin un tenant resuelto (modo monoinstancia
@@ -124,11 +124,15 @@ backend ya cubre este caso (`auth.js`/`empresas.js` con middleware
 única ruta con `req.prisma` sin ese respaldo. Aplicado el mismo patrón
 `(req.prisma || prisma)` a los 2 endpoints.
 
-**Verificado** con una importación real de 150 filas sintéticas (código
-`TESTBULK0001..0150`, sin tocar ningún producto real): primera subida —
-150 creados, 1608 ms; segunda subida con los mismos códigos — 0 creados,
-150 actualizados, 0 duplicados, 835 ms. Datos y usuario de prueba
-eliminados al terminar. `node --test`: 29/29.
+**Verificado** con importaciones reales de tamaño creciente (código
+sintético, sin tocar ningún producto real): 150 filas (1.6s), 1000 filas en
+el peor caso — cada fila con movimiento de inventario — (6.7s, ~6.7ms/fila),
+y 3000 filas en el mismo peor caso (20-21.5s, ~7ms/fila estable). El usuario
+avisó después que su plantilla real es de "más de 600" productos — a ese
+ritmo (~7ms/fila) el margen de 300s cubre cómodamente varios miles de
+filas. Re-subir el mismo archivo dos veces no duplicó nada (segunda subida:
+0 creados, todo actualizado). Datos y usuarios de prueba eliminados al
+terminar. `node --test`: 29/29.
 
 ## 🔴 PARA RETOMAR MAÑANA
 
