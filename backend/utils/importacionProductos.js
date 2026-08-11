@@ -508,6 +508,53 @@ async function obtenerXmlDesdeAutorizacion(claveAcceso) {
   );
 }
 
+function normalizarNombreComparacion(nombre) {
+  return String(nombre || '').trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
+// Cuando el mismo código aparece en varias filas del archivo con nombres
+// DISTINTOS (ej. varias tarjetas prepago sin barcode real, todas anotadas
+// con el mismo código placeholder), son productos distintos que el usuario
+// no quiere perder — se les asigna un código único (`${codigo}-2`,
+// `${codigo}-3`, ...) conservando el original en la primera aparición. Si
+// el nombre se repite igual, se asume que es el mismo producto duplicado
+// en el archivo y se deja tal cual (gana la última fila, igual que antes).
+// Muta `productos` en el lugar; devuelve el detalle de lo renombrado para
+// que quede visible en el resumen de la importación.
+function desambiguarCodigosDuplicados(productos) {
+  const codigosUsados = new Set(productos.map((p) => p?.codigoPrincipal).filter(Boolean));
+  const gruposPorCodigo = new Map();
+  productos.forEach((item, index) => {
+    if (!item?.codigoPrincipal) return;
+    const grupo = gruposPorCodigo.get(item.codigoPrincipal) || [];
+    grupo.push(index);
+    gruposPorCodigo.set(item.codigoPrincipal, grupo);
+  });
+
+  const desambiguados = [];
+
+  for (const [codigo, indices] of gruposPorCodigo) {
+    if (indices.length <= 1) continue;
+
+    const nombresDistintos = new Set(indices.map((i) => normalizarNombreComparacion(productos[i].nombre)));
+    if (nombresDistintos.size <= 1) continue;
+
+    indices.slice(1).forEach((index) => {
+      let sufijo = 2;
+      let nuevoCodigo = `${codigo}-${sufijo}`;
+      while (codigosUsados.has(nuevoCodigo)) {
+        sufijo += 1;
+        nuevoCodigo = `${codigo}-${sufijo}`;
+      }
+      codigosUsados.add(nuevoCodigo);
+      desambiguados.push({ codigoOriginal: codigo, codigoNuevo: nuevoCodigo, nombre: productos[index].nombre });
+      productos[index] = { ...productos[index], codigoPrincipal: nuevoCodigo };
+    });
+  }
+
+  return desambiguados;
+}
+
 async function importarProductos({
   tx,
   empresaId,
@@ -516,11 +563,14 @@ async function importarProductos({
   registrarEntradaInventario = false,
   origen = 'manual',
 }) {
+  const codigosDesambiguados = desambiguarCodigosDuplicados(productos);
+
   const resumen = {
     creados: 0,
     actualizados: 0,
     omitidos: 0,
     movimientos: 0,
+    codigosDesambiguados,
     items: [],
   };
 
@@ -619,6 +669,7 @@ module.exports = {
   crearPlantillaProductosXlsx,
   leerFilasDesdeExcel,
   mapearFilaProducto,
+  desambiguarCodigosDuplicados,
   parsearProductosDesdeXmlFactura,
   parsearFacturaCompraDesdeXml,
   obtenerXmlDesdeAutorizacion,

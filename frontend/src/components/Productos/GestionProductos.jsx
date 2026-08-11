@@ -630,6 +630,19 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                     <div><span>Omitidos</span><strong>{resultadoImportacion.omitidos || 0}</strong></div>
                     <div><span>Movimientos</span><strong>{resultadoImportacion.movimientos || 0}</strong></div>
                   </div>
+                  {resultadoImportacion.codigosDesambiguados?.length > 0 && (
+                    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '.75rem 1rem', fontSize: '.85rem' }}>
+                      <strong>⚠ {resultadoImportacion.codigosDesambiguados.length} código(s) repetido(s) en el archivo con nombres distintos</strong> —
+                      se les asignó un código nuevo para no perder ninguno. Verifica y corrige el código real cuando lo tengas.
+                      <ul style={{ margin: '.5rem 0 0', paddingLeft: '1.2rem' }}>
+                        {resultadoImportacion.codigosDesambiguados.map((c, i) => (
+                          <li key={i}>
+                            <code>{c.codigoOriginal}</code> → <code>{c.codigoNuevo}</code> — {c.nombre}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <div className="prod-table-wrap">
                     <table className="prod-table">
                       <thead>
