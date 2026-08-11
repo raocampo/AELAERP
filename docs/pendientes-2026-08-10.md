@@ -179,10 +179,51 @@ sobrescribe a la anterior con el mismo código y solo queda la última:
 - `TARJETA` — filas 615-618, las 4 tarjetas Claro (5.50, 1.10, 3.50, 2.50)
   comparten el código literal `TARJETA` en vez de uno único por monto
 
-**Recomendación**: antes de subir el archivo, asignar un código único a
-cada una de esas filas (especialmente las 4 tarjetas Claro, que son
-productos con precios distintos) — si no, después de importar solo
-quedará uno de cada grupo.
+**Actualización — esto ya no requiere acción manual**, ver punto 6: el
+usuario pidió que si el código se repite con un nombre distinto se le cree
+un código diferente en vez de perderlo, y eso ya quedó implementado.
+
+## 6. Auto-resolución de códigos duplicados dentro del mismo archivo
+
+Primer intento (descartado): editar directamente el Excel del usuario con
+la librería `xlsx` para renombrar los 4 grupos de códigos repetidos.
+**Ese intento dañó el archivo** — al reescribirlo con `XLSX.writeFile()`,
+el formato de precios de TODO el archivo (no solo las 6 filas tocadas) se
+corrompió: precios como `3.04` volvían a mostrarse como `3.043478261`
+incluso en filas nunca editadas. SheetJS no reconstruye fielmente el
+estilo numérico original en un ciclo lectura→escritura de este archivo en
+particular. El archivo corregido se descartó por completo, sin subirlo a
+ningún lado.
+
+**Fix real, a nivel de sistema en vez de tocar el archivo**:
+`importarProductos()` (`backend/utils/importacionProductos.js`) ahora
+desambigua códigos duplicados en memoria antes de guardar, con
+`desambiguarCodigosDuplicados()`. Si el mismo código aparece en varias
+filas con nombres distintos, las filas siguientes reciben un código único
+(`${codigo}-2`, `${codigo}-3`, ...) conservando el original en la primera
+aparición; si el nombre repetido es el mismo producto, se deja igual (se
+asume que es el mismo producto y gana la última fila, comportamiento
+previo). El resumen de la importación ahora incluye `codigosDesambiguados`
+y el frontend lo muestra en un aviso amarillo con el detalle código
+original → nuevo, para que el usuario los revise y les ponga el código
+real cuando lo tenga.
+
+**Verificado con el archivo real completo** (642 filas, importación
+completa contra un tenant local aislado — nunca contra Comercial S&S): 642
+creados, los 6 casos desambiguados correctamente, precios correctos en BD
+(ej. la 3ra tarjeta Claro → `$3.04`, no el valor crudo con decimales de
+más). Datos y usuario de prueba eliminados al terminar. 3 tests de
+regresión nuevos. `node --test`: 34/34. `vite build`: sin errores.
+
+**Sobre "subir al sistema"**: el usuario pidió también subir el archivo ya
+corregido al sistema real de Comercial S&S. No se hizo — este entorno no
+tiene ni debe tener acceso directo a la BD de producción de ese tenant
+(`aela_sys`, en Railway), y no corresponde iniciar sesión como ese cliente
+ni ejecutar la importación en su nombre sin que él la vea pasar por la UI
+normal. Con el fix ya desplegado, el usuario puede subir el archivo
+**original, sin ninguna edición**, directamente desde Productos >
+Importación en el sistema — el fix ya resuelve los duplicados
+automáticamente.
 
 ## 🔴 PARA RETOMAR MAÑANA
 
@@ -192,9 +233,12 @@ quedará uno de cada grupo.
    con precio/costo en $0 y un código temporal — el sistema los deja
    operar así, pero cualquier venta de esos productos hoy factura a $0
    hasta que se corrijan.
-2. **Corregir en el archivo real** (Comercial S&S) los 4 códigos duplicados
-   listados en el punto 5 antes de volver a subirlo — de lo contrario se
-   pierde un producto por cada par/grupo repetido.
+2. **Comercial S&S — subir la plantilla real** (archivo original, sin
+   editar) desde Productos > Importación una vez el deploy esté activo;
+   los 6 códigos repetidos (2 pares de barcodes + 4 tarjetas Claro) se
+   resuelven solos y quedan visibles en el aviso amarillo del resultado de
+   importación — revisar esos 6 después y ponerles el código real cuando
+   se tenga.
 3. El resto del backlog general (Buzón SRI descarga automática en
    producción, app móvil sin verificar en emulador, 16 registros de
    Puchaicela esperando a la contadora, auditoría del patrón `rgba(...)` en
