@@ -25,6 +25,15 @@ const permitirGestionarProductos = autorizarPermiso('productos.gestionar');
 const permitirEliminarProductos = autorizarPermiso('productos.eliminar');
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Importar productos recorre fila por fila (varias queries c/u: buscar
+// existente, actualizar/crear, movimiento de inventario) dentro de UNA sola
+// transacción interactiva — con una plantilla de tamaño real (decenas de
+// productos) el timeout por defecto de Prisma (5000 ms) se cumple antes de
+// terminar y la transacción se cierra a mitad de camino ("Transaction API
+// error: Transaction already closed"). Se sube a un techo generoso para
+// lotes grandes.
+const TX_OPTIONS_IMPORTACION = { maxWait: 10000, timeout: 120000 };
+
 // ─── GET /api/productos  (lista con búsqueda y paginación) ───────────────────
 router.get('/', permitirVerProductos, async (req, res) => {
   try {
@@ -144,14 +153,14 @@ router.post('/importacion/excel', permitirGestionarProductos, checkLimiteProduct
 
     const registrarEntradaInventario = String(req.body?.registrarEntradaInventario || 'false') === 'true';
 
-    const resultado = await req.prisma.$transaction(async (tx) => importarProductos({
+    const resultado = await (req.prisma || prisma).$transaction(async (tx) => importarProductos({
       tx,
       empresaId: req.empresa.id,
       usuarioId: req.usuario.id,
       productos,
       registrarEntradaInventario,
       origen: 'excel',
-    }));
+    }), TX_OPTIONS_IMPORTACION);
 
     res.status(201).json({
       success: true,
@@ -182,14 +191,14 @@ router.post('/importacion/xml', permitirGestionarProductos, upload.single('archi
     }
 
     const registrarEntradaInventario = String(req.body?.registrarEntradaInventario || 'false') === 'true';
-    const resultado = await req.prisma.$transaction(async (tx) => importarProductos({
+    const resultado = await (req.prisma || prisma).$transaction(async (tx) => importarProductos({
       tx,
       empresaId: req.empresa.id,
       usuarioId: req.usuario.id,
       productos,
       registrarEntradaInventario,
       origen: 'xml',
-    }));
+    }), TX_OPTIONS_IMPORTACION);
 
     res.status(201).json({
       success: true,
@@ -227,7 +236,7 @@ router.post('/importacion/autorizacion', permitirGestionarProductos, async (req,
       productos,
       registrarEntradaInventario,
       origen: `autorizacion-${ambiente}`,
-    }));
+    }), TX_OPTIONS_IMPORTACION);
 
     res.status(201).json({
       success: true,

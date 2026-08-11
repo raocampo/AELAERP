@@ -89,6 +89,47 @@ esto que el incidente del punto 2 solo afectó a Corp Simtelec (la única
 empresa contra la que estaba logueada la sesión de prueba) y no tocó datos
 de Puchaicela ni de ningún otro tenant en la misma BD local.
 
+## 4. Bug real encontrado y corregido: importar Excel fallaba con archivos grandes
+
+El usuario reportó (con captura) un error al actualizar el inventario
+subiendo la plantilla: `Transaction API error: Transaction already closed:
+... The timeout for this transaction was 5000ms, however 5003ms passed
+since the start of the transaction`.
+
+**Causa raíz**: `importarProductos()` recorre cada fila del Excel de forma
+secuencial (buscar producto existente, crear/actualizar, y si aplica
+registrar el movimiento de inventario — varias queries por fila), todo
+dentro de **una sola transacción interactiva** de Prisma. El timeout por
+defecto de Prisma para ese tipo de transacción es 5000 ms; con una
+plantilla de tamaño real (decenas de productos) se excede antes de
+terminar y Postgres cierra la transacción a mitad de camino.
+
+**Fix** (`backend/routes/productos.js`): las 3 rutas de importación
+(`/importacion/excel`, `/importacion/xml`, `/importacion/autorizacion`)
+ahora pasan `{ maxWait: 10000, timeout: 120000 }` como opciones de
+`$transaction`, dándole hasta 2 minutos a un lote grande.
+
+**Bug adicional encontrado de paso (mismo síntoma, distinta causa)**: al
+reproducir el error localmente sin un tenant resuelto (modo monoinstancia
+sin slug — el mismo modo en que corren varios clientes reales, ver la
+nota de la sesión 2026-08-07 sobre "Railway dedicado por cliente, sin
+SaaS multi-tenant"), `/importacion/excel` y `/importacion/xml`
+fallaban de inmediato con `Cannot read properties of undefined (reading
+'$transaction')`: usaban `req.prisma.$transaction(...)` sin respaldo, y
+`req.prisma` solo se define cuando `resolverTenant` resuelve un slug
+(`middleware/tenant.js`) — en monoinstancia nunca se asigna. El resto del
+backend ya cubre este caso (`auth.js`/`empresas.js` con middleware
+`req.prisma = req.prisma || prisma` al tope del router; `buzon.js` con
+`(req.prisma || prisma).$transaction(...)` inline) — productos.js era la
+única ruta con `req.prisma` sin ese respaldo. Aplicado el mismo patrón
+`(req.prisma || prisma)` a los 2 endpoints.
+
+**Verificado** con una importación real de 150 filas sintéticas (código
+`TESTBULK0001..0150`, sin tocar ningún producto real): primera subida —
+150 creados, 1608 ms; segunda subida con los mismos códigos — 0 creados,
+150 actualizados, 0 duplicados, 835 ms. Datos y usuario de prueba
+eliminados al terminar. `node --test`: 29/29.
+
 ## 🔴 PARA RETOMAR MAÑANA
 
 1. **Completar los 3 productos `RESTAURAR-1/2/3`** en Productos > Lista
