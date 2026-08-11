@@ -11,6 +11,7 @@ const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { checkLimiteProductos } = require('../middleware/edition');
 const {
   crearPlantillaProductosXlsx,
+  crearExportacionProductosXlsx,
   leerFilasDesdeExcel,
   mapearFilaProducto,
   parsearProductosDesdeXmlFactura,
@@ -135,6 +136,27 @@ router.get('/importacion/plantilla', permitirGestionarProductos, async (req, res
   } catch (error) {
     console.error('GET /productos/importacion/plantilla:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo generar la plantilla de productos' });
+  }
+});
+
+// GET /api/productos/exportar/excel — descarga el catálogo inventariable
+// actual en el mismo formato de la plantilla, listo para editar y volver a
+// subir por Importación sin tocar columnas.
+router.get('/exportar/excel', permitirVerProductos, async (req, res) => {
+  try {
+    const productos = await prisma.productos_servicios.findMany({
+      where: { empresaId: req.empresa.id, inventariable: true },
+      orderBy: { nombre: 'asc' },
+    });
+
+    const buffer = crearExportacionProductosXlsx(productos);
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="aela-inventario-${fecha}.xlsx"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('GET /productos/exportar/excel:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo exportar el inventario' });
   }
 });
 

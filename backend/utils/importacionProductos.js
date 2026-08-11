@@ -185,6 +185,35 @@ function crearPlantillaProductosXlsx() {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
+// Mismos encabezados que crearPlantillaProductosXlsx() — el archivo exportado
+// se puede editar y volver a subir directo por Importación sin tocar columnas.
+function crearExportacionProductosXlsx(productos = []) {
+  const filas = productos.map((p) => ({
+    codigoPrincipal: p.codigoPrincipal,
+    codigoAuxiliar: p.codigoAuxiliar || '',
+    nombre: p.nombre,
+    precioVenta: Number(p.precioUnitario || 0),
+    costoUnitario: Number(p.costoUnitario || 0),
+    iva: Number(p.tarifaIva || 0),
+    unidad: p.unidadMedida || 'UND',
+    inventariable: p.inventariable ? 'SI' : 'NO',
+    stockActual: Number(p.stockActual || 0),
+    stockMinimo: Number(p.stockMinimo || 0),
+    activo: p.activo ? 'SI' : 'NO',
+    infoAdicional: p.infoAdicional || '',
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(filas);
+  ws['!cols'] = [
+    { wch: 18 }, { wch: 18 }, { wch: 32 }, { wch: 14 }, { wch: 14 }, { wch: 10 },
+    { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 32 },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
 // Excel formatea la celda para mostrarla (ej. redondea el precio a 2
 // decimales, o muestra un código de barras largo en notación científica
 // "7.80223E+12"), pero el valor guardado internamente conserva precisión
@@ -663,6 +692,7 @@ async function importarProductos({
 
 module.exports = {
   crearPlantillaProductosXlsx,
+  crearExportacionProductosXlsx,
   leerFilasDesdeExcel,
   mapearFilaProducto,
   desambiguarCodigosDuplicados,

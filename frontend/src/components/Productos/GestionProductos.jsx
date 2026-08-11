@@ -57,6 +57,7 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
   const [importando, setImportando] = useState(false);
   const [resultadoImportacion, setResultadoImportacion] = useState(null);
   const [exportandoInv, setExportandoInv] = useState(false);
+  const [exportandoInvExcel, setExportandoInvExcel] = useState(false);
   const [modalProducto,   setModalProducto]   = useState(false);
   const [modalMovimiento, setModalMovimiento] = useState(false);
   const [modalEliminarInv, setModalEliminarInv] = useState(false);
@@ -217,6 +218,27 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       toast.error('No se pudo exportar el CSV de inventario');
     } finally {
       setExportandoInv(false);
+    }
+  };
+
+  const exportarInventarioExcel = async () => {
+    setExportandoInvExcel(true);
+    try {
+      const res = await api.get('/productos/exportar/excel', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      const fecha = new Date().toISOString().slice(0, 10);
+      link.setAttribute('download', `aela-inventario-${fecha}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Inventario exportado correctamente');
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo exportar el inventario');
+    } finally {
+      setExportandoInvExcel(false);
     }
   };
 
@@ -465,7 +487,10 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
             <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
               <button className="btn-secondary" onClick={exportarMovimientosCsv}
                 disabled={exportandoInv || movimientos.length === 0}>
-                {exportandoInv ? 'Exportando…' : '⬇ CSV'}
+                {exportandoInv ? 'Exportando…' : '⬇ CSV movimientos'}
+              </button>
+              <button className="btn-secondary" onClick={exportarInventarioExcel} disabled={exportandoInvExcel}>
+                {exportandoInvExcel ? 'Exportando…' : '⬇ Exportar inventario (Excel)'}
               </button>
               <button className="btn-secondary" onClick={() => setTab('importacion')}>
                 📤 Actualizar por plantilla Excel
