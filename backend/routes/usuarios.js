@@ -65,14 +65,20 @@ router.get('/', proteger, soloAdmin, async (req, res) => {
 
 // POST /api/usuarios
 router.post('/', proteger, soloAdmin, checkLimiteUsuarios, async (req, res) => {
+  // empresaId se declara fuera del try porque el catch también lo necesita (para
+  // detectar si el conflicto de username es con OTRA empresa) — un const dentro
+  // del bloque try no es visible dentro del catch (son bloques hermanos, no
+  // anidados), así que antes esa comparación tiraba un ReferenceError silencioso
+  // (atrapado por el catch interno) y siempre caía al mensaje genérico, dejando
+  // muerto el flujo de "reasignar usuario existente a esta empresa".
+  const { nombre, username, email, password, rol, empresaId: empresaIdBody } = req.body;
+  const empresaId = empresaIdBody ? parseInt(empresaIdBody, 10) : obtenerEmpresaActual(req);
+
   try {
-    const { nombre, username, email, password, rol, empresaId: empresaIdBody } = req.body;
     const nombreLimpio = String(nombre || '').trim();
     const usernameLimpio = normalizarUsername(username);
     const emailLimpio = normalizarEmail(email);
     const rolNormalizado = normalizarRol(rol || DEFAULT_ROLE);
-    // Allow admin to create user for a specific company
-    const empresaId = empresaIdBody ? parseInt(empresaIdBody, 10) : obtenerEmpresaActual(req);
 
     if (!nombreLimpio || !usernameLimpio || !password) {
       return res.status(400).json({ success: false, mensaje: 'Nombre, usuario y contraseña son requeridos' });
@@ -118,7 +124,7 @@ router.post('/', proteger, soloAdmin, checkLimiteUsuarios, async (req, res) => {
       // Detectar si el conflicto es por username en otra empresa para dar mensaje accionable
       try {
         const existente = await prisma.usuarios.findUnique({
-          where: { username: normalizarUsername(req.body.username || '') },
+          where: { username: normalizarUsername(username || '') },
           select: { id: true, username: true, nombre: true, empresaId: true },
         });
         if (existente && existente.empresaId !== empresaId) {
