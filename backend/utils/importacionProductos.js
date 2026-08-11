@@ -185,30 +185,23 @@ function crearPlantillaProductosXlsx() {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-// Códigos de barras largos (EAN-13, ~13 dígitos) guardados en Excel como
-// número (sin formato de Texto) se muestran en notación científica cuando la
-// celda es "General" — ej. "7.80223E+12" en vez de "7802230000000". Leyendo
-// con raw:false (necesario para precios: el archivo trae fórmulas con
-// muchos decimales, ej. 0.8695652173913044, y el valor mostrado "0.87" es el
-// que se quiere) ese truncamiento del código llega tal cual al sistema.
-// Reconstruir el entero completo solo cuando el valor formateado luce como
-// notación científica, usando el valor numérico crudo de la misma celda
-// (que Excel sí guarda con precisión completa) — el resto de columnas
-// (precio, stock, nombre, etc.) no coincide con el patrón y queda intacto.
-const RE_NOTACION_CIENTIFICA = /^-?\d+(\.\d+)?[eE][+-]?\d+$/;
-
-function corregirNotacionCientifica(valorFormateado, valorCrudo) {
-  if (
-    typeof valorFormateado === 'string'
-    && RE_NOTACION_CIENTIFICA.test(valorFormateado.trim())
-    && typeof valorCrudo === 'number'
-    && Number.isFinite(valorCrudo)
-  ) {
-    return Number.isInteger(valorCrudo) ? String(valorCrudo) : valorCrudo.toFixed(0);
-  }
-  return valorFormateado;
-}
-
+// Excel formatea la celda para mostrarla (ej. redondea el precio a 2
+// decimales, o muestra un código de barras largo en notación científica
+// "7.80223E+12"), pero el valor guardado internamente conserva precisión
+// completa. Usar el texto formateado (raw:false) como fuente pierde esa
+// precisión en dos frentes reales:
+//   - Precios: el archivo trae el precio sin IVA calculado por fórmula (ej.
+//     0.4347826086956522, resultado de desglosar un PVP de 0.50 al 15%) —
+//     si se guarda el "0.43" que Excel muestra, el IVA hacia adelante ya no
+//     cierra (0.43 × 1.15 = 0.49, nunca vuelve a 0.50 en el POS).
+//   - Códigos: un EAN-13 sin formato de Texto se muestra truncado en
+//     notación científica y se pierden los últimos dígitos.
+// Por eso se prefiere siempre el valor numérico crudo cuando la celda es un
+// número real — el redondeo final a la precisión que corresponda (4
+// decimales en precio/costo, ver schema.prisma) lo aplica la columna
+// Decimal de la base de datos al guardar. Las celdas de texto (nombre,
+// "SI"/"NO", códigos sin formato numérico) no se tocan: raw:true y
+// raw:false devuelven lo mismo para ellas.
 function leerFilasDesdeExcel(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer' });
   const hoja = wb.SheetNames[0];
@@ -220,11 +213,14 @@ function leerFilasDesdeExcel(buffer) {
 
   return filasFormateadas.map((fila, index) => {
     const filaCruda = filasCrudas[index] || {};
-    const corregida = { ...fila };
-    for (const key of Object.keys(corregida)) {
-      corregida[key] = corregirNotacionCientifica(corregida[key], filaCruda[key]);
+    const combinada = { ...fila };
+    for (const key of Object.keys(combinada)) {
+      const crudo = filaCruda[key];
+      if (typeof crudo === 'number' && Number.isFinite(crudo)) {
+        combinada[key] = crudo;
+      }
     }
-    return corregida;
+    return combinada;
   });
 }
 

@@ -15,16 +15,30 @@ test('leerFilasDesdeExcel reconstruye códigos de barras que Excel muestra en no
     ['codigoPrincipal', 'nombre', 'precio de venta'],
     [7802225427777, 'Producto código largo', 0.8695652173913044],
   ]);
-  ws.C2.z = '0.00'; // mismo formato de 2 decimales que trae el archivo real del usuario
+  ws.C2.z = '0.00'; // Excel lo muestra como "0.87", pero el valor guardado trae más decimales
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Productos');
   const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
   const filas = leerFilasDesdeExcel(buffer);
-  assert.equal(filas[0].codigoPrincipal, '7802225427777');
-  assert.ok(!/e\+/i.test(filas[0].codigoPrincipal));
-  // El precio con muchos decimales debe conservar el redondeo que Excel muestra, no el valor crudo
-  assert.equal(filas[0]['precio de venta'], '0.87');
+  assert.equal(filas[0].codigoPrincipal, 7802225427777);
+  assert.ok(!/e\+/i.test(String(filas[0].codigoPrincipal)));
+  // El precio conserva la precisión completa (no el "0.87" redondeado que Excel muestra) —
+  // el IVA se calcula sobre este valor, y con solo 2 decimales el PVP no vuelve a cerrar
+  // exacto al facturar (0.43 × 1.15 = 0.49, nunca 0.50).
+  assert.equal(filas[0]['precio de venta'], 0.8695652173913044);
+});
+
+test('mapearFilaProducto conserva la precisión completa del precio para que el IVA cierre exacto', () => {
+  // PVP real $0.50 con IVA 15% desglosado por fórmula de Excel
+  const fila = { codigoPrincipal: 'P002', nombre: 'Test IVA', 'precio de venta': 0.4347826086956522, iva: '15' };
+  const producto = mapearFilaProducto(fila, 0);
+  assert.equal(producto.precioUnitario, 0.4347826086956522);
+  // Redondeado a los 4 decimales que soporta la columna (Decimal(14,4)) y multiplicado por
+  // el IVA, el PVP debe volver a acercarse a 0.50 (no quedarse en 0.49 como con 2 decimales)
+  const precioRedondeado = Number(producto.precioUnitario.toFixed(4));
+  const pvpRecalculado = Math.round(precioRedondeado * 1.15 * 100) / 100;
+  assert.equal(pvpRecalculado, 0.5);
 });
 
 test('desambiguarCodigosDuplicados asigna código único cuando el mismo código tiene nombres distintos', () => {
