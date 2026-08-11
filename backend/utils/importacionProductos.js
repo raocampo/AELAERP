@@ -14,8 +14,8 @@ const HEADERS = {
   codigoPrincipal: ['codigoprincipal', 'codigo', 'sku', 'item', 'codigoitem', 'codigoproducto'],
   codigoAuxiliar: ['codigoauxiliar', 'codigobarras', 'barras', 'barcode', 'barra', 'auxiliar'],
   nombre: ['nombre', 'descripcion', 'producto', 'detalle', 'nombreproducto'],
-  precioUnitario: ['precioventa', 'preciounitario', 'precio', 'pvp', 'venta'],
-  costoUnitario: ['costounitario', 'costocompra', 'costo', 'preciocompra'],
+  precioUnitario: ['precioventa', 'preciodeventa', 'preciounitario', 'precio', 'pvp', 'venta'],
+  costoUnitario: ['costounitario', 'costocompra', 'costo', 'preciocompra', 'preciodecompra'],
   tarifaIva: ['iva', 'tarifaiva', 'impuesto', 'porcentajeiva'],
   unidadMedida: ['unidadmedida', 'unidad', 'uom'],
   inventariable: ['inventariable', 'manejastock', 'controlastock', 'stock'],
@@ -185,13 +185,46 @@ function crearPlantillaProductosXlsx() {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
+// Códigos de barras largos (EAN-13, ~13 dígitos) guardados en Excel como
+// número (sin formato de Texto) se muestran en notación científica cuando la
+// celda es "General" — ej. "7.80223E+12" en vez de "7802230000000". Leyendo
+// con raw:false (necesario para precios: el archivo trae fórmulas con
+// muchos decimales, ej. 0.8695652173913044, y el valor mostrado "0.87" es el
+// que se quiere) ese truncamiento del código llega tal cual al sistema.
+// Reconstruir el entero completo solo cuando el valor formateado luce como
+// notación científica, usando el valor numérico crudo de la misma celda
+// (que Excel sí guarda con precisión completa) — el resto de columnas
+// (precio, stock, nombre, etc.) no coincide con el patrón y queda intacto.
+const RE_NOTACION_CIENTIFICA = /^-?\d+(\.\d+)?[eE][+-]?\d+$/;
+
+function corregirNotacionCientifica(valorFormateado, valorCrudo) {
+  if (
+    typeof valorFormateado === 'string'
+    && RE_NOTACION_CIENTIFICA.test(valorFormateado.trim())
+    && typeof valorCrudo === 'number'
+    && Number.isFinite(valorCrudo)
+  ) {
+    return Number.isInteger(valorCrudo) ? String(valorCrudo) : valorCrudo.toFixed(0);
+  }
+  return valorFormateado;
+}
+
 function leerFilasDesdeExcel(buffer) {
   const wb = XLSX.read(buffer, { type: 'buffer' });
   const hoja = wb.SheetNames[0];
   if (!hoja) return [];
-  return XLSX.utils.sheet_to_json(wb.Sheets[hoja], {
-    defval: '',
-    raw: false,
+
+  const sheet = wb.Sheets[hoja];
+  const filasFormateadas = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+  const filasCrudas = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
+
+  return filasFormateadas.map((fila, index) => {
+    const filaCruda = filasCrudas[index] || {};
+    const corregida = { ...fila };
+    for (const key of Object.keys(corregida)) {
+      corregida[key] = corregirNotacionCientifica(corregida[key], filaCruda[key]);
+    }
+    return corregida;
   });
 }
 
