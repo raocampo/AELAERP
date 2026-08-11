@@ -9,6 +9,11 @@ router.use(proteger);
 
 const permitirVerInventario = autorizarPermiso('inventario.ver');
 const permitirGestionarInventario = autorizarPermiso('inventario.gestionar');
+// 'eliminar-todo' es una operación masiva y destructiva (puede borrar productos
+// del catálogo por completo) — se exige el permiso de eliminar productos
+// (admin/supervisor), más estricto que 'inventario.gestionar' (que también
+// incluye facturador/secretaria).
+const permitirEliminarInventario = autorizarPermiso('productos.eliminar');
 
 async function validarInventarioHabilitado(req, res, next) {
   try {
@@ -148,6 +153,72 @@ router.get('/movimientos', permitirVerInventario, validarInventarioHabilitado, a
   } catch (error) {
     console.error('GET /inventario/movimientos:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudieron cargar los movimientos de inventario' });
+  }
+});
+
+// POST /api/inventario/eliminar-todo — reinicia el stock de todos los productos
+// inventariables a 0. Con eliminarProductos:true intenta borrar el producto del
+// catálogo por completo (para productos mal creados/duplicados); si el producto
+// tiene historial vinculado (ítems de compra pendientes) que impide el borrado
+// por integridad referencial, cae de vuelta a solo reiniciar su stock.
+router.post('/eliminar-todo', permitirEliminarInventario, validarInventarioHabilitado, async (req, res) => {
+  try {
+    const eliminarProductos = req.body?.eliminarProductos === true;
+    const productos = await prisma.productos_servicios.findMany({
+      where: { empresaId: req.empresa.id, inventariable: true },
+    });
+
+    let eliminados = 0;
+    let stockReiniciado = 0;
+    let noEliminadosPorReferencias = 0;
+
+    for (const producto of productos) {
+      if (eliminarProductos) {
+        try {
+          await prisma.productos_servicios.delete({ where: { id: producto.id } });
+          eliminados += 1;
+          continue;
+        } catch (err) {
+          noEliminadosPorReferencias += 1;
+        }
+      }
+
+      if (Number(producto.stockActual) !== 0) {
+        await prisma.$transaction(async (tx) => {
+          const delta = -Number(producto.stockActual);
+          await aplicarMovimientoInventario({
+            tx,
+            empresaId: req.empresa.id,
+            productoId: producto.id,
+            usuarioId: req.usuario.id,
+            tipo: delta > 0 ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO',
+            deltaCantidad: delta,
+            referencia: 'RESET-INVENTARIO',
+            observacion: 'Reinicio masivo de inventario',
+          });
+        });
+      }
+      stockReiniciado += 1;
+    }
+
+    let mensaje;
+    if (eliminarProductos) {
+      mensaje = `${eliminados} producto(s) eliminado(s) del catálogo.`;
+      if (noEliminadosPorReferencias > 0) {
+        mensaje += ` ${noEliminadosPorReferencias} no se pudieron eliminar por tener historial vinculado (compras) y se reiniciaron a stock 0.`;
+      }
+    } else {
+      mensaje = `Stock reiniciado a 0 en ${stockReiniciado} producto(s).`;
+    }
+
+    res.json({
+      success: true,
+      data: { total: productos.length, eliminados, stockReiniciado, noEliminadosPorReferencias },
+      mensaje,
+    });
+  } catch (error) {
+    console.error('POST /inventario/eliminar-todo:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo eliminar el inventario' });
   }
 });
 

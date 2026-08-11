@@ -59,6 +59,9 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
   const [exportandoInv, setExportandoInv] = useState(false);
   const [modalProducto,   setModalProducto]   = useState(false);
   const [modalMovimiento, setModalMovimiento] = useState(false);
+  const [modalEliminarInv, setModalEliminarInv] = useState(false);
+  const [eliminarProductosInv, setEliminarProductosInv] = useState(false);
+  const [eliminandoInv, setEliminandoInv] = useState(false);
   // Lista — paginación
   const [listPage,    setListPage]    = useState(1);
   const [listPerPage, setListPerPage] = useState(15);
@@ -186,6 +189,21 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       toast.error(error.response?.data?.mensaje || 'No se pudo registrar el movimiento');
     } finally {
       setGuardandoMovimiento(false);
+    }
+  };
+
+  const eliminarTodoInventario = async () => {
+    setEliminandoInv(true);
+    try {
+      const res = await api.post('/inventario/eliminar-todo', { eliminarProductos: eliminarProductosInv });
+      toast.success(res.data?.mensaje || 'Inventario eliminado');
+      setModalEliminarInv(false);
+      setEliminarProductosInv(false);
+      await cargar({ busquedaActual: busqueda });
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo eliminar el inventario');
+    } finally {
+      setEliminandoInv(false);
     }
   };
 
@@ -444,10 +462,16 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 <option value="VENTA_NOTA">Venta nota</option>
               </select>
             </div>
-            <div style={{ display: 'flex', gap: '.5rem' }}>
+            <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
               <button className="btn-secondary" onClick={exportarMovimientosCsv}
                 disabled={exportandoInv || movimientos.length === 0}>
                 {exportandoInv ? 'Exportando…' : '⬇ CSV'}
+              </button>
+              <button className="btn-secondary" onClick={() => setTab('importacion')}>
+                📤 Actualizar por plantilla Excel
+              </button>
+              <button className="btn-danger" onClick={() => setModalEliminarInv(true)}>
+                🗑 Eliminar todo el inventario
               </button>
               <button className="btn-primary" onClick={() => { setMovimientoForm(MOVIMIENTO_INICIAL); setModalMovimiento(true); }}>
                 + Registrar movimiento
@@ -509,6 +533,11 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
               <div className="prod-import-box">
                 <h3>2. Importar desde Excel</h3>
                 <p>Soporta columnas comunes como código, nombre, precio, costo, IVA, stock y producto inventariable.</p>
+                <p style={{ color: '#64748b', fontSize: '.82rem' }}>
+                  Vuelve a subir la misma plantilla cuando quieras actualizar precios, costos o stock: los productos se
+                  emparejan por <strong>código</strong> y se actualizan sin duplicarse — los que no aparecen en el
+                  archivo quedan intactos.
+                </p>
                 <DropZone
                   accept=".xlsx,.xls,.csv"
                   icon="📊"
@@ -782,6 +811,45 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL ELIMINAR TODO EL INVENTARIO ── */}
+      {modalEliminarInv && (
+        <div className="prod-modal-overlay" onClick={() => setModalEliminarInv(false)}>
+          <div className="prod-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="prod-modal-head">
+              <h2>Eliminar todo el inventario</h2>
+              <button className="prod-modal-close" onClick={() => setModalEliminarInv(false)}>✕</button>
+            </div>
+            <div className="prod-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <p style={{ margin: 0 }}>
+                Esta acción reinicia el stock a <strong>0</strong> de todos los productos inventariables
+                {eliminarProductosInv ? ' y elimina el producto del catálogo' : ''}. Se registra un movimiento de
+                ajuste por cada producto afectado para dejar rastro en el historial.
+              </p>
+              <label className="prod-check" style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <input
+                  type="checkbox"
+                  checked={eliminarProductosInv}
+                  onChange={(e) => setEliminarProductosInv(e.target.checked)}
+                  style={{ marginTop: '3px' }}
+                />
+                <span>
+                  Eliminar también los productos del catálogo (no solo el stock) — útil si hay productos mal creados
+                  o duplicados. Los productos con historial de compras vinculado no podrán borrarse; en ese caso solo
+                  se reiniciará su stock a 0.
+                </span>
+              </label>
+              <p style={{ margin: 0, color: '#ef4444', fontWeight: 600 }}>Esta acción no se puede deshacer.</p>
+              <div className="prod-actions">
+                <button className="btn-secondary" onClick={() => setModalEliminarInv(false)}>Cancelar</button>
+                <button className="btn-danger" onClick={eliminarTodoInventario} disabled={eliminandoInv}>
+                  {eliminandoInv ? 'Eliminando…' : eliminarProductosInv ? 'Eliminar productos e inventario' : 'Reiniciar stock a 0'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
