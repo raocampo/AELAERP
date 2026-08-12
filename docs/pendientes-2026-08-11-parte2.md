@@ -258,30 +258,35 @@ del `try`. Verificado end-to-end en local.
 
 `node --test`: 38/38 en ambas sesiones. `vite build`: sin errores.
 
+### ✅ Confirmado por el usuario 2026-08-12 (los 3 pendientes de verificación de campo)
+
+1. **Fix de usuario en modo multiempresa confirmado en producción real**:
+   el usuario ya se pudo crear en "Deportivo CAT" (antes "CAT DISEÑO
+   DEPORTI..."). Cierra el pendiente de `63adddd` — el fix del bug de
+   scoping `try`/`catch` en `POST /usuarios` funciona también fuera de
+   local.
+2. **Comercial S&S subió la plantilla real de productos** desde Productos →
+   Importación. Cierra el pendiente del fix de precios truncados/notación
+   científica (commits del 08-10). No se revisó desde aquí si de los 6
+   códigos duplicados esperados quedó algo pendiente para el usuario — a
+   confirmar si hace falta en una próxima sesión.
+3. **Los 3 productos `RESTAURAR-1/2/3`** ya están corregidos con su código,
+   precio y costo reales — cierra el pendiente abierto desde el incidente
+   del 08-10.
+
 ### 🔴 Pendientes para retomar mañana desde la oficina
 
 1. **Emitir la factura real de $41.20** a Diana Gabriela Sucunuta Albán en
    el tenant "sys" — saldrá como secuencial 003, con el fix de fecha ya
    desplegado y el stock de los 31 productos ya restaurado. Confirmar que
    sale bien (AUTORIZADO).
-2. **Confirmar con el usuario de "CAT DISEÑO DEPORTI..."** (modo
-   multiempresa) si el fix de creación de usuario con username repetido en
-   otra empresa resolvió su caso — no se pudo verificar en producción real,
-   solo en local.
-3. **Comercial S&S**: confirmar si ya subió la plantilla real de productos
-   (sin editar) desde Productos → Importación con el fix de precios/
-   notación científica ya desplegado; revisar los 6 códigos duplicados que
-   quedan visibles en el aviso amarillo del resultado.
-4. **3 productos `RESTAURAR-1/2/3`** en Comercial S&S (Productos → Lista)
-   siguen con precio/costo en $0 y código temporal — confirmar si el
-   usuario ya les puso el código/precio real (pendiente desde 08-10).
-5. Backlog general sin tocar hoy: gating móvil sin verificar en emulador,
+2. Backlog general sin tocar hoy: gating móvil sin verificar en emulador,
    Buzón SRI/Puppeteer en Railway (timeout+reorden sin confirmar), 16
    registros de Puchaicela esperando a la contadora, auditar si el patrón
    `rgba()` sin capa sólida en modo oscuro se repite en otros componentes
    (pendiente desde 08-07), backlog "más PRO" (Anexo RDEP, F101 completo,
    Anticipo IR).
-6. **Patrón nuevo a vigilar**: cualquier factura RECHAZADO/no autorizada que
+3. **Patrón nuevo a vigilar**: cualquier factura RECHAZADO/no autorizada que
    quede sin anular deja inventario descontado de forma fantasma — si un
    cliente reporta stock bajo o en 0 "sin razón aparente", revisar primero
    si hay facturas rechazadas sin anular para ese producto antes de asumir
