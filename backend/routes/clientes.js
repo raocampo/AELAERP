@@ -441,7 +441,7 @@ router.post('/importar-excel', proteger, upload.single('archivo'), async (req, r
       return res.status(400).json({ success: false, mensaje: 'No se recibió ningún archivo' });
     }
 
-    const db = req.prisma;
+    const db = req.prisma || prisma;
     const empresaId = req.empresa.id;
     let rows;
     try {

@@ -6,6 +6,7 @@ import { useAuth } from '../../context/useAuth';
 import { abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
 import { enviarBufferUSB } from '../../utils/impresoraUsb';
 import { apiOffline, estaOnline } from '../../utils/syncQueue';
+import { fechaLocalOffset, hoyLocal } from '../../utils/fecha';
 import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
 import './PuntoVenta.css';
 
@@ -45,13 +46,18 @@ export default function PuntoVenta() {
   const [formaPagoFactura, setFormaPagoFactura] = useState('01');
   const [pagoRefFactura, setPagoRefFactura] = useState('');
   const [formaPagoNota, setFormaPagoNota] = useState('Efectivo');
-  const [fechaEmision, setFechaEmision] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaEmision, setFechaEmision] = useState(hoyLocal());
   // Res. SRI NAC-DGERCGC25-00000014: fecha de emisión = fecha real de la
   // operación, sin backdating — el backend rechaza más de 3 días de atraso
   // o fechas futuras; el picker refleja ese mismo rango para no dejar
   // elegir algo que luego el servidor va a rechazar.
-  const fechaEmisionMin = (() => { const d = new Date(); d.setDate(d.getDate() - 3); return d.toISOString().slice(0, 10); })();
-  const fechaEmisionMax = new Date().toISOString().slice(0, 10);
+  // hoyLocal()/fechaLocalOffset() usan la hora LOCAL del navegador (nunca
+  // toISOString(), que es UTC) — con Ecuador en UTC-5, toISOString() ya
+  // muestra el día siguiente a partir de las 19:00 hora local, lo que
+  // generaba facturas fechadas "mañana" y el SRI las rechazaba con "FECHA
+  // EMISION EXTEMPORANEA" (quemando el secuencial sin poder reutilizarlo).
+  const fechaEmisionMin = fechaLocalOffset(-3);
+  const fechaEmisionMax = hoyLocal();
   const [codigoBarras, setCodigoBarras] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState([]);

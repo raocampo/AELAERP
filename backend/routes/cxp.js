@@ -5,6 +5,7 @@
  * redundante. Requiere plan Medium o Pro.
  */
 const express = require('express');
+const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
@@ -19,6 +20,9 @@ const { parsearNotaCreditoRecibidaXml } = require('../utils/sri');
 const router = express.Router();
 
 router.use(proteger);
+// req.prisma solo se setea cuando resolverTenant resuelve un tenant por
+// subdominio (SaaS) — en monoinstancia/cliente directo queda undefined.
+router.use((req, _res, next) => { req.prisma = req.prisma || prisma; next(); });
 router.use(soloMediumOPro);
 router.use(requiereModulo('contabilidadHabilitada'));
 

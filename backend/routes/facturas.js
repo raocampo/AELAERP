@@ -11,6 +11,7 @@ const fs      = require('fs');
 const prisma  = require('../config/prisma');
 const sri     = require('../utils/sri');
 const { registrarAuditoria } = require('../utils/auditoria');
+const { fechaHoyEC, fechaECOffset, diaCalendarioEC } = require('../utils/fechas');
 const {
   crearAsientoFacturaAutorizada,
   crearAsientoCostoVentaFactura,
@@ -582,7 +583,7 @@ router.put('/configuracion', permitirConfigurarSri, async (req, res) => {
 router.post('/configuracion/logo', permitirConfigurarSri, uploadLogo.single('logo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió imagen' });
   try {
-    const db = req.prisma;
+    const db = req.prisma || prisma;
     const config = await getConfigSRI(req.empresa.id, db);
     if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
 
@@ -602,7 +603,7 @@ router.post('/configuracion/logo', permitirConfigurarSri, uploadLogo.single('log
 router.post('/configuracion/firma', permitirConfigurarSri, uploadLogo.single('firma'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió imagen' });
   try {
-    const db = req.prisma;
+    const db = req.prisma || prisma;
     const config = await getConfigSRI(req.empresa.id, db);
     if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
     const firmaUrl = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
@@ -617,7 +618,7 @@ router.post('/configuracion/firma', permitirConfigurarSri, uploadLogo.single('fi
 router.post('/configuracion/sello', permitirConfigurarSri, uploadLogo.single('sello'), async (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió imagen' });
   try {
-    const db = req.prisma;
+    const db = req.prisma || prisma;
     const config = await getConfigSRI(req.empresa.id, db);
     if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
     const selloUrl = `data:${req.file.mimetype || 'image/png'};base64,${req.file.buffer.toString('base64')}`;
@@ -633,7 +634,7 @@ router.post('/configuracion/certificado', permitirConfigurarSri, uploadCert.sing
   if (!req.file) return res.status(400).json({ ok: false, error: 'No se recibió archivo .p12' });
 
   try {
-    const db = req.prisma;
+    const db = req.prisma || prisma;
     const config = await getConfigSRI(req.empresa.id, db);
     if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
 
@@ -1050,6 +1051,43 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
 
     const detallesFinales = detalles;
 
+    const fecha = fechaEmision ? new Date(fechaEmision) : new Date();
+
+    // Res. SRI NAC-DGERCGC25-00000014 (Disposición Reformatoria Primera #2,
+    // vigente desde 2026-01-01): se eliminó el plazo de gracia de 4 días
+    // hábiles — la transmisión debe ser inmediata y la fecha de emisión debe
+    // corresponder a la fecha real de la operación. No se exige que sea
+    // exactamente "ahora" (el POS permite ventas encoladas offline que se
+    // sincronizan minutos u horas después, con la fecha real de la venta —
+    // ver frontend/src/utils/offlineDB.js), pero sí se rechaza un backdating
+    // evidente. Para facturas de años anteriores usar "Importar históricas"
+    // (estado HISTORICO, sin transmisión real al SRI), no este endpoint.
+    // Se valida aquí, antes de consumir un secuencial, igual que el resto de
+    // validaciones del comprobante — si además del rechazo del SRI también
+    // quemábamos el secuencial en nuestra propia validación, era doblemente
+    // desperdiciado.
+    //
+    // Se compara por DÍA CALENDARIO EN ECUADOR (diaCalendarioEC), no por
+    // milisegundos UTC crudos: Railway corre en UTC, y comparar timestamps
+    // UTC dejaba pasar facturas fechadas "mañana" en el calendario de
+    // Ecuador (con Ecuador en UTC-5, un cliente que envía la fecha de "hoy"
+    // después de las 19:00 hora local puede seguir quedando dentro de la
+    // ventana de milisegundos aunque el SRI, que sí exige el día calendario
+    // correcto, la rechace con "FECHA EMISION EXTEMPORANEA").
+    const MAX_DIAS_ATRASO_FECHA_EMISION = 3;
+    if (isNaN(fecha.getTime())) {
+      return res.status(400).json({ ok: false, error: 'Fecha de emisión inválida' });
+    }
+    const fechaEmisionEC = diaCalendarioEC(fechaEmision || fecha);
+    const hoyEC = fechaHoyEC();
+    const limiteAtrasEC = fechaECOffset(-MAX_DIAS_ATRASO_FECHA_EMISION);
+    if (fechaEmisionEC < limiteAtrasEC || fechaEmisionEC > hoyEC) {
+      return res.status(400).json({
+        ok: false,
+        error: `La fecha de emisión debe corresponder a la operación real (máximo ${MAX_DIAS_ATRASO_FECHA_EMISION} días de atraso, sin fechas futuras) — Res. SRI NAC-DGERCGC25-00000014, transmisión inmediata vigente desde 2026-01-01. Para facturas de períodos anteriores usa "Importar facturas históricas".`,
+      });
+    }
+
     // Punto de venta que emite el documento — si no viene en el body (ej.
     // integraciones que no seleccionan punto de venta), cae al único
     // establecimiento/puntoEmision configurado en configuracion_sri.
@@ -1067,32 +1105,6 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       prisma, req.empresa.id, establecimiento, puntoEmision
     );
     const secuencial = String(secuencialNum).padStart(9, '0');
-
-    const fecha = fechaEmision ? new Date(fechaEmision) : new Date();
-
-    // Res. SRI NAC-DGERCGC25-00000014 (Disposición Reformatoria Primera #2,
-    // vigente desde 2026-01-01): se eliminó el plazo de gracia de 4 días
-    // hábiles — la transmisión debe ser inmediata y la fecha de emisión debe
-    // corresponder a la fecha real de la operación. No se exige que sea
-    // exactamente "ahora" (el POS permite ventas encoladas offline que se
-    // sincronizan minutos u horas después, con la fecha real de la venta —
-    // ver frontend/src/utils/offlineDB.js), pero sí se rechaza un backdating
-    // evidente. Para facturas de años anteriores usar "Importar históricas"
-    // (estado HISTORICO, sin transmisión real al SRI), no este endpoint.
-    const MAX_DIAS_ATRASO_FECHA_EMISION = 3;
-    const MAX_HORAS_ADELANTO_FECHA_EMISION = 6;
-    const ahora = new Date();
-    const limiteAtras = new Date(ahora.getTime() - MAX_DIAS_ATRASO_FECHA_EMISION * 24 * 60 * 60 * 1000);
-    const limiteAdelante = new Date(ahora.getTime() + MAX_HORAS_ADELANTO_FECHA_EMISION * 60 * 60 * 1000);
-    if (isNaN(fecha.getTime())) {
-      return res.status(400).json({ ok: false, error: 'Fecha de emisión inválida' });
-    }
-    if (fecha < limiteAtras || fecha > limiteAdelante) {
-      return res.status(400).json({
-        ok: false,
-        error: `La fecha de emisión debe corresponder a la operación real (máximo ${MAX_DIAS_ATRASO_FECHA_EMISION} días de atraso, sin fechas futuras) — Res. SRI NAC-DGERCGC25-00000014, transmisión inmediata vigente desde 2026-01-01. Para facturas de períodos anteriores usa "Importar facturas históricas".`,
-      });
-    }
 
     // Generar clave de acceso
     const claveAcceso = sri.generarClaveAcceso({

@@ -83,14 +83,23 @@ export function formatFechaHora(fecha, fallback = '—') {
 }
 
 /**
- * Devuelve la fecha de hoy como string YYYY-MM-DD (hora local).
+ * Devuelve hoy ± N días como string YYYY-MM-DD, en hora local del navegador
+ * (nunca UTC — ver cabecera del archivo).
  */
-export function hoyLocal() {
+export function fechaLocalOffset(diasOffset = 0) {
   const d = new Date();
+  d.setDate(d.getDate() + diasOffset);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${dd}`;
+}
+
+/**
+ * Devuelve la fecha de hoy como string YYYY-MM-DD (hora local).
+ */
+export function hoyLocal() {
+  return fechaLocalOffset(0);
 }
 
 /**

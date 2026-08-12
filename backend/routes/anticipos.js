@@ -4,6 +4,7 @@
  * /api/anticipos/proveedores — anticipos pagados a proveedores (antes de recibir factura)
  */
 const express = require('express');
+const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
 const {
@@ -20,7 +21,9 @@ const router = express.Router();
 router.use(proteger);
 router.use(soloMediumOPro);
 
-function db(req) { return req.prisma; }
+// req.prisma solo se setea cuando resolverTenant resuelve un tenant por
+// subdominio (SaaS) — en monoinstancia/cliente directo queda undefined.
+function db(req) { return req.prisma || prisma; }
 function empresaId(req) { return req.empresa?.id ?? req.usuario?.empresaId ?? 1; }
 function usuarioId(req) { return req.usuario?.id; }
 

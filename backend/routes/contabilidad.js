@@ -1539,7 +1539,7 @@ router.post('/plan-cuentas/semilla', async (req, res) => {
 // luego hace upsert del plan base completo. Deja intactas las cuentas con movimientos.
 router.post('/plan-cuentas/restaurar-base', autorizarPermiso('contabilidad.gestionar'), async (req, res) => {
   try {
-    const db        = req.prisma;
+    const db        = req.prisma || prisma;
     const empresaId = obtenerEmpresaId(req);
     const codigosBase = new Set(PLAN_CUENTAS_BASE.map((c) => c.codigo));
 
@@ -1591,7 +1591,7 @@ router.post('/plan-cuentas/restaurar-base', autorizarPermiso('contabilidad.gesti
 // POST /api/contabilidad/plan-cuentas/semilla-supercias — instala plan NIIF Supercias
 router.post('/plan-cuentas/semilla-supercias', async (req, res) => {
   try {
-    const db = req.prisma;
+    const db = req.prisma || prisma;
     const empresaId = obtenerEmpresaId(req);
     const overwriteExisting = Boolean(req.body?.overwriteExisting);
     const resultado = await sembrarPlanSupercias(db, empresaId, overwriteExisting);
@@ -1612,7 +1612,7 @@ router.post('/plan-cuentas/semilla-supercias', async (req, res) => {
 // GET /api/contabilidad/plan-cuentas/estado — detecta si el sistema arranca desde cero
 router.get('/plan-cuentas/estado', async (req, res) => {
   try {
-    const db        = req.prisma;
+    const db        = req.prisma || prisma;
     const empresaId = obtenerEmpresaId(req);
 
     const [totalCuentas, totalAsientos] = await Promise.all([
@@ -1657,7 +1657,7 @@ const CAMPOS_CONFIG_CONTABLE = [
 // GET /api/contabilidad/configuracion-asientos
 router.get('/configuracion-asientos', async (req, res) => {
   try {
-    const db        = req.prisma;
+    const db        = req.prisma || prisma;
     const empresaId = obtenerEmpresaId(req);
 
     const config = await db.configuracion_contable.findUnique({ where: { empresaId } });
@@ -1675,7 +1675,7 @@ router.get('/configuracion-asientos', async (req, res) => {
 // PUT /api/contabilidad/configuracion-asientos
 router.put('/configuracion-asientos', async (req, res) => {
   try {
-    const db        = req.prisma;
+    const db        = req.prisma || prisma;
     const empresaId = obtenerEmpresaId(req);
 
     const data = {};
@@ -1904,7 +1904,7 @@ router.post('/plan-cuentas/importar/ejecutar', multerPlanCuentas, async (req, re
   try {
     if (!req.file) return res.status(400).json({ success: false, mensaje: 'No se recibió ningún archivo' });
 
-    const db         = req.prisma;
+    const db         = req.prisma || prisma;
     const empresaId  = obtenerEmpresaId(req);
     const reemplazar = String(req.body?.reemplazar || '').toLowerCase() === 'true';
 

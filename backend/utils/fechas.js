@@ -23,4 +23,31 @@ const formatFechaHora = (d = new Date()) =>
 const fechaHoyEC = () =>
   new Date().toLocaleDateString('en-CA', { timeZone: TZ_EC }); // en-CA = YYYY-MM-DD
 
-module.exports = { TZ_EC, formatFechaHora, fechaHoyEC };
+/**
+ * Retorna hoy ± N días en Ecuador como "YYYY-MM-DD". Ecuador no tiene
+ * horario de verano, así que sumar/restar milisegundos y reformatear con
+ * timeZone es seguro (nunca hay un salto de hora que descuadre el día).
+ */
+const fechaECOffset = (diasOffset = 0) =>
+  new Date(Date.now() + diasOffset * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: TZ_EC });
+
+/**
+ * Reduce cualquier valor de fecha a su día calendario en Ecuador ("YYYY-MM-DD"),
+ * para comparar fechas por día sin importar la hora exacta ni la zona horaria
+ * del proceso que las generó (Railway corre en UTC).
+ *
+ * Si `valor` ya es un string "YYYY-MM-DD" (el caso normal: viene de un
+ * <input type="date">, ej. fechaEmision del POS/facturación), se devuelve
+ * TAL CUAL — es la fecha calendario que el usuario eligió, sin ambigüedad.
+ * Convertirlo primero a Date y de ahí a zona horaria movería el día (una
+ * fecha "solo-fecha" se ancla a medianoche UTC; reinterpretada en
+ * America/Guayaquil cae en el día ANTERIOR). Solo para timestamps reales
+ * (con hora) tiene sentido pasar por el Date + timeZone.
+ */
+const diaCalendarioEC = (valor) => {
+  const s = String(valor ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return new Date(valor).toLocaleDateString('en-CA', { timeZone: TZ_EC });
+};
+
+module.exports = { TZ_EC, formatFechaHora, fechaHoyEC, fechaECOffset, diaCalendarioEC };
