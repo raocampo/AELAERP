@@ -133,6 +133,39 @@ $41.20 a Diana Gabriela Sucunuta Albán — con el fix ya desplegado, debería
 salir bien esta vez. Confirmar que el deploy en Railway ya tomó el commit
 `34faa61` antes de reintentar.
 
+## 5. Consultado por el usuario: vender con stock negativo a criterio del dueño — YA EXISTÍA, sin cambios de código
+
+El usuario pidió poder vender con stock negativo cuando el dueño lo decida
+(ej. se olvidó de registrar stock nuevo). Antes de implementar nada se
+revisó si ya estaba cubierto — **sí, completo y funcionando**:
+
+- Backend: `utils/inventario.js` — `aplicarMovimientoInventario()` solo
+  bloquea la venta si `!config.permitirStockNegativo && stockNuevo < 0`;
+  si el flag está activo, deja pasar el movimiento y el stock queda en
+  negativo. Ya conectado desde `POST /facturas` (y notas de venta, mismo
+  código compartido `aplicarMovimientosVentaDesdeDetalles`).
+- Configuración: `configuracion_sistema.permitirStockNegativo`
+  (`backend/utils/configuracionSistema.js`), persistido vía
+  `PUT /configuracion-sistema` — requiere permiso `sistema.configurar`
+  (admin), consistente con "a criterio del dueño".
+- Frontend: checkbox **"Permitir ventas con stock negativo"** en
+  Configuración → Config Sistema → sección Inventario, justo debajo de
+  "Habilitar control de inventario" (deshabilitado si el inventario está
+  apagado).
+
+**Verificado en navegador real**: con el toggle apagado (default), vender 5
+unidades de un producto con 1 en stock devuelve 400 "Stock insuficiente...
+Disponible: 1". Se activó el checkbox desde la UI real (Playwright),
+guardado confirmado con el toast "Configuración del sistema actualizada".
+Repetida la misma venta: 201, factura creada, stock del producto queda en
+**-4** (1 - 5), exactamente como se espera. Datos de prueba eliminados y
+`permitirStockNegativo` revertido a `false` al terminar.
+
+**Para el usuario**: la opción ya está en Configuración → Config Sistema →
+Inventario. Actívala cuando haga falta vender sin stock suficiente — el
+sistema deja constancia igual en `movimientos_inventario`, así que después
+se puede ver qué ventas dejaron el stock en negativo para corregirlo.
+
 ## Commits de esta sesión (2026-08-11, continuación)
 `34faa61` fix fecha POS UTC + req.prisma en 8 rutas.
 
