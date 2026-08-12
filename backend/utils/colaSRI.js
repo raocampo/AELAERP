@@ -12,6 +12,8 @@ const sri    = require('./sri');
 const fs     = require('fs');
 const path   = require('path');
 const { getCertBuffer, tieneCertificado } = require('./certUtils');
+const { getTenantPrisma }  = require('../config/prismaTenant');
+const { getPrismaMaster }  = require('../config/prismaMaster');
 
 // ─── Helpers de error ──────────────────────────────────────
 
@@ -61,18 +63,30 @@ function esErrorConectividad(err) {
 }
 
 // ─── Cache de configuraciones SRI por empresa ──────────────
-const _configCache = new Map();
+// `empresaId` NO es único entre tenants — cada BD de tenant numera sus
+// empresas desde 1. Con el worker recorriendo varias BDs (ver
+// `ejecutarCiclo`), cachear solo por empresaId mezclaría el certificado/RUC
+// de un tenant con el de otro. Se anida por el cliente Prisma activo
+// (identidad de objeto, estable entre ciclos porque `getTenantPrisma`
+// reutiliza el mismo cliente pooled por tenant).
+const _configCachePorDB = new Map(); // client → Map(empresaId → config)
 
 async function getConfigSRI(empresaId) {
-  if (_configCache.has(empresaId)) return _configCache.get(empresaId);
+  const cliente = prisma.getActiveClient();
+  let cacheDB = _configCachePorDB.get(cliente);
+  if (!cacheDB) {
+    cacheDB = new Map();
+    _configCachePorDB.set(cliente, cacheDB);
+  }
+  if (cacheDB.has(empresaId)) return cacheDB.get(empresaId);
 
   const config = await prisma.configuracion_sri.findFirst({
     where: { empresaId, activo: true },
   });
   if (config) {
-    _configCache.set(empresaId, config);
+    cacheDB.set(empresaId, config);
     // Invalidar cache cada 5 min para recoger cambios de certificado
-    setTimeout(() => _configCache.delete(empresaId), 5 * 60 * 1000);
+    setTimeout(() => cacheDB.delete(empresaId), 5 * 60 * 1000);
   }
   return config;
 }
@@ -574,10 +588,10 @@ async function reintentarNotaCredito(nc) {
 // ─── Ciclo principal del worker ─────────────────────────────
 let _workerActivo = false;
 
-async function ejecutarCiclo() {
-  if (_workerActivo) return;
-  _workerActivo = true;
-
+// Procesa los pendientes de UNA sola base de datos (la que esté activa como
+// contexto del proxy `prisma` en este momento — global o de un tenant, ver
+// `ejecutarCiclo` más abajo).
+async function procesarPendientesEnDB() {
   try {
     const [facturas, retenciones, liquidaciones, notasDebito, notasCredito] = await Promise.all([
       prisma.facturas.findMany({
@@ -639,6 +653,40 @@ async function ejecutarCiclo() {
     for (const n of notasDebito)   await reintentarNotaDebito(n);
     for (const nc of notasCredito) await reintentarNotaCredito(nc);
 
+  } catch (err) {
+    console.error('[ColaSRI] Error en ciclo:', err.message);
+  }
+}
+
+// Ciclo completo: la BD global/default (monoinstancia o fallback) MÁS, si
+// este backend tiene SaaS activo (DATABASE_MASTER_URL configurada), la BD de
+// cada tenant activo. Sin este recorrido, el worker solo veía la BD por
+// defecto de la instancia de Railway — cualquier tenant SaaS resuelto por
+// slug (ej. "sys") nunca recibía reintentos automáticos, sin importar
+// cuánto tiempo pasara, y una factura con un error de red transitorio hacia
+// el SRI se quedaba en FIRMADO_PENDIENTE_ENVIO indefinidamente hasta que
+// alguien la reenviara a mano.
+async function ejecutarCiclo() {
+  if (_workerActivo) return;
+  _workerActivo = true;
+
+  try {
+    // BD global/default — cubre monoinstancia y el fallback fuera de contexto SaaS.
+    await procesarPendientesEnDB();
+
+    // BD de cada tenant SaaS activo, si este backend tiene modo SaaS.
+    const master = getPrismaMaster();
+    if (master) {
+      const tenants = await master.tenants.findMany({ where: { estado: 'activo' } });
+      for (const tenant of tenants) {
+        try {
+          const tenantClient = await getTenantPrisma(tenant);
+          await prisma.runWithClient(tenantClient, procesarPendientesEnDB);
+        } catch (err) {
+          console.error(`[ColaSRI] Error procesando tenant "${tenant.slug}":`, err.message);
+        }
+      }
+    }
   } catch (err) {
     console.error('[ColaSRI] Error en ciclo:', err.message);
   } finally {
