@@ -96,18 +96,42 @@ endpoints antes rotos ahora responden 200.
   **no es un bug** — es la validación normal del sistema impidiendo vender
   más unidades de las que hay en inventario. Comportamiento esperado.
 
-## 🔴 Pendiente, necesita que el usuario decida
+## 4. Confirmado contra producción real (`aela_sys`, empresaId=1 "DIANA FERNANDA SUCUNUTA ALBAN")
 
-**Confirmar el estado exacto de la factura 001 en el tenant "sys"** — este
-entorno no tiene configurado el acceso a la BD de producción de ese tenant
-(`DATABASE_PUBLIC_URL` de Railway — ver memoria persistente
-`infra_tenant_db_access` para el procedimiento ya documentado).
-Si el usuario comparte esa URL (Railway → proyecto → Postgres → Variables),
-se puede confirmar si la 001 quedó como "Rechazado" (visible, mismo caso
-que la 002) o si no llegó a grabarse en absoluto (secuencial quemado sin
-fila en la tabla — no recuperable, pero sí explicable). Sin esas
-credenciales, la explicación de arriba es la hipótesis mejor sustentada por
-el código, no una confirmación directa.
+El usuario compartió las credenciales (`.env.local`, conexión externa de
+Railway). Consulta directa, de solo lectura, contra `aela_sys`:
+
+- **Solo existe 1 fila en `facturas`** para esta empresa: `id=3`,
+  `numeroFactura` 001-001-**000000002**, `fechaEmision`
+  **2026-08-12T05:00:00.000Z** (la fecha "de mañana" que causó el bug),
+  `estadoSri` RECHAZADO, con el mensaje SRI exacto ya conocido (identificador
+  65, FECHA EMISION EXTEMPORANEA).
+- **No existe ninguna fila para el secuencial 000000001.** No es un
+  problema de filtro/paginación en la lista — la factura 001 nunca llegó a
+  grabarse en la base de datos.
+- `puntos_emision.ultimoSecuencialFactura` = **2**, confirmando que el
+  contador atómico si se incrementó dos veces (dos intentos reales), pero
+  solo el segundo produjo una fila.
+- Tabla `auditoria` vacía para esta empresa — sin rastro adicional del
+  primer intento.
+
+**Conclusión**: el secuencial 001 se consumió (incremento atómico, antes de
+cualquier validación) en un primer intento que **nunca llegó a crear la
+factura** — muy probablemente rechazado por la validación local de fecha
+del propio backend (la versión vieja, con la comparación en milisegundos
+UTC) antes de intentar grabar nada. El segundo intento (002) sí pasó esa
+validación vieja (la diferencia en milisegundos puede ser chica cerca del
+cambio de día UTC, aunque el día calendario en Ecuador ya sea distinto — es
+justo la inconsistencia que corrigió el fix de hoy) y llegó hasta el SRI,
+que sí la rechazó por día calendario.
+
+**No es recuperable**: ambos secuenciales (001 y 002) quedan permanentemente
+inutilizables — ninguna factura real usó el 001, y el 002 quedó marcado
+RECHAZADO de forma irreversible ante el SRI. **Acción para el usuario**:
+emitir una factura nueva (saldrá con el secuencial 003) para esa venta de
+$41.20 a Diana Gabriela Sucunuta Albán — con el fix ya desplegado, debería
+salir bien esta vez. Confirmar que el deploy en Railway ya tomó el commit
+`34faa61` antes de reintentar.
 
 ## Commits de esta sesión (2026-08-11, continuación)
 `34faa61` fix fecha POS UTC + req.prisma en 8 rutas.
