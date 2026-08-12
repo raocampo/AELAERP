@@ -217,3 +217,72 @@ ya no debería toparse con stock artificialmente bajo.
 **Acción operativa (no es un commit de código)**: anulación de la factura
 001-001-000000002 en producción (`aela_sys`, empresaId=1) vía API real, 2026-08-12,
 ver punto 6 arriba.
+
+## Cierre de sesión 2026-08-11 — resumen completo del día y pendientes para mañana
+
+### Resumen de todo lo hecho hoy (2 sesiones/hilos)
+
+**Sesión 1** (`docs/pendientes-2026-08-11.md`, commit `63adddd`): bug real de
+scoping `try`/`catch` en `POST /usuarios` — crear un usuario con username ya
+usado en OTRA empresa (modo multiempresa/Admin Macro) daba un mensaje
+genérico "usuario ya registrado" en vez de ofrecer el modal de reasignación
+que el frontend ya sabía mostrar. `empresaId` se declaraba con `const`
+dentro del `try`, invisible en el `catch` sibling → `ReferenceError`
+silencioso atrapado por un catch interno. Fix: mover la declaración fuera
+del `try`. Verificado end-to-end en local.
+
+**Sesión 2** (este archivo, commits `34faa61`, `db4416d`, `6e8af4b`,
+`6718683`, `0e83fc9`):
+1. **Bug crítico corregido**: POS mostraba la fecha de "mañana" después de
+   las 19:00 hora Ecuador (`toISOString()` es UTC) — el SRI rechazaba la
+   factura por fecha futura y el secuencial se quemaba igual. Fix en
+   frontend (`hoyLocal()`) y backend (comparación por día calendario
+   Ecuador, movida antes de consumir el secuencial).
+2. **Auditoría completa de `req.prisma` undefined** en modo monoinstancia:
+   Cuentas por Cobrar, Cuentas por Pagar, Caja Chica y Anticipos estaban
+   **completamente rotos** para cualquier cliente directo — corregidos los
+   4, más líneas sueltas en `contabilidad.js`/`clientes.js`/`proveedores.js`/
+   `facturas.js`.
+3. **Confirmado contra producción real** (`aela_sys`): la factura 001 nunca
+   grabó fila (secuencial quemado antes del INSERT); la 002 quedó RECHAZADO
+   por el SRI con el mismo bug de fecha.
+4. **Verificado que "vender con stock negativo a criterio del dueño" ya
+   existía** — toggle `permitirStockNegativo` en Configuración → Config
+   Sistema → Inventario, sin cambios de código necesarios.
+5. **Encontrada y corregida la causa real** de por qué hacía falta esa
+   opción en este caso puntual: la factura 002 (RECHAZADO) había descontado
+   inventario real de 31 productos al crearse, sin revertirlo nunca (6 en
+   stock 0 sin serlo). **Anulada en producción** vía el endpoint real
+   (`POST /facturas/3/anular`, login real con `x-tenant-slug: sys`) —
+   verificado que el stock de los 31 productos quedó restaurado.
+
+`node --test`: 38/38 en ambas sesiones. `vite build`: sin errores.
+
+### 🔴 Pendientes para retomar mañana desde la oficina
+
+1. **Emitir la factura real de $41.20** a Diana Gabriela Sucunuta Albán en
+   el tenant "sys" — saldrá como secuencial 003, con el fix de fecha ya
+   desplegado y el stock de los 31 productos ya restaurado. Confirmar que
+   sale bien (AUTORIZADO).
+2. **Confirmar con el usuario de "CAT DISEÑO DEPORTI..."** (modo
+   multiempresa) si el fix de creación de usuario con username repetido en
+   otra empresa resolvió su caso — no se pudo verificar en producción real,
+   solo en local.
+3. **Comercial S&S**: confirmar si ya subió la plantilla real de productos
+   (sin editar) desde Productos → Importación con el fix de precios/
+   notación científica ya desplegado; revisar los 6 códigos duplicados que
+   quedan visibles en el aviso amarillo del resultado.
+4. **3 productos `RESTAURAR-1/2/3`** en Comercial S&S (Productos → Lista)
+   siguen con precio/costo en $0 y código temporal — confirmar si el
+   usuario ya les puso el código/precio real (pendiente desde 08-10).
+5. Backlog general sin tocar hoy: gating móvil sin verificar en emulador,
+   Buzón SRI/Puppeteer en Railway (timeout+reorden sin confirmar), 16
+   registros de Puchaicela esperando a la contadora, auditar si el patrón
+   `rgba()` sin capa sólida en modo oscuro se repite en otros componentes
+   (pendiente desde 08-07), backlog "más PRO" (Anexo RDEP, F101 completo,
+   Anticipo IR).
+6. **Patrón nuevo a vigilar**: cualquier factura RECHAZADO/no autorizada que
+   quede sin anular deja inventario descontado de forma fantasma — si un
+   cliente reporta stock bajo o en 0 "sin razón aparente", revisar primero
+   si hay facturas rechazadas sin anular para ese producto antes de asumir
+   error de captura o de importación.
