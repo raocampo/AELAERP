@@ -166,7 +166,54 @@ Inventario. Actívala cuando haga falta vender sin stock suficiente — el
 sistema deja constancia igual en `movimientos_inventario`, así que después
 se puede ver qué ventas dejaron el stock en negativo para corregirlo.
 
+## 6. Acción tomada en producción: se anuló la factura 002 (RECHAZADO) para restaurar stock
+
+Al confirmar el punto 4, se detectó el problema real detrás del pedido de "vender con
+stock negativo" del punto 5: la factura 001-001-000000002 (RECHAZADO) sí había
+descontado inventario real al crearse — el descuento ocurre en la misma transacción
+que crea la factura (`aplicarMovimientosVentaDesdeDetalles`, `facturas.js` línea 1174),
+**antes** de que se sepa si el SRI la va a aceptar o rechazar (`procesarFacturaEnSRI` se
+llama después, en background). Como la factura nunca se anuló, ese descuento nunca se
+revirtió.
+
+**Impacto confirmado contra la BD real (`aela_sys`)**: 31 productos con stock
+descontado de forma fantasma, 6 de ellos en **stock 0** sin serlo realmente:
+COCA-COLA E 1250 GRB, LECHS CHOCO TPK NATURA 750ML, QUESILLO LB, CLOROX ROPA 250 ML,
+TE DE MANZANILLA 25 BOL, NESTLE TANGO ORIGINAL 25G. Los otros 25 con 1-3 unidades de
+diferencia (LECHE EL RANCHITO -3, DASANI 1.2L -2, POLLO LB -2, etc.).
+
+**Solución**: el sistema ya tiene el mecanismo correcto para esto — `POST
+/facturas/:id/anular` (`facturas.js` línea 1288). Para facturas no autorizadas por el
+SRI (como esta, RECHAZADO) no requiere Nota de Crédito: solo marca `ANULADO` y revierte
+inventario + caja en la misma transacción (además intenta un asiento contable reverso,
+best-effort).
+
+**Ejecutado contra producción real**, con autorización explícita del usuario, vía el
+endpoint real desplegado (no SQL manual, para no saltarse la lógica de negocio ni el
+rastro de auditoría):
+1. Login real contra `POST https://aelaerp-production.up.railway.app/api/auth/login`
+   con header `x-tenant-slug: sys` y credenciales del propio usuario (admin, empresaId=1).
+2. `POST /api/facturas/3/anular` con motivo explicando el rechazo SRI y la corrección
+   del bug de fecha ⇒ `200 OK`, `"mensaje":"Factura anulada correctamente (no estaba
+   autorizada en el SRI)."`.
+
+**Verificado de nuevo contra la BD real** tras la anulación:
+- 31 movimientos `ANULACION_FACTURA` nuevos, uno por cada `VENTA_FACTURA` original
+  (62 movimientos totales para la referencia `001-001-000000002`).
+- Los 6 productos que estaban en 0 ya muestran su stock real (1, 1, 1, 1, 1, 2).
+- `facturas.id=3`: `estadoSri=ANULADO`, `anulada=true`.
+- `puntos_emision.ultimoSecuencialFactura` sigue en **2** (correcto — el secuencial no
+  se reutiliza, solo queda liberado el inventario).
+
+**Para el usuario**: el stock de esos 31 productos ya está correcto. La próxima factura
+por esa venta de $41.20 a Diana Gabriela Sucunuta Albán saldrá con el secuencial 003 y
+ya no debería toparse con stock artificialmente bajo.
+
 ## Commits de esta sesión (2026-08-11, continuación)
 `34faa61` fix fecha POS UTC + req.prisma en 8 rutas.
 
 `node --test`: 38/38. `vite build`: sin errores.
+
+**Acción operativa (no es un commit de código)**: anulación de la factura
+001-001-000000002 en producción (`aela_sys`, empresaId=1) vía API real, 2026-08-12,
+ver punto 6 arriba.
