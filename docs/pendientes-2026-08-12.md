@@ -110,3 +110,40 @@ manual. Si vuelve a pasar que un comprobante queda pendiente más de unos
 minutos después de este fix, ya no es "hay que esperar" — vale la pena
 avisar, porque significaría que hay algo distinto pasando (el SRI caído por
 más tiempo del normal, un problema con el certificado de ese tenant, etc.).
+
+**Calibración honesta sobre qué tan probado quedó esto**: lo que se verificó
+fue el mecanismo (el worker recorre las BDs correctamente, sin choques entre
+tenants, sin errores al arrancar). Lo que **no** se pudo observar en vivo es
+el caso real completo — una factura de un tenant SaaS quedando pendiente en
+producción y el worker resolviéndola solo a los 2 minutos — porque en el
+momento de probar no había ninguna factura realmente pendiente (ya se había
+resuelto la única que existía, la de "sys", a mano). La prueba de fuego real
+va a ser la próxima vez que le pase un corte transitorio hacia el SRI a
+cualquier tenant.
+
+## Cierre de sesión 2026-08-12 — pendientes para retomar mañana desde la oficina
+
+### Resumen del día
+Un solo hilo, arrancado por una observación del usuario ("pasaron más de 2
+minutos y no se autorizaba sola") sobre el cierre del día anterior — llevó a
+encontrar y corregir un bug arquitectónico real que afectaba a **todos los
+tenants SaaS**, no solo al que lo disparó. Commit `904de64`. `node --test`:
+38/38 en todas las verificaciones del día.
+
+### 🔴 Pendientes para mañana
+
+1. **Validación de campo pendiente** (ver calibración arriba): la próxima
+   vez que a cualquier tenant SaaS le pase un corte transitorio hacia el
+   SRI, confirmar que el comprobante se autoriza solo en ~2 minutos sin
+   intervención manual. Si no pasa, es prioritario — el bug de fondo sería
+   distinto al que se corrigió hoy.
+2. Nada más generado hoy. El backlog general de sesiones previas sigue
+   abierto sin tocar: gating móvil sin verificar en emulador, Buzón SRI/
+   Puppeteer en Railway (timeout+reorden sin confirmar), 16 registros de
+   Puchaicela esperando a la contadora, auditar si el patrón `rgba()` sin
+   capa sólida en modo oscuro se repite en otros componentes (desde 08-07),
+   backlog "más PRO" (Anexo RDEP, F101 completo, Anticipo IR).
+3. **Patrón a vigilar** (heredado de ayer, sigue vigente): cualquier factura
+   RECHAZADO/no autorizada que quede sin anular deja inventario descontado
+   de forma fantasma — revisar antes de asumir error de captura si un
+   cliente reporta stock bajo o en 0 "sin razón aparente".
