@@ -274,12 +274,42 @@ del `try`. Verificado end-to-end en local.
    precio y costo reales — cierra el pendiente abierto desde el incidente
    del 08-10.
 
+## 7. Factura 003 emitida — quedó "esperando envío al SRI", resuelto con reintento manual
+
+El usuario emitió la factura real de $41.20 (secuencial 001-001-000000003,
+id=4) y compartió una captura: en la pantalla de detalle se veía solo
+"Generado" activo (ni Enviado ni Autorizado), y en el sidebar el badge
+"1 pendiente SRI — Se enviarán cuando vuelva el internet".
+
+**No era falta de internet del negocio.** La factura sí se creó y se firmó
+(`xmlFirmado` existe), pero el intento de transmitirla al SRI falló con un
+error de red transitorio entre Railway y el servidor del SRI:
+`mensajesSri: {"code":"ECONNRESET","error":"Error de red al contactar el
+SRI: read ECONNRESET"}`. `esErrorConectividad()` (`backend/utils/colaSRI.js`)
+clasifica esto como error de conectividad (no como rechazo), así que la deja
+en `FIRMADO_PENDIENTE_ENVIO` para que el worker automático la reintente
+(cada 2 minutos, `ejecutarCiclo`/`colaSRI.js`). El texto "sin internet" del
+badge es engañoso — es la conexión Railway→SRI, no la del usuario.
+
+En vez de esperar el ciclo automático, se forzó el reintento manual real vía
+`POST /api/facturas/4/reenviar` (mismo endpoint del botón "Reenviar" que ya
+existe en la UI) — quedó `AUTORIZADO` de inmediato, con número de
+autorización real del SRI. Verificado con un GET posterior que el estado
+quedó persistido. No fue necesario ningún cambio de código: es el
+comportamiento de diseño esperado ante un corte momentáneo de red hacia el
+SRI (que es notoriamente inestable).
+
+**Para el usuario**: si vuelve a aparecer el badge "pendiente SRI", esperar
+un par de minutos (el worker automático reintenta solo) o usar el botón
+"Reenviar" en el detalle de la factura — no hace falta escalarlo salvo que
+seguras pasado varios minutos sin resolverse.
+
 ### 🔴 Pendientes para retomar mañana desde la oficina
 
-1. **Emitir la factura real de $41.20** a Diana Gabriela Sucunuta Albán en
-   el tenant "sys" — saldrá como secuencial 003, con el fix de fecha ya
-   desplegado y el stock de los 31 productos ya restaurado. Confirmar que
-   sale bien (AUTORIZADO).
+1. Nada operativo urgente — la factura 003 quedó AUTORIZADA. Si el badge
+   "pendiente SRI" vuelve a aparecer seguido, vale la pena revisar si hay un
+   patrón (¿Railway teniendo cortes de red hacia el SRI con más frecuencia
+   de lo normal?) en vez de asumir que siempre se resuelve solo.
 2. Backlog general sin tocar hoy: gating móvil sin verificar en emulador,
    Buzón SRI/Puppeteer en Railway (timeout+reorden sin confirmar), 16
    registros de Puchaicela esperando a la contadora, auditar si el patrón
