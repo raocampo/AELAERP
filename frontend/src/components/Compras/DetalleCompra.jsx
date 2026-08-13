@@ -366,6 +366,12 @@ export default function DetalleCompra() {
   const totalRetenido = Number(compra.retencionIVA || 0) + Number(compra.retencionRenta || 0);
   const retenciones = compra.retenciones || [];
   const retencionesDisponibles = esPro && Boolean(sistema?.retencionesHabilitadas);
+  // Líneas sin producto de catálogo asignado (no matchearon nada al crear
+  // la compra, ej. porque "crear productos faltantes" venía apagado) —
+  // quedan fuera del inventario en silencio. El botón de abajo permite
+  // integrarlas después, cuantas veces haga falta, sin duplicar las que ya
+  // se resolvieron en una corrida anterior.
+  const productosSinIntegrar = detalles.filter((d) => !d.productoId).length;
 
   return (
     <div className="detalle-compra-page">
@@ -483,24 +489,27 @@ export default function DetalleCompra() {
 
       {/* MODAL REGISTRAR INVENTARIO */}
       {modalInv && (() => {
-        const inventariables = detalles.filter((d) => d.inventariable);
+        const yaIntegrado = (compra.movimientosInventario || 0) > 0;
+        const pendientesIntegrar = detalles.filter((d) => !d.productoId);
         const margenActual = margenSelId ? utilidades.find((u) => u.id === Number(margenSelId)) : null;
         return (
           <div className="dc-modal-overlay">
             <div className="dc-modal" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
-              <h3>📦 Registrar en inventario</h3>
+              <h3>{yaIntegrado ? '🔗 Integrar al inventario' : '📦 Registrar en inventario'}</h3>
               <p style={{ color: '#475569', fontSize: '.9rem', marginBottom: '.75rem' }}>
-                Se registrarán entradas de inventario para los productos inventariables de esta compra.
+                {yaIntegrado
+                  ? `Esta compra ya tiene ${compra.movimientosInventario} movimiento(s) registrado(s). Las líneas de abajo aún no tienen un producto de catálogo asignado — no se tocará lo que ya está integrado.`
+                  : 'Se registrarán entradas de inventario para los productos de esta compra.'}
               </p>
 
-              {inventariables.length === 0 ? (
+              {pendientesIntegrar.length === 0 ? (
                 <p style={{ color: '#ef4444', fontSize: '.9rem' }}>
-                  Esta compra no tiene líneas marcadas como inventariables.
+                  Todas las líneas de esta compra ya tienen un producto de catálogo asignado.
                 </p>
               ) : (
                 <div style={{ background: '#f8fafc', borderRadius: '.5rem', padding: '.6rem .75rem', marginBottom: '.75rem', maxHeight: 180, overflowY: 'auto' }}>
-                  {inventariables.map((d, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.85rem', padding: '.25rem 0', borderBottom: i < inventariables.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+                  {pendientesIntegrar.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.85rem', padding: '.25rem 0', borderBottom: i < pendientesIntegrar.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
                       <span>{d.descripcion || d.codigoPrincipal}</span>
                       <span style={{ color: '#64748b', marginLeft: '.5rem', whiteSpace: 'nowrap' }}>
                         {fmtNumero(d.cantidad, 2)} × {fmtMoneda(d.precioUnitario)}
@@ -550,8 +559,8 @@ export default function DetalleCompra() {
 
               <div className="dc-modal-actions" style={{ marginTop: '1rem' }}>
                 <button className="btn-secondary" onClick={() => setModalInv(false)} disabled={registrandoInv}>Cancelar</button>
-                <button className="btn-primary" onClick={registrarInventario} disabled={registrandoInv || inventariables.length === 0}>
-                  {registrandoInv ? 'Registrando…' : `Registrar ${inventariables.length} producto${inventariables.length === 1 ? '' : 's'}`}
+                <button className="btn-primary" onClick={registrarInventario} disabled={registrandoInv || pendientesIntegrar.length === 0}>
+                  {registrandoInv ? 'Registrando…' : `${yaIntegrado ? 'Integrar' : 'Registrar'} ${pendientesIntegrar.length} producto${pendientesIntegrar.length === 1 ? '' : 's'}`}
                 </button>
               </div>
             </div>
@@ -773,8 +782,12 @@ export default function DetalleCompra() {
               Emitir retención
             </button>
           )}
-          {!compra.anulada && (compra.movimientosInventario || 0) === 0 && (
-            <button className="btn-secondary" onClick={abrirModalInv}>📦 Registrar en inventario</button>
+          {!compra.anulada && productosSinIntegrar > 0 && (
+            <button className="btn-secondary" onClick={abrirModalInv}>
+              {(compra.movimientosInventario || 0) === 0
+                ? '📦 Registrar en inventario'
+                : `🔗 Integrar al inventario (${productosSinIntegrar})`}
+            </button>
           )}
           <button className="btn-secondary" onClick={verAsiento} disabled={cargandoAsiento}>
             {cargandoAsiento ? 'Cargando...' : '📒 Ver asiento'}
@@ -863,7 +876,15 @@ export default function DetalleCompra() {
         <article className="detalle-compra-card">
           <h2>Operacion</h2>
           <div className="detalle-compra-row"><span>Total</span><strong>{fmtMoneda(compra.importeTotal)}</strong></div>
-          <div className="detalle-compra-row"><span>Inventario aplicado</span><strong>{fmtBool(compra.movimientosInventario > 0, `Si (${compra.movimientosInventario})`, 'No')}</strong></div>
+          <div className="detalle-compra-row">
+            <span>Inventario aplicado</span>
+            <strong>
+              {fmtBool(compra.movimientosInventario > 0, `Si (${compra.movimientosInventario})`, 'No')}
+              {productosSinIntegrar > 0 && (
+                <span style={{ color: '#ea580c', fontWeight: 600 }}> — {productosSinIntegrar} sin integrar</span>
+              )}
+            </strong>
+          </div>
           <div className="detalle-compra-row"><span>Egreso en caja</span><strong>{fmtBool(compra.egresoCajaRegistrado)}</strong></div>
           <div className="detalle-compra-row"><span>Productos auto-creados</span><strong>{fmtBool(compra.creaProductos)}</strong></div>
           <div className="detalle-compra-row"><span>Registrada por</span><span>{compra.emisor?.nombre || compra.emisor?.username || 'Sistema'}</span></div>
@@ -897,7 +918,7 @@ export default function DetalleCompra() {
                 <th className="text-right">Costo</th>
                 <th className="text-right">Desc.</th>
                 <th>IVA</th>
-                <th>Invent.</th>
+                <th title="¿Ya tiene un producto de catálogo asignado?">Invent.</th>
                 <th className="text-right">Utilidad %</th>
                 <th className="text-right">PVP</th>
                 <th className="text-right">Subtotal</th>
@@ -915,7 +936,15 @@ export default function DetalleCompra() {
                   <td className="text-right">{fmtMoneda(detalle.precioUnitario)}</td>
                   <td className="text-right">{fmtMoneda(detalle.descuento)}</td>
                   <td><span className="detalle-compra-mini-badge">{Number(detalle.porcentajeIva || 0)}%</span></td>
-                  <td>{detalle.inventariable ? 'Si' : 'No'}</td>
+                  <td>
+                    {!detalle.productoId ? (
+                      <span style={{ color: '#ea580c', fontWeight: 600 }} title="Esta línea no matcheó ningún producto del catálogo — no está en el inventario">
+                        Sin integrar
+                      </span>
+                    ) : (
+                      detalle.inventariable ? 'Si' : 'No'
+                    )}
+                  </td>
                   <td className="text-right" style={{ color: detalle.utilidadPct != null ? '#059669' : '#94a3b8' }}>
                     {detalle.utilidadPct != null ? `${Number(detalle.utilidadPct).toFixed(2)}%` : '—'}
                   </td>

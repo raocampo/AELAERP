@@ -1792,6 +1792,17 @@ router.post('/:id/generar-asiento', autorizarPermiso('compras.gestionar'), async
   }
 });
 
+// Reentrante a propósito: antes se bloqueaba por completo si la compra ya
+// tenía CUALQUIER movimiento registrado ("ya tiene movimientos de
+// inventario"), incluso si solo eran 4 de 11 líneas (ej. porque las otras
+// 7 no matchearon ningún producto existente y crearProductosFaltantes
+// venía en false al crear la compra — quedaban con productoId:null,
+// silenciosamente fuera del inventario, sin aviso ni forma de completarlas
+// después). Ahora procesa SOLO las líneas sin productoId resuelto, y deja
+// registrado en el propio detalles (JSON) el productoId asignado a cada
+// una para que una corrida futura no las vuelva a tocar ni duplique el
+// movimiento — así el botón se puede usar tantas veces como haga falta a
+// medida que se van creando los productos que faltaban.
 router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), async (req, res) => {
   const compraId  = parseInt(req.params.id, 10);
   const empresaId = req.empresa.id;
@@ -1808,9 +1819,6 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
     if (compra.esGastoPersonal) {
       return res.status(400).json({ success: false, mensaje: 'Esta compra está marcada como gasto personal — no puede afectar el inventario de reventa' });
     }
-    if ((compra.movimientosInventario || 0) > 0) {
-      return res.status(400).json({ success: false, mensaje: 'Esta compra ya tiene movimientos de inventario registrados' });
-    }
 
     const detalles = Array.isArray(compra.detalles)
       ? compra.detalles
@@ -1824,47 +1832,83 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
     let productosCreados = 0;
     let itemsPendientes = 0;
     const errores = [];
+    const detallesActualizados = detalles.map((d) => ({ ...d }));
 
     await prisma.$transaction(async (tx) => {
       const configOperativa = await obtenerConfiguracionSistemaOperativa(empresaId, tx);
       const prefijosRegalo = configOperativa?.prefijosRegaloCompras;
 
-      for (const det of detalles) {
-        if (!det.productoId && !det.codigoPrincipal) continue;
+      for (let i = 0; i < detallesActualizados.length; i++) {
+        const det = detallesActualizados[i];
+        let prod = null;
+        let esRegaloMatcheado = false;
 
-        const resolucion = await resolverOMarcarPendiente({
-          tx,
-          empresaId,
-          detalle: det,
-          detallesTodos: detalles,
-          crearProductosFaltantes: Boolean(crearSiNoExiste),
-          actualizarProductosExistentes: false, // este endpoint históricamente no actualiza productos ya existentes
-          prefijosRegalo,
-        });
+        if (det.productoId) {
+          // Ya venía resuelto a un producto (ej. match exacto de código al
+          // crear la compra) — pero eso NO garantiza que su movimiento de
+          // inventario se haya aplicado: si "registrar inventario" estaba
+          // apagado en ese momento, el producto quedó asignado sin nunca
+          // sumar el stock. Se sigue de largo hasta el chequeo de abajo en
+          // vez de saltarse la línea entera.
+          prod = await tx.productos_servicios.findFirst({ where: { id: det.productoId, empresaId } });
+          if (!prod) continue; // el producto fue eliminado después — nada que hacer
+        } else {
+          if (!det.codigoPrincipal) continue;
 
-        if (resolucion.creado) productosCreados++;
-
-        if (resolucion.pendiente) {
-          await registrarItemCompraPendiente({
-            tx, empresaId, compraId, detalle: det, prefijoDetectado: resolucion.prefijoDetectado,
-            motivo: resolucion.motivo, productoSugeridoId: resolucion.productoSugeridoId,
+          // Evita encolar el mismo ítem 2 veces en "Ítems por revisar" si se
+          // corre este endpoint más de una vez sobre una línea que sigue sin
+          // resolverse (posible duplicado / regalo sin match).
+          const yaEnRevision = await tx.items_compra_pendientes.findFirst({
+            where: { empresaId, compraId, codigoPrincipal: det.codigoPrincipal, estado: 'PENDIENTE' },
           });
-          itemsPendientes++;
-          continue;
+          if (yaEnRevision) continue;
+
+          const resolucion = await resolverOMarcarPendiente({
+            tx,
+            empresaId,
+            detalle: det,
+            detallesTodos: detallesActualizados,
+            crearProductosFaltantes: Boolean(crearSiNoExiste),
+            actualizarProductosExistentes: false, // este endpoint históricamente no actualiza productos ya existentes
+            prefijosRegalo,
+          });
+
+          if (resolucion.creado) productosCreados++;
+
+          if (resolucion.pendiente) {
+            await registrarItemCompraPendiente({
+              tx, empresaId, compraId, detalle: det, prefijoDetectado: resolucion.prefijoDetectado,
+              motivo: resolucion.motivo, productoSugeridoId: resolucion.productoSugeridoId,
+            });
+            itemsPendientes++;
+            continue;
+          }
+
+          prod = resolucion.producto;
+          esRegaloMatcheado = resolucion.esRegaloMatcheado;
+          if (!prod) {
+            errores.push(`Producto "${det.codigoPrincipal || det.descripcion || det.productoId}" no encontrado en catálogo`);
+            continue;
+          }
+
+          // Se resolvió a un producto real — queda marcado en el detalle
+          // para que una futura corrida no lo vuelva a resolver.
+          detallesActualizados[i] = { ...det, productoId: prod.id, inventariable: prod.inventariable };
         }
 
-        const prod = resolucion.producto;
-        if (!prod) {
-          errores.push(`Producto "${det.codigoPrincipal || det.descripcion || det.productoId}" no encontrado en catálogo`);
-          continue;
-        }
-
-        if (!prod.inventariable) {
-          continue; // No inventariable — omitir sin error
-        }
+        if (!prod.inventariable) continue; // No inventariable — omitir sin error
 
         const cantidad = Number(det.cantidad || 0);
         if (cantidad <= 0) continue;
+
+        // Fuente de verdad real de "¿ya se aplicó esta línea?": si ya existe
+        // un movimiento de este producto para esta misma factura, no se
+        // vuelve a aplicar — sin importar si el productoId se resolvió hoy
+        // o venía de la creación original de la compra.
+        const yaTieneMovimiento = await tx.movimientos_inventario.findFirst({
+          where: { empresaId, productoId: prod.id, referencia: compra.numeroFactura },
+        });
+        if (yaTieneMovimiento) continue;
 
         await aplicarMovimientoInventario({
           tx,
@@ -1874,16 +1918,16 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
           tipo: 'ENTRADA',
           deltaCantidad: cantidad,
           referencia: compra.numeroFactura,
-          observacion: resolucion.esRegaloMatcheado
+          observacion: esRegaloMatcheado
             ? `Entrada por regalo/combo — compra ${compra.numeroFactura}`
             : `Entrada manual — compra ${compra.numeroFactura}`,
           metadata: { compraId, tipo: 'REGISTRO_MANUAL' },
           // Ítem regalo/combo emparejado (costo $0): NO pasar costoUnitario
           // para no sobreescribir el costo real del producto con $0.
-          ...(resolucion.esRegaloMatcheado ? {} : { costoUnitario: det.precioUnitario || 0 }),
+          ...(esRegaloMatcheado ? {} : { costoUnitario: det.precioUnitario || 0 }),
         });
 
-        if (!resolucion.esRegaloMatcheado && usarPvpAuto && Number(det.precioUnitario || 0) > 0) {
+        if (!esRegaloMatcheado && usarPvpAuto && Number(det.precioUnitario || 0) > 0) {
           const nuevoPvp = Number((det.precioUnitario * (1 + Number(margenPct) / 100)).toFixed(4));
           await tx.productos_servicios.update({
             where: { id: prod.id },
@@ -1894,10 +1938,16 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
         movimientosRegistrados++;
       }
 
-      if (movimientosRegistrados > 0) {
+      const huboCambiosDeDetalle = detallesActualizados.some((d, i) => d.productoId !== detalles[i].productoId);
+      if (huboCambiosDeDetalle || movimientosRegistrados > 0) {
         await tx.facturas_compra.update({
           where: { id: compraId },
-          data: { movimientosInventario: movimientosRegistrados, registraInventario: true },
+          data: {
+            ...(huboCambiosDeDetalle ? { detalles: detallesActualizados } : {}),
+            ...(movimientosRegistrados > 0
+              ? { movimientosInventario: (compra.movimientosInventario || 0) + movimientosRegistrados, registraInventario: true }
+              : {}),
+          },
         });
       }
     });
@@ -1915,7 +1965,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
       errores,
       mensaje: partes.length > 0
         ? partes.join(' y ')
-        : 'No se encontraron productos inventariables en esta compra',
+        : 'No se encontraron productos inventariables pendientes de integrar en esta compra',
     });
   } catch (error) {
     console.error('POST /compras/:id/registrar-inventario:', error);
