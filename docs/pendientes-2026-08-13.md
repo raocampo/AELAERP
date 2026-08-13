@@ -112,3 +112,72 @@ caso general (Resumen + 5 cuentas, nombres de hoja truncados a 31
 caracteres sin colisión). Probado contra un tenant local aislado, datos de
 prueba eliminados al terminar. `node --test`: 42/42. `vite build`: sin
 errores.
+
+## Continuación misma sesión — Compra sin poder completar la integración a inventario (commit `f554be5`)
+
+El usuario compartió una compra real de Comercial S&S (Bimbo Ecuador, 11
+líneas) con "Inventario aplicado: Sí (4)" — 4 de 11 líneas integradas, sin
+ninguna opción visible para completar las 7 restantes.
+
+**Causa raíz**: las líneas que no matchean ningún producto existente por
+código exacto al crear la compra (típico cuando "crear productos
+faltantes" viene apagado, ej. import histórico) quedan con
+`productoId: null` en el `detalles` JSON de la compra — sin producto, sin
+inventario, **sin ningún aviso**. El único endpoint pensado para
+completarlas después (`POST /compras/:id/registrar-inventario`) se negaba
+a correr por completo si la compra ya tenía cualquier movimiento
+registrado (`"Esta compra ya tiene movimientos de inventario
+registrados"`) — diseño todo-o-nada que bloqueaba justo el caso real
+reportado.
+
+**Fix — el endpoint ahora es reentrante** (se puede llamar tantas veces
+como haga falta, a medida que se van resolviendo líneas):
+- Ya no bloquea por "ya tiene movimientos"; procesa cada línea
+  individualmente.
+- Líneas sin producto asignado: se resuelven/crean con la misma lógica ya
+  compartida (`resolverOMarcarPendiente`).
+- Líneas que YA tienen `productoId` pero nunca recibieron su movimiento de
+  entrada (bug real encontrado durante la prueba: con el fix a medias,
+  estas quedaban permanentemente saltadas — exactamente el síntoma
+  reportado): se verifica contra `movimientos_inventario` (por
+  productoId + número de factura) antes de decidir si aplicar el
+  movimiento, evitando tanto dejarlas sin integrar como duplicar lo ya
+  aplicado antes.
+- El `detalles` de la compra se actualiza con el `productoId` recién
+  asignado en cada corrida, para que la siguiente no reprocese esa línea.
+
+Frontend: el botón ahora aparece cuando quedan líneas sin producto
+asignado, sin importar si la compra ya tiene movimientos ("📦 Registrar en
+inventario" la primera vez, "🔗 Integrar al inventario (N)" para
+completar). La columna "Invent." de la tabla de detalle y el resumen
+"Inventario aplicado" ahora muestran **"Sin integrar"** en las líneas
+afectadas, en vez de quedar en silencio.
+
+**Pedido adicional del usuario, ya implementado desde antes (verificado,
+no nuevo código)**: "que al integrar al inventario lea la descripción como
+el código para evitar duplicados, y si la descripción coincide pero el
+código no, dar una alerta para confirmar si es el mismo producto." Esto
+**ya existe** desde la sesión del 2026-08-06
+(`buscarPosibleDuplicadoPorNombre`, similitud Jaccard sobre la
+descripción, umbral 0.34) y **ya estaba conectado** a este mismo flujo vía
+`resolverOMarcarPendiente` — se confirmó en la prueba end-to-end: una
+línea con código nuevo pero descripción parecida a un producto existente
+NO creó un duplicado, se envió a **"Ítems por revisar"** con el producto
+sugerido, para que el usuario confirme con el botón "Sí, es el mismo" o lo
+rechace.
+
+**Verificado** end-to-end contra un tenant local aislado: compra de 3
+líneas (match exacto sin movimiento previo, código nuevo, y descripción
+similar a un producto existente con código distinto). 1ra corrida: el
+match exacto sí recibe su movimiento (antes se saltaba), el código nuevo
+crea el producto, la línea de descripción parecida va a revisión en vez de
+duplicar. 2da corrida (repetir el mismo botón): 0 movimientos nuevos, 0
+pendientes duplicados — sin efecto, como corresponde. `node --test`:
+42/42. `vite build`: sin errores.
+
+**Para el usuario**: en la compra real de Bimbo, después del deploy, el
+botón "🔗 Integrar al inventario (7)" (o el número que corresponda) debería
+aparecer arriba. Si alguna de esas 7 líneas tiene una descripción parecida
+a un producto que ya existe en el catálogo, no va a crear un duplicado —
+va a aparecer en **Compras → Ítems por revisar** para que confirmes si es
+el mismo producto.
