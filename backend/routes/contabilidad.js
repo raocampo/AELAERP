@@ -274,6 +274,31 @@ function dibujarTablaPdf(doc, columnas, filas, startY) {
   return y + 6;
 }
 
+// Dibuja el detalle movimiento-por-movimiento de una cuenta (mismo bloque
+// que usa el reporte de "una cuenta" y, ahora, cada cuenta del libro mayor
+// general — antes el general solo mostraba el resumen de mayorización, sin
+// este detalle).
+function dibujarDetalleMayorCuentaPdf(doc, mayor, money) {
+  doc.fontSize(11).font('Helvetica-Bold').text(`Cuenta: `, { continued: true })
+    .font('Helvetica').text(`${mayor.cuenta.codigo} - ${mayor.cuenta.nombre}`);
+  doc.fontSize(10).font('Helvetica-Bold').text('Saldo final: ', { continued: true })
+    .font('Helvetica').text(`${money(mayor.saldoFinal)}  ·  ${mayor.movimientos.length} movimiento(s)`);
+  doc.moveDown(0.3);
+
+  dibujarTablaPdf(doc, [
+    { header: 'Fecha',     key: 'fecha',      width: 55, formato: formatDateOnly },
+    { header: 'Asiento',   key: 'numero',     width: 75 },
+    { header: 'Tipo',      key: 'tipo',       width: 65 },
+    { header: 'Detalle',   key: 'detalle',    width: 158 },
+    { header: 'Debe',      key: 'debe',       width: 55, align: 'right', formato: money },
+    { header: 'Haber',     key: 'haber',      width: 55, align: 'right', formato: money },
+    { header: 'Saldo',     key: 'saldo',      width: 60, align: 'right', formato: money },
+  ], mayor.movimientos.map((m) => ({
+    ...m,
+    detalle: (m.descripcionDetalle || m.descripcionAsiento || '').slice(0, 55),
+  })), doc.y);
+}
+
 async function validarPeriodoAbiertoParaFecha(empresaId, fecha) {
   const totalPeriodos = await prisma.periodos_contables.count({
     where: { empresaId },
@@ -614,9 +639,16 @@ async function obtenerBalanceGeneral(empresaId, fechaCorte = new Date()) {
     construirJerarquiaContable(empresaId, ['INGRESO', 'GASTO', 'COSTO'], filtrosFecha),
   ]);
 
-  const activos    = filasBalance.filter((f) => f.tipo === 'ACTIVO');
-  const pasivos    = filasBalance.filter((f) => f.tipo === 'PASIVO');
-  const patrimonio = filasBalance.filter((f) => f.tipo === 'PATRIMONIO');
+  // Salvaguarda: una misma cuenta (por id) no debe aparecer 2 veces en la
+  // misma sección del balance. plan_cuentas tiene @@unique([empresaId,
+  // codigo]) así que en teoría no puede pasar, pero se filtra igual antes
+  // de calcular totales/imprimir — es más barato deduplicar que dejar que
+  // un dato corrupto duplique un saldo en el reporte que firma gerencia.
+  const sinDuplicados = (filas) => [...new Map(filas.map((f) => [f.id, f])).values()];
+
+  const activos    = sinDuplicados(filasBalance.filter((f) => f.tipo === 'ACTIVO'));
+  const pasivos    = sinDuplicados(filasBalance.filter((f) => f.tipo === 'PASIVO'));
+  const patrimonio = sinDuplicados(filasBalance.filter((f) => f.tipo === 'PATRIMONIO'));
 
   const totalActivos    = round2(activos.filter((f) => !f.codigoPadre).reduce((a, f) => a + f.saldo, 0));
   const totalPasivos    = round2(pasivos.filter((f) => !f.codigoPadre).reduce((a, f) => a + f.saldo, 0));
@@ -2118,6 +2150,72 @@ router.get('/asientos/:id', async (req, res) => {
   }
 });
 
+// GET /api/contabilidad/asientos/:id/pdf — comprobante contable imprimible
+// con todos los datos del asiento (cabecera, detalle completo, totales).
+router.get('/asientos/:id/pdf', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const asiento = await prisma.asientos_contables.findFirst({
+      where: { id, empresaId },
+      include: {
+        detalles: { include: { cuenta: true, centroCosto: true }, orderBy: { id: 'asc' } },
+        usuario: { select: { nombre: true } },
+      },
+    });
+    if (!asiento) return res.status(404).json({ success: false, mensaje: 'Asiento no encontrado' });
+
+    const config = await prisma.configuracion_sri.findFirst({ where: { empresaId } });
+    const money = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+    const doc = crearDocumentoPdf(res, `asiento_${asiento.numero}.pdf`);
+    dibujarEncabezadoContable(doc, config, `Comprobante Contable ${asiento.numero}`);
+
+    doc.fontSize(9);
+    doc.font('Helvetica-Bold').text('Fecha: ', { continued: true }).font('Helvetica').text(formatDateOnly(asiento.fecha));
+    doc.font('Helvetica-Bold').text('Tipo: ', { continued: true }).font('Helvetica').text(asiento.tipo);
+    if (asiento.referencia) {
+      doc.font('Helvetica-Bold').text('Referencia: ', { continued: true }).font('Helvetica').text(asiento.referencia);
+    }
+    doc.font('Helvetica-Bold').text('Descripción: ', { continued: true }).font('Helvetica').text(asiento.descripcion);
+    doc.font('Helvetica-Bold').text('Estado: ', { continued: true }).font('Helvetica').text(
+      [asiento.cerrado ? 'Cerrado' : 'Abierto', asiento.bloqueado ? 'Bloqueado' : null].filter(Boolean).join(' · ')
+    );
+    doc.moveDown(0.5);
+
+    dibujarTablaPdf(doc, [
+      { header: 'Cuenta',    key: 'cuenta',      width: 195 },
+      { header: 'C. Costo',  key: 'centroCosto', width: 65 },
+      { header: 'Detalle',   key: 'detalle',     width: 115 },
+      { header: 'Debe',      key: 'debe',        width: 65, align: 'right', formato: money },
+      { header: 'Haber',     key: 'haber',       width: 65, align: 'right', formato: money },
+    ], asiento.detalles.map((d) => ({
+      cuenta: `${d.cuenta.codigo} ${d.cuenta.nombre}`,
+      centroCosto: d.centroCosto?.nombre || '',
+      detalle: d.descripcion || '',
+      debe: d.debe,
+      haber: d.haber,
+    })), doc.y);
+
+    doc.fontSize(9).font('Helvetica-Bold')
+      .text(`Total Debe: ${money(asiento.totalDebe)}    Total Haber: ${money(asiento.totalHaber)}`, { align: 'right' });
+    doc.moveDown(0.6);
+
+    doc.fontSize(7).font('Helvetica').fillColor('#94a3b8').text(
+      `Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}` +
+      (asiento.usuario?.nombre ? `  ·  Elaborado por: ${asiento.usuario.nombre}` : '') +
+      `  ·  Creado: ${formatDateOnly(asiento.createdAt)}`
+    ).fillColor('#000000');
+
+    doc.end();
+  } catch (error) {
+    console.error('GET /contabilidad/asientos/:id/pdf:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo generar el PDF del asiento' });
+  }
+});
+
 // PUT /api/contabilidad/asientos/:id
 router.put('/asientos/:id', async (req, res) => {
   try {
@@ -2545,27 +2643,13 @@ router.get('/reportes/mayor', async (req, res) => {
       // Se filtró UNA cuenta — el PDF trae solo su detalle, sin la
       // mayorización de las demás cuentas (antes se anexaba siempre,
       // ruido innecesario cuando lo que se pidió fue una cuenta puntual).
-      doc.fontSize(11).font('Helvetica-Bold').text(`Cuenta: `, { continued: true })
-        .font('Helvetica').text(`${mayor.cuenta.codigo} - ${mayor.cuenta.nombre}`);
-      doc.fontSize(10).font('Helvetica-Bold').text('Saldo final: ', { continued: true })
-        .font('Helvetica').text(`${money(mayor.saldoFinal)}  ·  ${mayor.movimientos.length} movimiento(s)`);
-      doc.moveDown(0.3);
-
-      dibujarTablaPdf(doc, [
-        { header: 'Fecha',     key: 'fecha',      width: 55, formato: formatDateOnly },
-        { header: 'Asiento',   key: 'numero',     width: 75 },
-        { header: 'Tipo',      key: 'tipo',       width: 65 },
-        { header: 'Detalle',   key: 'detalle',    width: 158 },
-        { header: 'Debe',      key: 'debe',       width: 55, align: 'right', formato: money },
-        { header: 'Haber',     key: 'haber',      width: 55, align: 'right', formato: money },
-        { header: 'Saldo',     key: 'saldo',      width: 60, align: 'right', formato: money },
-      ], mayor.movimientos.map((m) => ({
-        ...m,
-        detalle: (m.descripcionDetalle || m.descripcionAsiento || '').slice(0, 55),
-      })), doc.y);
+      dibujarDetalleMayorCuentaPdf(doc, mayor, money);
     } else {
-      // Sin cuenta filtrada — mayorización por lote (resumen de todas las
-      // cuentas). El título ya lo puso dibujarEncabezadoContable() arriba.
+      // Sin cuenta filtrada — libro mayor general: primero el resumen de
+      // mayorización (índice/totales), y luego el detalle completo
+      // movimiento por movimiento de CADA cuenta, una página por cuenta —
+      // igual al reporte de una cuenta individual, en vez de quedarse solo
+      // en el resumen como antes.
       doc.fontSize(9).font('Helvetica').text(
         `${mayorizacion.resumen.cuentas} cuenta(s) · ${mayorizacion.resumen.movimientos} movimiento(s) · ` +
         `Debe ${money(mayorizacion.resumen.totalDebe)} · Haber ${money(mayorizacion.resumen.totalHaber)}`,
@@ -2580,6 +2664,13 @@ router.get('/reportes/mayor', async (req, res) => {
         { header: 'Haber',       key: 'totalHaber',  width: 60, align: 'right', formato: money },
         { header: 'Saldo',       key: 'saldo',        width: 63, align: 'right', formato: money },
       ], mayorizacion.tabla, doc.y);
+
+      for (const fila of mayorizacion.tabla) {
+        const detalleCuenta = await obtenerLibroMayor(empresaId, fila.cuentaId, req.query);
+        if (!detalleCuenta || detalleCuenta.movimientos.length === 0) continue;
+        doc.addPage();
+        dibujarDetalleMayorCuentaPdf(doc, detalleCuenta, money);
+      }
     }
 
     doc.end();
@@ -2720,6 +2811,104 @@ router.get('/balance-general', async (req, res) => {
   } catch (error) {
     console.error('GET /contabilidad/balance-general:', error);
     res.status(500).json({ success: false, mensaje: 'Error al generar balance general' });
+  }
+});
+
+// GET /api/contabilidad/reportes/balance-general?formato=csv|pdf — versión
+// imprimible del Estado de Situación Financiera, con línea de firma para
+// Gerente y Contador al final del documento (documento oficial que se
+// entrega firmado, a diferencia de la tabla en pantalla).
+router.get('/reportes/balance-general', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const formato = String(req.query.formato || 'pdf').toLowerCase();
+    if (!['csv', 'pdf'].includes(formato)) {
+      return res.status(400).json({ success: false, mensaje: 'Formato inválido. Use csv o pdf' });
+    }
+
+    const data = await obtenerBalanceGeneral(empresaId, req.query.fecha || new Date());
+    const money = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+    if (formato === 'csv') {
+      const rows = [];
+      const agregarSeccion = (seccion, filas) => filas.forEach((f) => rows.push({
+        seccion, codigo: f.codigo, cuenta: f.nombre, debe: f.totalDebe, haber: f.totalHaber, saldo: f.saldo,
+      }));
+      agregarSeccion('ACTIVO', data.activos);
+      agregarSeccion('PASIVO', data.pasivos);
+      agregarSeccion('PATRIMONIO', data.patrimonio);
+      rows.push({ seccion: 'RESULTADO', codigo: '', cuenta: 'Resultado del ejercicio', debe: '', haber: '', saldo: data.resultadoEjercicio });
+      rows.push({ seccion: 'TOTAL', codigo: '', cuenta: 'Total Activos', debe: '', haber: '', saldo: data.totalActivos });
+      rows.push({ seccion: 'TOTAL', codigo: '', cuenta: 'Total Pasivo + Patrimonio', debe: '', haber: '', saldo: round2(data.totalPasivos + data.totalPatrimonioNeto) });
+
+      return enviarCsv(
+        res,
+        `balance_general_${formatDateOnly(new Date())}.csv`,
+        ['seccion', 'codigo', 'cuenta', 'debe', 'haber', 'saldo'],
+        rows,
+      );
+    }
+
+    const config = await prisma.configuracion_sri.findFirst({ where: { empresaId } });
+    const doc = crearDocumentoPdf(res, `balance_general_${formatDateOnly(new Date())}.pdf`);
+    dibujarEncabezadoContable(doc, config, 'Estado de Situación Financiera');
+
+    doc.fontSize(8).fillColor('#94a3b8')
+      .text(`Corte al: ${formatDateOnly(data.fecha)}  ·  Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`)
+      .fillColor('#000000');
+    doc.moveDown(0.4);
+
+    const columnas = [
+      { header: 'Cuenta', key: 'cuenta',     width: 260 },
+      { header: 'Debe',   key: 'totalDebe',  width: 85, align: 'right', formato: (v) => (v ? money(v) : '') },
+      { header: 'Haber',  key: 'totalHaber', width: 85, align: 'right', formato: (v) => (v ? money(v) : '') },
+      { header: 'Saldo',  key: 'saldo',      width: 88, align: 'right', formato: money },
+    ];
+    const filaDe = (f) => ({
+      cuenta: `${'  '.repeat(Math.max(0, f.nivel - 1))}${f.codigo} ${f.nombre}`,
+      totalDebe: f.totalDebe,
+      totalHaber: f.totalHaber,
+      saldo: f.saldo,
+    });
+
+    doc.fontSize(10).font('Helvetica-Bold').text('ACTIVO');
+    dibujarTablaPdf(doc, columnas, data.activos.map(filaDe), doc.y);
+    doc.font('Helvetica-Bold').fontSize(9).text(`TOTAL ACTIVOS: ${money(data.totalActivos)}`, { align: 'right' });
+    doc.moveDown(0.4);
+
+    doc.fontSize(10).font('Helvetica-Bold').text('PASIVO');
+    dibujarTablaPdf(doc, columnas, data.pasivos.map(filaDe), doc.y);
+    doc.font('Helvetica-Bold').fontSize(9).text(`TOTAL PASIVOS: ${money(data.totalPasivos)}`, { align: 'right' });
+    doc.moveDown(0.4);
+
+    doc.fontSize(10).font('Helvetica-Bold').text('PATRIMONIO');
+    dibujarTablaPdf(doc, columnas, data.patrimonio.map(filaDe), doc.y);
+    doc.fontSize(9).font('Helvetica').text(`Resultado del ejercicio: ${money(data.resultadoEjercicio)}`, { align: 'right' });
+    doc.font('Helvetica-Bold').text(`TOTAL PASIVO + PATRIMONIO: ${money(round2(data.totalPasivos + data.totalPatrimonioNeto))}`, { align: 'right' });
+    doc.moveDown(0.3);
+    // Sin símbolos Unicode (✓/⚠): la fuente base Helvetica de PDFKit usa
+    // WinAnsiEncoding y no los tiene — salían como un glifo roto en el PDF.
+    doc.fontSize(9).fillColor(data.balanceado ? '#16a34a' : '#dc2626')
+      .text(data.balanceado ? 'Balance cuadrado' : 'ATENCIÓN: el balance NO cuadra — revisar antes de firmar', { align: 'right' })
+      .fillColor('#000000');
+
+    // Firmas al final del documento — si no queda espacio suficiente en la
+    // página actual, arranca una página nueva en vez de apretarlas al pie.
+    const ML = doc.page.margins.left;
+    const anchoFirma = 180;
+    if (doc.y > doc.page.height - 150) doc.addPage();
+    doc.moveDown(3);
+    const yFirma = doc.y;
+    doc.moveTo(ML, yFirma).lineTo(ML + anchoFirma, yFirma).lineWidth(1).stroke('#000000');
+    doc.moveTo(ML + 260, yFirma).lineTo(ML + 260 + anchoFirma, yFirma).stroke('#000000');
+    doc.fontSize(9).font('Helvetica')
+      .text('Gerente General', ML, yFirma + 4, { width: anchoFirma, align: 'center' })
+      .text('Contador', ML + 260, yFirma + 4, { width: anchoFirma, align: 'center' });
+
+    doc.end();
+  } catch (error) {
+    console.error('GET /contabilidad/reportes/balance-general:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo generar el reporte de balance general' });
   }
 });
 

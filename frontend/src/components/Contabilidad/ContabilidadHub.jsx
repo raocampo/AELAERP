@@ -1031,6 +1031,56 @@ const ContabilidadHub = () => {
   const editarAsiento = (id) => cargarAsientoEnFormulario(id, false);
   const verAsiento = (id) => cargarAsientoEnFormulario(id, true);
 
+  const imprimirAsiento = async (id) => {
+    try {
+      const res = await api.get(`/contabilidad/asientos/${id}/pdf`, { responseType: 'blob' });
+      const blobUrl = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.setAttribute('download', `asiento_${id}.pdf`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo generar el PDF del asiento');
+    }
+  };
+
+  // Carga el asiento como base para uno NUEVO (id: null) — útil para
+  // asientos repetitivos (provisiones, alquileres, depreciaciones) donde
+  // solo cambia la fecha o algún monto. Un asiento automático se duplica
+  // como MANUAL: el tipo original (FACTURA, COMPRA, etc.) está reservado
+  // para asientos generados por el sistema desde su documento fuente.
+  const duplicarAsiento = async (id) => {
+    try {
+      const res = await api.get(`/contabilidad/asientos/${id}`);
+      const asiento = res.data?.data;
+      if (!asiento) return;
+
+      setAsientoForm({
+        id: null,
+        fecha: new Date().toISOString().slice(0, 10),
+        descripcion: asiento.descripcion || '',
+        tipo: TIPOS_ASIENTO_AUTOMATICOS.includes(asiento.tipo) ? asiento.tipo : 'MANUAL',
+        referencia: asiento.referencia || '',
+        detalles: (asiento.detalles || []).map((d) => ({
+          cuentaId: d.cuentaId,
+          centroCostoId: d.centroCostoId || '',
+          descripcion: d.descripcion || '',
+          debe: Number(d.debe || 0),
+          haber: Number(d.haber || 0),
+        })),
+      });
+      setAsientoSoloLectura(false);
+      setOrigenDoc(null);
+      setModalAsientoAbierto(true);
+      toast.success('Asiento duplicado — revisa los datos y guárdalo como uno nuevo');
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo duplicar el asiento');
+    }
+  };
+
   const cerrarAsiento = async (id) => {
     if (!window.confirm('¿Deseas cerrar este asiento?')) return;
     try {
@@ -1325,6 +1375,8 @@ const ContabilidadHub = () => {
                           {!a.cerrado && !a.bloqueado && (
                             <button className="btn-link" onClick={() => editarAsiento(a.id)}>Editar</button>
                           )}
+                          <button className="btn-link" title="Imprimir asiento (PDF)" onClick={() => imprimirAsiento(a.id)}>🖨</button>
+                          <button className="btn-link" title="Duplicar asiento (crear uno nuevo a partir de este)" onClick={() => duplicarAsiento(a.id)}>📋</button>
                           {!a.cerrado && (
                             <button className="btn-link" onClick={() => cerrarAsiento(a.id)}>Cerrar</button>
                           )}
@@ -1560,6 +1612,9 @@ const ContabilidadHub = () => {
                     <div className="conta-form-actions">
                       {!asientoSoloLectura && (
                         <button type="submit" className="btn-primary">{asientoForm.id ? 'Actualizar asiento' : 'Crear asiento'}</button>
+                      )}
+                      {asientoForm.id && (
+                        <button type="button" className="btn-secondary" onClick={() => imprimirAsiento(asientoForm.id)}>🖨 Imprimir</button>
                       )}
                       <button type="button" className="btn-secondary" onClick={limpiarAsientoForm}>
                         {asientoSoloLectura ? 'Cerrar' : 'Cancelar'}
@@ -2493,7 +2548,10 @@ const ContabilidadHub = () => {
             <div className="conta-filters" style={{ marginBottom: 12 }}>
               <button className="btn-secondary" onClick={cargarEstadosFinancieros}>Actualizar estados</button>
               <button className="btn-secondary" onClick={() => descargarReporteContable('estados', 'csv', estadosFiltros)}>Exportar CSV</button>
-              <button className="btn-secondary" onClick={() => descargarReporteContable('estados', 'pdf', estadosFiltros)}>PDF</button>
+              <button className="btn-secondary" onClick={() => descargarReporteContable('estados', 'pdf', estadosFiltros)}>PDF (resumen)</button>
+              <button className="btn-secondary" onClick={() => descargarReporteContable('balance-general', 'pdf', { fecha: estadosFiltros.fechaBalance })} title="Detalle completo del Estado de Situación Financiera, con línea de firma para Gerente y Contador">
+                📄 Balance General (para firmar)
+              </button>
             </div>
 
             {/* KPIs rápidos */}
