@@ -1,6 +1,7 @@
 const express = require('express');
 const multer  = require('multer');
 const PDFDocument = require('pdfkit');
+const ExcelJS = require('exceljs');
 const fs   = require('fs');
 const path = require('path');
 const prisma = require('../config/prisma');
@@ -2566,13 +2567,112 @@ router.get('/reportes/diario', async (req, res) => {
 });
 
 // GET /api/contabilidad/reportes/mayor?formato=csv|pdf
+// El CSV del libro mayor es texto plano sin formato — para uso contable
+// real (revisar en Excel, resaltar, filtrar) hace falta un .xlsx con
+// encabezados en negrita, columnas de moneda con formato numérico real
+// (no texto) y ancho de columna razonable. xlsx (SheetJS) ya se usa en
+// otras partes del sistema para leer/generar plantillas, pero su edición
+// community NO escribe estilos de celda de forma confiable (probado: bold
+// y fill quedan sin aplicar al reabrir el archivo) — solo persiste el
+// formato numérico. exceljs sí escribe estilos reales, por eso se usa acá.
+const FORMATO_MONEDA_XLSX = '"$"#,##0.00';
+const ESTILO_ENCABEZADO_XLSX = {
+  font: { bold: true, color: { argb: 'FF1E293B' } },
+  fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } },
+  border: { bottom: { style: 'thin', color: { argb: 'FF94A3B8' } } },
+};
+
+// Nombre de hoja válido para Excel (máx 31 caracteres, sin : \ / ? * [ ]) y
+// único dentro del libro — Excel no permite 2 hojas con el mismo nombre.
+function nombreHojaExcel(base, usados) {
+  let limpio = String(base || 'Hoja').replace(/[:\\/?*[\]]/g, '-').slice(0, 31).trim();
+  if (!limpio) limpio = 'Hoja';
+  let nombre = limpio;
+  let i = 2;
+  while (usados.has(nombre)) {
+    const sufijo = ` (${i})`;
+    nombre = `${limpio.slice(0, 31 - sufijo.length)}${sufijo}`;
+    i += 1;
+  }
+  usados.add(nombre);
+  return nombre;
+}
+
+function agregarHojaMayorCuentaXlsx(workbook, nombreHoja, mayor) {
+  const ws = workbook.addWorksheet(nombreHoja);
+  ws.columns = [{ width: 12 }, { width: 16 }, { width: 14 }, { width: 45 }, { width: 14 }, { width: 14 }, { width: 14 }];
+
+  const filaTitulo = ws.addRow([`Cuenta: ${mayor.cuenta.codigo} - ${mayor.cuenta.nombre}`]);
+  ws.mergeCells(filaTitulo.number, 1, filaTitulo.number, 7);
+  filaTitulo.getCell(1).font = { bold: true, size: 12 };
+
+  const filaSaldo = ws.addRow([`Saldo final: $${Number(mayor.saldoFinal).toFixed(2)}  ·  ${mayor.movimientos.length} movimiento(s)`]);
+  ws.mergeCells(filaSaldo.number, 1, filaSaldo.number, 7);
+  filaSaldo.getCell(1).font = { italic: true, color: { argb: 'FF64748B' } };
+
+  ws.addRow([]);
+
+  const filaEncabezado = ws.addRow(['Fecha', 'Asiento', 'Tipo', 'Detalle', 'Debe', 'Haber', 'Saldo']);
+  filaEncabezado.eachCell((cell) => Object.assign(cell, ESTILO_ENCABEZADO_XLSX));
+
+  mayor.movimientos.forEach((m) => {
+    const fila = ws.addRow([
+      new Date(m.fecha),
+      m.numero,
+      m.tipo,
+      m.descripcionDetalle || m.descripcionAsiento || '',
+      Number(m.debe || 0),
+      Number(m.haber || 0),
+      Number(m.saldo || 0),
+    ]);
+    fila.getCell(1).numFmt = 'dd/mm/yyyy';
+    fila.getCell(5).numFmt = FORMATO_MONEDA_XLSX;
+    fila.getCell(6).numFmt = FORMATO_MONEDA_XLSX;
+    fila.getCell(7).numFmt = FORMATO_MONEDA_XLSX;
+  });
+
+  ws.views = [{ state: 'frozen', ySplit: filaEncabezado.number }];
+  return ws;
+}
+
+function agregarHojaResumenMayorXlsx(workbook, mayorizacion) {
+  const ws = workbook.addWorksheet('Resumen');
+  ws.columns = [{ width: 14 }, { width: 40 }, { width: 12 }, { width: 14 }, { width: 14 }, { width: 14 }];
+
+  const filaTitulo = ws.addRow(['Mayorización por lote']);
+  ws.mergeCells(filaTitulo.number, 1, filaTitulo.number, 6);
+  filaTitulo.getCell(1).font = { bold: true, size: 12 };
+
+  const filaResumen = ws.addRow([
+    `${mayorizacion.resumen.cuentas} cuenta(s)  ·  ${mayorizacion.resumen.movimientos} movimiento(s)  ·  ` +
+    `Debe $${mayorizacion.resumen.totalDebe.toFixed(2)}  ·  Haber $${mayorizacion.resumen.totalHaber.toFixed(2)}`,
+  ]);
+  ws.mergeCells(filaResumen.number, 1, filaResumen.number, 6);
+  filaResumen.getCell(1).font = { italic: true, color: { argb: 'FF64748B' } };
+
+  ws.addRow([]);
+
+  const filaEncabezado = ws.addRow(['Código', 'Cuenta', 'Movimientos', 'Debe', 'Haber', 'Saldo']);
+  filaEncabezado.eachCell((cell) => Object.assign(cell, ESTILO_ENCABEZADO_XLSX));
+
+  mayorizacion.tabla.forEach((fila) => {
+    const r = ws.addRow([fila.codigo, fila.nombre, fila.movimientos, Number(fila.totalDebe), Number(fila.totalHaber), Number(fila.saldo)]);
+    r.getCell(4).numFmt = FORMATO_MONEDA_XLSX;
+    r.getCell(5).numFmt = FORMATO_MONEDA_XLSX;
+    r.getCell(6).numFmt = FORMATO_MONEDA_XLSX;
+  });
+
+  ws.views = [{ state: 'frozen', ySplit: filaEncabezado.number }];
+  return ws;
+}
+
 router.get('/reportes/mayor', async (req, res) => {
   try {
     const empresaId = obtenerEmpresaId(req);
     const formato = String(req.query.formato || 'csv').toLowerCase();
     const cuentaId = parseIntSafe(req.query.cuentaId);
-    if (!['csv', 'pdf'].includes(formato)) {
-      return res.status(400).json({ success: false, mensaje: 'Formato inválido. Use csv o pdf' });
+    if (!['csv', 'pdf', 'xlsx'].includes(formato)) {
+      return res.status(400).json({ success: false, mensaje: 'Formato inválido. Use csv, pdf o xlsx' });
     }
 
     const mayor = cuentaId ? await obtenerLibroMayor(empresaId, cuentaId, req.query) : null;
@@ -2622,6 +2722,30 @@ router.get('/reportes/mayor', async (req, res) => {
         ['seccion', 'codigo', 'cuenta', 'fecha', 'asientoNumero', 'tipo', 'detalle', 'debe', 'haber', 'saldo'],
         rows,
       );
+    }
+
+    if (formato === 'xlsx') {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'AELA ERP';
+      workbook.created = new Date();
+
+      if (mayor) {
+        agregarHojaMayorCuentaXlsx(workbook, 'Mayor', mayor);
+      } else {
+        agregarHojaResumenMayorXlsx(workbook, mayorizacion);
+        const nombresUsados = new Set(['Resumen']);
+        for (const fila of mayorizacion.tabla) {
+          const detalleCuenta = await obtenerLibroMayor(empresaId, fila.cuentaId, req.query);
+          if (!detalleCuenta || detalleCuenta.movimientos.length === 0) continue;
+          const nombreHoja = nombreHojaExcel(`${fila.codigo} ${fila.nombre}`, nombresUsados);
+          agregarHojaMayorCuentaXlsx(workbook, nombreHoja, detalleCuenta);
+        }
+      }
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="libro_mayor_${formatDateOnly(new Date())}.xlsx"`);
+      await workbook.xlsx.write(res);
+      return res.end();
     }
 
     const config = await prisma.configuracion_sri.findFirst({ where: { empresaId } });

@@ -1748,9 +1748,16 @@ const ContabilidadHub = () => {
               <button className="btn-secondary" onClick={cargarLibroMayor}>Consultar</button>
               <button
                 className="btn-secondary"
+                onClick={() => descargarReporteContable('mayor', 'xlsx', mayorFiltros)}
+                title="Excel real (.xlsx) con encabezados en negrita, columnas de moneda formateadas y una hoja por cuenta"
+              >
+                📊 Exportar Excel
+              </button>
+              <button
+                className="btn-secondary"
                 onClick={() => descargarReporteContable('mayor', 'csv', mayorFiltros)}
               >
-                Exportar Excel (CSV)
+                Exportar CSV
               </button>
               <button
                 className="btn-secondary"
