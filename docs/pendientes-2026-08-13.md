@@ -77,3 +77,38 @@ build`: sin errores.
   repetida en el Balance después de este fix, compárteme una captura — eso
   confirmaría que la causa es otra (por ejemplo, algo distinto a lo que se
   cubrió aquí) y hay que investigarlo puntual.
+
+## Continuación misma sesión — Exportar Libro Mayor a Excel real (commit `b872adb`)
+
+El usuario hizo notar que el botón "Exportar Excel" del Libro Mayor en
+realidad descargaba un CSV (la propia etiqueta lo decía: "Exportar Excel
+(CSV)") — texto plano, sin formato, montos como texto. Pidió que salga
+"bien formateado en el Excel".
+
+**Se agregó la dependencia `exceljs`**: la librería `xlsx` (SheetJS
+community edition) ya usada en el resto del sistema para leer/generar
+plantillas **no escribe estilos de celda de forma confiable** — se probó
+explícitamente (bold y fill de relleno quedaban sin aplicar al reabrir el
+archivo con una librería independiente; solo el formato numérico
+persiste). `exceljs` sí escribe estilos reales de forma consistente.
+
+`GET /contabilidad/reportes/mayor` ahora acepta `formato=xlsx` además de
+`csv|pdf`: encabezados en negrita con fondo gris, Debe/Haber/Saldo como
+números reales con formato de moneda (no texto), Fecha como fecha real,
+anchos de columna razonables y encabezado congelado. Filtrando por una
+cuenta: una hoja "Mayor". Sin filtrar (general): hoja "Resumen" + una hoja
+por cada cuenta con movimientos, mismo criterio que el PDF general de
+antes.
+
+Botón `📊 Exportar Excel` en el tab Libro Mayor; el botón CSV existente se
+renombró a "Exportar CSV" (ya no se hace pasar por Excel).
+
+**Verificado** generando el archivo con `exceljs` y reabriéndolo con
+`openpyxl` (librería Python independiente, para no validar con la misma
+herramienta que lo generó): negrita y relleno del encabezado sí persisten,
+columnas de fecha y moneda con el tipo y formato numérico correctos, ancho
+de columna y freeze panes aplicados, 6 hojas generadas correctamente en el
+caso general (Resumen + 5 cuentas, nombres de hoja truncados a 31
+caracteres sin colisión). Probado contra un tenant local aislado, datos de
+prueba eliminados al terminar. `node --test`: 42/42. `vite build`: sin
+errores.
