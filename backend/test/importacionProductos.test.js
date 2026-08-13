@@ -41,6 +41,16 @@ test('mapearFilaProducto conserva la precisión completa del precio para que el 
   assert.equal(pvpRecalculado, 0.5);
 });
 
+test('mapearFilaProducto limpia saltos de línea de celdas de Excel con texto envuelto (Alt+Enter)', () => {
+  // Caso real: "RUFFLES TWIST LIMON 38GX60X1 RM" en una celda con ajuste de
+  // texto en Excel se ve como una línea pero guarda un \r\n real — sin
+  // limpiar esto, el SRI rechaza la factura con error 35 "ARCHIVO NO
+  // CUMPLE ESTRUCTURA XML" recién al vender ese producto.
+  const fila = { codigoPrincipal: '7861018591712', nombre: 'RUFFLES TWIST LIMON\r\n38GX60X1 RM' };
+  const producto = mapearFilaProducto(fila, 0);
+  assert.equal(producto.nombre, 'RUFFLES TWIST LIMON 38GX60X1 RM');
+});
+
 test('desambiguarCodigosDuplicados asigna código único cuando el mismo código tiene nombres distintos', () => {
   const productos = [
     { codigoPrincipal: 'TARJETA', nombre: 'Tarjeta Claro 5.50' },

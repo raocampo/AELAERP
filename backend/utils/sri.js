@@ -19,6 +19,19 @@ const fs         = require('fs');
 const path       = require('path');
 const bwipjs     = require('bwip-js');
 
+// ─── Sanitización de texto libre para XML ──────────────────────────────────
+// El XSD del SRI valida los campos de texto (descripcion, razonSocial,
+// direccion, motivo, etc.) contra el patrón `[^\n]*` — no admite saltos de
+// línea. Un salto de línea embebido (típico de nombres de producto
+// importados desde Excel con celdas de texto envuelto, Alt+Enter) produce
+// un rechazo "ARCHIVO NO CUMPLE ESTRUCTURA XML" recién al llegar al SRI,
+// no antes. Se normaliza cualquier texto libre antes de insertarlo en el
+// XML para que un dato sucio nunca vuelva a tumbar un comprobante.
+function t(valor) {
+  if (valor === null || valor === undefined) return valor;
+  return String(valor).replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim();
+}
+
 // ─── Constantes SRI ─────────────────────────────────────────────────────────
 
 const SRI_URLS = {
@@ -345,15 +358,15 @@ function generarXMLFactura(data, config) {
   const infoTrib = root.ele('infoTributaria');
   infoTrib.ele('ambiente').txt(String(config.ambiente));
   infoTrib.ele('tipoEmision').txt('1');
-  infoTrib.ele('razonSocial').txt(config.razonSocial);
-  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(config.nombreComercial);
+  infoTrib.ele('razonSocial').txt(t(config.razonSocial));
+  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(t(config.nombreComercial));
   infoTrib.ele('ruc').txt(config.ruc);
   infoTrib.ele('claveAcceso').txt(claveAcceso);
   infoTrib.ele('codDoc').txt(TIPO_COMPROBANTE.FACTURA);
   infoTrib.ele('estab').txt(String(config.establecimiento).padStart(3, '0'));
   infoTrib.ele('ptoEmi').txt(String(config.puntoEmision).padStart(3, '0'));
   infoTrib.ele('secuencial').txt(String(secuencial).padStart(9, '0'));
-  infoTrib.ele('dirMatriz').txt(config.dirMatriz);
+  infoTrib.ele('dirMatriz').txt(t(config.dirMatriz));
   if (config.contribuyenteRimpe) {
     infoTrib.ele('contribuyenteRimpe').txt(config.negocioPopular
       ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
@@ -363,16 +376,16 @@ function generarXMLFactura(data, config) {
   // infoFactura
   const infoFact = root.ele('infoFactura');
   infoFact.ele('fechaEmision').txt(fechaStr);
-  infoFact.ele('dirEstablecimiento').txt(config.dirEstablecimiento || config.dirMatriz);
-  if (config.contribuyenteEspecial) infoFact.ele('contribuyenteEspecial').txt(config.contribuyenteEspecial);
+  infoFact.ele('dirEstablecimiento').txt(t(config.dirEstablecimiento || config.dirMatriz));
+  if (config.contribuyenteEspecial) infoFact.ele('contribuyenteEspecial').txt(t(config.contribuyenteEspecial));
   infoFact.ele('obligadoContabilidad').txt(config.obligadoContabilidad ? 'SI' : 'NO');
   infoFact.ele('tipoIdentificacionComprador').txt(tipoIdentificacionComprador);
   if (tipoIdentificacionComprador === '07') {
     infoFact.ele('guiaRemision').txt('000-000-000000000');
   }
-  infoFact.ele('razonSocialComprador').txt(razonSocialComprador);
+  infoFact.ele('razonSocialComprador').txt(t(razonSocialComprador));
   infoFact.ele('identificacionComprador').txt(identificacionComprador);
-  if (direccionComprador) infoFact.ele('direccionComprador').txt(direccionComprador);
+  if (direccionComprador) infoFact.ele('direccionComprador').txt(t(direccionComprador));
   infoFact.ele('totalSinImpuestos').txt(totalSinImpuestos.toFixed(2));
   infoFact.ele('totalDescuento').txt(totalDesc.toFixed(2));
 
@@ -434,7 +447,7 @@ function generarXMLFactura(data, config) {
     if (config.sectorTransporte) {
       detEle.ele('codigoAuxiliar').txt(CODIGO_AUXILIAR_TRANSPORTE);
     }
-    detEle.ele('descripcion').txt(det.descripcion);
+    detEle.ele('descripcion').txt(t(det.descripcion));
     detEle.ele('cantidad').txt(det.cantidad);
     detEle.ele('precioUnitario').txt(det.precioUnitario);
     detEle.ele('descuento').txt(det.descuento);
@@ -513,15 +526,15 @@ function generarXMLNotaCredito(data, config) {
   const infoTrib = root.ele('infoTributaria');
   infoTrib.ele('ambiente').txt(String(config.ambiente));
   infoTrib.ele('tipoEmision').txt('1');
-  infoTrib.ele('razonSocial').txt(config.razonSocial);
-  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(config.nombreComercial);
+  infoTrib.ele('razonSocial').txt(t(config.razonSocial));
+  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(t(config.nombreComercial));
   infoTrib.ele('ruc').txt(config.ruc);
   infoTrib.ele('claveAcceso').txt(claveAcceso);
   infoTrib.ele('codDoc').txt(TIPO_COMPROBANTE.NOTA_CREDITO);
   infoTrib.ele('estab').txt(String(config.establecimiento).padStart(3, '0'));
   infoTrib.ele('ptoEmi').txt(String(config.puntoEmision).padStart(3, '0'));
   infoTrib.ele('secuencial').txt(String(secuencial).padStart(9, '0'));
-  infoTrib.ele('dirMatriz').txt(config.dirMatriz);
+  infoTrib.ele('dirMatriz').txt(t(config.dirMatriz));
   if (config.contribuyenteRimpe) {
     infoTrib.ele('contribuyenteRimpe').txt(config.negocioPopular
       ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
@@ -530,9 +543,9 @@ function generarXMLNotaCredito(data, config) {
 
   const infoNC = root.ele('infoNotaCredito');
   infoNC.ele('fechaEmision').txt(fechaStr);
-  infoNC.ele('dirEstablecimiento').txt(config.dirEstablecimiento || config.dirMatriz);
+  infoNC.ele('dirEstablecimiento').txt(t(config.dirEstablecimiento || config.dirMatriz));
   infoNC.ele('tipoIdentificacionComprador').txt(tipoIdentificacionComprador);
-  infoNC.ele('razonSocialComprador').txt(razonSocialComprador);
+  infoNC.ele('razonSocialComprador').txt(t(razonSocialComprador));
   infoNC.ele('identificacionComprador').txt(identificacionComprador);
   infoNC.ele('obligadoContabilidad').txt(config.obligadoContabilidad ? 'SI' : 'NO');
   infoNC.ele('codDocModificado').txt(TIPO_COMPROBANTE.FACTURA);
@@ -553,13 +566,13 @@ function generarXMLNotaCredito(data, config) {
     ti.ele('valor').txt(parseFloat(val.iva.toFixed(2)).toFixed(2));
   });
 
-  infoNC.ele('motivo').txt(motivoModificacion);
+  infoNC.ele('motivo').txt(t(motivoModificacion));
 
   const detallesEle = root.ele('detalles');
   detallesXML.forEach(det => {
     const detEle = detallesEle.ele('detalle');
     detEle.ele('codigoInterno').txt('SRV001');
-    detEle.ele('descripcion').txt(det.descripcion);
+    detEle.ele('descripcion').txt(t(det.descripcion));
     detEle.ele('cantidad').txt(det.cantidad.toFixed(2));
     detEle.ele('precioUnitario').txt(det.precio.toFixed(6));
     detEle.ele('descuento').txt('0.00');
@@ -625,15 +638,15 @@ function generarXMLNotaDebito(data, config) {
   const infoTrib = root.ele('infoTributaria');
   infoTrib.ele('ambiente').txt(String(config.ambiente));
   infoTrib.ele('tipoEmision').txt('1');
-  infoTrib.ele('razonSocial').txt(config.razonSocial);
-  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(config.nombreComercial);
+  infoTrib.ele('razonSocial').txt(t(config.razonSocial));
+  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(t(config.nombreComercial));
   infoTrib.ele('ruc').txt(config.ruc);
   infoTrib.ele('claveAcceso').txt(claveAcceso);
   infoTrib.ele('codDoc').txt(TIPO_COMPROBANTE.NOTA_DEBITO);
   infoTrib.ele('estab').txt(String(config.establecimiento).padStart(3, '0'));
   infoTrib.ele('ptoEmi').txt(String(config.puntoEmision).padStart(3, '0'));
   infoTrib.ele('secuencial').txt(String(secuencial).padStart(9, '0'));
-  infoTrib.ele('dirMatriz').txt(config.dirMatriz);
+  infoTrib.ele('dirMatriz').txt(t(config.dirMatriz));
   if (config.contribuyenteRimpe) {
     infoTrib.ele('contribuyenteRimpe').txt(config.negocioPopular
       ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
@@ -643,11 +656,11 @@ function generarXMLNotaDebito(data, config) {
   // infoNotaDebito
   const infoND = root.ele('infoNotaDebito');
   infoND.ele('fechaEmision').txt(fechaStr);
-  infoND.ele('dirEstablecimiento').txt(config.dirEstablecimiento || config.dirMatriz);
-  if (config.contribuyenteEspecial) infoND.ele('contribuyenteEspecial').txt(String(config.contribuyenteEspecial));
+  infoND.ele('dirEstablecimiento').txt(t(config.dirEstablecimiento || config.dirMatriz));
+  if (config.contribuyenteEspecial) infoND.ele('contribuyenteEspecial').txt(t(config.contribuyenteEspecial));
   infoND.ele('obligadoContabilidad').txt(config.obligadoContabilidad ? 'SI' : 'NO');
   infoND.ele('tipoIdentificacionComprador').txt(tipoIdentificacionComprador);
-  infoND.ele('razonSocialComprador').txt(razonSocialComprador);
+  infoND.ele('razonSocialComprador').txt(t(razonSocialComprador));
   infoND.ele('identificacionComprador').txt(identificacionComprador);
   infoND.ele('codDocModificado').txt(codDocSustento || TIPO_COMPROBANTE.FACTURA);
   infoND.ele('numDocModificado').txt(numeroDocSustento);
@@ -678,7 +691,7 @@ function generarXMLNotaDebito(data, config) {
   const motivosEle = root.ele('motivos');
   motivos.forEach((m) => {
     const mEle = motivosEle.ele('motivo');
-    mEle.ele('razon').txt(m.razon);
+    mEle.ele('razon').txt(t(m.razon));
     mEle.ele('valor').txt(parseFloat(m.valor).toFixed(2));
   });
 
@@ -2048,16 +2061,16 @@ function generarXMLRetencion(data, config) {
   const infoTrib = root.ele('infoTributaria');
   infoTrib.ele('ambiente').txt(String(config.ambiente));
   infoTrib.ele('tipoEmision').txt('1');
-  infoTrib.ele('razonSocial').txt(config.razonSocial);
-  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(config.nombreComercial);
+  infoTrib.ele('razonSocial').txt(t(config.razonSocial));
+  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(t(config.nombreComercial));
   infoTrib.ele('ruc').txt(config.ruc);
   infoTrib.ele('claveAcceso').txt(claveAcceso);
   infoTrib.ele('codDoc').txt(TIPO_COMPROBANTE.COMPROBANTE_RETENCION);
   infoTrib.ele('estab').txt(String(config.establecimiento).padStart(3, '0'));
   infoTrib.ele('ptoEmi').txt(String(config.puntoEmision).padStart(3, '0'));
   infoTrib.ele('secuencial').txt(String(secuencial).padStart(9, '0'));
-  infoTrib.ele('dirMatriz').txt(config.dirMatriz);
-  if (config.agenteRetencion) infoTrib.ele('agenteRetencion').txt(config.agenteRetencion);
+  infoTrib.ele('dirMatriz').txt(t(config.dirMatriz));
+  if (config.agenteRetencion) infoTrib.ele('agenteRetencion').txt(t(config.agenteRetencion));
   if (config.contribuyenteRimpe) {
     const rimpeLabel = config.negocioPopular
       ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
@@ -2068,11 +2081,11 @@ function generarXMLRetencion(data, config) {
   // infoCompRetencion
   const infoComp = root.ele('infoCompRetencion');
   infoComp.ele('fechaEmision').txt(fechaStr);
-  infoComp.ele('dirEstablecimiento').txt(config.dirEstablecimiento || config.dirMatriz);
-  if (config.contribuyenteEspecial) infoComp.ele('contribuyenteEspecial').txt(config.contribuyenteEspecial);
+  infoComp.ele('dirEstablecimiento').txt(t(config.dirEstablecimiento || config.dirMatriz));
+  if (config.contribuyenteEspecial) infoComp.ele('contribuyenteEspecial').txt(t(config.contribuyenteEspecial));
   infoComp.ele('obligadoContabilidad').txt(config.obligadoContabilidad ? 'SI' : 'NO');
   infoComp.ele('tipoIdentificacionSujetoRetenido').txt(tipoIdentificacionProveedor);
-  infoComp.ele('razonSocialSujetoRetenido').txt(razonSocialProveedor);
+  infoComp.ele('razonSocialSujetoRetenido').txt(t(razonSocialProveedor));
   infoComp.ele('identificacionSujetoRetenido').txt(identificacionProveedor);
   infoComp.ele('periodoFiscal').txt(periodoFiscal); // MM/YYYY
 
@@ -2456,15 +2469,15 @@ function generarXMLLiquidacionCompra(data, config) {
   const infoTrib = root.ele('infoTributaria');
   infoTrib.ele('ambiente').txt(String(config.ambiente));
   infoTrib.ele('tipoEmision').txt('1');
-  infoTrib.ele('razonSocial').txt(config.razonSocial);
-  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(config.nombreComercial);
+  infoTrib.ele('razonSocial').txt(t(config.razonSocial));
+  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(t(config.nombreComercial));
   infoTrib.ele('ruc').txt(config.ruc);
   infoTrib.ele('claveAcceso').txt(claveAcceso);
   infoTrib.ele('codDoc').txt(TIPO_COMPROBANTE.LIQUIDACION_COMPRA);
   infoTrib.ele('estab').txt(String(config.establecimiento).padStart(3, '0'));
   infoTrib.ele('ptoEmi').txt(String(config.puntoEmision).padStart(3, '0'));
   infoTrib.ele('secuencial').txt(String(secuencial).padStart(9, '0'));
-  infoTrib.ele('dirMatriz').txt(config.dirMatriz);
+  infoTrib.ele('dirMatriz').txt(t(config.dirMatriz));
   if (config.contribuyenteRimpe) {
     infoTrib.ele('contribuyenteRimpe').txt(config.negocioPopular
       ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
@@ -2474,13 +2487,13 @@ function generarXMLLiquidacionCompra(data, config) {
   // infoLiquidacionCompra
   const infoLiq = root.ele('infoLiquidacionCompra');
   infoLiq.ele('fechaEmision').txt(fechaStr);
-  infoLiq.ele('dirEstablecimiento').txt(config.dirEstablecimiento || config.dirMatriz);
-  if (config.contribuyenteEspecial) infoLiq.ele('contribuyenteEspecial').txt(config.contribuyenteEspecial);
+  infoLiq.ele('dirEstablecimiento').txt(t(config.dirEstablecimiento || config.dirMatriz));
+  if (config.contribuyenteEspecial) infoLiq.ele('contribuyenteEspecial').txt(t(config.contribuyenteEspecial));
   infoLiq.ele('obligadoContabilidad').txt(config.obligadoContabilidad ? 'SI' : 'NO');
   infoLiq.ele('tipoIdentificacionProveedor').txt(tipoIdentificacionProveedor);
-  infoLiq.ele('razonSocialProveedor').txt(razonSocialProveedor);
+  infoLiq.ele('razonSocialProveedor').txt(t(razonSocialProveedor));
   infoLiq.ele('identificacionProveedor').txt(identificacionProveedor);
-  if (direccionProveedor) infoLiq.ele('direccionProveedor').txt(direccionProveedor);
+  if (direccionProveedor) infoLiq.ele('direccionProveedor').txt(t(direccionProveedor));
   infoLiq.ele('totalSinImpuestos').txt(totalSinImpuestos.toFixed(2));
   infoLiq.ele('totalDescuento').txt(totalDesc.toFixed(2));
 
@@ -2531,7 +2544,7 @@ function generarXMLLiquidacionCompra(data, config) {
   detallesXML.forEach(det => {
     const detEle = detallesEle.ele('detalle');
     detEle.ele('codigoPrincipal').txt(det.codigoPrincipal);
-    detEle.ele('descripcion').txt(det.descripcion);
+    detEle.ele('descripcion').txt(t(det.descripcion));
     detEle.ele('cantidad').txt(det.cantidad);
     detEle.ele('precioUnitario').txt(det.precioUnitario);
     detEle.ele('descuento').txt(det.descuento);
@@ -2857,15 +2870,15 @@ function generarXMLGuiaRemision(data, config) {
   const infoTrib = root.ele('infoTributaria');
   infoTrib.ele('ambiente').txt(String(config.ambiente));
   infoTrib.ele('tipoEmision').txt('1');
-  infoTrib.ele('razonSocial').txt(config.razonSocial);
-  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(config.nombreComercial);
+  infoTrib.ele('razonSocial').txt(t(config.razonSocial));
+  if (config.nombreComercial) infoTrib.ele('nombreComercial').txt(t(config.nombreComercial));
   infoTrib.ele('ruc').txt(config.ruc);
   infoTrib.ele('claveAcceso').txt(claveAcceso);
   infoTrib.ele('codDoc').txt(TIPO_COMPROBANTE.GUIA_REMISION);
   infoTrib.ele('estab').txt(String(config.establecimiento).padStart(3, '0'));
   infoTrib.ele('ptoEmi').txt(String(config.puntoEmision).padStart(3, '0'));
   infoTrib.ele('secuencial').txt(String(secuencial).padStart(9, '0'));
-  infoTrib.ele('dirMatriz').txt(config.dirMatriz);
+  infoTrib.ele('dirMatriz').txt(t(config.dirMatriz));
   if (config.contribuyenteRimpe) {
     infoTrib.ele('contribuyenteRimpe').txt(config.negocioPopular
       ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
@@ -2874,8 +2887,8 @@ function generarXMLGuiaRemision(data, config) {
 
   // infoGuiaRemision
   const infoGR = root.ele('infoGuiaRemision');
-  infoGR.ele('dirPartida').txt(dirPartida || config.dirMatriz);
-  infoGR.ele('razonSocialTransportista').txt(nombreTransportista);
+  infoGR.ele('dirPartida').txt(t(dirPartida || config.dirMatriz));
+  infoGR.ele('razonSocialTransportista').txt(t(nombreTransportista));
   infoGR.ele('tipoIdentificacionTransportista').txt(tipoIdTransportista);
   infoGR.ele('rucTransportista').txt(rucTransportista);
   infoGR.ele('obligadoContabilidad').txt(config.obligadoContabilidad ? 'SI' : 'NO');
@@ -2887,9 +2900,9 @@ function generarXMLGuiaRemision(data, config) {
   const destinatariosEle = root.ele('destinatarios');
   const dest = destinatariosEle.ele('destinatario');
   dest.ele('identificacionDestinatario').txt(rucDestinatario);
-  dest.ele('razonSocialDestinatario').txt(nombreDestinatario);
-  dest.ele('dirDestinatario').txt(dirDestinatario);
-  dest.ele('motivoTraslado').txt(motivoTraslado);
+  dest.ele('razonSocialDestinatario').txt(t(nombreDestinatario));
+  dest.ele('dirDestinatario').txt(t(dirDestinatario));
+  dest.ele('motivoTraslado').txt(t(motivoTraslado));
   if (docAduaneroUnico) dest.ele('docAduaneroUnico').txt(docAduaneroUnico);
   dest.ele('codDocSustento').txt(codDocSustento);
   dest.ele('numDocSustento').txt(numDocSustento);
@@ -2901,7 +2914,7 @@ function generarXMLGuiaRemision(data, config) {
   (detalles.length > 0 ? detalles : [{ descripcion: 'Mercadería', cantidad: 1 }]).forEach(d => {
     const det = detallesEle.ele('detalle');
     if (d.codigoInterno) det.ele('codigoInterno').txt(String(d.codigoInterno));
-    det.ele('descripcion').txt(d.descripcion || 'Artículo');
+    det.ele('descripcion').txt(t(d.descripcion || 'Artículo'));
     det.ele('cantidad').txt(parseFloat(d.cantidad || 1).toFixed(2));
   });
 

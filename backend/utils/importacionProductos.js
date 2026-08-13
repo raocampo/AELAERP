@@ -34,7 +34,13 @@ function normalizarTexto(valor) {
 }
 
 function limpiarTexto(valor) {
-  return String(valor || '').trim();
+  // Excel permite celdas de texto "envuelto" (Alt+Enter) que se ven como una
+  // sola línea pero guardan un salto de línea real en el valor de la celda.
+  // Sin normalizar esto, el nombre importado queda con \r\n embebido — el
+  // SRI rechaza cualquier <descripcion> con salto de línea (error 35,
+  // "ARCHIVO NO CUMPLE ESTRUCTURA XML") recién al facturar ese producto, no
+  // al importarlo.
+  return String(valor || '').replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim();
 }
 
 // ─── Clasificación best-effort: ¿esta línea de compra es mercadería para la
