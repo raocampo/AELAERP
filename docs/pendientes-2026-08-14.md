@@ -151,3 +151,48 @@ Debe/Haber con formato moneda). Capturas con Playwright contra el tenant
 local (empresaId=1) de las 3 pantallas reportadas — Libro Diario (iconos +
 botones en una línea), Libro Mayor (botones agrupados + Mayorización con
 espacio), Estados Financieros (sub-tabs con estilo de píldora).
+
+## Resumen de commits de la sesión (orden cronológico)
+
+| Commit | Qué |
+|---|---|
+| `e57908d` | Naming reportemayorgeneral/reportemayor\<Cuenta\>, quitar modo oscuro de Contabilidad, mayor general sin salto de página por cuenta, fix cursor de dibujarTablaPdf (totales del asiento) |
+| `86691f5` | docs: Parte 1 |
+| `11f7fb5` | Alto de fila dinámico en PDFs (Detalle completo), Excel real del Diario, botones renombrados/agrupados, Mayorización con estilo, acciones de asientos con iconos, sub-tabs de Estados con estilo |
+| `f5c4a92` | docs: Parte 2 |
+
+Todo lo de hoy quedó **implementado, verificado (tests/build/PDFs/capturas)
+y pusheado a `origin/main`** — no hay ningún cambio de código a medio
+terminar ni bloqueado.
+
+## 🔴 Pendientes para continuar (2026-08-15)
+
+**1. Verificación humana en navegador real (no solo Playwright automatizado)**
+— todo lo de hoy se verificó con capturas automatizadas (Playwright headless)
+y PDFs renderizados a PNG, pero nadie lo probó a mano todavía interactuando
+de verdad (clics, hover de los tooltips nuevos en los iconos, exportar y
+abrir los archivos reales). Recomendable que el usuario le dé una pasada
+rápida a `/contabilidad` (tabs Libro Diario, Libro Mayor, Cierre y Estados)
+antes de darlo por completamente cerrado.
+
+**2. Iconos de acciones — alcance limitado a la lista de asientos (Libro
+Diario)** — el pedido decía "como en las listas de facturas" y se aplicó
+solo ahí, que era la pantalla de la captura. Otras listas de Contabilidad
+con acciones de texto (ej. **Períodos Contables**: "Editar"/"Cerrar"/"Abrir"
+en `ContabilidadHub.jsx` línea ~1722) se quedaron igual — no se tocaron por
+no estar en el pedido ni en las capturas. Si el usuario quiere la misma
+consistencia ahí, es un cambio chico y directo (mismo patrón `.btn-icon`
+ya armado).
+
+**3. Nota — `.env.example` con una diferencia sin relación a esta sesión**
+— desde el inicio de la sesión (antes de tocar nada de Contabilidad)
+`git status` ya mostraba `.env.example` modificado: un `)` de más al final
+de la línea `# DATABASE_URL="postgresql://...railway"` comentada. No se
+tocó (no es parte de ningún pedido) pero quedó sin commitear en el working
+directory — si el usuario lo hizo a propósito, confirmar y commitear; si no,
+probablemente sea un typo para revertir con `git checkout -- .env.example`.
+
+**4. Retomar mañana**: `git fetch` + revisar este documento y
+`project_aela_estado.md` (memoria) — no hay ningún punto 1/2/3 bloqueante,
+son solo verificación humana pendiente y una nota de scope, no bugs
+conocidos.
