@@ -134,10 +134,21 @@ router.get('/movimientos/exportar/csv', permitirVerInventario, validarInventario
 
 router.get('/movimientos', permitirVerInventario, validarInventarioHabilitado, async (req, res) => {
   try {
-    const { productoId, tipo, limit = 100 } = req.query;
+    const { productoId, tipo, busqueda, limit = 100 } = req.query;
     const where = { empresaId: req.empresa.id };
     if (productoId) where.productoId = parseInt(productoId, 10);
     if (tipo) where.tipo = tipo;
+    // Búsqueda por nombre/código del producto — el mismo cuadro "Buscar por
+    // código o nombre" de arriba de la pantalla filtraba el Catálogo/Lista
+    // pero no esta tabla, dando la falsa impresión de que "no filtra" nada.
+    if (busqueda) {
+      where.producto = {
+        OR: [
+          { nombre: { contains: busqueda, mode: 'insensitive' } },
+          { codigoPrincipal: { contains: busqueda, mode: 'insensitive' } },
+        ],
+      };
+    }
 
     const items = await prisma.movimientos_inventario.findMany({
       where,

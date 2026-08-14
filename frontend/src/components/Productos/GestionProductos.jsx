@@ -91,13 +91,20 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       ];
 
       if (inventarioActivo) {
-        consultas.push(api.get('/inventario/movimientos', { params: { limit: 200 } }));
+        // El mismo cuadro "Buscar por código o nombre" de arriba también
+        // filtra esta lista — antes solo afectaba Catálogo/Lista, dando la
+        // impresión de que "Actualizar" no hacía nada en Movimientos.
+        consultas.push(api.get('/inventario/movimientos', { params: { limit: 200, busqueda: busquedaActual || undefined } }));
       }
 
       const [productosRes, resumenRes, movimientosRes] = await Promise.all(consultas);
       setProductos(productosRes.data?.data || []);
       setResumen(resumenRes.data?.data || null);
       setMovimientos(movimientosRes?.data?.data || []);
+      // Una búsqueda general nueva tiene prioridad sobre el filtro de "ver
+      // historial completo de un producto" (si había uno activo, quedaría
+      // mostrando datos viejos e ignorando la búsqueda recién hecha).
+      if (busquedaActual) { setMovFiltroProducto(null); setMovimientosProducto(null); }
     } catch (error) {
       toast.error(error.response?.data?.mensaje || error.response?.data?.error || 'No se pudo cargar productos');
     } finally {
@@ -578,7 +585,9 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 ))}
                 {movFiltrados.length === 0 && (
                   <tr><td colSpan="7" className="prod-empty">
-                    {movFiltroTipo ? 'No hay movimientos de ese tipo.' : 'No hay movimientos de inventario todavía.'}
+                    {busqueda
+                      ? `No hay movimientos de un producto que coincida con "${busqueda}".`
+                      : movFiltroTipo ? 'No hay movimientos de ese tipo.' : 'No hay movimientos de inventario todavía.'}
                   </td></tr>
                 )}
               </tbody>
