@@ -70,5 +70,84 @@ Contra el tenant local (empresaId=1, Corp Simtelec):
   confirma que Contabilidad ya no reacciona a la preferencia de tema del
   sistema, igual que Compras/Facturación.
 
-No quedan pendientes abiertos de esta sesión — las 4 partes del pedido están
+No quedan pendientes abiertos de la Parte 1 — las 4 partes del pedido están
 implementadas y verificadas.
+
+## Parte 2 — mismo día: detalle truncado en PDF, botones y acciones sin estilo
+
+El usuario volvió con 3 capturas nuevas (comprobante de asiento con el
+Detalle cortado, tab Libro Mayor con "Procesar mayorización" pegado al
+título, tab Estados Financieros con sub-tabs sin estilo) y una lista de 6
+observaciones más.
+
+### Pedido del usuario
+
+1. En el PDF de un asiento, el Detalle se corta ("Ingreso de inventario
+   por…") — debe mostrarse completo, en varias líneas si hace falta.
+2. Los botones "Exportar Excel" y "PDF Servidor" deben estar en la misma
+   línea; el nombre "PDF Servidor" debe cambiar; falta un Excel real (no
+   CSV) en algún lado.
+3. El botón "Procesar Mayorización" está muy pegado — necesita estilo y
+   espacio.
+4. El botón de imprimir el mayor a PDF debe llamarse "Impresión de mayor"
+   o "PDF de mayor", no "PDF Servidor".
+5. Los iconos de imprimir/duplicar en la lista de asientos no se entienden
+   — deberían ser acciones por ícono como en las listas de facturas.
+6. Los botones de sub-tabs de Estados Financieros no tienen estilo del
+   sistema y están muy pegados.
+
+### Implementado (commit `11f7fb5`)
+
+**1. Detalle truncado (causa raíz en `dibujarTablaPdf`)** — la función
+compartida por los 6 reportes PDF de Contabilidad dibujaba cada fila con
+alto **fijo** (16pt) y `ellipsis: true`, cortando cualquier texto que no
+cupiera en una línea. Mismo patrón de bug ya documentado para el RIDE de
+factura ([[project-ride-pdf-layout-dinamico]]): PDFKit no calcula solo el
+alto de una fila con texto largo, hay que medirlo con `doc.heightOfString()`
+ANTES de dibujar el `rect()` de fondo. Corregido: alto de fila dinámico
+= `Math.max(16, alto medido de la columna más alta)`. Se quitó también el
+`.slice(0, 55)` que truncaba a mano el detalle de movimientos en el Libro
+Mayor (ya innecesario). Verificado con un script aislado de PDFKit (fuera
+de la BD, para no crear asientos de prueba en `empresaId=1`) con un detalle
+de 190 caracteres — se envuelve en 7 líneas sin solaparse con las filas
+siguientes ni con los totales.
+
+**2-4. Botones renombrados y agrupados** — "PDF Servidor" → "PDF del
+Diario" (tab Libro Diario) / "PDF de Mayor" (tab Libro Mayor). El Diario
+solo tenía un CSV mal etiquetado "Exportar Excel (CSV)"; nuevo
+`GET /contabilidad/reportes/diario?formato=xlsx` (Excel real, mismo patrón
+que ya tenía el Mayor: encabezados en negrita, Fecha/Debe/Haber con formato
+real). Los 3 botones de exportación (Excel/CSV/PDF) de cada tab se agrupan
+ahora en un `.conta-btn-group` (flex propio) para que cuando no quepan en
+la línea, se vayan juntos a la siguiente en vez de partirse entre sí.
+
+**3. "Procesar mayorización"** — se agregó un texto de ayuda debajo del
+título de la tarjeta (explica qué hace el botón) y más espacio antes de
+las tarjetas KPI de abajo; el botón pasó de `btn-secondary` a `btn-primary`
+(verde) para que se note que es la acción principal de esa tarjeta.
+
+**5. Acciones de la lista de asientos → iconos** — Ver/Editar/Imprimir/
+Duplicar/Cerrar/Bloquear/Desbloquear/Anular pasaron de texto suelto +
+emoji a `.btn-icon` con tooltip (`title`), el mismo patrón que ya usa
+`ListaFacturas.jsx` (`.tbl-acciones` + `.btn-icon.ic-*`). Se agregaron los
+3 iconos SVG que faltaban a `utils/icons.jsx` (compartido, no solo de
+Contabilidad): `IcDuplicar` (copiar), `IcCandado`/`IcCandadoAbierto`
+(bloquear/desbloquear) — y sus variantes de color en `App.css`
+(`.ic-duplicar`, `.ic-cerrar`, `.ic-bloquear`, `.ic-desbloquear`).
+
+**6. Sub-tabs de Estados Financieros** — usaban una clase `conta-subtabs`
+(plural) que nunca tuvo CSS definido, así que salían como botones de
+navegador sin estilo. Se reemplazó por `.conta-subtab-nav`/`.conta-subtab`,
+la misma píldora con subrayado verde que ya usa Libro Diario/Corrección
+(se le agregó `flex-wrap: wrap` porque acá son 5 pestañas con nombres
+largos en vez de 2).
+
+### Verificado
+
+`node --test`: 42/42. `npm run build`: sin errores. PDF de prueba aislado
+(sin tocar la BD) confirmó el ajuste de altura de fila. Excel del Diario
+verificado con `openpyxl` (encabezado en negrita, Fecha como fecha real,
+Debe/Haber con formato moneda). Capturas con Playwright contra el tenant
+local (empresaId=1) de las 3 pantallas reportadas — Libro Diario (iconos +
+botones en una línea), Libro Mayor (botones agrupados + Mayorización con
+espacio), Estados Financieros (sub-tabs con estilo de píldora).
