@@ -255,3 +255,41 @@ correctamente. Si alguna línea ya está en **Ítems por revisar**
 (pendiente o resuelta antes de hoy), este fix la reconoce y la sincroniza
 al confirmar — ya no debería quedar pegada mostrando "Sin integrar" para
 siempre.
+
+## Continuación misma sesión — el mensaje seguía siendo engañoso (commit `21f8e68`)
+
+El usuario probó de nuevo en la compra real (`aela.corpsimtelec.com/compras/66`,
+Comercial S&S) y **seguía** recibiendo "No se encontraron productos
+inventariables pendientes de integrar en esta compra" al hacer clic en
+"Integrar al inventario (3)".
+
+**Causa**: las 3 líneas restantes YA estaban en **Ítems por revisar**
+(estado `PENDIENTE`) desde una corrida anterior — probablemente quedaron
+ahí por "posible duplicado" antes de que el fix de esta sesión existiera.
+El bucle de `registrar-inventario` (fix anterior, `761e9d0`) las
+reconoce correctamente y NO las vuelve a evaluar (correcto, para no
+duplicar la cola) — pero simplemente hacía `continue` sin contarlas en
+ningún lado, así que el mensaje final seguía siendo el genérico "no hay
+nada pendiente" — técnicamente cierto para ESTE endpoint, pero engañoso:
+sí había algo pendiente, solo que esperando en otra pantalla.
+
+**Fix**: nuevo contador `yaEnRevision` en la respuesta. Cuando es la
+única razón de que no pasó nada, el mensaje ahora dice explícitamente
+*"N línea(s) ya están esperando tu confirmación en Compras → Ítems por
+revisar — resuélvelas ahí (o descártalas) antes de volver a integrar."*
+El toast del frontend (`DetalleCompra.jsx`) ya mostraba el `mensaje` tal
+cual venía del backend, así que no hizo falta tocar el frontend.
+
+**Verificado** con una compra de prueba que simula el escenario exacto
+(línea con entrada `PENDIENTE` preexistente en `items_compra_pendientes`,
+como la de producción): la respuesta reporta `yaEnRevision: 1` y el
+mensaje nuevo, sin registrar movimientos (correcto). `node --test`: 42/42.
+
+**Para el usuario**: en la compra real de Bimbo, después de este deploy,
+si el botón sigue sin crear productos, el mensaje del toast debería decir
+ahora cuántas líneas están esperando en Ítems por revisar — ve a
+**Compras → Ítems por revisar**, busca esas 3 líneas y usa "Sí, es el
+mismo" (si sugiere un producto parecido) o "Crear producto" (si es
+realmente nuevo) para resolverlas una por una. Una vez resueltas ahí,
+la compra se sincroniza sola — no hace falta volver a tocar "Integrar al
+inventario".
