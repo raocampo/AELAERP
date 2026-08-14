@@ -181,3 +181,77 @@ aparecer arriba. Si alguna de esas 7 líneas tiene una descripción parecida
 a un producto que ya existe en el catálogo, no va a crear un duplicado —
 va a aparecer en **Compras → Ítems por revisar** para que confirmes si es
 el mismo producto.
+
+## Continuación misma sesión — el fix anterior no alcanzaba para la compra real (commit `761e9d0`)
+
+El usuario probó el botón "Integrar al inventario" en la compra real de
+Bimbo y recibió **"No se encontraron productos inventariables pendientes
+de integrar en esta compra"** — un callejón sin salida, cuando debía crear
+los productos faltantes.
+
+**Causa raíz real**: esa compra tiene `Origen: BUZON_SRI` — se creó por un
+flujo de código completamente distinto (`utils/buzon.js`,
+`importarDocumentoRecibido`), no por `POST /compras`. El fix anterior
+(`f554be5`) solo tocó `registrar-inventario`; nunca tocó el import del
+Buzón. Ahí se encontraron 2 bugs propios:
+
+1. `detalles` se guardaba en la BD **antes** de correr la resolución de
+   productos, y esa resolución nunca escribía `productoId` de vuelta al
+   detalle — toda compra importada del Buzón SRI queda con
+   `productoId: undefined` en **todas** sus líneas para siempre, sin
+   importar cuántas se hayan resuelto durante el import.
+2. El movimiento de inventario usaba `referencia: "BUZON-<id>"` en vez del
+   número de factura (la convención que usa el resto del sistema) —
+   impedía que el chequeo de "ya aplicado" reconociera estos movimientos.
+
+Al armar una prueba end-to-end simulando un import real del Buzón
+aparecieron **2 bugs más**, en la misma área pero relacionados con la
+función "¿es el mismo producto?" (posible duplicado, sesión 2026-08-06):
+
+3. `POST /compras/pendientes/:id/asignar` y `/crear-producto` — los
+   endpoints reales detrás del botón **"Sí, es el mismo"** en Ítems por
+   revisar — aplicaban el movimiento de inventario pero **nunca
+   actualizaban el detalle de la compra origen**. La línea seguía
+   mostrando "Sin integrar" para siempre, y una corrida posterior de
+   "Integrar al inventario" la evaluaba desde cero (podía re-encolarla en
+   Ítems por revisar otra vez). Además usaban `item.codigoPrincipal` como
+   referencia en vez del número de factura — mismo problema que el bug 2.
+4. El chequeo de "¿ya se aplicó esta línea?" en `registrar-inventario` se
+   basaba en producto+factura, no en la línea puntual de la compra. Cuando
+   **2 líneas de la misma compra resuelven al mismo producto** (justo el
+   caso de "posible duplicado" confirmado — una línea con match exacto y
+   otra con descripción parecida apuntando al mismo producto), la segunda
+   se daba por aplicada solo porque la primera ya había generado un
+   movimiento para ese producto — su cantidad se perdía en silencio, sin
+   ningún error visible.
+
+**Fix**: se agregó un flag `movimientoAplicado` por línea de detalle —
+fuente de verdad inequívoca por línea, sin la ambigüedad de inferir por
+producto+factura cuando 2 líneas comparten el mismo producto. Se aplicó en
+los 3 lugares que tocan movimientos de compra (`buzon.js`, `compras.js`,
+`comprasPendientes.js`). El chequeo viejo por producto+factura se
+conserva solo como inferencia de migración, para líneas que ya tenían
+`productoId` de antes de este fix. `registrar-inventario` ahora también
+**auto-sana** líneas que ya se resolvieron por Ítems por revisar (estado
+`RESUELTO`) pero cuyo detalle nunca se sincronizó — en vez de re-evaluarlas
+o dejarlas atascadas para siempre. El mensaje de respuesta también se
+mejoró para distinguir "no había nada pendiente" de "había líneas sin
+match y no se creó ninguna" (probablemente por no marcar "Crear productos
+no encontrados").
+
+**Verificado** end-to-end contra un tenant local aislado, simulando una
+importación real del Buzón SRI con 3 líneas (match exacto, producto
+nuevo, descripción parecida) más un ítem de regalo resuelto vía
+"crear producto": `productoId` y `movimientoAplicado` se sincronizan
+correctamente en los 3 flujos, la referencia es consistente
+(`numeroFactura` en los 3), "Integrar al inventario" queda idempotente
+después de cada resolución (0 movimientos en corridas repetidas), sin
+movimientos duplicados ni perdidos. `node --test`: 42/42. `vite build`:
+sin errores.
+
+**Para el usuario**: en la compra real de Bimbo, después de este deploy,
+"Integrar al inventario" debería crear los productos faltantes
+correctamente. Si alguna línea ya está en **Ítems por revisar**
+(pendiente o resuelta antes de hoy), este fix la reconoce y la sincroniza
+al confirmar — ya no debería quedar pegada mostrando "Sin integrar" para
+siempre.
