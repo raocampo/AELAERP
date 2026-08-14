@@ -382,3 +382,20 @@ S&S) para corregirlo directamente. Recomendación:
    explicando "Corrección duplicado — compra 66". Esto deja el stock
    correcto y mantiene el historial completo (mejor que borrar el
    movimiento duplicado a mano).
+
+## Continuación misma sesión — el buscador no filtraba Movimientos (commit `255ef3b`)
+
+El usuario escribió "submar" en "Buscar por código o nombre" (para
+revisar justo los productos Submarino tras el hallazgo del duplicado) y
+al presionar Actualizar la tabla de Movimientos no cambió. Causa: ese
+cuadro solo se pasaba a `GET /productos` (Catálogo/Lista) —
+`GET /inventario/movimientos` nunca recibía el término de búsqueda.
+
+Fix: el endpoint acepta `busqueda` (nombre o código, insensible a
+mayúsculas) igual que el resto de búsquedas del sistema; el frontend
+pasa el mismo término del cuadro superior. Si había un filtro de "ver
+historial completo de un producto" activo, una búsqueda nueva lo
+reemplaza (antes hubiera quedado mostrando datos viejos, ignorando la
+búsqueda). Verificado con Playwright: 3 productos de prueba (2 con
+"submarino" en el nombre, 1 sin relación), buscar "submar" devuelve
+exactamente los 2 esperados. `vite build`: sin errores.
