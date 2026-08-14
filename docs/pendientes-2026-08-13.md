@@ -399,3 +399,69 @@ reemplaza (antes hubiera quedado mostrando datos viejos, ignorando la
 búsqueda). Verificado con Playwright: 3 productos de prueba (2 con
 "submarino" en el nombre, 1 sin relación), buscar "submar" devuelve
 exactamente los 2 esperados. `vite build`: sin errores.
+
+**El usuario probó en producción y reportó "sigue sin filtrar"** —
+antes de tocar código de nuevo, se le pidió un refresco forzado
+(Ctrl+Shift+R), porque el sistema tiene un **service worker** (PWA
+offline, `frontend/public/sw.js`) que cachea el bundle de JS del
+navegador — un deploy nuevo no siempre se ve reflejado sin refrescar la
+caché. Confirmado: era exactamente eso, funcionó al instante tras el
+refresco forzado, sin más cambios de código. Guardado como aprendizaje
+en memoria ([[feedback-pwa-service-worker-cache]]) para no perder
+tiempo re-investigando código la próxima vez que pase algo similar.
+
+## Resumen de commits de la sesión (orden cronológico)
+
+| Commit | Qué |
+|---|---|
+| `4a851b4` | Imprimir/duplicar asiento, mayor general detallado, balance con firmas |
+| `b872adb` | Exportar Libro Mayor a Excel real (exceljs) |
+| `f554be5` | `registrar-inventario` reentrante (compras sin Buzón SRI) |
+| `761e9d0` | Fix compras del Buzón SRI: `productoId` no persistía + referencia inconsistente + sync de Ítems por revisar |
+| `21f8e68` | Mensaje claro cuando hay líneas esperando en Ítems por revisar |
+| `a23bcc7` | Columnas Stock anterior/Referencia + filtro por producto en Movimientos |
+| `07512f0` | Fix duplicado real: chequeo de "ya aplicado" por contador, no gateado |
+| `255ef3b` | El buscador ahora también filtra la tabla de Movimientos |
+
+## 🔴 Pendientes para continuar (2026-08-14)
+
+**1. Corregir manualmente el stock duplicado en la compra real #66**
+(Comercial S&S / Bimbo, `aela.corpsimtelec.com/compras/66`) — el código
+ya no vuelve a duplicar, pero lo que YA se duplicó sigue así hasta que
+se corrija a mano (sin acceso a la BD de `aela_sys` desde este
+entorno):
+- Confirmar si el usuario ya registró el `AJUSTE_NEGATIVO` de 3 unidades
+  para **"Pan Molde Blanco 1p 262g BOLSA SUP"** (dejó el formulario
+  listo con referencia `CORRECCION-DUP-COMPRA-66`, pero no se confirmó
+  en el chat que le dio clic a "Registrar movimiento").
+- Revisar con el mismo método (clic en el nombre del producto → ver
+  historial completo) los otros productos que se integraron el 13/8 a
+  las 6:01:14 p.m. junto con Pan Molde Blanco — al menos **"Submarino
+  Vainilla NC 1p 27g FLOW MLA"** y **"Submarino Manjar 1p 29g FLOW
+  MLA"** mostraban el mismo patrón sospechoso (cantidad 3, stock nuevo
+  7) en una captura anterior, sin confirmar si eran o no duplicados
+  reales.
+- Ojo: puede haber **otras compras** de Buzón SRI (no solo la #66) con
+  el mismo problema si el usuario las "re-integró" en la ventana entre
+  el commit `761e9d0` (fix que reintrodujo el bug de duplicado) y
+  `07512f0` (fix del duplicado) — no hay forma de saberlo sin revisar
+  caso por caso; si el usuario reporta otro número raro en cualquier
+  producto, aplicar el mismo diagnóstico (filtro por producto →
+  ¿aparecen 2 movimientos ENTRADA con la misma cantidad, uno
+  `BUZON-<id>` y otro con el número de factura?).
+
+**2. Confirmar que las 3 líneas restantes de la compra #66 quedaron
+integradas** — el hilo se cortó en el fix del duplicado sin una
+confirmación final explícita del usuario de que el botón "Integrar al
+inventario" ya no muestra ningún pendiente en esa compra específica.
+
+**3. (Menor, no urgente)** Warning de consola preexistente — "Encountered
+two children with the same key... `/productos`" — visto durante las
+pruebas con Playwright de esta sesión, no relacionado a ningún cambio
+de hoy, no investigado. Probablemente en el menú lateral
+(`Layout.jsx` o similar) con una key duplicada por ruta. Queda para
+otra sesión si el usuario lo nota o pide revisarlo.
+
+**4. Retomar mañana**: `git pull`, revisar este documento y
+`project_aela_estado.md` (memoria), y empezar por el punto 1 de arriba
+si el usuario no lo resolvió por su cuenta.
