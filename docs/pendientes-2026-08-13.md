@@ -293,3 +293,39 @@ mismo" (si sugiere un producto parecido) o "Crear producto" (si es
 realmente nuevo) para resolverlas una por una. Una vez resueltas ahí,
 la compra se sincroniza sola — no hace falta volver a tocar "Integrar al
 inventario".
+
+## Continuación misma sesión — Movimientos de inventario: Stock anterior/Referencia + filtro por producto (commit `a23bcc7`)
+
+El usuario vio en la tabla de Movimientos (Productos > Inventario) dos
+filas con `Cantidad: 3.00` y `Stock nuevo: 7.00` y preguntó por qué,
+esperando 4 (1 anterior + 3 subidas ahora). La tabla no mostraba
+**Stock anterior** ni **Referencia** — sin esos 2 datos era imposible
+saber si el 7 era correcto (el stock anterior ya era 4 por otra razón,
+legítima) o un bug de duplicación. El backend ya devolvía ambos campos
+(`stockAnterior`, `referencia`), solo no se mostraban en esta pantalla.
+
+Además, la lista general solo trae los últimos 200 movimientos
+**mezclados de todos los productos** — si hay bastante movimiento
+reciente de otros productos, el historial completo de uno específico
+puede no estar ahí. El backend ya soportaba filtrar por `productoId`,
+solo no estaba expuesto en la UI.
+
+**Implementado**: columnas nuevas "Stock anterior" y "Referencia" en la
+tabla; el nombre del producto en cada fila ahora es un botón que carga
+su historial completo (hasta 500 movimientos) directo del backend, con
+un chip "Producto: X — historial completo" y botón para quitar el
+filtro.
+
+**Verificado** con Playwright contra el backend local (producto de
+prueba con movimiento ENTRADA 4→7, mismo patrón que reportó el usuario):
+columnas nuevas visibles con el dato correcto, clic en el producto
+filtra bien, quitar filtro funciona, sin errores de consola nuevos
+(sí se notó un warning preexistente de React key duplicada en el menú
+lateral, `/productos` — no relacionado, no corregido, queda para otra
+sesión). `vite build`: sin errores. Datos de prueba eliminados.
+
+**Para el usuario**: ahora puedes ver el `stockAnterior` real de
+cualquier movimiento (columna nueva) y hacer clic en el nombre de
+cualquier producto en Movimientos para ver TODO su historial — así
+puedes confirmar tú mismo si el 7 de "Submarino Vainilla" es correcto
+(por otro stock previo legítimo) o si hay algo raro que compartir.
