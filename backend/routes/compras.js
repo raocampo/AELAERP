@@ -1839,6 +1839,41 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
       const configOperativa = await obtenerConfiguracionSistemaOperativa(empresaId, tx);
       const prefijosRegalo = configOperativa?.prefijosRegaloCompras;
 
+      // Cuántos movimientos de ENTRADA ya existen para este producto+esta
+      // factura, sin importar cuándo ni por qué línea se aplicaron —
+      // incluye tanto el formato de referencia legado `BUZON-<id>` como el
+      // actual `numeroFactura`. Se cuenta una sola vez por producto (cache
+      // en memoria) y cada línea que reclama uno de estos movimientos
+      // históricos lo descuenta — así, si el mismo producto aparece en 2
+      // líneas de la compra y solo 1 ya tenía su movimiento aplicado, la
+      // otra sigue aplicando el suyo con normalidad.
+      const movimientosLegadosDisponibles = new Map(); // productoId -> cantidad de movimientos sin reclamar
+      const contarMovimientosLegados = async (productoId) => {
+        if (!movimientosLegadosDisponibles.has(productoId)) {
+          const total = await tx.movimientos_inventario.count({
+            where: {
+              empresaId,
+              productoId,
+              OR: [
+                { referencia: compra.numeroFactura },
+                { referencia: `BUZON-${compraId}` },
+              ],
+            },
+          });
+          movimientosLegadosDisponibles.set(productoId, total);
+        }
+        return movimientosLegadosDisponibles.get(productoId);
+      };
+      // Reclama 1 movimiento histórico de este producto si queda alguno sin
+      // asignar a una línea — devuelve true si lo reclamó (la línea NO debe
+      // volver a aplicar un movimiento nuevo).
+      const reclamarMovimientoLegado = async (productoId) => {
+        const disponibles = await contarMovimientosLegados(productoId);
+        if (disponibles <= 0) return false;
+        movimientosLegadosDisponibles.set(productoId, disponibles - 1);
+        return true;
+      };
+
       for (let i = 0; i < detallesActualizados.length; i++) {
         const det = detallesActualizados[i];
 
@@ -1855,7 +1890,6 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
 
         let prod = null;
         let esRegaloMatcheado = false;
-        const teniaProductoIdPrevio = Boolean(det.productoId);
 
         if (det.productoId) {
           // Ya venía resuelto a un producto (ej. match exacto de código al
@@ -1887,6 +1921,11 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
               const prodAsignado = await tx.productos_servicios.findFirst({ where: { id: itemPrevio.productoAsignadoId, empresaId } });
               if (prodAsignado) {
                 detallesActualizados[i] = { ...det, productoId: prodAsignado.id, inventariable: prodAsignado.inventariable, movimientoAplicado: true };
+                // El movimiento de esta línea ya se aplicó vía /asignar o
+                // /crear-producto (referencia=numeroFactura) — reservarlo
+                // en el contador para que ninguna otra línea de esta misma
+                // compra que resuelva al mismo producto lo reclame de nuevo.
+                await reclamarMovimientoLegado(prodAsignado.id);
               }
             } else if (itemPrevio.estado === 'PENDIENTE') {
               // Ya está esperando al usuario en "Ítems por revisar" — sin
@@ -1937,30 +1976,27 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
         const cantidad = Number(det.cantidad || 0);
         if (cantidad <= 0) continue;
 
-        // Chequeo legado por producto+factura: solo se usa para líneas que
-        // YA tenían productoId asignado desde ANTES de esta corrida (nunca
-        // pudieron tener `movimientoAplicado` porque el campo no existía
-        // todavía) — es una inferencia de migración única. Las líneas
-        // recién resueltas en este mismo bucle (arriba) nunca entran acá:
-        // no podrían haber recibido su movimiento antes de existir, así
-        // que siempre se aplican. Se acepta también el formato de
-        // referencia legado `BUZON-<id>` que usaban las compras
-        // importadas del Buzón SRI antes de este fix.
-        if (teniaProductoIdPrevio) {
-          const yaTieneMovimiento = await tx.movimientos_inventario.findFirst({
-            where: {
-              empresaId,
-              productoId: prod.id,
-              OR: [
-                { referencia: compra.numeroFactura },
-                { referencia: `BUZON-${compraId}` },
-              ],
-            },
-          });
-          if (yaTieneMovimiento) {
-            detallesActualizados[i] = { ...detallesActualizados[i], movimientoAplicado: true };
-            continue;
-          }
+        // Chequeo legado por producto+factura — se ejecuta para TODA línea
+        // que llega hasta acá, no solo las que ya tenían productoId antes
+        // de esta corrida. Es tentador pensar que una línea "recién
+        // resuelta" en este mismo bucle no puede tener un movimiento previo
+        // (todavía no existía como línea resuelta) — pero eso ignora que el
+        // PRODUCTO al que resuelve puede haber recibido su movimiento por
+        // otra vía que nunca escribió el productoId de vuelta al detalle:
+        // el caso real que reveló este bug fue una compra del Buzón SRI
+        // donde el import original SÍ aplicó el movimiento (con la
+        // referencia legada `BUZON-<id>`) pero nunca guardó el productoId
+        // en la línea (bug de buzon.js corregido en esta misma sesión) — al
+        // reprocesar la compra, la línea llegaba "en blanco", resolvía al
+        // mismo producto por código exacto, y volvía a aplicar el mismo
+        // movimiento por segunda vez, duplicando el stock. El contador
+        // por producto (`reclamarMovimientoLegado`) evita tanto este caso
+        // como el opuesto: si 2 líneas de la compra comparten el mismo
+        // producto y solo 1 ya tenía su movimiento aplicado, la otra igual
+        // aplica el suyo con normalidad (no se bloquean entre sí).
+        if (await reclamarMovimientoLegado(prod.id)) {
+          detallesActualizados[i] = { ...detallesActualizados[i], movimientoAplicado: true };
+          continue;
         }
 
         await aplicarMovimientoInventario({
