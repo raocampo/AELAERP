@@ -351,6 +351,39 @@
   border: 1px solid #e2e8f0;
 }
 
+/* ── Filtro por producto en Movimientos ─────────────────────────── */
+.prod-filtro-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .25rem .6rem;
+  border-radius: .5rem;
+  font-size: .8rem;
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+}
+.prod-filtro-chip-x {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #3730a3;
+  font-weight: 700;
+  padding: 0 .2rem;
+}
+.prod-link-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: #4f46e5;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  font: inherit;
+}
+.prod-link-btn:hover { text-decoration-color: currentColor; }
+
 /* ── Modales ─────────────────────────────────────────────────────── */
 .prod-modal-overlay {
   position: fixed;

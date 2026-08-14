@@ -70,6 +70,14 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
   const [movPage,       setMovPage]       = useState(1);
   const [movPerPage]                      = useState(10);
   const [movFiltroTipo, setMovFiltroTipo] = useState('');
+  // Filtro por producto: la lista general trae solo los últimos 200
+  // movimientos MEZCLADOS entre todos los productos — insuficiente para ver
+  // el historial completo de uno solo si hay mucho movimiento. Al filtrar
+  // se pide directo al backend con ese productoId (soportado desde antes,
+  // solo no estaba expuesto en esta UI).
+  const [movFiltroProducto, setMovFiltroProducto] = useState(null); // { id, nombre } | null
+  const [movimientosProducto, setMovimientosProducto] = useState(null); // null = sin filtro activo
+  const [cargandoMovProducto, setCargandoMovProducto] = useState(false);
   const busquedaInicial = useRef(busqueda);
 
   const inventarioActivo = Boolean(sistema?.inventarioHabilitado);
@@ -208,6 +216,22 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
     }
   };
 
+  const filtrarMovimientosPorProducto = async (producto) => {
+    setMovFiltroProducto(producto);
+    setMovPage(1);
+    if (!producto) { setMovimientosProducto(null); return; }
+    setCargandoMovProducto(true);
+    try {
+      const res = await api.get('/inventario/movimientos', { params: { productoId: producto.id, limit: 500 } });
+      setMovimientosProducto(res.data?.data || []);
+    } catch {
+      toast.error('No se pudo cargar el historial de este producto');
+      setMovimientosProducto([]);
+    } finally {
+      setCargandoMovProducto(false);
+    }
+  };
+
   const exportarMovimientosCsv = async () => {
     setExportandoInv(true);
     try {
@@ -321,9 +345,10 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
 
   // Datos derivados para movimientos filtrados + paginados
   const movFiltrados = useMemo(() => {
-    if (!movFiltroTipo) return movimientos;
-    return movimientos.filter((m) => m.tipo === movFiltroTipo);
-  }, [movimientos, movFiltroTipo]);
+    const base = movFiltroProducto ? (movimientosProducto || []) : movimientos;
+    if (!movFiltroTipo) return base;
+    return base.filter((m) => m.tipo === movFiltroTipo);
+  }, [movimientos, movimientosProducto, movFiltroProducto, movFiltroTipo]);
   const movTotalPages = Math.ceil(movFiltrados.length / movPerPage);
   const movEnPagina   = movFiltrados.slice((movPage - 1) * movPerPage, movPage * movPerPage);
 
@@ -483,6 +508,17 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 <option value="VENTA_FACTURA">Venta factura</option>
                 <option value="VENTA_NOTA">Venta nota</option>
               </select>
+              {movFiltroProducto && (
+                <span className="prod-filtro-chip">
+                  Producto: <strong>{movFiltroProducto.nombre}</strong> — historial completo
+                  <button type="button" className="prod-filtro-chip-x" onClick={() => filtrarMovimientosPorProducto(null)} title="Quitar filtro">✕</button>
+                </span>
+              )}
+              {!movFiltroProducto && (
+                <span style={{ fontSize: '.78rem', color: '#64748b' }}>
+                  Clic en un producto de la lista para ver su historial completo
+                </span>
+              )}
             </div>
             <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
               <button className="btn-secondary" onClick={exportarMovimientosCsv}
@@ -503,6 +539,7 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
               </button>
             </div>
           </div>
+          {cargandoMovProducto && <p style={{ color: '#64748b', fontSize: '.85rem' }}>Cargando historial del producto…</p>}
           <div className="prod-table-wrap">
             <table className="prod-table">
               <thead>
@@ -510,22 +547,37 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                   <th>Fecha</th>
                   <th>Producto</th>
                   <th>Tipo</th>
+                  <th className="text-right">Stock anterior</th>
                   <th className="text-right">Cantidad</th>
                   <th className="text-right">Stock nuevo</th>
+                  <th>Referencia</th>
                 </tr>
               </thead>
               <tbody>
                 {movEnPagina.map((movimiento) => (
                   <tr key={movimiento.id}>
                     <td style={{ whiteSpace: 'nowrap', fontSize: '.82rem' }}>{new Date(movimiento.createdAt).toLocaleString('es-EC')}</td>
-                    <td>{movimiento.producto?.nombre || '—'}</td>
+                    <td>
+                      {movimiento.producto?.id ? (
+                        <button
+                          type="button"
+                          className="prod-link-btn"
+                          title="Ver historial completo de este producto"
+                          onClick={() => filtrarMovimientosPorProducto({ id: movimiento.producto.id, nombre: movimiento.producto.nombre })}
+                        >
+                          {movimiento.producto.nombre}
+                        </button>
+                      ) : (movimiento.producto?.nombre || '—')}
+                    </td>
                     <td><span className="prod-tipo-chip">{movimiento.tipo}</span></td>
+                    <td className="text-right">{Number(movimiento.stockAnterior || 0).toFixed(2)}</td>
                     <td className="text-right">{Number(movimiento.cantidad || 0).toFixed(2)}</td>
                     <td className="text-right">{Number(movimiento.stockNuevo || 0).toFixed(2)}</td>
+                    <td style={{ fontSize: '.8rem', color: '#64748b' }}>{movimiento.referencia || '—'}</td>
                   </tr>
                 ))}
                 {movFiltrados.length === 0 && (
-                  <tr><td colSpan="5" className="prod-empty">
+                  <tr><td colSpan="7" className="prod-empty">
                     {movFiltroTipo ? 'No hay movimientos de ese tipo.' : 'No hay movimientos de inventario todavía.'}
                   </td></tr>
                 )}
