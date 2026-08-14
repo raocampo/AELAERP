@@ -1840,8 +1840,21 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
 
       for (let i = 0; i < detallesActualizados.length; i++) {
         const det = detallesActualizados[i];
+
+        // Señal definitiva de "esta línea puntual ya recibió su
+        // movimiento" — a diferencia de inferirlo por producto+factura
+        // (ver más abajo), esto no se confunde cuando 2 líneas distintas
+        // de la misma compra resuelven al MISMO producto (ej. una línea
+        // con match exacto de código y otra con descripción parecida
+        // confirmada como "el mismo producto" vía Ítems por revisar) — sin
+        // esto, la segunda línea se daba por aplicada solo porque YA
+        // existía un movimiento de ese producto en esta factura (de la
+        // primera línea), y su cantidad se perdía en silencio.
+        if (det.movimientoAplicado) continue;
+
         let prod = null;
         let esRegaloMatcheado = false;
+        const teniaProductoIdPrevio = Boolean(det.productoId);
 
         if (det.productoId) {
           // Ya venía resuelto a un producto (ej. match exacto de código al
@@ -1855,13 +1868,28 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
         } else {
           if (!det.codigoPrincipal) continue;
 
-          // Evita encolar el mismo ítem 2 veces en "Ítems por revisar" si se
-          // corre este endpoint más de una vez sobre una línea que sigue sin
-          // resolverse (posible duplicado / regalo sin match).
-          const yaEnRevision = await tx.items_compra_pendientes.findFirst({
-            where: { empresaId, compraId, codigoPrincipal: det.codigoPrincipal, estado: 'PENDIENTE' },
+          // Si esta línea ya pasó antes por "Ítems por revisar" (en
+          // cualquier estado), no se vuelve a evaluar ni a re-encolar:
+          // - PENDIENTE: sigue esperando resolución manual del usuario.
+          // - IGNORADO: el usuario decidió explícitamente no integrarla.
+          // - RESUELTO: ya se aplicó su movimiento vía
+          //   /compras/pendientes/:id/asignar o /crear-producto — se
+          //   sincroniza acá el producto asignado (auto-sanar compras
+          //   antiguas de antes de este fix, cuando esa resolución nunca
+          //   se reflejaba en el detalle de la compra).
+          const itemPrevio = await tx.items_compra_pendientes.findFirst({
+            where: { empresaId, compraId, codigoPrincipal: det.codigoPrincipal },
+            orderBy: { id: 'desc' },
           });
-          if (yaEnRevision) continue;
+          if (itemPrevio) {
+            if (itemPrevio.estado === 'RESUELTO' && itemPrevio.productoAsignadoId) {
+              const prodAsignado = await tx.productos_servicios.findFirst({ where: { id: itemPrevio.productoAsignadoId, empresaId } });
+              if (prodAsignado) {
+                detallesActualizados[i] = { ...det, productoId: prodAsignado.id, inventariable: prodAsignado.inventariable, movimientoAplicado: true };
+              }
+            }
+            continue;
+          }
 
           const resolucion = await resolverOMarcarPendiente({
             tx,
@@ -1901,14 +1929,31 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
         const cantidad = Number(det.cantidad || 0);
         if (cantidad <= 0) continue;
 
-        // Fuente de verdad real de "¿ya se aplicó esta línea?": si ya existe
-        // un movimiento de este producto para esta misma factura, no se
-        // vuelve a aplicar — sin importar si el productoId se resolvió hoy
-        // o venía de la creación original de la compra.
-        const yaTieneMovimiento = await tx.movimientos_inventario.findFirst({
-          where: { empresaId, productoId: prod.id, referencia: compra.numeroFactura },
-        });
-        if (yaTieneMovimiento) continue;
+        // Chequeo legado por producto+factura: solo se usa para líneas que
+        // YA tenían productoId asignado desde ANTES de esta corrida (nunca
+        // pudieron tener `movimientoAplicado` porque el campo no existía
+        // todavía) — es una inferencia de migración única. Las líneas
+        // recién resueltas en este mismo bucle (arriba) nunca entran acá:
+        // no podrían haber recibido su movimiento antes de existir, así
+        // que siempre se aplican. Se acepta también el formato de
+        // referencia legado `BUZON-<id>` que usaban las compras
+        // importadas del Buzón SRI antes de este fix.
+        if (teniaProductoIdPrevio) {
+          const yaTieneMovimiento = await tx.movimientos_inventario.findFirst({
+            where: {
+              empresaId,
+              productoId: prod.id,
+              OR: [
+                { referencia: compra.numeroFactura },
+                { referencia: `BUZON-${compraId}` },
+              ],
+            },
+          });
+          if (yaTieneMovimiento) {
+            detallesActualizados[i] = { ...detallesActualizados[i], movimientoAplicado: true };
+            continue;
+          }
+        }
 
         await aplicarMovimientoInventario({
           tx,
@@ -1926,6 +1971,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
           // para no sobreescribir el costo real del producto con $0.
           ...(esRegaloMatcheado ? {} : { costoUnitario: det.precioUnitario || 0 }),
         });
+        detallesActualizados[i] = { ...detallesActualizados[i], movimientoAplicado: true };
 
         if (!esRegaloMatcheado && usarPvpAuto && Number(det.precioUnitario || 0) > 0) {
           const nuevoPvp = Number((det.precioUnitario * (1 + Number(margenPct) / 100)).toFixed(4));
@@ -1938,7 +1984,14 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
         movimientosRegistrados++;
       }
 
-      const huboCambiosDeDetalle = detallesActualizados.some((d, i) => d.productoId !== detalles[i].productoId);
+      // Comparar también movimientoAplicado, no solo productoId: una línea
+      // puede quedar marcada como aplicada sin cambiar de producto (ej. el
+      // chequeo legado yaTieneMovimiento la marcó, o ya tenía productoId y
+      // recién hoy se le aplicó el movimiento) — si solo se mirara
+      // productoId, ese flag se perdía silenciosamente al no persistirse.
+      const huboCambiosDeDetalle = detallesActualizados.some((d, i) =>
+        d.productoId !== detalles[i].productoId || Boolean(d.movimientoAplicado) !== Boolean(detalles[i].movimientoAplicado)
+      );
       if (huboCambiosDeDetalle || movimientosRegistrados > 0) {
         await tx.facturas_compra.update({
           where: { id: compraId },
@@ -1955,7 +2008,21 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
     const partes = [];
     if (movimientosRegistrados > 0) partes.push(`${movimientosRegistrados} movimiento(s) de inventario registrado(s)`);
     if (productosCreados > 0) partes.push(`${productosCreados} producto(s) creado(s) en catálogo`);
-    if (itemsPendientes > 0) partes.push(`${itemsPendientes} ítem(s) de regalo/combo enviado(s) a Obsequios pendientes`);
+    if (itemsPendientes > 0) partes.push(`${itemsPendientes} ítem(s) enviado(s) a Ítems por revisar (regalo/combo o posible duplicado)`);
+
+    // Si no pasó nada útil PERO hubo líneas que no matchearon ningún
+    // producto (errores.length > 0), casi siempre es porque "Crear
+    // productos no encontrados en el catálogo" estaba desmarcado — antes
+    // esto caía en el mismo mensaje genérico de "no había nada pendiente",
+    // un callejón sin salida que no explicaba qué pasó de verdad.
+    let mensaje;
+    if (partes.length > 0) {
+      mensaje = partes.join(' y ');
+    } else if (errores.length > 0) {
+      mensaje = `${errores.length} línea(s) no coinciden con ningún producto del catálogo y no se creó ninguno — marca "Crear productos no encontrados en el catálogo" e inténtalo de nuevo.`;
+    } else {
+      mensaje = 'No se encontraron productos inventariables pendientes de integrar en esta compra';
+    }
 
     res.json({
       success: true,
@@ -1963,9 +2030,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
       productosCreados,
       itemsPendientes,
       errores,
-      mensaje: partes.length > 0
-        ? partes.join(' y ')
-        : 'No se encontraron productos inventariables pendientes de integrar en esta compra',
+      mensaje,
     });
   } catch (error) {
     console.error('POST /compras/:id/registrar-inventario:', error);

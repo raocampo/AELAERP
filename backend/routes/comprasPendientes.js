@@ -71,6 +71,8 @@ router.post('/:id/asignar', async (req, res) => {
     if (!producto) return res.status(404).json({ success: false, mensaje: 'Producto no encontrado' });
 
     const resultado = await prisma.$transaction(async (tx) => {
+      const compra = await tx.facturas_compra.findFirst({ where: { id: item.compraId, empresaId } });
+
       // Regalo/combo a $0: NO pasar costoUnitario, para no sobreescribir el
       // costo real del producto asignado (aplicarMovimientoInventario
       // sobreescribe el costo, no lo promedia).
@@ -81,7 +83,12 @@ router.post('/:id/asignar', async (req, res) => {
         usuarioId,
         tipo: 'ENTRADA',
         deltaCantidad: item.cantidad,
-        referencia: item.codigoPrincipal,
+        // Antes: item.codigoPrincipal — inconsistente con la referencia
+        // (numeroFactura) que usan los otros 2 flujos que aplican
+        // movimientos de compra (creación manual y "Integrar al
+        // inventario"), lo que le impedía a esos flujos reconocer este
+        // movimiento como ya aplicado y arriesgaba duplicarlo.
+        referencia: compra?.numeroFactura || item.codigoPrincipal,
         observacion: item.motivo === 'POSIBLE_DUPLICADO'
           ? `Entrada por posible duplicado confirmado (ítem pendiente #${item.id})`
           : `Entrada por regalo/combo asignado manualmente (ítem pendiente #${item.id})`,
@@ -98,6 +105,34 @@ router.post('/:id/asignar', async (req, res) => {
           resueltoEn: new Date(),
         },
       });
+
+      // Reflejar la resolución en la línea de detalle de la compra origen —
+      // antes esto nunca se hacía, así que la compra quedaba mostrando la
+      // línea como "sin integrar" para siempre, y una corrida posterior de
+      // "Integrar al inventario" la volvía a evaluar desde cero (podía
+      // re-encolarla como pendiente otra vez).
+      if (compra) {
+        const detalles = Array.isArray(compra.detalles)
+          ? compra.detalles
+          : (typeof compra.detalles === 'string' ? JSON.parse(compra.detalles || '[]') : []);
+        let sincronizado = false;
+        const detallesActualizados = detalles.map((d) => {
+          if (!sincronizado && !d.productoId && d.codigoPrincipal === item.codigoPrincipal) {
+            sincronizado = true;
+            return { ...d, productoId: producto.id, inventariable: producto.inventariable, movimientoAplicado: Boolean(movimiento) };
+          }
+          return d;
+        });
+        if (sincronizado) {
+          await tx.facturas_compra.update({
+            where: { id: compra.id },
+            data: {
+              detalles: detallesActualizados,
+              ...(movimiento ? { movimientosInventario: (compra.movimientosInventario || 0) + 1 } : {}),
+            },
+          });
+        }
+      }
 
       return { actualizado, movimientoAplicado: Boolean(movimiento) };
     });
@@ -180,6 +215,8 @@ router.post('/:id/crear-producto', async (req, res) => {
         },
       });
 
+      const compra = await tx.facturas_compra.findFirst({ where: { id: item.compraId, empresaId } });
+
       let movimiento = null;
       if (nuevoProducto.inventariable) {
         movimiento = await aplicarMovimientoInventario({
@@ -189,13 +226,13 @@ router.post('/:id/crear-producto', async (req, res) => {
           usuarioId,
           tipo: 'ENTRADA',
           deltaCantidad: item.cantidad,
-          referencia: item.codigoPrincipal,
+          referencia: compra?.numeroFactura || item.codigoPrincipal,
           observacion: `Entrada inicial — producto creado desde ítem pendiente #${item.id}`,
           metadata: { itemPendienteId: item.id, compraId: item.compraId },
         });
       }
 
-      return tx.items_compra_pendientes.update({
+      const actualizado = await tx.items_compra_pendientes.update({
         where: { id: item.id },
         data: {
           estado: 'RESUELTO',
@@ -205,6 +242,33 @@ router.post('/:id/crear-producto', async (req, res) => {
           resueltoEn: new Date(),
         },
       });
+
+      // Mismo fix que en /asignar: sincronizar el detalle de la compra
+      // origen para que no quede "sin integrar" permanentemente.
+      if (compra) {
+        const detalles = Array.isArray(compra.detalles)
+          ? compra.detalles
+          : (typeof compra.detalles === 'string' ? JSON.parse(compra.detalles || '[]') : []);
+        let sincronizado = false;
+        const detallesActualizados = detalles.map((d) => {
+          if (!sincronizado && !d.productoId && d.codigoPrincipal === item.codigoPrincipal) {
+            sincronizado = true;
+            return { ...d, productoId: nuevoProducto.id, inventariable: nuevoProducto.inventariable, movimientoAplicado: Boolean(movimiento) };
+          }
+          return d;
+        });
+        if (sincronizado) {
+          await tx.facturas_compra.update({
+            where: { id: compra.id },
+            data: {
+              detalles: detallesActualizados,
+              ...(movimiento ? { movimientosInventario: (compra.movimientosInventario || 0) + 1 } : {}),
+            },
+          });
+        }
+      }
+
+      return actualizado;
     });
 
     res.json({ success: true, data: resultado, mensaje: 'Producto creado y stock inicial registrado' });

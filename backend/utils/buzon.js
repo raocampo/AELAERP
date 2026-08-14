@@ -351,8 +351,18 @@ async function importarDocumentoRecibido({
     // Inventario y caja opcionales (igual que compras manuales)
     const { registraInventario = false, creaProductos = false, registraCaja = false } = opcionesFactura;
     let movimientosInventario = 0;
+    // Copia mutable de los detalles ya persistidos arriba (detalles:
+    // datos.detalles) — el productoId que se va resolviendo abajo se
+    // escribe acá y se vuelve a guardar al final. Antes NUNCA se
+    // persistía: la compra se creaba con el detalles "en blanco" y el
+    // resultado de resolverOMarcarPendiente se perdía apenas terminaba
+    // este bloque — cualquier intento posterior de "Integrar al
+    // inventario" (POST /compras/:id/registrar-inventario) volvía a ver
+    // TODAS las líneas como sin producto, sin importar cuántas ya se
+    // habían resuelto en esta misma importación.
+    const detallesActualizados = datos.detalles.map((d) => ({ ...d }));
 
-    if ((registraInventario || creaProductos) && datos.detalles?.length) {
+    if ((registraInventario || creaProductos) && detallesActualizados.length) {
       const { aplicarMovimientoInventario } = require('./inventario');
       const { resolverOMarcarPendiente, registrarItemCompraPendiente } = require('./comprasInventario');
       const { obtenerConfiguracionSistemaOperativa } = require('./configuracionSistema');
@@ -360,12 +370,13 @@ async function importarDocumentoRecibido({
       const configOperativa = await obtenerConfiguracionSistemaOperativa(empresaId, tx);
       const prefijosRegalo = configOperativa?.prefijosRegaloCompras;
 
-      for (const det of datos.detalles) {
+      for (let i = 0; i < detallesActualizados.length; i++) {
+        const det = detallesActualizados[i];
         const resolucion = await resolverOMarcarPendiente({
           tx,
           empresaId,
           detalle: det,
-          detallesTodos: datos.detalles,
+          detallesTodos: detallesActualizados,
           crearProductosFaltantes: creaProductos,
           actualizarProductosExistentes: false, // comportamiento histórico: este flujo no actualizaba productos ya existentes
           prefijosRegalo,
@@ -380,7 +391,11 @@ async function importarDocumentoRecibido({
         }
 
         const prod = resolucion.producto;
-        if (prod && registraInventario && prod.inventariable !== false) {
+        if (!prod) continue;
+
+        detallesActualizados[i] = { ...det, productoId: prod.id, inventariable: prod.inventariable };
+
+        if (registraInventario && prod.inventariable !== false) {
           await aplicarMovimientoInventario({
             tx,
             empresaId,
@@ -388,23 +403,38 @@ async function importarDocumentoRecibido({
             usuarioId,
             tipo: 'ENTRADA',
             deltaCantidad: toNum(det.cantidad, 0),
-            referencia: `BUZON-${nuevaCompra.id}`,
+            // Antes: `BUZON-${nuevaCompra.id}` — inconsistente con el resto
+            // del sistema (creación manual y "Integrar al inventario" usan
+            // el número de factura como referencia), lo que le impedía a
+            // esos otros flujos reconocer que esta línea ya tenía su
+            // movimiento aplicado.
+            referencia: datos.comprobante.numeroFactura,
             observacion: resolucion.esRegaloMatcheado
               ? `Entrada por regalo/combo — Buzón SRI: ${datos.comprobante.numeroFactura}`
               : `Entrada por Buzón SRI: ${datos.comprobante.numeroFactura}`,
+            metadata: { compraId: nuevaCompra.id, tipo: 'BUZON_SRI' },
             // Ítem regalo/combo emparejado (costo $0): NO pasar costoUnitario
             // para no sobreescribir el costo real del producto con $0.
             ...(resolucion.esRegaloMatcheado ? {} : { costoUnitario: det.precioUnitario || 0 }),
           });
           movimientosInventario += 1;
+          // Marca definitiva de "esta línea puntual ya tiene su movimiento"
+          // — evita que POST /compras/:id/registrar-inventario la
+          // reaplique más adelante si otra línea de esta misma compra
+          // resuelve al mismo producto (ver mismo flag en compras.js).
+          detallesActualizados[i] = { ...detallesActualizados[i], movimientoAplicado: true };
         }
       }
     }
 
-    if (movimientosInventario > 0 || registraInventario) {
+    if (movimientosInventario > 0 || registraInventario || creaProductos) {
       await tx.facturas_compra.update({
         where: { id: nuevaCompra.id },
-        data: { registraInventario: registraInventario || false, movimientosInventario },
+        data: {
+          detalles: detallesActualizados,
+          registraInventario: registraInventario || false,
+          movimientosInventario,
+        },
       });
     }
 
