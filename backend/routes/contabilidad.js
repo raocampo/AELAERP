@@ -272,7 +272,14 @@ function dibujarTablaPdf(doc, columnas, filas, startY) {
     y += ROW_H;
   });
 
-  return y + 6;
+  // Sincronizar el cursor real de PDFKit con el "y" calculado — cada
+  // doc.text(valor, x, y) de las celdas deja doc.x/doc.y donde terminó la
+  // ÚLTIMA celda dibujada (dentro de la fila, no debajo de la tabla), así
+  // que sin esto lo que se dibuje después de la tabla (totales, notas)
+  // queda montado sobre la última fila en vez de debajo.
+  doc.x = ML;
+  doc.y = y + 6;
+  return doc.y;
 }
 
 // Dibuja el detalle movimiento-por-movimiento de una cuenta (mismo bloque
@@ -2186,6 +2193,9 @@ router.get('/asientos/:id/pdf', async (req, res) => {
     );
     doc.moveDown(0.5);
 
+    const anchoTablaAsiento = 195 + 65 + 115 + 65 + 65;
+    const mlAsiento = doc.page.margins.left;
+
     dibujarTablaPdf(doc, [
       { header: 'Cuenta',    key: 'cuenta',      width: 195 },
       { header: 'C. Costo',  key: 'centroCosto', width: 65 },
@@ -2200,9 +2210,16 @@ router.get('/asientos/:id/pdf', async (req, res) => {
       haber: d.haber,
     })), doc.y);
 
+    // Línea separadora + totales alineados al ancho real de la tabla (antes
+    // el texto de totales heredaba el x/y donde había quedado la última
+    // celda dibujada, así que se montaba sobre la última fila).
+    doc.moveTo(mlAsiento, doc.y).lineTo(mlAsiento + anchoTablaAsiento, doc.y).lineWidth(0.5).stroke('#cbd5e1');
+    doc.moveDown(0.35);
     doc.fontSize(9).font('Helvetica-Bold')
-      .text(`Total Debe: ${money(asiento.totalDebe)}    Total Haber: ${money(asiento.totalHaber)}`, { align: 'right' });
-    doc.moveDown(0.6);
+      .text(`Total Debe: ${money(asiento.totalDebe)}    Total Haber: ${money(asiento.totalHaber)}`,
+        mlAsiento, doc.y, { width: anchoTablaAsiento, align: 'right' });
+    doc.font('Helvetica').fillColor('#000000');
+    doc.moveDown(0.8);
 
     doc.fontSize(7).font('Helvetica').fillColor('#94a3b8').text(
       `Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}` +
@@ -2598,6 +2615,18 @@ function nombreHojaExcel(base, usados) {
   return nombre;
 }
 
+// Nombre del archivo descargado del reporte de mayor — sin la cuenta filtrada
+// es "reportemayorgeneral"; filtrado por cuenta es "reportemayor<Cuenta>"
+// (nombre de cuenta sin tildes/espacios/símbolos) para que se identifique de
+// un vistazo en la carpeta de descargas.
+function nombreArchivoMayor(mayor) {
+  if (!mayor) return 'reportemayorgeneral';
+  const limpio = String(mayor.cuenta?.nombre || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '');
+  return `reportemayor${limpio || mayor.cuenta?.codigo || 'cuenta'}`;
+}
+
 function agregarHojaMayorCuentaXlsx(workbook, nombreHoja, mayor) {
   const ws = workbook.addWorksheet(nombreHoja);
   ws.columns = [{ width: 12 }, { width: 16 }, { width: 14 }, { width: 45 }, { width: 14 }, { width: 14 }, { width: 14 }];
@@ -2718,7 +2747,7 @@ router.get('/reportes/mayor', async (req, res) => {
 
       return enviarCsv(
         res,
-        `libro_mayor_${formatDateOnly(new Date())}.csv`,
+        `${nombreArchivoMayor(mayor)}.csv`,
         ['seccion', 'codigo', 'cuenta', 'fecha', 'asientoNumero', 'tipo', 'detalle', 'debe', 'haber', 'saldo'],
         rows,
       );
@@ -2743,14 +2772,14 @@ router.get('/reportes/mayor', async (req, res) => {
       }
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="libro_mayor_${formatDateOnly(new Date())}.xlsx"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivoMayor(mayor)}.xlsx"`);
       await workbook.xlsx.write(res);
       return res.end();
     }
 
     const config = await prisma.configuracion_sri.findFirst({ where: { empresaId } });
 
-    const doc = crearDocumentoPdf(res, `libro_mayor_${formatDateOnly(new Date())}.pdf`);
+    const doc = crearDocumentoPdf(res, `${nombreArchivoMayor(mayor)}.pdf`);
     dibujarEncabezadoContable(doc, config, mayor ? 'Mayor de una cuenta contable' : 'Mayorización por lote');
 
     const money = (v) => `$${Number(v || 0).toFixed(2)}`;
@@ -2789,10 +2818,21 @@ router.get('/reportes/mayor', async (req, res) => {
         { header: 'Saldo',       key: 'saldo',        width: 63, align: 'right', formato: money },
       ], mayorizacion.tabla, doc.y);
 
+      // Las cuentas ya NO se separan una por página — fluyen con un espacio
+      // prudencial entre ellas y solo saltan de página cuando el bloque de
+      // la siguiente cuenta (título + saldo + encabezado de tabla + al
+      // menos 1 fila) no entra en lo que queda de la hoja actual, para no
+      // dejar el título de la cuenta huérfano al pie de página.
+      const limiteYMayor = doc.page.height - doc.page.margins.bottom;
+      const altoMinCuenta = 80;
       for (const fila of mayorizacion.tabla) {
         const detalleCuenta = await obtenerLibroMayor(empresaId, fila.cuentaId, req.query);
         if (!detalleCuenta || detalleCuenta.movimientos.length === 0) continue;
-        doc.addPage();
+        if (doc.y + altoMinCuenta > limiteYMayor) {
+          doc.addPage();
+        } else {
+          doc.moveDown(1.2);
+        }
         dibujarDetalleMayorCuentaPdf(doc, detalleCuenta, money);
       }
     }
