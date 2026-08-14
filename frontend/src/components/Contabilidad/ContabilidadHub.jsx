@@ -5,6 +5,7 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { normalizarPeriodoMMYYYY } from '../../utils/periodo';
 import { formatFechaCorta } from '../../utils/fecha';
+import { IcVer, IcEditar, IcPDF, IcDuplicar, IcCandado, IcCandadoAbierto, IcActivar, IcAnular } from '../../utils/icons';
 import ConfiguracionCuentasReferencia from './ConfiguracionCuentasReferencia';
 import './ContabilidadHub.css';
 
@@ -1332,12 +1333,17 @@ const ContabilidadHub = () => {
                   <option value="true">Cerrados</option>
                 </select>
                 <button className="btn-secondary" onClick={cargarDiario}>Filtrar</button>
-                <button className="btn-secondary" onClick={() => descargarReporteContable('diario', 'csv', diarioFiltros)}>
-                  Exportar Excel (CSV)
-                </button>
-                <button className="btn-secondary" onClick={() => descargarReporteContable('diario', 'pdf', diarioFiltros)}>
-                  PDF Servidor
-                </button>
+                <div className="conta-btn-group">
+                  <button className="btn-secondary" onClick={() => descargarReporteContable('diario', 'xlsx', diarioFiltros)}>
+                    📊 Exportar Excel
+                  </button>
+                  <button className="btn-secondary" onClick={() => descargarReporteContable('diario', 'csv', diarioFiltros)}>
+                    Exportar CSV
+                  </button>
+                  <button className="btn-secondary" onClick={() => descargarReporteContable('diario', 'pdf', diarioFiltros)}>
+                    PDF del Diario
+                  </button>
+                </div>
               </div>
               {diarioLoading ? (
                 <div className="conta-loading">Cargando libro diario...</div>
@@ -1371,24 +1377,26 @@ const ContabilidadHub = () => {
                           }
                         </td>
                         <td>
-                          <button className="btn-link" onClick={() => verAsiento(a.id)}>Ver</button>
-                          {!a.cerrado && !a.bloqueado && (
-                            <button className="btn-link" onClick={() => editarAsiento(a.id)}>Editar</button>
-                          )}
-                          <button className="btn-link" title="Imprimir asiento (PDF)" onClick={() => imprimirAsiento(a.id)}>🖨</button>
-                          <button className="btn-link" title="Duplicar asiento (crear uno nuevo a partir de este)" onClick={() => duplicarAsiento(a.id)}>📋</button>
-                          {!a.cerrado && (
-                            <button className="btn-link" onClick={() => cerrarAsiento(a.id)}>Cerrar</button>
-                          )}
-                          {!a.bloqueado && (
-                            <button className="btn-link" title="Bloquear asiento" onClick={() => bloquearAsiento(a.id)}>🔒</button>
-                          )}
-                          {a.bloqueado && (
-                            <button className="btn-link" title="Desbloquear asiento" onClick={() => desbloquearAsiento(a.id)}>🔓</button>
-                          )}
-                          {a.tipo !== 'ANULACION' && (
-                            <button className="btn-link danger" onClick={() => anularAsiento(a.id)}>Anular</button>
-                          )}
+                          <div className="tbl-acciones">
+                            <button className="btn-icon ic-ver" title="Ver detalle" onClick={() => verAsiento(a.id)}><IcVer/></button>
+                            {!a.cerrado && !a.bloqueado && (
+                              <button className="btn-icon ic-editar" title="Editar asiento" onClick={() => editarAsiento(a.id)}><IcEditar/></button>
+                            )}
+                            <button className="btn-icon ic-pdf" title="Imprimir asiento (PDF)" onClick={() => imprimirAsiento(a.id)}><IcPDF/></button>
+                            <button className="btn-icon ic-duplicar" title="Duplicar asiento (crear uno nuevo a partir de este)" onClick={() => duplicarAsiento(a.id)}><IcDuplicar/></button>
+                            {!a.cerrado && (
+                              <button className="btn-icon ic-cerrar" title="Cerrar asiento" onClick={() => cerrarAsiento(a.id)}><IcActivar/></button>
+                            )}
+                            {!a.bloqueado && (
+                              <button className="btn-icon ic-bloquear" title="Bloquear asiento" onClick={() => bloquearAsiento(a.id)}><IcCandado/></button>
+                            )}
+                            {a.bloqueado && (
+                              <button className="btn-icon ic-desbloquear" title="Desbloquear asiento" onClick={() => desbloquearAsiento(a.id)}><IcCandadoAbierto/></button>
+                            )}
+                            {a.tipo !== 'ANULACION' && (
+                              <button className="btn-icon ic-anular" title="Anular asiento" onClick={() => anularAsiento(a.id)}><IcAnular/></button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1746,25 +1754,27 @@ const ContabilidadHub = () => {
               <input type="date" value={mayorFiltros.hasta} onChange={(e) => setMayorFiltros((prev) => ({ ...prev, hasta: e.target.value }))} />
               <div></div>
               <button className="btn-secondary" onClick={cargarLibroMayor}>Consultar</button>
-              <button
-                className="btn-secondary"
-                onClick={() => descargarReporteContable('mayor', 'xlsx', mayorFiltros)}
-                title="Excel real (.xlsx) con encabezados en negrita, columnas de moneda formateadas y una hoja por cuenta"
-              >
-                📊 Exportar Excel
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => descargarReporteContable('mayor', 'csv', mayorFiltros)}
-              >
-                Exportar CSV
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => descargarReporteContable('mayor', 'pdf', mayorFiltros)}
-              >
-                PDF Servidor
-              </button>
+              <div className="conta-btn-group">
+                <button
+                  className="btn-secondary"
+                  onClick={() => descargarReporteContable('mayor', 'xlsx', mayorFiltros)}
+                  title="Excel real (.xlsx) con encabezados en negrita, columnas de moneda formateadas y una hoja por cuenta"
+                >
+                  📊 Exportar Excel
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => descargarReporteContable('mayor', 'csv', mayorFiltros)}
+                >
+                  Exportar CSV
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => descargarReporteContable('mayor', 'pdf', mayorFiltros)}
+                >
+                  PDF de Mayor
+                </button>
+              </div>
             </div>
 
             {mayorLoading ? (
@@ -1814,8 +1824,11 @@ const ContabilidadHub = () => {
 
           <div className="conta-card">
             <h3>Mayorización por lote</h3>
-            <div className="conta-form-actions">
-              <button className="btn-secondary" onClick={cargarMayorizacionLote}>Procesar mayorización</button>
+            <p className="conta-subtab-hint">
+              Calcula el resumen de movimientos y saldos de todas las cuentas con actividad en el rango de fechas seleccionado arriba.
+            </p>
+            <div className="conta-form-actions" style={{ marginBottom: 16 }}>
+              <button className="btn-primary" onClick={cargarMayorizacionLote}>Procesar mayorización</button>
             </div>
 
             {mayorLoading ? (
@@ -2571,12 +2584,12 @@ const ContabilidadHub = () => {
             </div>
 
             {/* Sub-tabs de estados */}
-            <div className="conta-subtabs" style={{ marginBottom: 12 }}>
-              <button className={cierreSubTab === 'situacion'    ? 'active' : ''} onClick={() => setCierreSubTab('situacion')}>Estado de Situación Financiera</button>
-              <button className={cierreSubTab === 'resultados'   ? 'active' : ''} onClick={() => setCierreSubTab('resultados')}>Estado de Resultados</button>
-              <button className={cierreSubTab === 'comprobacion' ? 'active' : ''} onClick={() => setCierreSubTab('comprobacion')}>Balance de Comprobación</button>
-              <button className={cierreSubTab === 'flujo' ? 'active' : ''} onClick={() => setCierreSubTab('flujo')}>Flujo de Efectivo</button>
-              <button className={cierreSubTab === 'patrimonio' ? 'active' : ''} onClick={() => setCierreSubTab('patrimonio')}>Cambios en el Patrimonio</button>
+            <div className="conta-subtab-nav">
+              <button className={`conta-subtab${cierreSubTab === 'situacion'    ? ' active' : ''}`} onClick={() => setCierreSubTab('situacion')}>Estado de Situación Financiera</button>
+              <button className={`conta-subtab${cierreSubTab === 'resultados'   ? ' active' : ''}`} onClick={() => setCierreSubTab('resultados')}>Estado de Resultados</button>
+              <button className={`conta-subtab${cierreSubTab === 'comprobacion' ? ' active' : ''}`} onClick={() => setCierreSubTab('comprobacion')}>Balance de Comprobación</button>
+              <button className={`conta-subtab${cierreSubTab === 'flujo'        ? ' active' : ''}`} onClick={() => setCierreSubTab('flujo')}>Flujo de Efectivo</button>
+              <button className={`conta-subtab${cierreSubTab === 'patrimonio'   ? ' active' : ''}`} onClick={() => setCierreSubTab('patrimonio')}>Cambios en el Patrimonio</button>
             </div>
 
             {cierreLoading ? (

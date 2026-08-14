@@ -233,12 +233,12 @@ function escribirLineaPdf(doc, texto = '', opts = {}) {
 function dibujarTablaPdf(doc, columnas, filas, startY) {
   const ML = doc.page.margins.left;
   const LIMITE_Y = doc.page.height - doc.page.margins.bottom;
-  const ROW_H = 16;
+  const ROW_H_MIN = 16;
   const anchoTotal = columnas.reduce((s, c) => s + c.width, 0);
   let y = startY;
 
   const dibujarEncabezado = () => {
-    doc.rect(ML, y, anchoTotal, ROW_H).fillAndStroke('#e2e8f0', '#94a3b8');
+    doc.rect(ML, y, anchoTotal, ROW_H_MIN).fillAndStroke('#e2e8f0', '#94a3b8');
     doc.fillColor('#1e293b').font('Helvetica-Bold').fontSize(8);
     let x = ML;
     columnas.forEach((c) => {
@@ -246,30 +246,35 @@ function dibujarTablaPdf(doc, columnas, filas, startY) {
       x += c.width;
     });
     doc.font('Helvetica').fillColor('#000000');
-    y += ROW_H;
+    y += ROW_H_MIN;
   };
 
   dibujarEncabezado();
+  doc.fontSize(8);
 
   filas.forEach((fila, i) => {
-    if (y + ROW_H > LIMITE_Y) {
+    const valores = columnas.map((c) => (c.formato ? c.formato(fila[c.key], fila) : String(fila[c.key] ?? '')));
+    // Alto dinámico: se mide el texto más alto de la fila (ej. "Detalle" con
+    // varias líneas) en vez de usar un alto fijo con ellipsis — así un
+    // detalle largo se ve completo, envuelto en varias líneas, en vez de
+    // recortado con "…" (PDFKit no calcula esto solo: hay que medir con
+    // heightOfString ANTES de dibujar el rect() de fondo de la fila).
+    const altoFila = Math.max(ROW_H_MIN, ...columnas.map((c, idx) =>
+      doc.heightOfString(valores[idx], { width: c.width - 6, align: c.align || 'left' }) + 8));
+
+    if (y + altoFila > LIMITE_Y) {
       doc.addPage();
       y = doc.page.margins.top;
       dibujarEncabezado();
+      doc.fontSize(8);
     }
-    if (i % 2 === 1) doc.rect(ML, y, anchoTotal, ROW_H).fill('#f8fafc').fillColor('#000000');
+    if (i % 2 === 1) doc.rect(ML, y, anchoTotal, altoFila).fill('#f8fafc').fillColor('#000000');
     let x = ML;
-    doc.fontSize(8);
-    columnas.forEach((c) => {
-      const valor = c.formato ? c.formato(fila[c.key], fila) : String(fila[c.key] ?? '');
-      // height + ellipsis: recorta con "…" según el ancho REAL del texto en
-      // vez de un límite de caracteres adivinado — evita que un detalle
-      // largo se envuelva a 2 líneas y se salga de la fila (fila de altura
-      // fija) tapando la siguiente.
-      doc.text(valor, x + 3, y + 4, { width: c.width - 6, height: ROW_H - 4, align: c.align || 'left', ellipsis: true });
+    columnas.forEach((c, idx) => {
+      doc.text(valores[idx], x + 3, y + 4, { width: c.width - 6, align: c.align || 'left' });
       x += c.width;
     });
-    y += ROW_H;
+    y += altoFila;
   });
 
   // Sincronizar el cursor real de PDFKit con el "y" calculado — cada
@@ -303,7 +308,7 @@ function dibujarDetalleMayorCuentaPdf(doc, mayor, money) {
     { header: 'Saldo',     key: 'saldo',      width: 60, align: 'right', formato: money },
   ], mayor.movimientos.map((m) => ({
     ...m,
-    detalle: (m.descripcionDetalle || m.descripcionAsiento || '').slice(0, 55),
+    detalle: m.descripcionDetalle || m.descripcionAsiento || '',
   })), doc.y);
 }
 
@@ -2509,19 +2514,19 @@ router.get('/reportes/diario', async (req, res) => {
   try {
     const empresaId = obtenerEmpresaId(req);
     const formato = String(req.query.formato || 'csv').toLowerCase();
-    if (!['csv', 'pdf'].includes(formato)) {
-      return res.status(400).json({ success: false, mensaje: 'Formato inválido. Use csv o pdf' });
+    if (!['csv', 'xlsx', 'pdf'].includes(formato)) {
+      return res.status(400).json({ success: false, mensaje: 'Formato inválido. Use csv, xlsx o pdf' });
     }
 
     const asientos = await listarAsientos(empresaId, req.query, { includeDetails: true, ignorePagination: true });
 
-    if (formato === 'csv') {
+    if (formato === 'csv' || formato === 'xlsx') {
       const rows = [];
       asientos.forEach((asiento) => {
         if (!asiento.detalles?.length) {
           rows.push({
             numero: asiento.numero,
-            fecha: formatDateOnly(asiento.fecha),
+            fecha: asiento.fecha,
             tipo: asiento.tipo,
             referencia: asiento.referencia || '',
             descripcion: asiento.descripcion,
@@ -2537,7 +2542,7 @@ router.get('/reportes/diario', async (req, res) => {
         asiento.detalles.forEach((detalle) => {
           rows.push({
             numero: asiento.numero,
-            fecha: formatDateOnly(asiento.fecha),
+            fecha: asiento.fecha,
             tipo: asiento.tipo,
             referencia: asiento.referencia || '',
             descripcion: asiento.descripcion,
@@ -2550,12 +2555,44 @@ router.get('/reportes/diario', async (req, res) => {
         });
       });
 
-      return enviarCsv(
-        res,
-        `libro_diario_${formatDateOnly(new Date())}.csv`,
-        ['numero', 'fecha', 'tipo', 'referencia', 'descripcion', 'cuenta', 'detalle', 'debe', 'haber', 'estado'],
-        rows,
-      );
+      if (formato === 'csv') {
+        return enviarCsv(
+          res,
+          `libro_diario_${formatDateOnly(new Date())}.csv`,
+          ['numero', 'fecha', 'tipo', 'referencia', 'descripcion', 'cuenta', 'detalle', 'debe', 'haber', 'estado'],
+          rows.map((r) => ({ ...r, fecha: formatDateOnly(r.fecha) })),
+        );
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'AELA ERP';
+      workbook.created = new Date();
+      const ws = workbook.addWorksheet('Libro Diario');
+      ws.columns = [
+        { header: '#',            key: 'numero',      width: 14 },
+        { header: 'Fecha',        key: 'fecha',        width: 12 },
+        { header: 'Tipo',         key: 'tipo',          width: 12 },
+        { header: 'Referencia',   key: 'referencia',    width: 16 },
+        { header: 'Descripción',  key: 'descripcion',   width: 35 },
+        { header: 'Cuenta',       key: 'cuenta',        width: 35 },
+        { header: 'Detalle',      key: 'detalle',       width: 35 },
+        { header: 'Debe',         key: 'debe',          width: 14 },
+        { header: 'Haber',        key: 'haber',         width: 14 },
+        { header: 'Estado',       key: 'estado',        width: 12 },
+      ];
+      ws.getRow(1).eachCell((cell) => Object.assign(cell, ESTILO_ENCABEZADO_XLSX));
+      rows.forEach((r) => {
+        const fila = ws.addRow({ ...r, fecha: new Date(r.fecha) });
+        fila.getCell('fecha').numFmt = 'dd/mm/yyyy';
+        fila.getCell('debe').numFmt = FORMATO_MONEDA_XLSX;
+        fila.getCell('haber').numFmt = FORMATO_MONEDA_XLSX;
+      });
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="libro_diario_${formatDateOnly(new Date())}.xlsx"`);
+      await workbook.xlsx.write(res);
+      return res.end();
     }
 
     const doc = crearDocumentoPdf(res, `libro_diario_${formatDateOnly(new Date())}.pdf`);

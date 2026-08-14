@@ -74,3 +74,24 @@ export const IcDesactivar = () => (
     <line x1="5.5" y1="8" x2="10.5" y2="8"/>
   </svg>
 );
+
+export const IcDuplicar = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5.5" y="5.5" width="7" height="8" rx="1"/>
+    <path d="M3.5 10.5v-6a1 1 0 011-1h6"/>
+  </svg>
+);
+
+export const IcCandado = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/>
+    <path d="M5.5 7V5a2.5 2.5 0 015 0v2"/>
+  </svg>
+);
+
+export const IcCandadoAbierto = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/>
+    <path d="M5.5 7V5a2.5 2.5 0 014.5-1.5"/>
+  </svg>
+);

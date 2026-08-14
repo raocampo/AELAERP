@@ -343,6 +343,15 @@
   flex: 0 0 auto;
 }
 
+/* Agrupa botones de exportación (Excel/CSV/PDF) como una sola unidad dentro
+   de .conta-filters — si no caben en la línea actual, se van juntos a la
+   siguiente en vez de partirse entre sí. */
+.conta-btn-group {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 /* ── Selector de cuenta con búsqueda (Libro Mayor, asientos) ────────── */
 .conta-selector-cuenta {
   position: relative;
@@ -893,6 +902,7 @@
 .conta-subtab-nav {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 16px;
   border-bottom: 2px solid #e2e8f0;
