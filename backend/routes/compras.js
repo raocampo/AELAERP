@@ -1831,6 +1831,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
     let movimientosRegistrados = 0;
     let productosCreados = 0;
     let itemsPendientes = 0;
+    let yaEnRevision = 0; // líneas que ya están en Ítems por revisar (PENDIENTE) de una corrida anterior — este endpoint no las puede resolver, esperan al usuario en esa otra pantalla
     const errores = [];
     const detallesActualizados = detalles.map((d) => ({ ...d }));
 
@@ -1887,6 +1888,13 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
               if (prodAsignado) {
                 detallesActualizados[i] = { ...det, productoId: prodAsignado.id, inventariable: prodAsignado.inventariable, movimientoAplicado: true };
               }
+            } else if (itemPrevio.estado === 'PENDIENTE') {
+              // Ya está esperando al usuario en "Ítems por revisar" — sin
+              // esto, este endpoint no reportaba nada sobre esta línea y el
+              // mensaje genérico de "no había nada pendiente" ocultaba que
+              // en realidad SÍ había algo pendiente, solo que en otra
+              // pantalla.
+              yaEnRevision++;
             }
             continue;
           }
@@ -2010,14 +2018,21 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
     if (productosCreados > 0) partes.push(`${productosCreados} producto(s) creado(s) en catálogo`);
     if (itemsPendientes > 0) partes.push(`${itemsPendientes} ítem(s) enviado(s) a Ítems por revisar (regalo/combo o posible duplicado)`);
 
-    // Si no pasó nada útil PERO hubo líneas que no matchearon ningún
-    // producto (errores.length > 0), casi siempre es porque "Crear
-    // productos no encontrados en el catálogo" estaba desmarcado — antes
-    // esto caía en el mismo mensaje genérico de "no había nada pendiente",
-    // un callejón sin salida que no explicaba qué pasó de verdad.
+    // Distinguir 3 escenarios que antes caían todos en el mismo mensaje
+    // genérico "no había nada pendiente" (un callejón sin salida que no
+    // explicaba qué pasó de verdad):
+    //  1. Líneas que ya están esperando en Ítems por revisar de una
+    //     corrida anterior — este botón no las puede resolver, hay que ir
+    //     a esa otra pantalla y confirmar/crear el producto ahí.
+    //  2. Líneas que no matchearon ningún producto y no se creó ninguno —
+    //     casi siempre porque "Crear productos no encontrados" estaba
+    //     desmarcado.
+    //  3. Genuinamente no había nada que hacer.
     let mensaje;
     if (partes.length > 0) {
       mensaje = partes.join(' y ');
+    } else if (yaEnRevision > 0) {
+      mensaje = `${yaEnRevision} línea(s) ya están esperando tu confirmación en Compras → Ítems por revisar — resuélvelas ahí (o descártalas) antes de volver a integrar.`;
     } else if (errores.length > 0) {
       mensaje = `${errores.length} línea(s) no coinciden con ningún producto del catálogo y no se creó ninguno — marca "Crear productos no encontrados en el catálogo" e inténtalo de nuevo.`;
     } else {
@@ -2029,6 +2044,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
       movimientosRegistrados,
       productosCreados,
       itemsPendientes,
+      yaEnRevision,
       errores,
       mensaje,
     });
