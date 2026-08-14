@@ -329,3 +329,56 @@ cualquier movimiento (columna nueva) y hacer clic en el nombre de
 cualquier producto en Movimientos para ver TODO su historial — así
 puedes confirmar tú mismo si el 7 de "Submarino Vainilla" es correcto
 (por otro stock previo legítimo) o si hay algo raro que compartir.
+
+## Continuación misma sesión — duplicado real confirmado y corregido (commit `07512f0`)
+
+El usuario usó el filtro nuevo (commit anterior) en "Pan Molde Blanco 1p
+262g BOLSA SUP" y encontró la prueba: 2 movimientos ENTRADA de cantidad 3
+cada uno, uno con `referencia: BUZON-66` (12/8, el import original) y otro
+con `referencia: 004-206-000111467` (13/8, el número de factura de esa
+misma compra #66) — la línea se integró **dos veces**.
+
+**Causa raíz**: el chequeo "¿ya se aplicó esta línea?" (de `761e9d0`) solo
+corría para líneas que YA tenían `productoId` guardado ANTES de la
+corrida (`teniaProductoIdPrevio`). El razonamiento — "una línea recién
+resuelta no puede tener un movimiento previo" — ignoraba el bug real de
+`buzon.js`: el import original SÍ aplicó el movimiento (matcheó el
+producto por código, referencia `BUZON-<id>`) pero NUNCA guardó el
+`productoId` en la línea. Al reprocesar la compra con el fix de esta
+sesión, esa línea llegaba "en blanco", volvía a resolver al mismo
+producto por código exacto, y el chequeo legado nunca se ejecutaba (por
+el gate) — aplicando el movimiento por segunda vez.
+
+**Fix**: el chequeo por producto+factura ahora corre para TODA línea que
+llega a aplicar un movimiento, no solo las que ya tenían `productoId`.
+Para no reintroducir el bug original (2 líneas de la misma compra que
+comparten producto bloqueándose entre sí), se reemplazó el chequeo
+booleano por un **contador por producto**: cuenta cuántos movimientos ya
+existen para producto+factura (incluyendo `BUZON-<id>`) y cada línea que
+"reclama" uno lo descuenta — si el mismo producto aparece en 2 líneas y
+solo 1 ya se había aplicado, la otra sigue aplicando la suya con
+normalidad, sin bloquearse ni duplicarse.
+
+**Verificado** con 2 pruebas dirigidas: el escenario exacto reportado
+(duplicado `BUZON-<id>`+`numeroFactura`) y el caso borde de 2 líneas
+compartiendo un producto con solo 1 ya aplicada — ambos dan el resultado
+correcto. `node --test`: 42/42.
+
+**🔴 Importante para el usuario — acción manual pendiente**: este fix
+previene duplicaciones NUEVAS, pero **no corrige retroactivamente** el
+stock ya inflado en la compra #66 real (ni en ninguna otra compra vieja
+del Buzón que haya pasado por el mismo problema) — no hay acceso desde
+este entorno a la base de datos de producción (`aela_sys`, Comercial
+S&S) para corregirlo directamente. Recomendación:
+1. Usa el filtro por producto (Inventario → clic en el nombre) en cada
+   uno de los productos que se integraron el 13/8 a las 6:01:14 p.m.
+   (al menos "Pan Molde Blanco", y probablemente también "Submarino
+   Vainilla" y "Submarino Manjar" — mismo patrón visto en la captura
+   anterior: cantidad 3, stock nuevo 7, mismo timestamp).
+2. Si ves el mismo patrón (2 movimientos ENTRADA de la misma cantidad,
+   uno `BUZON-66` y otro `004-206-000111467`), es un duplicado.
+3. Corrígelo con "+ Registrar movimiento" → tipo `AJUSTE_NEGATIVO`,
+   cantidad = la duplicada (3 en este caso), referencia/observación
+   explicando "Corrección duplicado — compra 66". Esto deja el stock
+   correcto y mantiene el historial completo (mejor que borrar el
+   movimiento duplicado a mano).
