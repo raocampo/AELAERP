@@ -744,14 +744,6 @@ export default function ATS() {
             </div>
           </div>
 
-          {data.comprasExcluidasCedula > 0 && (
-            <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: 12 }}>
-              ⚠️ {data.comprasExcluidasCedula} compra(s) de este período están facturadas a una cédula personal, no al
-              RUC de la empresa — no se incluyeron en el XML ni en la pestaña Compras. Si el proveedor puede reemitir el
-              comprobante a nombre del RUC, pídeselo; si corresponde a la actividad económica y no es posible
-              reemitirlo, en Compras → Editar puedes marcarla como "Revisado por contador" para que sí cuente aquí.
-            </div>
-          )}
           {data.gastosPersonalesExcluidos > 0 && (
             <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 6, background: '#fffbeb', border: '1px solid #f59e0b', fontSize: 12, color: '#92400e' }}>
               ℹ️ {data.gastosPersonalesExcluidos} compra(s) marcada(s) como <strong>gasto personal</strong> fueron

@@ -2,6 +2,18 @@
 //  Reglas fiscales compartidas para facturas_compra: cédula vs RUC.
 //  Usado por routes/declaraciones.js (F104, F101) y routes/facturas.js
 //  (reporte tributario) — un solo lugar para no repetir la regla 3 veces.
+//
+//  ⚠️ NO usar en routes/ats.js. condicionComprasDeducibles() responde
+//  "¿esta compra da derecho a crédito tributario/deducción?" — una
+//  pregunta de F104/F101. El ATS es un reporte TRANSACCIONAL (informa al
+//  SRI qué compras existieron, para que cruce contra lo que cada
+//  proveedor declaró vender) — ahí la pregunta correcta es simplemente
+//  "¿existió la compra?", sin importar si ya es deducible o no. Se
+//  intentó aplicar esta regla al ATS el 2026-08-18 por la mañana y se
+//  revirtió esa misma tarde al confirmar con un reporte real que el ATS
+//  estaba sub-reportando transacciones reales al SRI — un riesgo de
+//  cumplimiento mayor que el que se intentaba resolver. Ver
+//  docs/pendientes-2026-08-18.md para el caso completo.
 // ============================================================
 
 // A partir de esta fecha se exige que el contador revise y apruebe

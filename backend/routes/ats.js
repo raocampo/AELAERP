@@ -12,17 +12,21 @@ const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { CODIGOS_RETENCION_RENTA, parsearNotaCreditoRecibidaXml } = require('../utils/sri');
-const { condicionComprasDeducibles, CUTOFF_APROBACION_CEDULA } = require('../utils/comprasFiscal');
 
-// Reglas de inclusión de compras en el ATS — MISMA regla que ya usan
-// declaraciones.js (F104/F101) y facturas.js (reporte tributario), ver
-// utils/comprasFiscal.js: excluye compras facturadas a cédula personal (no
-// al RUC de la empresa) sin revisión del contador, y excluye siempre las
-// marcadas como gasto personal. Antes esta ruta no aplicaba ninguna de las
-// 2 reglas — el ATS (que se sube directo al SRI) podía reportar compras que
-// ni siquiera son deducibles para la empresa.
+// El ATS es un reporte TRANSACCIONAL (informa al SRI qué compras existieron,
+// para que cruce contra lo que cada proveedor declaró que vendió) — a
+// diferencia del F104/F101, que determinan si una compra da derecho a
+// crédito tributario/deducción. Por eso el ATS SÍ reporta compras
+// facturadas a cédula personal aunque el contador aún no las haya aprobado
+// (esa regla de comprasFiscal.js/condicionComprasDeducibles() es correcta
+// para F104/F101, pero no aplica aquí — se intentó extenderla al ATS el
+// 2026-08-18 y se revirtió el mismo día al confirmarlo con el usuario, ver
+// docs/pendientes-2026-08-18.md). Lo único que sí se excluye siempre es
+// esGastoPersonal: si el usuario marcó la compra como gasto personal, no es
+// una transacción comercial de la empresa y no corresponde reportarla en su
+// anexo transaccional.
 function whereComprasAts(base) {
-  return { ...base, esGastoPersonal: { not: true }, OR: condicionComprasDeducibles() };
+  return { ...base, esGastoPersonal: { not: true } };
 }
 
 const LOGO_SRI = path.join(__dirname, '../assets/LogoSRI.png');
@@ -138,7 +142,7 @@ router.get('/preview', async (req, res) => {
         },
         orderBy: { fechaEmision: 'asc' },
       }),
-      // Compras: facturas_compra NO anuladas del período, deducibles (ver whereComprasAts)
+      // Compras: facturas_compra NO anuladas del período, sin gasto personal (ver whereComprasAts)
       prisma.facturas_compra.findMany({
         where: whereComprasAts({ empresaId, anulada: false, ...periodoWhere }),
         include: {
@@ -216,20 +220,11 @@ router.get('/preview', async (req, res) => {
     });
     const totalNcRecibidasIva = ncsRecibidasVista.reduce((s, nc) => s + nc.iva, 0);
 
-    // Compras excluidas de `compras` arriba (mismo criterio que declaraciones.js)
-    // — se cuentan aparte solo para avisar al usuario en pantalla, no afectan el XML.
-    const [comprasExcluidasCedula, gastosPersonalesExcluidos] = await Promise.all([
-      prisma.facturas_compra.count({
-        where: {
-          empresaId, anulada: false, ...periodoWhere,
-          receptorEsRuc: false, aprobadaPorContador: false,
-          NOT: { fechaEmision: { lt: CUTOFF_APROBACION_CEDULA } },
-        },
-      }),
-      prisma.facturas_compra.count({
-        where: { empresaId, anulada: false, ...periodoWhere, esGastoPersonal: true },
-      }),
-    ]);
+    // Compras excluidas de `compras` arriba por ser gasto personal — se
+    // cuentan aparte solo para avisar al usuario en pantalla, no afectan el XML.
+    const gastosPersonalesExcluidos = await prisma.facturas_compra.count({
+      where: { empresaId, anulada: false, ...periodoWhere, esGastoPersonal: true },
+    });
 
     const totales = {
       totalVentasFacturas:       sumar(facturas, 'importeTotal'),
@@ -261,7 +256,6 @@ router.get('/preview', async (req, res) => {
         retencionesRecibidas,
         ncsRecibidas: ncsRecibidasVista,
         totales,
-        comprasExcluidasCedula,
         gastosPersonalesExcluidos,
       },
     });
