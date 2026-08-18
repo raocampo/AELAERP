@@ -307,3 +307,63 @@ Sin pendientes abiertos de este tema. Solo queda pendiente correr el mismo
 script para OTROS tenants si el usuario quiere confirmar que no tienen el
 mismo problema (no se hizo — solo se corrigió el tenant que reportó el
 caso concreto).
+
+## Continuación misma tarde — auditoría general de tributación (pedido del usuario)
+
+El usuario pidió revisar que todo lo de tributación funcione de acuerdo al
+SRI y resolver lo que se encuentre. Se buscó sistemáticamente el mismo
+patrón de bug (confundir `codigoPorcentaje` con otro campo, o clasificar
+IVA con una tabla de códigos incompleta) en el resto del sistema.
+
+**Tercer bug encontrado y corregido** (commit `78a1d9e`):
+`utils/importarFacturasVentaXML.js` (usado por
+`POST /facturas/importar/xml-ejecutar` y el script standalone
+`scripts/importarFacturasVentaXML.js`, para clientes con contabilidad
+atrasada que ya tienen a mano el XML de sus facturas de venta emitidas)
+comparaba `imp.codigo === '6'/'7'` para detectar No Objeto/Exento — pero
+`<codigo>` es el TIPO de impuesto (siempre `'2'` para IVA, sea cual sea la
+tarifa); la categoría real vive en `<codigoPorcentaje>` (confirmado contra
+el propio `generarXMLFactura` de ese mismo archivo, que siempre escribe
+`<codigo>2</codigo>` en sus 6 bloques `totalImpuesto`). El check nunca era
+cierto — cualquier línea No Objeto/Exento (con `valor=0`) se colaba en
+`inferirTarifa(base, 0)=0%` y se mezclaba en silencio con `subtotal0`,
+tanto a nivel de cabecera como de cada detalle. Corregido en ambos puntos,
+con los mismos sentinels 6/7 del resto del sistema. 1 test nuevo. `node
+--test`: 49/49.
+
+**Impacto en producción — limitación real, sin acción posible por ahora**:
+se encontraron 40 facturas ya importadas por esta vía en `aela_lsac`
+(empresa 1: 3, empresa 4: 35, empresa 5: 2), **todas con
+`subtotalNoObjetoIva=0`** — sin forma de saber si es correcto (ninguna
+tenía realmente No Objeto/Exento) o si todas sufrieron el bug, porque a
+diferencia de `facturas_compra`, el modelo `facturas` **no guarda el XML
+original** (`xmlOrigen`) para poder re-parsear y confirmar, como sí se
+pudo hacer con las compras. No se tocó ningún dato. Si el usuario todavía
+conserva los `.zip`/XML originales que subió, se puede volver a correr
+`scripts/importarFacturasVentaXML.js "<carpeta>" <empresaId>` (sin
+`--ejecutar`, modo dry-run) para comparar contra lo ya guardado sin
+escribir nada — pendiente de que el usuario decida si quiere hacerlo.
+
+**Áreas revisadas sin encontrar problemas** (mismo patrón buscado
+explícitamente, no solo lectura superficial):
+- `utils/sri.js` — generación de XML de factura/liquidación de compra/nota
+  de crédito, y el parser de NC recibida (`parsearNotaCreditoRecibidaXml`)
+  — todos usan la tabla de códigos correcta y consistente entre sí (son la
+  fuente de verdad contra la que se corrigieron los otros 3 bugs).
+- `utils/retenciones.js` / `utils/buzon.js` (`parsearRetencionRecibida`) —
+  usan `codigo` para distinguir Renta(1)/IVA(2)/ISD en retenciones, que es
+  el campo correcto para ESE catálogo (distinto del de tarifas IVA) — sin
+  bug.
+- No se encontró ningún otro reductor de totales con solo 2 baldes
+  (`subtotal0`/`subtotal15`) en el resto del código.
+
+**Verificación final de consistencia F104 vs ATS** (confirmando que ambos
+reportes ahora leen los mismos datos ya corregidos, cada uno aplicando su
+propia regla correcta): para julio 2026, empresa 4, el F104 (que sí debe
+excluir compras a cédula sin aprobar) da Base0=$920.69, No
+Objeto=$0.00, Exento=$0.00 — correcto, porque las 15 compras a cédula de
+julio (que son el 100% del No Objeto/Exento de ese mes) siguen
+"pendientes de revisión" del contador. El ATS (que si debe reportarlas
+todas) sigue dando No Objeto=$21.60/Exento=$2.84. Ambos números son
+correctos y consistentes con la regla de cada reporte — no hay
+contradicción entre ellos.
