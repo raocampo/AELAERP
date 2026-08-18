@@ -88,9 +88,41 @@ es algo que se pueda hacer desde este entorno (requiere las credenciales
 reales del usuario en el portal del SRI). Sin ese dato confirmado, no se
 debe empezar a construir `GET /declaraciones/f104/pdf`.
 
+**Checklist exacto que se le pasó al usuario (queda pendiente de su lado,
+sin fecha — dijo "ya luego reviso eso y te comparto")**: entrar a
+`sri.gob.ec` → Servicios en Línea → Formulario 104 (declaración del período
+actual o un borrador, no hace falta presentar nada) y confirmar con captura
+de pantalla:
+1. Sección Ventas: ¿la tarifa 5% tiene casillero propio, separado de 12% y
+   15%? Números exactos de los 3.
+2. Sección Compras: misma pregunta para 5% vs 12%/15%; confirmar si 531
+   (No Objeto) y 532 (Exenta) siguen siendo casilleros separados o
+   cambiaron de número.
+3. Casillero 429 (impuesto generado): ¿sigue siendo uno solo o ahora se
+   suma por tarifa antes de totalizar?
+
+Con capturas de esas 2 secciones (Ventas y Compras) alcanza — el mapeo a
+`subtotal5`/`subtotal12`/`subtotal15`/`subtotalNoObjeto`/`subtotalExento`/
+`subtotalNoObjetoIva` (campos que el sistema ya calcula) se hace desde acá.
+
 ## Nota — `.env.example`
 
 Sigue sin resolver desde antes del 2026-08-14: un cambio local real (un `)`
 de más al final de una línea comentada de `DATABASE_URL` de Railway). No se
 tocó. Confirmar con el usuario si fue intencional o revertir con
 `git checkout -- .env.example`.
+
+## Siguiente — nuevo reporte del usuario: "el ATS no cuadra" (sin detalle aún)
+
+Al cierre de esta sesión el usuario avisó que va a revisar el checklist de
+casilleros del SRI **por su cuenta, sin fecha definida** ("ya luego reviso
+eso y te comparto") — no es un bloqueo de esta sesión, queda en su cancha.
+
+Además adelantó que el **siguiente tema a retomar es el ATS: dijo
+literalmente "no cuadra"**, y va a compartir un resumen con el detalle
+concreto. **Sin información todavía** de qué específicamente no cuadra (¿un
+total? ¿el XML vs lo que la contadora esperaba? ¿una comparación contra otro
+reporte?) — no se investigó nada todavía, a propósito, hasta tener ese
+resumen. Podría o no estar relacionado con los 2 fixes de ATS de hoy mismo
+(commit `e03f3da`) — no asumir que es continuación de lo mismo sin
+confirmarlo primero.
