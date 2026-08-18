@@ -177,3 +177,81 @@ exclusivamente en F104/F101, donde sí corresponde.
 eliminados al terminar) — compra a RUC cuenta, compra a cédula sin aprobar
 **ahora también cuenta** (revertido), compra de gasto personal sigue
 excluida. `node --test`: 44/44. `vite build`: sin errores.
+
+## Continuación misma tarde — el "No Objeto"/"Exento" de Compras seguía en $0 incluso después del revert
+
+El usuario compartió el Talón Resumen PDF real (tenant "Puchaicela Abendaño
+Daniel Ramiro", período 07-2026) y una captura de la pantalla en vivo:
+ambos mostraban "No Obj." en $0.00 en Compras (y el PDF ni siquiera tiene
+columna "Exento" — la combina con "No Obj." por espacio), a pesar del
+revert de arriba y de que el Excel de ayer confirmaba $21.60/$2.84 reales
+en julio.
+
+**Causa raíz real — NO estaba en `ats.js`, sino en el parser de XML de
+compras** (`backend/utils/importacionProductos.js`,
+`parsearFacturaCompraDesdeXml`, usado por `utils/buzon.js` al importar del
+Buzón SRI): tenía su propia tabla de `codigoPorcentaje` — **incorrecta y
+contradictoria con la ya verificada en `utils/sri.js`** (código `'4'` lo
+trataba como "No objeto" cuando en realidad es **15%** según la tabla 17 de
+la ficha técnica SRI v2.26; no tenía ningún código para "Exento" en
+absoluto; "5%(bienes)"/"15%(servicios)" en códigos que no corresponden a
+ningún IVA real). Además, el cálculo de `totales` solo tenía 2 baldes
+(`subtotal0`/`subtotal15`) — **cualquier detalle a 5%, 12%, No Objeto o
+Exento de una compra importada por XML quedaba mal clasificado**, sin
+excepción, desde que existe esta función. `utils/buzon.js` tampoco ayudaba:
+al crear la compra solo pasaba `subtotal0`/`subtotal5`/`subtotal15` al
+`create()` — nunca `subtotal12`/`subtotalNoObjeto`/`subtotalExento`,
+quedando siempre en su default de esquema (0) pasara lo que pasara en el
+parser.
+
+Confirmado que el patrón CORRECTO ya existía en 2 lugares del sistema
+(`routes/compras.js`, importación manual por Excel y creación con detalle,
+líneas ~1027-1039 y ~1195-1215) — el bug era exclusivo del camino de
+importación por XML/Buzón SRI.
+
+**Fix**:
+- `importacionProductos.js`: `extraerTarifaIvaDetalle()` reescrita con la
+  tabla de códigos real (reutilizando el mismo catálogo ya verificado en
+  `sri.js` — 0%→'0', 5%→'5', 12%→'2', 15%→'4', No Objeto→'6', Exento→'7',
+  más los códigos históricos '1'/'3' para XMLs antiguos), devolviendo los
+  mismos sentinels numéricos 6/7 que ya usa el resto del sistema (ej.
+  `productos_servicios.tarifaIva`). El cálculo de `totales` en
+  `parsearFacturaCompraDesdeXml()` ahora separa las 6 categorías completas
+  (mismo criterio que ya usaba `routes/compras.js`), y ya no calcula un IVA
+  falso para detalles No Objeto/Exento (antes `porcentajeIva > 0` disparaba
+  `subtotal * (6/100)` o `*(7/100)` por accidente, tratando el sentinel
+  como si fuera un % real).
+- `buzon.js`: el `create()` de la compra ahora sí pasa
+  `subtotal12`/`subtotalNoObjeto`/`subtotalExento` (antes solo
+  `subtotal0`/`subtotal5`/`subtotal15`).
+- 3 tests nuevos en `test/importacionProductos.test.js` con XML sintético
+  cubriendo código '4' (debe ser 15%, no "No objeto"), códigos '6'/'7'
+  (deben separarse en `subtotalNoObjeto`/`subtotalExento`, sin generar IVA
+  falso) y códigos '5'/'2' (deben ir a `subtotal5`/`subtotal12`, no
+  colapsarse en `subtotal15`). `node --test`: 47/47.
+- Verificado extremo a extremo contra el tenant local: se insertó una
+  compra sintética con los 6 campos ya bien poblados (simulando el output
+  del parser corregido) y se confirmó que tanto `/preview` como el PDF real
+  del Talón Resumen (`/exportar/pdf`) ya muestran "No Obj." correctamente
+  (`24.44` = No Objeto + Exento combinados, tal como el PDF ya documentaba
+  que hace a propósito por espacio de columna) — la lógica de agregación de
+  `ats.js` para Compras YA estaba bien escrita desde antes, el dato
+  simplemente nunca le llegaba bien desde el parser.
+
+**⚠️ Este fix solo previene el problema en importaciones NUEVAS del Buzón
+SRI — NO corrige retroactivamente las 91 compras de julio (ni ninguna otra
+compra histórica importada por XML) que ya están mal en producción.**
+Nuevo script de solo-diagnóstico (por defecto, no escribe nada):
+`backend/scripts/corregirComprasNoObjetoExentoBuzon.js` — re-parsea el
+`xmlOrigen` ya guardado de cada compra `BUZON_SRI` con el parser YA
+CORREGIDO y compara contra lo que hay en la fila. Probado en local
+simulando el bug exacto (compra con `subtotalNoObjeto=0` pese a tener un
+detalle código '6' en su XML) — el diagnóstico lo detecta correctamente
+(`subtotal0 21.60→0.00, subtotalNoObjeto 0.00→21.60`) y `--fix` lo corrige
+con backup previo (mismo patrón ya usado por
+`corregirCorteIva15Abril2024.js`). **No se ejecutó contra ninguna BD de
+producción real** (sin acceso desde este entorno) — pendiente que el
+usuario decida cuándo y en qué tenant(s) correrlo. El script avisa al
+final que, si el `totalIva`/`importeTotal` de alguna compra corregida
+cambia, revisar si ya generó un asiento contable que necesite regenerarse
+a mano (el script no toca asientos).

@@ -1,7 +1,46 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const XLSX = require('xlsx');
-const { mapearFilaProducto, leerFilasDesdeExcel, desambiguarCodigosDuplicados, pareceNotacionCientifica } = require('../utils/importacionProductos');
+const { mapearFilaProducto, leerFilasDesdeExcel, desambiguarCodigosDuplicados, pareceNotacionCientifica, parsearFacturaCompraDesdeXml } = require('../utils/importacionProductos');
+
+function detalleXml({ codigo, descripcion, cantidad, precioUnitario, codigoPorcentaje, tarifa, valorIva }) {
+  return `
+    <detalle>
+      <codigoPrincipal>${codigo}</codigoPrincipal>
+      <descripcion>${descripcion}</descripcion>
+      <cantidad>${cantidad}</cantidad>
+      <precioUnitario>${precioUnitario}</precioUnitario>
+      <descuento>0</descuento>
+      <precioTotalSinImpuesto>${(cantidad * precioUnitario).toFixed(2)}</precioTotalSinImpuesto>
+      <impuestos>
+        <impuesto>
+          <codigo>2</codigo>
+          <codigoPorcentaje>${codigoPorcentaje}</codigoPorcentaje>
+          ${tarifa !== undefined ? `<tarifa>${tarifa}</tarifa>` : ''}
+          <baseImponible>${(cantidad * precioUnitario).toFixed(2)}</baseImponible>
+          <valor>${valorIva}</valor>
+        </impuesto>
+      </impuestos>
+    </detalle>`;
+}
+
+function facturaCompraXml(detallesXml) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+    <factura id="comprobante">
+      <infoTributaria>
+        <ruc>1790016919001</ruc>
+        <razonSocial>PROVEEDOR TEST</razonSocial>
+        <estab>001</estab>
+        <ptoEmi>001</ptoEmi>
+        <secuencial>000000001</secuencial>
+        <claveAcceso>0000000000000000000000000000000000000000000000</claveAcceso>
+      </infoTributaria>
+      <infoFactura>
+        <fechaEmision>01/07/2026</fechaEmision>
+      </infoFactura>
+      <detalles>${detallesXml.join('')}</detalles>
+    </factura>`;
+}
 
 test('mapearFilaProducto reconoce encabezados "precio de venta" / "stock actual" con espacios', () => {
   const fila = { codigoPrincipal: 'P001', nombre: 'Test', 'precio de venta': '0.87', 'stock actual': '5' };
@@ -96,4 +135,41 @@ test('pareceNotacionCientifica detecta un código pegado en notación científic
   assert.equal(pareceNotacionCientifica('ARROCILLO'), false);
   assert.equal(pareceNotacionCientifica(7802225427777), false); // número, no texto — no aplica
   assert.equal(pareceNotacionCientifica(undefined), false);
+});
+
+test('parsearFacturaCompraDesdeXml usa el código de porcentaje SRI real (4=15%, no "No objeto") — antes tenía una tabla incorrecta', () => {
+  const xml = facturaCompraXml([
+    detalleXml({ codigo: 'A', descripcion: 'Item 15%', cantidad: 1, precioUnitario: 100, codigoPorcentaje: '4', valorIva: 15 }),
+  ]);
+  const { detalles, totales } = parsearFacturaCompraDesdeXml(xml);
+  assert.equal(detalles[0].porcentajeIva, 15);
+  assert.equal(totales.subtotal15, 100);
+  assert.equal(totales.subtotalNoObjeto, 0);
+  assert.equal(totales.totalIva, 15);
+});
+
+test('parsearFacturaCompraDesdeXml separa No Objeto (6) y Exento (7) del resto — antes caían en subtotal0 sin distinguirse', () => {
+  const xml = facturaCompraXml([
+    detalleXml({ codigo: 'B', descripcion: 'Item No Objeto', cantidad: 1, precioUnitario: 20, codigoPorcentaje: '6', valorIva: 0 }),
+    detalleXml({ codigo: 'C', descripcion: 'Item Exento', cantidad: 1, precioUnitario: 30, codigoPorcentaje: '7', valorIva: 0 }),
+  ]);
+  const { detalles, totales } = parsearFacturaCompraDesdeXml(xml);
+  assert.equal(detalles[0].porcentajeIva, 6);
+  assert.equal(detalles[1].porcentajeIva, 7);
+  assert.equal(totales.subtotalNoObjeto, 20);
+  assert.equal(totales.subtotalExento, 30);
+  assert.equal(totales.subtotal0, 0);
+  assert.equal(totales.totalIva, 0);
+});
+
+test('parsearFacturaCompraDesdeXml separa 5% y 12% en sus propios campos — antes se colapsaban en subtotal15', () => {
+  const xml = facturaCompraXml([
+    detalleXml({ codigo: 'D', descripcion: 'Item 5%', cantidad: 1, precioUnitario: 40, codigoPorcentaje: '5', valorIva: 2 }),
+    detalleXml({ codigo: 'E', descripcion: 'Item 12%', cantidad: 1, precioUnitario: 50, codigoPorcentaje: '2', valorIva: 6 }),
+  ]);
+  const { totales } = parsearFacturaCompraDesdeXml(xml);
+  assert.equal(totales.subtotal5, 40);
+  assert.equal(totales.subtotal12, 50);
+  assert.equal(totales.subtotal15, 0);
+  assert.equal(totales.totalIva, 8);
 });

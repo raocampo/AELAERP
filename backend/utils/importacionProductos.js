@@ -294,21 +294,35 @@ function extraerXmlPrincipal(xmlString) {
   }
 }
 
+// Código de porcentaje IVA del SRI (tabla 17, ficha técnica v2.26) — MISMA
+// tabla ya verificada en utils/sri.js (IVA_CODIGO, usada para generar el XML
+// saliente): 0%→'0', 5%→'5', 12%→'2', 15%→'4', No Objeto→'6', Exento→'7'.
+// Se agregan acá los códigos históricos '1' (12%, previo a 2%) y '3' (14%,
+// vigente 2016-2019) que solo pueden aparecer en XMLs recibidos antiguos —
+// sri.js no los necesita porque nunca los genera hacia afuera.
+// Esta función ANTES tenía una tabla propia, distinta e incorrecta (código
+// '4' lo trataba como "No objeto" en vez de 15%, sin código para Exento, y
+// "15%(servicios)"/"5%(bienes)" en códigos '6'/'7'/'8' que no corresponden a
+// ningún IVA real) — cualquier detalle 5%, 12%, No Objeto o Exento de una
+// compra importada por XML (Buzón SRI) quedaba mal clasificado.
+const CODIGO_A_TARIFA = { '0': 0, '1': 12, '2': 12, '3': 14, '4': 15, '5': 5, '6': 6, '7': 7 };
+
+// Devuelve la tarifa IVA del detalle usando el mismo sentinel numérico que
+// el resto del sistema: 0/5/12/15 para tarifas reales, 6 para No Objeto de
+// IVA y 7 para Exento de IVA (igual que productos_servicios.tarifaIva y
+// utils/sri.js IVA_CODIGO).
 function extraerTarifaIvaDetalle(impuesto) {
   if (!impuesto) return 0;
+  const codigo = String(impuesto.codigoPorcentaje || impuesto.porcentajeCodigo || '').trim();
+  // No Objeto (6) y Exento (7) no son un "% de tarifa" — el campo <tarifa>
+  // del XML puede venir en 0 para ambos, así que el código manda primero.
+  if (codigo === '6') return 6;
+  if (codigo === '7') return 7;
+
   const tarifa = toNumber(impuesto.tarifa, NaN);
   if (Number.isFinite(tarifa)) return normalizarTarifaIva(tarifa);
 
-  // Tabla de codigoPorcentaje del SRI Ecuador:
-  //   0 → 0%    1 → 12% (histórico)   2 → 12%   3 → 14%   4 → No objeto
-  //   5 → 15%   6 → 15% (servicios)   7 → 5%    8 → 5% (bienes)
-  const codigo = String(impuesto.codigoPorcentaje || impuesto.porcentajeCodigo || '').trim();
-  if (codigo === '0' || codigo === '4') return 0;
-  if (codigo === '7' || codigo === '8') return 5;
-  if (codigo === '5' || codigo === '6') return 15;
-  if (['1', '2'].includes(codigo)) return 12;
-  if (codigo === '3') return 14;
-  return 0;
+  return CODIGO_A_TARIFA[codigo] ?? 0;
 }
 
 function obtenerImpuestoDetalle(detalle) {
@@ -417,7 +431,10 @@ function parsearFacturaCompraDesdeXml(xmlString) {
     const descuento = toNumber(detalle.descuento, 0);
     const precioTotalSinImpuesto = toNumber(detalle.precioTotalSinImpuesto, (cantidad * precioUnitario) - descuento);
     const porcentajeIva = extraerTarifaIvaDetalle(impuesto);
-    const totalLinea = precioTotalSinImpuesto + (porcentajeIva > 0 ? toNumber(impuesto?.valor, precioTotalSinImpuesto * (porcentajeIva / 100)) : 0);
+    // No Objeto (6) y Exento (7) son sentinels, no un % real — nunca generan
+    // IVA aunque porcentajeIva > 0.
+    const esTarifaReal = porcentajeIva > 0 && porcentajeIva !== 6 && porcentajeIva !== 7;
+    const totalLinea = precioTotalSinImpuesto + (esTarifaReal ? toNumber(impuesto?.valor, precioTotalSinImpuesto * (porcentajeIva / 100)) : 0);
 
     return {
       codigoPrincipal: limpiarCodigo(detalle.codigoPrincipal || generarCodigoDesdeTexto(detalle.descripcion, index)),
@@ -437,13 +454,23 @@ function parsearFacturaCompraDesdeXml(xmlString) {
     };
   }).filter((item) => item.descripcion && item.cantidad > 0);
 
+  // Mismo criterio de clasificación por tarifa/sentinel ya usado en
+  // routes/compras.js (importación manual por Excel y creación con
+  // detalle) — No Objeto y Exento primero (no son un % real), luego 5/12/15,
+  // el resto a 0%.
   const totales = detalles.reduce((acc, item) => {
     const subtotal = toNumber(item.subtotal, 0);
     const descuento = toNumber(item.descuento, 0);
-    const iva = item.porcentajeIva > 0 ? subtotal * (item.porcentajeIva / 100) : 0;
+    const pct = item.porcentajeIva;
+    const esTarifaReal = pct > 0 && pct !== 6 && pct !== 7;
+    const iva = esTarifaReal ? subtotal * (pct / 100) : 0;
 
-    if (item.porcentajeIva > 0) acc.subtotal15 += subtotal;
-    else acc.subtotal0 += subtotal;
+    if (pct === 6)          acc.subtotalNoObjeto += subtotal;
+    else if (pct === 7)     acc.subtotalExento += subtotal;
+    else if (pct === 5)     acc.subtotal5  += subtotal;
+    else if (pct === 12 || pct === 14) acc.subtotal12 += subtotal;
+    else if (pct > 0)       acc.subtotal15 += subtotal;
+    else                    acc.subtotal0  += subtotal;
 
     acc.totalDescuento += descuento;
     acc.totalIva += iva;
@@ -451,7 +478,11 @@ function parsearFacturaCompraDesdeXml(xmlString) {
     return acc;
   }, {
     subtotal0: 0,
+    subtotal5: 0,
+    subtotal12: 0,
     subtotal15: 0,
+    subtotalNoObjeto: 0,
+    subtotalExento: 0,
     totalDescuento: 0,
     totalIva: 0,
     importeTotal: 0,
@@ -484,7 +515,11 @@ function parsearFacturaCompraDesdeXml(xmlString) {
     pagos: pagos.length > 0 ? pagos : [{ formaPago: '20', total: Number(totales.importeTotal.toFixed(2)) }],
     totales: {
       subtotal0: Number(totales.subtotal0.toFixed(2)),
+      subtotal5: Number(totales.subtotal5.toFixed(2)),
+      subtotal12: Number(totales.subtotal12.toFixed(2)),
       subtotal15: Number(totales.subtotal15.toFixed(2)),
+      subtotalNoObjeto: Number(totales.subtotalNoObjeto.toFixed(2)),
+      subtotalExento: Number(totales.subtotalExento.toFixed(2)),
       totalDescuento: Number(totales.totalDescuento.toFixed(2)),
       totalIva: Number(totales.totalIva.toFixed(2)),
       importeTotal: Number(totales.importeTotal.toFixed(2)),
