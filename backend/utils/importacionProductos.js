@@ -95,10 +95,20 @@ function toBoolean(valor, fallback = false) {
   return fallback;
 }
 
+// Redondea un valor de tarifa IVA (de Excel o del campo <tarifa> de un XML)
+// al valor real más cercano de la tabla vigente en Ecuador: 0/5/12/14/15.
+// ANTES solo conocía 0/5/15 — cualquier tarifa 12% o 14% (ej. compras
+// anteriores a abr-2024, cuando 12% era la tarifa general vigente) se
+// "normalizaba" incorrectamente a 15%, inflando el IVA de compras
+// históricas reales. Confirmado en producción: una compra real de
+// 2023-02-01 con <tarifa>12</tarifa> explícito en el XML terminaba
+// guardada como 15% en vez de 12%.
 function normalizarTarifaIva(valor) {
   const numero = Math.round(toNumber(valor, 0));
   if (numero <= 0) return 0;
-  if (numero > 0 && numero <= 5) return 5;
+  if (numero <= 5) return 5;
+  if (numero <= 13) return 12;
+  if (numero === 14) return 14;
   return 15;
 }
 

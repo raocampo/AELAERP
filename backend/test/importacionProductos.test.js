@@ -162,6 +162,21 @@ test('parsearFacturaCompraDesdeXml separa No Objeto (6) y Exento (7) del resto �
   assert.equal(totales.totalIva, 0);
 });
 
+test('parsearFacturaCompraDesdeXml respeta <tarifa>12</tarifa> explícito del XML — antes normalizarTarifaIva lo redondeaba a 15%', () => {
+  // Caso real de producción (compra 007-002-000006320, 2023-02-01, antes de
+  // que 15% empezara a regir en abr-2024): el XML trae codigoPorcentaje='2'
+  // Y <tarifa>12</tarifa> explícito — el campo <tarifa> tiene prioridad y
+  // antes se "normalizaba" mal porque normalizarTarifaIva no conocía 12%.
+  const xml = facturaCompraXml([
+    detalleXml({ codigo: 'F', descripcion: 'Item 12% con tarifa explicita', cantidad: 1, precioUnitario: 9.38, codigoPorcentaje: '2', tarifa: 12, valorIva: 1.13 }),
+  ]);
+  const { detalles, totales } = parsearFacturaCompraDesdeXml(xml);
+  assert.equal(detalles[0].porcentajeIva, 12);
+  assert.equal(totales.subtotal12, 9.38);
+  assert.equal(totales.subtotal15, 0);
+  assert.equal(totales.totalIva, 1.13);
+});
+
 test('parsearFacturaCompraDesdeXml separa 5% y 12% en sus propios campos — antes se colapsaban en subtotal15', () => {
   const xml = facturaCompraXml([
     detalleXml({ codigo: 'D', descripcion: 'Item 5%', cantidad: 1, precioUnitario: 40, codigoPorcentaje: '5', valorIva: 2 }),
