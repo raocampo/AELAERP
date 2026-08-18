@@ -12,6 +12,18 @@ const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { CODIGOS_RETENCION_RENTA, parsearNotaCreditoRecibidaXml } = require('../utils/sri');
+const { condicionComprasDeducibles, CUTOFF_APROBACION_CEDULA } = require('../utils/comprasFiscal');
+
+// Reglas de inclusión de compras en el ATS — MISMA regla que ya usan
+// declaraciones.js (F104/F101) y facturas.js (reporte tributario), ver
+// utils/comprasFiscal.js: excluye compras facturadas a cédula personal (no
+// al RUC de la empresa) sin revisión del contador, y excluye siempre las
+// marcadas como gasto personal. Antes esta ruta no aplicaba ninguna de las
+// 2 reglas — el ATS (que se sube directo al SRI) podía reportar compras que
+// ni siquiera son deducibles para la empresa.
+function whereComprasAts(base) {
+  return { ...base, esGastoPersonal: { not: true }, OR: condicionComprasDeducibles() };
+}
 
 const LOGO_SRI = path.join(__dirname, '../assets/LogoSRI.png');
 
@@ -126,9 +138,9 @@ router.get('/preview', async (req, res) => {
         },
         orderBy: { fechaEmision: 'asc' },
       }),
-      // Compras: facturas_compra NO anuladas del período
+      // Compras: facturas_compra NO anuladas del período, deducibles (ver whereComprasAts)
       prisma.facturas_compra.findMany({
-        where: { empresaId, anulada: false, ...periodoWhere },
+        where: whereComprasAts({ empresaId, anulada: false, ...periodoWhere }),
         include: {
           retenciones: {
             where: { anulada: false },
@@ -204,6 +216,21 @@ router.get('/preview', async (req, res) => {
     });
     const totalNcRecibidasIva = ncsRecibidasVista.reduce((s, nc) => s + nc.iva, 0);
 
+    // Compras excluidas de `compras` arriba (mismo criterio que declaraciones.js)
+    // — se cuentan aparte solo para avisar al usuario en pantalla, no afectan el XML.
+    const [comprasExcluidasCedula, gastosPersonalesExcluidos] = await Promise.all([
+      prisma.facturas_compra.count({
+        where: {
+          empresaId, anulada: false, ...periodoWhere,
+          receptorEsRuc: false, aprobadaPorContador: false,
+          NOT: { fechaEmision: { lt: CUTOFF_APROBACION_CEDULA } },
+        },
+      }),
+      prisma.facturas_compra.count({
+        where: { empresaId, anulada: false, ...periodoWhere, esGastoPersonal: true },
+      }),
+    ]);
+
     const totales = {
       totalVentasFacturas:       sumar(facturas, 'importeTotal'),
       totalVentasLiquidaciones:  sumar(liquidaciones, 'importeTotal'),
@@ -234,6 +261,8 @@ router.get('/preview', async (req, res) => {
         retencionesRecibidas,
         ncsRecibidas: ncsRecibidasVista,
         totales,
+        comprasExcluidasCedula,
+        gastosPersonalesExcluidos,
       },
     });
   } catch (err) {
@@ -264,7 +293,7 @@ router.get('/exportar', async (req, res) => {
         orderBy: { secuencial: 'asc' },
       }),
       prisma.facturas_compra.findMany({
-        where: { empresaId, anulada: false, ...periodoWhere },
+        where: whereComprasAts({ empresaId, anulada: false, ...periodoWhere }),
         include: {
           retenciones: {
             where: { anulada: false },
@@ -579,7 +608,7 @@ router.get('/exportar/pdf', async (req, res) => {
       prisma.facturas.findMany({ where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere } }),
       prisma.liquidaciones_compra.findMany({ where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere } }),
       prisma.facturas_compra.findMany({
-        where: { empresaId, anulada: false, ...periodoWhere },
+        where: whereComprasAts({ empresaId, anulada: false, ...periodoWhere }),
         include: { retenciones: { where: { anulada: false } } },
       }),
       prisma.notas_credito.findMany({ where: { empresaId, estadoSri: 'AUTORIZADO', fechaEmision: { gte: desde, lte: hasta } } }),

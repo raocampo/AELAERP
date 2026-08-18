@@ -80,6 +80,7 @@ function TabVentas({ data }) {
                   <th className="text-right">Base 5%</th>
                   <th className="text-right">Base 12%</th>
                   <th className="text-right">Base 15%</th>
+                  <th className="text-right">No obj./Exenta</th>
                   <th className="text-right">IVA</th>
                   <th className="text-right">Total</th>
                 </tr>
@@ -95,6 +96,7 @@ function TabVentas({ data }) {
                     <td className="ats-money">{fmt(f.subtotal5 || 0)}</td>
                     <td className="ats-money">{fmt(f.subtotal12 || 0)}</td>
                     <td className="ats-money">{fmt(f.subtotal15)}</td>
+                    <td className="ats-money">{fmt(f.subtotalNoObjetoIva || 0)}</td>
                     <td className="ats-money">{fmt(f.totalIva)}</td>
                     <td className="ats-money ats-money-total">{fmt(f.importeTotal)}</td>
                   </tr>
@@ -107,6 +109,7 @@ function TabVentas({ data }) {
                   <td className="ats-money"><strong>{fmt(facturas.reduce((s, f) => s + parseFloat(f.subtotal5 || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(facturas.reduce((s, f) => s + parseFloat(f.subtotal12 || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(facturas.reduce((s, f) => s + parseFloat(f.subtotal15 || 0), 0))}</strong></td>
+                  <td className="ats-money"><strong>{fmt(facturas.reduce((s, f) => s + parseFloat(f.subtotalNoObjetoIva || 0), 0))}</strong></td>
                   <td className="ats-money"><strong>{fmt(facturas.reduce((s, f) => s + parseFloat(f.totalIva || 0), 0))}</strong></td>
                   <td className="ats-money ats-money-total"><strong>{fmt(totF)}</strong></td>
                 </tr>
@@ -740,6 +743,22 @@ export default function ATS() {
               <div className="ats-card-nota">facturas emitidas</div>
             </div>
           </div>
+
+          {data.comprasExcluidasCedula > 0 && (
+            <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: 12 }}>
+              ⚠️ {data.comprasExcluidasCedula} compra(s) de este período están facturadas a una cédula personal, no al
+              RUC de la empresa — no se incluyeron en el XML ni en la pestaña Compras. Si el proveedor puede reemitir el
+              comprobante a nombre del RUC, pídeselo; si corresponde a la actividad económica y no es posible
+              reemitirlo, en Compras → Editar puedes marcarla como "Revisado por contador" para que sí cuente aquí.
+            </div>
+          )}
+          {data.gastosPersonalesExcluidos > 0 && (
+            <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 6, background: '#fffbeb', border: '1px solid #f59e0b', fontSize: 12, color: '#92400e' }}>
+              ℹ️ {data.gastosPersonalesExcluidos} compra(s) marcada(s) como <strong>gasto personal</strong> fueron
+              excluidas del ATS. Los gastos personales (alimentación, salud, vivienda, vestimenta, educación) no
+              generan crédito de IVA — son deducibles del Impuesto a la Renta (F102), no del ATS/F104.
+            </div>
+          )}
 
           {/* Info instrucciones */}
           <div className="ats-nota-sri">
