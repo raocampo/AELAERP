@@ -239,19 +239,71 @@ importación por XML/Buzón SRI.
   simplemente nunca le llegaba bien desde el parser.
 
 **⚠️ Este fix solo previene el problema en importaciones NUEVAS del Buzón
-SRI — NO corrige retroactivamente las 91 compras de julio (ni ninguna otra
-compra histórica importada por XML) que ya están mal en producción.**
-Nuevo script de solo-diagnóstico (por defecto, no escribe nada):
-`backend/scripts/corregirComprasNoObjetoExentoBuzon.js` — re-parsea el
-`xmlOrigen` ya guardado de cada compra `BUZON_SRI` con el parser YA
-CORREGIDO y compara contra lo que hay en la fila. Probado en local
-simulando el bug exacto (compra con `subtotalNoObjeto=0` pese a tener un
-detalle código '6' en su XML) — el diagnóstico lo detecta correctamente
-(`subtotal0 21.60→0.00, subtotalNoObjeto 0.00→21.60`) y `--fix` lo corrige
-con backup previo (mismo patrón ya usado por
-`corregirCorteIva15Abril2024.js`). **No se ejecutó contra ninguna BD de
-producción real** (sin acceso desde este entorno) — pendiente que el
-usuario decida cuándo y en qué tenant(s) correrlo. El script avisa al
-final que, si el `totalIva`/`importeTotal` de alguna compra corregida
-cambia, revisar si ya generó un asiento contable que necesite regenerarse
-a mano (el script no toca asientos).
+SRI — NO corrige retroactivamente las compras históricas ya mal
+importadas.** Nuevo script de diagnóstico/corrección (solo lectura por
+defecto): `backend/scripts/corregirComprasNoObjetoExentoBuzon.js` —
+re-parsea el `xmlOrigen` ya guardado de cada compra `BUZON_SRI` con el
+parser corregido y compara contra lo que hay en la fila (mismo patrón que
+`corregirCorteIva15Abril2024.js`: diagnóstico por defecto, `--fix` con
+backup previo).
+
+## Continuación misma tarde — conexión a producción, segundo bug encontrado, aplicado
+
+El usuario compartió las credenciales de la BD de Railway en `.env.local`
+y autorizó conectarse a producción para correr el diagnóstico. La cadena
+del `.env.local` apunta a la BD **`railway`** (principal, sin slug) — el
+tenant real "Puchaicela Abendaño Daniel Ramiro" (RUC 1104196546001) no
+está ahí, sino en la BD **`aela_lsac`** (mismo servidor Postgres, mismo
+usuario/clave, solo cambia el nombre de la BD — confirmado contra
+`aela_master.tenants`: slug `lsac` → `dbName: aela_lsac`), empresaId **4**.
+
+**Antes de tocar nada**, el primer diagnóstico contra producción reveló
+algo inesperado: 65 compras con diferencia, varias de **febrero 2023**
+reclasificando `subtotal12→subtotal15` — sospechoso, porque en 2023 la
+tarifa vigente era 12%, no 15%. Se investigó contra el XML real
+(`facturas_compra#8`, `007-002-000006320`, 2023-02-01): el XML trae
+`<codigoPorcentaje>2</codigoPorcentaje><tarifa>12</tarifa>` explícito —
+correcto, 12% real. **Causa: un SEGUNDO bug preexistente**,
+`normalizarTarifaIva()` (usada por `extraerTarifaIvaDetalle` para el
+campo `<tarifa>` explícito del XML — el que traen los comprobantes reales,
+no solo el `codigoPorcentaje` de respaldo) solo reconocía 0%/5%/15% —
+cualquier valor entre 6 y 14 (incluido 12% real) se redondeaba hacia
+arriba a 15%. Si se hubiera aplicado `--fix` sin detectar esto, se habría
+**inflado el IVA de compras históricas reales de 2023-2024** — un daño
+nuevo, en dirección opuesta al problema original.
+
+**Fix** (commit `c3b511b`): `normalizarTarifaIva()` reconoce ahora
+0/5/12/14/15. Nuevo test con el caso exacto de producción. `node --test`:
+48/48. Re-diagnosticado contra `aela_lsac` después del fix: bajó de 65 a
+**30 compras** con diferencia real — ya ninguna de 2023-2024 (12%
+correcto se queda igual), solo las que genuinamente tienen 5%/12%/No
+Objeto/Exento mal clasificados. Se verificó además contra el XML crudo una
+muestra de la reclasificación 15%→5% (`facturas_compra#2215`,
+`001-100-000028400`, 2025-05-01: XML trae `<codigoPorcentaje>5</codigoPorcentaje><tarifa>5</tarifa>`,
+base $1,390.48, IVA $69.52 = exactamente 5% — confirmado). **Ninguna de
+las 30 compras cambia `totalIva` ni `importeTotal`** — solo el casillero
+fiscal donde se clasifica cada monto (lo que alimenta ATS/F104), no el
+monto adeudado al proveedor ni el crédito de IVA total — por lo que no
+hace falta regenerar ningún asiento contable ya posteado.
+
+**Aplicado con `--fix`** (confirmación explícita del usuario) contra
+`aela_lsac`, empresaId=4 — 30 compras corregidas, backup guardado en
+`backend/scripts/_backup_comprasNoObjetoExentoBuzon_4_2026-08-18.json`
+— **solo local, no committeado** (`.gitignore` excluye
+`backend/scripts/_backup_*.json` a propósito, para no subir datos reales
+de clientes al repo; el archivo queda disponible en esta máquina si hace
+falta restaurar).
+
+**Verificado con consulta SQL directa post-fix** — julio 2026, empresa 4:
+Base 0% $1,581.18, Base 15% $1,704.33, **No Objeto $21.60**, **Exento
+$2.84**, IVA pagado $255.62 — **coincide exacto** con el
+`Reporte_Facturas (1).xlsx` del usuario del día anterior (base0 RUC
+920.69 + Cédula 660.49 = 1581.18 ✓; No Objeto 21.60 ✓; Exento 2.84 ✓). El
+viejo "Base 0% $1,605.62" que mostraba la pantalla real era exactamente
+1581.18 + 21.60 + 2.84 — el No Objeto/Exento estaba ahí, escondido dentro
+de la base 0%, tal como se sospechaba desde el principio.
+
+Sin pendientes abiertos de este tema. Solo queda pendiente correr el mismo
+script para OTROS tenants si el usuario quiere confirmar que no tienen el
+mismo problema (no se hizo — solo se corrigió el tenant que reportó el
+caso concreto).
