@@ -67,8 +67,14 @@ function parsearFacturaXML(xmlString) {
   for (const imp of impuestos) {
     const base  = toNum(imp.baseImponible);
     const valor = toNum(imp.valor);
-    const codigo = limpiar(imp.codigo); // 2=IVA, 6=No objeto, 7=Exento
-    if (codigo === '6' || codigo === '7') { subtotalNoObjetoIva += base; continue; }
+    // <codigo> es el TIPO de impuesto (siempre '2' para IVA, sea cual sea la
+    // tarifa) — la tarifa/categoría real vive en <codigoPorcentaje>
+    // (0/5/2/4/6/7, ver IVA_CODIGO más abajo). Comparar contra `codigo` en
+    // vez de `codigoPorcentaje` hacía que este check nunca fuera cierto —
+    // cualquier línea No Objeto/Exento (valor=0) caía en inferirTarifa(base,0)
+    // = 0%, mezclándose silenciosamente con subtotal0.
+    const codigoPorcentaje = limpiar(imp.codigoPorcentaje);
+    if (codigoPorcentaje === '6' || codigoPorcentaje === '7') { subtotalNoObjetoIva += base; continue; }
     const tarifa = inferirTarifa(base, valor);
     if (tarifa === 5) subtotal5 += base;
     else if (tarifa === 0) subtotal0 += base;
@@ -80,13 +86,17 @@ function parsearFacturaXML(xmlString) {
     const impDet = ensureArray(d?.impuestos?.impuesto)[0] || {};
     const base = toNum(impDet.baseImponible, toNum(d.precioTotalSinImpuesto));
     const valorIva = toNum(impDet.valor);
+    const codPct = limpiar(impDet.codigoPorcentaje);
     return {
       codigoPrincipal: limpiar(d.codigoPrincipal) || null,
       descripcion: limpiar(d.descripcion) || 'Ítem',
       cantidad: toNum(d.cantidad, 1),
       precioUnitario: toNum(d.precioUnitario),
       descuento: toNum(d.descuento),
-      ivaPorcentaje: inferirTarifa(base, valorIva),
+      // Mismos sentinels 6/7 que el resto del sistema (ver utils/sri.js
+      // IVA_CODIGO) — sin esto, un detalle No Objeto/Exento (valor=0) se
+      // indistinguía de uno real a 0% de IVA.
+      ivaPorcentaje: (codPct === '6' || codPct === '7') ? Number(codPct) : inferirTarifa(base, valorIva),
     };
   });
 
