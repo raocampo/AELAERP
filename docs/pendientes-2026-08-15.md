@@ -105,12 +105,40 @@ eso ya estaba bien decidido en el sistema desde julio. El problema real que
 ustedes detectaron era que ese campo combinado nunca se estaba sumando —
 ya está corregido.
 
-## Pendiente relacionado — no implementado hoy
+## Continuación — F104 tenía el mismo vacío, ya corregido también
 
-El **F104** (`backend/routes/declaraciones.js`) no referencia
-`subtotalNoObjetoIva` en ninguna parte — probablemente tiene el mismo vacío
-del lado de ventas (no se investigó su estructura de casilleros ni se tocó
-código ahí). Como con el ATS, tampoco hay facturas reales con estas tarifas
-todavía, así que no es urgente, pero si el F104 se genera automáticamente
-desde este sistema (a confirmar) valdría la pena revisarlo con el mismo
-cuidado antes de que alguien lo necesite de verdad.
+Se revisó `backend/routes/declaraciones.js` (`GET /f104`) con el mismo
+cuidado. Confirmado: **mismo bug exacto que el ATS** — la consulta de
+`facturas` no traía `subtotalNoObjetoIva` y el acumulador de ventas nunca lo
+sumaba. Investigación rápida sobre el Formulario 104 real: al igual que en
+el ATS, del lado de **ventas** el SRI no distingue "no objeto" de "exenta"
+en casilleros separados (fuentes públicas ubican ambas bajo un mismo
+casillero, ~404 "Ventas no objeto de IVA", sin un casillero de "ventas
+exentas" aparte) — consistente con que `subtotalNoObjetoIva` ya combine
+ambas cosas por diseño. Del lado de **compras** si hay casilleros separados
+oficiales (531 no objeto, otro para exentas, según la fuente que trajo el
+usuario) — y ahí el backend YA calculaba bien `subtotalNoObjeto`/
+`subtotalExento` por separado, pero **la pantalla de Declaraciones nunca los
+mostraba** (el dato ya estaba bien calculado en el backend desde julio,
+solo nunca llegó a la UI).
+
+**Fix**:
+- `declaraciones.js`: agrega `subtotalNoObjetoIva` al `select` de facturas,
+  lo acumula, y lo expone como `ventas.subtotalNoObjeto` en la respuesta.
+- `frontend/.../Declaraciones.jsx`: nueva fila "Ventas no objeto / exentas
+  de IVA" (solo si > 0); nuevas filas "Compras no objeto de IVA" /
+  "Compras exentas de IVA" (el dato ya existía en el backend, solo faltaba
+  mostrarlo).
+
+**Verificado**: `npm run build` sin errores. HTTP real contra `scfi_dev`
+(misma factura de prueba insertada, `GET /api/declaraciones/f104` real):
+`ventas.subtotalNoObjeto: 50` confirmado. Datos de prueba eliminados.
+
+**Simplificación consciente, no corregida hoy**: el prorrateo de notas de
+crédito contra ventas (`ventasNetas0/5/12/15`) no incluye
+`subtotalNoObjeto` en su base de reparto — una NC contra una venta No
+Objeto/Exento no se descontaría de ese total. Como con todo lo demás de
+esta sesión, no hay ninguna venta real con esas tarifas todavía, así que se
+dejó así para no sobre-construir sobre un caso sin uso real; si alguna vez
+aparece, hay que revisar `_totBaseVentas`/`ventasNetas*` en
+`declaraciones.js`.

@@ -150,6 +150,7 @@ function F104View({ data, onRecargar }) {
           <FilaDecl label="Ventas tarifa 0%" valor={fmtNum(ventas.subtotalNeto0)} />
           {ventas.subtotalNeto5 > 0 && <FilaDecl label="Ventas tarifa 5%" valor={fmtNum(ventas.subtotalNeto5)} />}
           <FilaDecl label="Ventas tarifa 15%" valor={fmtNum(ventas.subtotalNeto15)} />
+          {ventas.subtotalNoObjeto > 0 && <FilaDecl label="Ventas no objeto / exentas de IVA" valor={fmtNum(ventas.subtotalNoObjeto)} />}
           <FilaDecl label="IVA cobrado en ventas" valor={fmtNum(ventas.ivaGenerado)} highlight />
           {ventas.notasCredito.iva > 0 && (
             <FilaDecl label="(-) Notas de crédito IVA" valor={`-${fmtNum(ventas.notasCredito.iva)}`} warn />
@@ -162,6 +163,8 @@ function F104View({ data, onRecargar }) {
           <FilaDecl label="Compras tarifa 0%" valor={fmtNum(compras.subtotal0)} />
           {compras.subtotal5 > 0 && <FilaDecl label="Compras tarifa 5%" valor={fmtNum(compras.subtotal5)} />}
           <FilaDecl label="Compras tarifa 15%" valor={fmtNum(compras.subtotal15)} />
+          {compras.subtotalNoObjeto > 0 && <FilaDecl label="Compras no objeto de IVA" valor={fmtNum(compras.subtotalNoObjeto)} />}
+          {compras.subtotalExento > 0 && <FilaDecl label="Compras exentas de IVA" valor={fmtNum(compras.subtotalExento)} />}
           {compras.liquidaciones.iva > 0 && (
             <FilaDecl label="IVA en liquidaciones de compra" valor={fmtNum(compras.liquidaciones.iva)} />
           )}

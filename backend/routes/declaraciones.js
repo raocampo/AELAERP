@@ -63,6 +63,7 @@ router.get('/f104', async (req, res) => {
       where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS } },
       select: {
         subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
+        subtotalNoObjetoIva: true,
         totalIva: true, importeTotal: true,
         notas_credito: {
           where: { estadoSri: 'AUTORIZADO' },
@@ -77,6 +78,11 @@ router.get('/f104', async (req, res) => {
     let ventasSubtotal5  = 0;
     let ventasSubtotal12 = 0;
     let ventasSubtotal15 = 0;
+    // No Objeto + Exento de IVA combinados — igual que en el ATS
+    // (routes/ats.js), el XSD del SRI para ventas no tiene un campo
+    // separado para "exenta" como sí tiene compras; facturas.subtotalNoObjetoIva
+    // ya guarda ambos juntos a propósito.
+    let ventasSubtotalNoObjeto = 0;
     let ventasIva        = 0;
     let ncSubtotal       = 0;
     let ncIva            = 0;
@@ -86,6 +92,7 @@ router.get('/f104', async (req, res) => {
       ventasSubtotal5  += d(f.subtotal5);
       ventasSubtotal12 += d(f.subtotal12);
       ventasSubtotal15 += d(f.subtotal15);
+      ventasSubtotalNoObjeto += d(f.subtotalNoObjetoIva);
       ventasIva        += d(f.totalIva);
       f.notas_credito?.forEach((nc) => {
         ncSubtotal += d(nc.totalSinImpuestos);
@@ -255,6 +262,7 @@ router.get('/f104', async (req, res) => {
         subtotal5:      parseFloat(ventasSubtotal5.toFixed(2)),
         subtotal12:     parseFloat(ventasSubtotal12.toFixed(2)),
         subtotal15:     parseFloat(ventasSubtotal15.toFixed(2)),
+        subtotalNoObjeto: parseFloat(ventasSubtotalNoObjeto.toFixed(2)),
         ivaVentas:      parseFloat(ventasIva.toFixed(2)),
         notasCredito:   { subtotal: parseFloat(ncSubtotal.toFixed(2)), iva: parseFloat(ncIva.toFixed(2)) },
         subtotalNeto0:  ventasNetas0,
