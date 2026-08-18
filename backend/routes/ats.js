@@ -98,7 +98,8 @@ router.get('/preview', async (req, res) => {
           id: true, numeroFactura: true, fechaEmision: true,
           tipoIdentificacionComprador: true, identificacionComprador: true,
           razonSocialComprador: true,
-          subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true, totalIva: true, importeTotal: true,
+          subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
+          subtotalNoObjetoIva: true, totalIva: true, importeTotal: true,
         },
         orderBy: { secuencial: 'asc' },
       }),
@@ -314,6 +315,12 @@ router.get('/exportar', async (req, res) => {
       }
       const e = ventasMap.get(key);
       e.count++;
+      // baseNoGraIva combina No Objeto + Exento de IVA — el XSD del ATS
+      // (detalleVentasType) solo tiene este único campo para ventas, sin
+      // equivalente a baseImpExe (ese existe solo en detalleComprasType),
+      // verificado contra el XSD oficial. facturas.subtotalNoObjetoIva ya
+      // guarda ambos combinados a propósito (ver utils/sri.js).
+      e.baseNoGraIva  += r2(row.subtotalNoObjetoIva || 0);
       e.baseImponible += r2(row.subtotal0 || 0);
       e.baseImpGrav   += r2((row.subtotal5 || 0) + (row.subtotal12 || 0) + (row.subtotal15 || 0));
       e.montoIva      += r2(row.totalIva   || 0);

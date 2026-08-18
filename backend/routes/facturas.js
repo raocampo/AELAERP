@@ -1155,7 +1155,7 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
           subtotal5: totales.subtotal5 || 0,
           subtotal12: totales.subtotal12 || 0,
           subtotal15: totales.subtotal15 || 0,
-          subtotalNoObjetoIva: 0,
+          subtotalNoObjetoIva: totales.subtotalNoObjetoIva || 0,
           totalDescuento: totales.totalDescuento,
           totalIva: totales.totalIva,
           propina: totales.propina,

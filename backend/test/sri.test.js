@@ -49,3 +49,60 @@ test('generarXMLFactura colapsa tabs y espacios múltiples sin perder el conteni
   const resultado = generarConDescripcion('PAPEL   HIGIENICO\tX 6 ROLLOS');
   assert.equal(resultado, 'PAPEL HIGIENICO X 6 ROLLOS');
 });
+
+test('generarXMLFactura declara totalImpuesto para detalles No Objeto (6) y Exento (7) de IVA', () => {
+  // Antes de este fix, un detalle con ivaPorcentaje 6/7 quedaba incluido en
+  // totalSinImpuestos pero SIN su propio bloque <totalImpuesto> en la
+  // cabecera — la suma de baseImponible ahí no cuadraba con
+  // totalSinImpuestos para ninguna factura con estas tarifas. Tampoco se
+  // usaba nunca en producción hasta ahora (0 facturas reales con estas
+  // tarifas), pero el formulario ya las ofrece.
+  const { xml, totales } = sri.generarXMLFactura({
+    fechaEmision: new Date('2026-08-15T12:00:00'),
+    tipoIdentificacionComprador: '05',
+    identificacionComprador: '1105863847',
+    razonSocialComprador: 'CLIENTE PRUEBA',
+    detalles: [
+      { codigoPrincipal: 'A', descripcion: 'Producto tarifa 0%', cantidad: 1, precioUnitario: 10, descuento: 0, ivaPorcentaje: 0 },
+      { codigoPrincipal: 'B', descripcion: 'Servicio no objeto de IVA', cantidad: 1, precioUnitario: 20, descuento: 0, ivaPorcentaje: 6 },
+      { codigoPrincipal: 'C', descripcion: 'Producto exento de IVA', cantidad: 1, precioUnitario: 30, descuento: 0, ivaPorcentaje: 7 },
+      { codigoPrincipal: 'D', descripcion: 'Producto gravado 15%', cantidad: 1, precioUnitario: 100, descuento: 0, ivaPorcentaje: 15 },
+    ],
+    pagos: [{ formaPago: 'Efectivo', total: 175 }],
+  }, CONFIG_BASE);
+
+  // totales.subtotalNoObjetoIva combina 6+7 (20+30=50) — un solo campo en
+  // facturas/ATS de ventas, ver comentario en generarXMLFactura.
+  assert.equal(totales.subtotalNoObjetoIva, 50);
+
+  const cab = xml.match(/<totalConImpuestos>([\s\S]*?)<\/totalConImpuestos>/)[1];
+  assert.match(cab, /<codigoPorcentaje>6<\/codigoPorcentaje>\s*<baseImponible>20\.00<\/baseImponible>/);
+  assert.match(cab, /<codigoPorcentaje>7<\/codigoPorcentaje>\s*<baseImponible>30\.00<\/baseImponible>/);
+
+  // La suma de baseImponible de la cabecera debe cuadrar con totalSinImpuestos
+  // (regla de validación del SRI) — 10 + 20 + 30 + 100 = 160.
+  const sumaBases = [...cab.matchAll(/<baseImponible>([\d.]+)<\/baseImponible>/g)]
+    .reduce((s, m) => s + parseFloat(m[1]), 0);
+  const totalSinImpuestos = parseFloat(xml.match(/<totalSinImpuestos>([\d.]+)<\/totalSinImpuestos>/)[1]);
+  assert.equal(sumaBases.toFixed(2), totalSinImpuestos.toFixed(2));
+  assert.equal(totalSinImpuestos, 160);
+});
+
+test('generarXMLFactura usa el código de porcentaje real (no "0") en el detalle para No Objeto/Exento', () => {
+  // IVA_CODIGO tenía las claves 'noObjeto'/'exento' (string) pero el resto
+  // del código siempre busca por el valor numérico de ivaPorcentaje — esas
+  // claves nunca se alcanzaban y el detalle caía siempre a codigoPorcentaje '0'.
+  const { xml } = sri.generarXMLFactura({
+    fechaEmision: new Date('2026-08-15T12:00:00'),
+    tipoIdentificacionComprador: '07',
+    identificacionComprador: '9999999999999',
+    razonSocialComprador: 'CONSUMIDOR FINAL',
+    detalles: [
+      { codigoPrincipal: 'B', descripcion: 'Servicio no objeto de IVA', cantidad: 1, precioUnitario: 20, descuento: 0, ivaPorcentaje: 6 },
+    ],
+    pagos: [{ formaPago: 'Efectivo', total: 20 }],
+  }, CONFIG_BASE);
+
+  const detalle = xml.match(/<detalle>([\s\S]*?)<\/detalle>/)[1];
+  assert.match(detalle, /<codigoPorcentaje>6<\/codigoPorcentaje>/);
+});

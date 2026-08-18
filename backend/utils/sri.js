@@ -103,12 +103,14 @@ function resolverFormaPago(formaPago) {
 
 // IVA codigoPorcentaje SRI (tabla 17 - ficha técnica v2.26)
 const IVA_CODIGO = {
-  0:          '0',   // 0%
-  5:          '5',   // 5%  (Ley Bienestar Social 2024)
-  12:         '2',   // 12% (tarifa legacy)
-  15:         '4',   // 15% (tarifa vigente desde abr 2024)
-  'noObjeto': '6',   // No objeto de IVA
-  'exento':   '7',   // Exento de IVA
+  0:  '0',   // 0%
+  5:  '5',   // 5%  (Ley Bienestar Social 2024)
+  12: '2',   // 12% (tarifa legacy)
+  15: '4',   // 15% (tarifa vigente desde abr 2024)
+  6:  '6',   // No objeto de IVA — antes con clave string 'noObjeto', nunca
+  7:  '7',   // Exento de IVA — se buscaban siempre con IVA_CODIGO[ivaPct]
+             // (numérico), así que esas dos claves quedaban inalcanzables y
+             // cualquier detalle No Objeto/Exento caía al '0' por defecto.
 };
 
 const IVA_TARIFA = {
@@ -299,7 +301,8 @@ function generarXMLFactura(data, config) {
   let subtotal5    = 0;
   let subtotal12   = 0;
   let subtotal15   = 0;
-  let subtotalNOIva = 0;
+  let subtotalNoObjeto = 0; // código SRI 6
+  let subtotalExento   = 0; // código SRI 7
   let totalDesc    = 0;
   let totalIva     = 0;
 
@@ -320,7 +323,8 @@ function generarXMLFactura(data, config) {
     if (ivaPct === 5)                 subtotal5    += subtotalLineaFull;
     if (ivaPct === 12)                subtotal12   += subtotalLineaFull;
     if (ivaPct === 15)                subtotal15   += subtotalLineaFull;
-    if (ivaPct === 6 || ivaPct === 7) subtotalNOIva += subtotalLineaFull;
+    if (ivaPct === 6)                 subtotalNoObjeto += subtotalLineaFull;
+    if (ivaPct === 7)                 subtotalExento   += subtotalLineaFull;
     totalIva  += ivaLineaFull;
 
     // No Objeto (6) y Exento (7) tienen tarifa display 0.00
@@ -345,9 +349,11 @@ function generarXMLFactura(data, config) {
   subtotal5    = parseFloat(subtotal5.toFixed(2));
   subtotal12   = parseFloat(subtotal12.toFixed(2));
   subtotal15   = parseFloat(subtotal15.toFixed(2));
+  subtotalNoObjeto = parseFloat(subtotalNoObjeto.toFixed(2));
+  subtotalExento   = parseFloat(subtotalExento.toFixed(2));
   totalDesc    = parseFloat(totalDesc.toFixed(2));
   totalIva     = parseFloat(totalIva.toFixed(2));
-  const totalSinImpuestos = parseFloat((subtotal0 + subtotal5 + subtotal12 + subtotal15 + subtotalNOIva).toFixed(2));
+  const totalSinImpuestos = parseFloat((subtotal0 + subtotal5 + subtotal12 + subtotal15 + subtotalNoObjeto + subtotalExento).toFixed(2));
   const importeTotal      = parseFloat((totalSinImpuestos + totalIva + parseFloat(propina || 0)).toFixed(2));
 
   // Construir XML con xmlbuilder2
@@ -419,6 +425,25 @@ function generarXMLFactura(data, config) {
     ti15.ele('baseImponible').txt(subtotal15.toFixed(2));
     ti15.ele('valor').txt((subtotal15 * 0.15).toFixed(2));
   }
+  // Código 6 (No objeto) y 7 (Exento) también entran en totalSinImpuestos —
+  // sin su propio bloque aquí, la suma de baseImponible de totalConImpuestos
+  // no cuadraba con totalSinImpuestos para cualquier factura con un detalle
+  // No Objeto/Exento (nunca ocurrió en producción hasta ahora, pero el
+  // formulario ya ofrece esas 2 tarifas desde antes).
+  if (subtotalNoObjeto > 0) {
+    const tiNo = totImpuestos.ele('totalImpuesto');
+    tiNo.ele('codigo').txt('2');
+    tiNo.ele('codigoPorcentaje').txt('6');
+    tiNo.ele('baseImponible').txt(subtotalNoObjeto.toFixed(2));
+    tiNo.ele('valor').txt('0.00');
+  }
+  if (subtotalExento > 0) {
+    const tiEx = totImpuestos.ele('totalImpuesto');
+    tiEx.ele('codigo').txt('2');
+    tiEx.ele('codigoPorcentaje').txt('7');
+    tiEx.ele('baseImponible').txt(subtotalExento.toFixed(2));
+    tiEx.ele('valor').txt('0.00');
+  }
 
   infoFact.ele('propina').txt(parseFloat(propina || 0).toFixed(2));
   infoFact.ele('importeTotal').txt(importeTotal.toFixed(2));
@@ -473,7 +498,15 @@ function generarXMLFactura(data, config) {
 
   return {
     xml: root.end({ prettyPrint: true }),
-    totales: { subtotal0, subtotal5, subtotal12, subtotal15, totalDescuento: totalDesc, totalIva, importeTotal, propina: parseFloat(propina || 0) },
+    totales: {
+      subtotal0, subtotal5, subtotal12, subtotal15,
+      // Combinado (No Objeto + Exento) porque el XSD del ATS (detalleVentasType)
+      // solo tiene un campo baseNoGraIva para ventas, sin equivalente a
+      // baseImpExe (ese existe solo en compras) — verificado contra el XSD
+      // oficial. facturas.subtotalNoObjetoIva guarda ambos juntos a propósito.
+      subtotalNoObjetoIva: parseFloat((subtotalNoObjeto + subtotalExento).toFixed(2)),
+      totalDescuento: totalDesc, totalIva, importeTotal, propina: parseFloat(propina || 0),
+    },
   };
 }
 
