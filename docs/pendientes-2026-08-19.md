@@ -1,5 +1,71 @@
 # AELA ERP — Sesión 2026-08-19 — Exportar a Excel escribía montos/fechas como texto
 
+# Parte 2 — PDF de apoyo para el Formulario 104 (IVA)
+
+## Pedido del usuario
+
+Compartió tres cosas: la "Guía para el llenado del Formulario IVA" oficial
+del SRI (27 páginas, vigente post-reforma abril/2024), el archivo
+`FORMULARIO IVA.xlsx` (diseño oficial casillero por casillero, carpeta
+`UtilitariosSCFI/Declaraciones/`) y la URL
+`https://www.sri.gob.ec/formularios-e-instructivos`. Pidió investigar,
+analizar, planear e implementar — esto desbloqueaba el pendiente que
+había quedado abierto el 2026-08-16 (generar un PDF real del F104).
+
+## Mapeo de casilleros confirmado
+
+Contra el Excel oficial se confirmó el diseño vigente: la tarifa
+diferente de cero (12%/15%) ya NO tiene casilleros separados por tasa —
+comparten un solo bloque (ventas 401/411/421, compras 500/510/520). Solo
+la tarifa 5% (materiales de construcción, Ley de Bienestar) tiene
+casillero propio (425/435/445 ventas, 540/550/560 compras). Los
+casilleros 531/532 (No objeto/Exenta de compras) no cambiaron desde el
+instructivo de 2017. Mapeo completo (activos fijos, exportaciones,
+importaciones, factor de proporcionalidad, resumen impositivo,
+retenciones, etc.) documentado en el commit.
+
+## Implementación
+
+- `backend/routes/declaraciones.js`: se extrajo el cálculo del F104 (que
+  ya vivía en `GET /f104`) a una función reutilizable `calcularF104()`,
+  usada tanto por el endpoint JSON existente como por el nuevo
+  `GET /f104/pdf`. De paso se expuso `retencionIvaCompras` (ya se
+  calculaba pero nunca se usaba) como `retencionesEmitidas` — es el IVA
+  que la empresa retiene a sus proveedores (casillero 799/801).
+- `GET /f104/pdf`: genera un PDF (PDFKit, mismo lenguaje visual que
+  `contabilidad.js` — encabezado corporativo, tablas con alto de fila
+  dinámico) con tres tablas (Ventas, Compras, Liquidación/Resumen) donde
+  cada fila muestra el casillero oficial junto al valor que el sistema
+  calcula. Incluye un aviso destacado ("documento de apoyo, no reemplaza
+  el formulario oficial") y, al final, la lista explícita de casilleros
+  que AELA NO puede llenar solo (activos fijos por separado,
+  exportaciones, importaciones DIM/DAU, tarifa turística variable,
+  factor de proporcionalidad, NC por compensar, desglose de retención
+  IVA por %, saldo de crédito tributario por origen) para que el
+  contador sepa qué revisar a mano.
+- `frontend/src/components/Declaraciones/Declaraciones.jsx`: botón
+  "📄 Generar Formulario (PDF)" en el header del F104, descarga vía blob
+  (mismo patrón que `imprimirAsiento` en `ContabilidadHub.jsx`).
+
+## Verificado
+
+Contra empresaId=1 local: primero con el único dato real disponible
+(mayo/2026, solo ventas), luego con datos `QATEST` insertados a mano
+(compra con IVA 0%/5%/15%/No Objeto/Exento + retención de IVA a
+proveedor, una liquidación de compra, una retención de IVA recibida de
+cliente) para ejercitar todas las ramas — el PDF resultante se renderizó
+a PNG con `pymupdf` y se verificó a ojo (y a mano, casillero por
+casillero) que la aritmética cierra: 601/602 = 429−529, 620/699 =
+máx(0, IVA a pagar), 859/902 = 620+799. Datos de prueba eliminados al
+terminar. `node --test`: 49/49. `vite build`: sin errores.
+
+No se probó en un navegador real (no hay herramienta de automatización
+de navegador disponible en este entorno) — el botón se verificó por
+lectura de código (mismo patrón ya probado en Contabilidad) y build
+exitoso, no por clic real. Pendiente de que el usuario lo pruebe en
+`Declaraciones → F104 → Generar Formulario (PDF)`.
+
+
 ## Contexto — sincronización entre equipos
 
 Antes de empezar se hizo `git pull` (1 commit nuevo de la otra máquina,

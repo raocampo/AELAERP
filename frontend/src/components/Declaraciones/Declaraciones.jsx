@@ -6,6 +6,7 @@
 // ====================================
 
 import { useCallback, useState, useEffect, Component } from 'react';
+import toast from 'react-hot-toast';
 import api from '../../services/api';
 
 // ─── ErrorBoundary — evita pantalla en blanco por crash de render ─────────────
@@ -135,12 +136,32 @@ function F104View({ data, onRecargar }) {
   const { ventas, compras, retenciones, resultado, meta } = data;
   const esDebito  = resultado.ivaACobrarPagar > 0;
   const esCredito = resultado.ivaACobrarPagar < 0;
+  const { anio, mes } = data.periodo;
+
+  const descargarPdf = async () => {
+    try {
+      const res = await api.get(`/declaraciones/f104/pdf?anio=${anio}&mes=${mes}`, { responseType: 'blob' });
+      const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.setAttribute('download', `f104_${anio}_${String(mes).padStart(2, '0')}.pdf`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo generar el PDF del Formulario 104');
+    }
+  };
 
   return (
     <div className="decl-formulario">
       <div className="decl-formulario-header">
         <span className="decl-form-badge">Formulario 104</span>
-        <span>IVA Mensual — {MESES[data.periodo.mes - 1]} {data.periodo.anio}</span>
+        <span>IVA Mensual — {MESES[mes - 1]} {anio}</span>
+        <button className="btn-secondary" style={{ marginLeft: 'auto' }} onClick={descargarPdf}>
+          📄 Generar Formulario (PDF)
+        </button>
       </div>
 
       <div className="decl-secciones">

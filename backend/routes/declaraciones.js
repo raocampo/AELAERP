@@ -13,6 +13,9 @@
 
 const express = require('express');
 const router  = express.Router();
+const fs      = require('fs');
+const path    = require('path');
+const PDFDocument = require('pdfkit');
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
@@ -46,19 +49,115 @@ function rangoAnio(anio) {
 
 function d(v) { return parseFloat(v || 0); }
 
-// ─── GET /f104 — Formulario 104 IVA Mensual ────────────────────────────────────
-// Query: ?anio=2025&mes=3
-router.get('/f104', async (req, res) => {
-  try {
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
-    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
+// ─── Helpers de PDF (copiados de routes/contabilidad.js — sin exportar allá) ───
+function crearDocumentoPdf(res, filename) {
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  const doc = new PDFDocument({ size: 'A4', margin: 36 });
+  doc.pipe(res);
+  return doc;
+}
+
+function _resolverLogoDeclaraciones(logoUrl) {
+  if (!logoUrl) return { logoData: null, tieneLogo: false };
+  if (logoUrl.startsWith('data:')) {
+    try {
+      const b64 = logoUrl.replace(/^data:image\/\w+;base64,/, '');
+      return { logoData: Buffer.from(b64, 'base64'), tieneLogo: true };
+    } catch { return { logoData: null, tieneLogo: false }; }
+  }
+  const logoPath = path.join(__dirname, '..', logoUrl.replace(/^\//, ''));
+  const existe = fs.existsSync(logoPath);
+  return { logoData: existe ? logoPath : null, tieneLogo: existe };
+}
+
+function dibujarEncabezadoContable(doc, config, titulo) {
+  const ML = doc.page.margins.left;
+  const W  = doc.page.width - ML - doc.page.margins.right;
+  const { logoData, tieneLogo } = _resolverLogoDeclaraciones(config?.logoUrl);
+  let y = doc.y;
+
+  if (tieneLogo) {
+    try { doc.image(logoData, ML, y, { fit: [70, 45] }); } catch { /* logo corrupto → omitir */ }
+  }
+
+  doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000')
+    .text((config?.razonSocial || 'Empresa').toUpperCase(), ML, y, { width: W, align: 'center' });
+  doc.fontSize(8).font('Helvetica').fillColor('#475569')
+    .text([config?.ruc, config?.dirMatriz, config?.telefono].filter(Boolean).join('  ·  '), { width: W, align: 'center' });
+  doc.moveDown(0.4);
+
+  doc.fontSize(13).font('Helvetica-Bold').fillColor('#000000')
+    .text(titulo, { width: W, align: 'center' });
+  doc.font('Helvetica').fillColor('#000000');
+  doc.moveDown(0.3);
+
+  const lineY = doc.y;
+  doc.moveTo(ML, lineY).lineTo(ML + W, lineY).lineWidth(1).stroke('#7C3AED');
+  doc.moveDown(0.4);
+}
+
+// Tabla de casilleros: Casillero | Descripción | Valor(es). Mismo lenguaje
+// visual que dibujarTablaPdf de contabilidad.js (alto de fila dinámico —
+// PDFKit no envuelve texto largo solo, hay que medir con heightOfString
+// antes de dibujar el rect() de fondo).
+function dibujarTablaPdf(doc, columnas, filas, startY) {
+  const ML = doc.page.margins.left;
+  const LIMITE_Y = doc.page.height - doc.page.margins.bottom;
+  const ROW_H_MIN = 16;
+  const anchoTotal = columnas.reduce((s, c) => s + c.width, 0);
+  let y = startY;
+
+  const dibujarEncabezado = () => {
+    doc.rect(ML, y, anchoTotal, ROW_H_MIN).fillAndStroke('#e2e8f0', '#94a3b8');
+    doc.fillColor('#1e293b').font('Helvetica-Bold').fontSize(8);
+    let x = ML;
+    columnas.forEach((c) => {
+      doc.text(c.header, x + 3, y + 4, { width: c.width - 6, align: c.align || 'left' });
+      x += c.width;
+    });
+    doc.font('Helvetica').fillColor('#000000');
+    y += ROW_H_MIN;
+  };
+
+  dibujarEncabezado();
+  doc.fontSize(8);
+
+  filas.forEach((fila, i) => {
+    const valores = columnas.map((c) => (c.formato ? c.formato(fila[c.key], fila) : String(fila[c.key] ?? '')));
+    const altoFila = Math.max(ROW_H_MIN, ...columnas.map((c, idx) =>
+      doc.heightOfString(valores[idx], { width: c.width - 6, align: c.align || 'left' }) + 8));
+
+    if (y + altoFila > LIMITE_Y) {
+      doc.addPage();
+      y = doc.page.margins.top;
+      dibujarEncabezado();
+      doc.fontSize(8);
+    }
+    if (fila._destacado) { doc.rect(ML, y, anchoTotal, altoFila).fill('#ede9fe').fillColor('#000000'); }
+    else if (i % 2 === 1) { doc.rect(ML, y, anchoTotal, altoFila).fill('#f8fafc').fillColor('#000000'); }
+    let x = ML;
+    columnas.forEach((c, idx) => {
+      doc.font(fila._destacado ? 'Helvetica-Bold' : 'Helvetica');
+      doc.text(valores[idx], x + 3, y + 4, { width: c.width - 6, align: c.align || 'left' });
+      x += c.width;
+    });
+    doc.font('Helvetica');
+    y += altoFila;
+  });
+
+  doc.x = ML;
+  doc.y = y + 6;
+  return doc.y;
+}
+
+// ─── calcularF104 — cálculo completo del Formulario 104, reutilizado por el
+// endpoint JSON (GET /f104) y por el generador de PDF (GET /f104/pdf) ─────────
+async function calcularF104(db, empresaId, anio, mes) {
     const { desde, hasta } = rangoMes(anio, mes);
-    const empresaId = req.empresa.id;
     const filtroFecha = { gte: desde, lte: hasta };
 
     // ── VENTAS ──────────────────────────────────────────────────────────────────
-    const db = req.prisma || prisma;
-
     const facturas = await db.facturas.findMany({
       where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS } },
       select: {
@@ -290,6 +389,12 @@ router.get('/f104', async (req, res) => {
         otro:    parseFloat(retencionIVAOtro.toFixed(2)),
         totalRetenido: ivaRetenidoClientes,
       },
+      // IVA que la propia empresa retuvo a sus proveedores al pagarles (agente
+      // de retención de IVA — casilleros 721-731/799/801 del formulario real).
+      // AELA no desglosa por porcentaje (10/20/30/50/70/100%), solo el total.
+      retencionesEmitidas: {
+        ivaRetenidoAProveedores: parseFloat(retencionIvaCompras.toFixed(2)),
+      },
       resultado: {
         creditoTributarioAnterior,
         creditoTributarioGuardado: !!creditoGuardado,
@@ -313,9 +418,173 @@ router.get('/f104', async (req, res) => {
       },
     };
 
+    return f104;
+}
+
+// ─── GET /f104 — Formulario 104 IVA Mensual ────────────────────────────────────
+// Query: ?anio=2025&mes=3
+router.get('/f104', async (req, res) => {
+  try {
+    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
+    const empresaId = req.empresa.id;
+    const db = req.prisma || prisma;
+
+    const f104 = await calcularF104(db, empresaId, anio, mes);
     res.json({ ok: true, data: f104 });
   } catch (err) {
     console.error('Error F104:', err);
+    res.status(500).json({ ok: false, mensaje: err.message });
+  }
+});
+
+const NOMBRES_MES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
+
+// ─── GET /f104/pdf — Documento de apoyo para el llenado del Formulario 104 ─────
+// NO es el formulario oficial ni lo reemplaza — es una ayuda para que el
+// contador arme la declaración en "SRI en Línea". Mapea los valores que AELA
+// calcula contra el casillero oficial correspondiente (confirmado 2026-08-19
+// contra el diseño oficial vigente post-reforma abril/2024: "Guía para el
+// llenado del Formulario IVA.PDF" + "FORMULARIO IVA.xlsx" del SRI). Deja en
+// blanco / con nota los casilleros que el sistema no puede determinar solo
+// (activos fijos por separado, exportaciones, importaciones DIM/DAU, tarifa
+// turística variable, factor de proporcionalidad, arrastre de NC, desglose de
+// retención IVA por porcentaje, saldo de crédito tributario por origen).
+// Query: ?anio=2025&mes=3
+router.get('/f104/pdf', async (req, res) => {
+  try {
+    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
+    const empresaId = req.empresa.id;
+    const db = req.prisma || prisma;
+
+    const f104 = await calcularF104(db, empresaId, anio, mes);
+    const config = await db.configuracion_sri.findFirst({ where: { empresaId } });
+    const money = (v) => `$${Number(v || 0).toFixed(2)}`;
+    const round2 = (v) => parseFloat((v || 0).toFixed(2));
+
+    // ── VENTAS: desglose por tarifa contra el casillero oficial ──────────────
+    const v = f104.ventas;
+    const ivaDif0Ventas = round2(v.subtotalNeto12 * 0.12 + v.subtotalNeto15 * 0.15);
+    const iva5Ventas    = round2(v.subtotalNeto5 * 0.05);
+    const baseTotalVentas = round2(v.subtotalNeto0 + v.subtotalNeto12 + v.subtotalNeto15 + v.subtotalNeto5);
+
+    // ── COMPRAS: se suman facturas + liquidaciones de compra (el formulario
+    // oficial no distingue tipo de documento, solo tarifa) ───────────────────
+    const c = f104.compras;
+    const compBase0    = round2(c.subtotal0 + c.liquidaciones.subtotal0);
+    const compBase5    = round2(c.subtotal5 + c.liquidaciones.subtotal5);
+    const compBase12   = round2(c.subtotal12 + c.liquidaciones.subtotal12);
+    const compBase15   = round2(c.subtotal15 + c.liquidaciones.subtotal15);
+    const ivaDif0Compras = round2(compBase12 * 0.12 + compBase15 * 0.15);
+    const iva5Compras   = round2(compBase5 * 0.05);
+    const baseTotalCompras = round2(compBase0 + compBase12 + compBase15 + compBase5);
+
+    const subtotalAPagar = round2(Math.max(0, f104.resultado.ivaACobrarPagar));
+    const saldoCreditoProxMes = round2(Math.max(0, -f104.resultado.ivaACobrarPagar));
+    const ivaRetProveedores = f104.retencionesEmitidas.ivaRetenidoAProveedores;
+    const totalAPagar = round2(subtotalAPagar + ivaRetProveedores);
+
+    const doc = crearDocumentoPdf(res, `f104_${anio}_${String(mes).padStart(2, '0')}.pdf`);
+    dibujarEncabezadoContable(doc, config, 'Formulario 104 — Declaración del IVA');
+
+    doc.fontSize(9).font('Helvetica-Bold')
+      .text(`Período: ${NOMBRES_MES[mes - 1]} ${anio}`, { align: 'center' });
+    doc.font('Helvetica').fontSize(8).fillColor('#94a3b8')
+      .text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`, { align: 'center' })
+      .fillColor('#000000');
+    doc.moveDown(0.3);
+
+    const ML = doc.page.margins.left;
+    const Wtotal = doc.page.width - ML - doc.page.margins.right;
+    const yAviso = doc.y;
+    const textoAviso = 'Documento de apoyo para declarar en SRI en Línea — NO es el formulario oficial ni lo reemplaza. Verifique cada casillero contra el sistema del SRI antes de presentar la declaración. Los casilleros no soportados por AELA (activos fijos por separado, exportaciones, importaciones, tarifa turística variable, factor de proporcionalidad, notas de crédito por compensar, desglose de retención IVA por %) se detallan al final.';
+    const altoAviso = doc.heightOfString(textoAviso, { width: Wtotal - 12 }) + 10;
+    doc.rect(ML, yAviso, Wtotal, altoAviso).fillAndStroke('#fef3c7', '#f59e0b');
+    doc.fillColor('#78350f').fontSize(7.5).font('Helvetica')
+      .text(textoAviso, ML + 6, yAviso + 5, { width: Wtotal - 12 });
+    doc.fillColor('#000000');
+    doc.y = yAviso + altoAviso + 8;
+    doc.x = ML;
+
+    const colCasillero = [
+      { header: 'Casillero', key: 'cas',   width: 88 },
+      { header: 'Descripción', key: 'desc', width: 234 },
+      { header: 'Base Imp.', key: 'base', width: 90, align: 'right', formato: (val) => (val === '' ? '' : money(val)) },
+      { header: 'IVA', key: 'iva', width: 90, align: 'right', formato: (val) => (val === '' ? '' : money(val)) },
+    ];
+
+    doc.fontSize(10).font('Helvetica-Bold').text('VENTAS Y OTRAS OPERACIONES');
+    doc.y = dibujarTablaPdf(doc, colCasillero, [
+      { cas: '401/411/421', desc: 'Ventas locales gravadas tarifa general (12%/15%)', base: v.subtotalNeto12 + v.subtotalNeto15, iva: ivaDif0Ventas },
+      { cas: '425/435/445', desc: 'Ventas locales gravadas tarifa 5% (materiales de construcción)', base: v.subtotalNeto5, iva: iva5Ventas },
+      { cas: '403-406/413-416', desc: 'Ventas tarifa 0% (sistema no distingue si dan o no derecho a crédito)', base: v.subtotalNeto0, iva: 0 },
+      { cas: '409/419/429', desc: 'TOTAL VENTAS Y OTRAS OPERACIONES', base: baseTotalVentas, iva: v.ivaGenerado, _destacado: true },
+      { cas: '431/441', desc: 'Transferencias no objeto o exentas de IVA (informativo, fuera del total 429)', base: v.subtotalNoObjeto, iva: '' },
+    ], doc.y);
+    doc.fontSize(7).fillColor('#64748b')
+      .text(`Notas de crédito del período netadas en las bases: ${money(v.notasCredito.subtotal)} (IVA ${money(v.notasCredito.iva)}).`)
+      .fillColor('#000000');
+    doc.moveDown(0.5);
+
+    doc.fontSize(10).font('Helvetica-Bold').text('ADQUISICIONES Y PAGOS (COMPRAS)');
+    doc.y = dibujarTablaPdf(doc, colCasillero, [
+      { cas: '500/510/520', desc: 'Adquisiciones gravadas tarifa general (12%/15%), con derecho a crédito', base: compBase12 + compBase15, iva: ivaDif0Compras },
+      { cas: '540/550/560', desc: 'Adquisiciones gravadas tarifa 5% (materiales de construcción)', base: compBase5, iva: iva5Compras },
+      { cas: '506/507/516/517', desc: 'Adquisiciones tarifa 0%', base: compBase0, iva: 0 },
+      { cas: '509/519/529', desc: 'TOTAL ADQUISICIONES Y PAGOS', base: baseTotalCompras, iva: c.ivaCreditoFiscal, _destacado: true },
+      { cas: '531/541', desc: 'Adquisiciones no objeto de IVA', base: c.subtotalNoObjeto, iva: '' },
+      { cas: '532/542', desc: 'Adquisiciones exentas del pago de IVA', base: c.subtotalExento, iva: '' },
+    ], doc.y);
+    doc.fontSize(7).fillColor('#64748b')
+      .text(`Incluye ${f104.meta.cantidadLiquidaciones} liquidación(es) de compra del período. Notas de crédito de proveedores netadas en el crédito fiscal: ${money(c.ncRecibidas.subtotal)} (IVA ${money(c.ncRecibidas.iva)}, ${c.ncRecibidas.cantidad} documento(s)).`)
+      .fillColor('#000000');
+    doc.moveDown(0.5);
+
+    const colResumen = [
+      { header: 'Casillero', key: 'cas',   width: 62 },
+      { header: 'Descripción', key: 'desc', width: 350 },
+      { header: 'Valor', key: 'valor', width: 90, align: 'right', formato: money },
+    ];
+
+    doc.fontSize(10).font('Helvetica-Bold').text('LIQUIDACIÓN DEL IVA Y RESUMEN IMPOSITIVO');
+    doc.y = dibujarTablaPdf(doc, colResumen, [
+      { cas: '601/602', desc: 'Impuesto causado (429-529, antes de crédito/retenciones)', valor: round2(v.ivaGenerado - c.ivaCreditoFiscal) },
+      { cas: '605', desc: 'Saldo crédito tributario del mes anterior (AELA no separa por origen)', valor: f104.resultado.creditoTributarioAnterior },
+      { cas: '609', desc: 'Retenciones de IVA que le han sido efectuadas por clientes', valor: f104.retenciones.totalRetenido },
+      { cas: '620/699', desc: 'SUBTOTAL A PAGAR POR PERCEPCIÓN', valor: subtotalAPagar, _destacado: true },
+      { cas: '615', desc: 'Saldo crédito tributario para el próximo mes', valor: saldoCreditoProxMes },
+      { cas: '799/801', desc: 'IVA retenido a proveedores (agente de retención — sin desglose por %)', valor: ivaRetProveedores },
+      { cas: '859/902', desc: 'TOTAL IMPUESTO A PAGAR', valor: totalAPagar, _destacado: true },
+    ], doc.y);
+    doc.moveDown(0.3);
+
+    doc.fontSize(7.5).font('Helvetica-Bold').text('Retenciones de IVA recibidas de clientes, por porcentaje (detalle del 609):');
+    doc.font('Helvetica').fontSize(7.5)
+      .text(`30%: ${money(f104.retenciones.iva30)}   ·   70%: ${money(f104.retenciones.iva70)}   ·   100%: ${money(f104.retenciones.iva100)}   ·   Otro: ${money(f104.retenciones.otro)}`);
+    doc.moveDown(0.5);
+
+    if (doc.y > 640) doc.addPage();
+    doc.fontSize(9).font('Helvetica-Bold').text('Casilleros no incluidos — requieren revisión y llenado manual');
+    doc.font('Helvetica').fontSize(7.5).fillColor('#334155');
+    [
+      'Activos fijos por separado (402/412/422, 501/511/521): AELA no distingue compra/venta de activo fijo del resto.',
+      'Exportaciones de bienes y servicios (407/408/417/418): no se registran en AELA.',
+      'Importaciones de bienes, servicios y activos fijos (503/504/505 y DIM/DAU): revisar aduana manualmente.',
+      'Tarifa turística variable (410/420/430, requiere casilla 203): no aplica salvo sector turismo.',
+      'Factor de proporcionalidad (563/564/565): solo aplica si hay ventas mixtas gravadas y no gravadas/exentas.',
+      'Notas de crédito por compensar en próximo mes (442/443/453/543/544/554): AELA neta todo en el período emitido.',
+      'Saldo de crédito tributario por origen (605 vs 606/607/608, 615 vs 617/618/619): AELA guarda un solo saldo combinado (ver PUT /f104/credito-anterior).',
+      'Compensaciones e IVA presuntivo (603/604/607/608/621), ISD devolución exportadores (700-702), pagos previos e imputación de sustitutivas (880-899).',
+    ].forEach((linea) => { doc.text(`• ${linea}`); doc.moveDown(0.15); });
+    doc.fillColor('#000000');
+
+    doc.end();
+  } catch (err) {
+    console.error('Error F104 PDF:', err);
     res.status(500).json({ ok: false, mensaje: err.message });
   }
 });
