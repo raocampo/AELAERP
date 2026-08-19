@@ -44,7 +44,7 @@ router.get('/exportar/xlsx', async (req, res) => {
   try {
     const db = req.prisma || prisma;
     const empresaId = req.empresa?.id ?? req.usuario?.empresaId ?? 1;
-    const XLSX = require('xlsx');
+    const ExcelJS = require('exceljs');
     const items = await db.retenciones_recibidas.findMany({
       where: buildWhereRR(empresaId, req.query),
       orderBy: { fechaEmision: 'desc' },
@@ -61,24 +61,52 @@ router.get('/exportar/xlsx', async (req, res) => {
       return `${ca.substring(24,27)}-${ca.substring(27,30)}-${ca.substring(30,39)}`;
     }
 
-    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
-    const fmtNum  = (v) => Number(v || 0).toFixed(2);
-
-    const headers = ['N° Retención', 'Fecha', 'Agente (Cliente)', 'RUC Agente', 'Doc. Sustento', 'Ret. IVA', 'Ret. Renta', 'Total', 'Anulada'];
-    const rows    = items.map(r => {
-      const totRet = Number(r.totalRetencionIva || 0) + Number(r.totalRetencionRenta || 0);
-      return [extraerNumero(r.claveAcceso), fmtDate(r.fechaEmision), r.razonSocialAgente, r.rucAgente, r.numDocSustento || '', fmtNum(r.totalRetencionIva), fmtNum(r.totalRetencionRenta), fmtNum(totRet), r.anulada ? 'Si' : 'No'];
+    // Mismo fix que el resto de exportadores /exportar/xlsx: exceljs en vez
+    // de xlsx, para que los montos/fecha salgan como número/fecha real.
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'AELA ERP';
+    workbook.created = new Date();
+    const ws = workbook.addWorksheet('Ret. Recibidas');
+    ws.columns = [
+      { header: 'N° Retención',      key: 'numero',      width: 22 },
+      { header: 'Fecha',             key: 'fecha',       width: 12 },
+      { header: 'Agente (Cliente)',  key: 'agente',      width: 36 },
+      { header: 'RUC Agente',        key: 'rucAgente',   width: 14 },
+      { header: 'Doc. Sustento',     key: 'docSustento', width: 22 },
+      { header: 'Ret. IVA',          key: 'retIva',      width: 10 },
+      { header: 'Ret. Renta',        key: 'retRenta',    width: 10 },
+      { header: 'Total',             key: 'total',       width: 10 },
+      { header: 'Anulada',           key: 'anulada',     width: 8 },
+    ];
+    ws.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FF1E293B' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FF94A3B8' } } };
     });
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 36 }, { wch: 14 }, { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 8 }];
-    XLSX.utils.book_append_sheet(wb, ws, 'Ret. Recibidas');
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    items.forEach((r) => {
+      const totRet = Number(r.totalRetencionIva || 0) + Number(r.totalRetencionRenta || 0);
+      const fila = ws.addRow({
+        numero: extraerNumero(r.claveAcceso),
+        fecha: r.fechaEmision ? new Date(r.fechaEmision) : null,
+        agente: r.razonSocialAgente,
+        rucAgente: r.rucAgente,
+        docSustento: r.numDocSustento || '',
+        retIva: Number(r.totalRetencionIva || 0),
+        retRenta: Number(r.totalRetencionRenta || 0),
+        total: totRet,
+        anulada: r.anulada ? 'Si' : 'No',
+      });
+      fila.getCell('fecha').numFmt = 'dd/mm/yyyy';
+      ['retIva', 'retRenta', 'total'].forEach((k) => { fila.getCell(k).numFmt = '"$"#,##0.00'; });
+    });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+
     const fecha = new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="retenciones-recibidas-${fecha}.xlsx"`);
-    res.send(buf);
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (err) {
     console.error('GET /retenciones-recibidas/exportar/xlsx:', err);
     res.status(500).json({ ok: false, error: err.message });

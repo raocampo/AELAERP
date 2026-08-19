@@ -469,7 +469,7 @@ router.get('/exportar/pdf', async (req, res) => {
 
 router.get('/exportar/xlsx', async (req, res) => {
   try {
-    const XLSX = require('xlsx');
+    const ExcelJS = require('exceljs');
     const { fechaDesde, fechaHasta, busqueda, proveedor, tipoGasto, origenRegistro } = req.query;
     const where = { empresaId: req.empresa.id };
 
@@ -517,43 +517,85 @@ router.get('/exportar/xlsx', async (req, res) => {
       },
     });
 
-    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
-    const fmtNum  = (v) => Number(v || 0).toFixed(2);
+    // xlsx (SheetJS community) no permite escribir el TIPO real de celda de
+    // forma confiable desde un array de arrays de texto — aoa_to_sheet()
+    // infería el tipo del valor JS que se le pasaba, y como los montos y
+    // fechas ya venían pre-formateados a string (fmtNum/fmtDate), todo el
+    // archivo salía con columnas de texto, no numéricas/fecha reales (no se
+    // puede sumar, ordenar numéricamente ni usar en fórmulas de Excel — así
+    // lo reportó el usuario). exceljs sí escribe números/fechas reales con
+    // su propio numFmt — mismo cambio ya aplicado en el Libro Mayor de
+    // Contabilidad por el mismo motivo.
+    const FORMATO_MONEDA = '"$"#,##0.00';
+    const ESTILO_ENCABEZADO = {
+      font: { bold: true, color: { argb: 'FF1E293B' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } },
+      border: { bottom: { style: 'thin', color: { argb: 'FF94A3B8' } } },
+    };
 
-    const headers = [
-      'ID', 'Fecha Emisión', 'Nro Factura', 'Nro Autorización',
-      'Proveedor', 'RUC/CI Proveedor',
-      'Subtotal 0%', 'Subtotal 5%', 'Subtotal 12%', 'Subtotal 15%', 'Descuento', 'IVA', 'Total',
-      'Retención IVA', 'Retención Renta',
-      'Origen', 'Tipo Gasto', 'Anulada', 'Observaciones', 'Fecha Registro',
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'AELA ERP';
+    workbook.created = new Date();
+    const ws = workbook.addWorksheet('Compras');
+    ws.columns = [
+      { header: 'ID',                key: 'id',            width: 6 },
+      { header: 'Fecha Emisión',     key: 'fechaEmision',   width: 12 },
+      { header: 'Nro Factura',       key: 'numeroFactura',  width: 22 },
+      { header: 'Nro Autorización',  key: 'numeroAutorizacion', width: 30 },
+      { header: 'Proveedor',         key: 'proveedor',      width: 36 },
+      { header: 'RUC/CI Proveedor',  key: 'ruc',             width: 14 },
+      { header: 'Subtotal 0%',       key: 'subtotal0',       width: 11 },
+      { header: 'Subtotal 5%',       key: 'subtotal5',       width: 10 },
+      { header: 'Subtotal 12%',      key: 'subtotal12',      width: 11 },
+      { header: 'Subtotal 15%',      key: 'subtotal15',      width: 11 },
+      { header: 'Descuento',         key: 'descuento',       width: 10 },
+      { header: 'IVA',               key: 'iva',             width: 10 },
+      { header: 'Total',             key: 'total',           width: 12 },
+      { header: 'Retención IVA',     key: 'retencionIva',    width: 13 },
+      { header: 'Retención Renta',   key: 'retencionRenta',  width: 14 },
+      { header: 'Origen',            key: 'origen',          width: 14 },
+      { header: 'Tipo Gasto',        key: 'tipoGasto',       width: 20 },
+      { header: 'Anulada',           key: 'anulada',         width: 8 },
+      { header: 'Observaciones',     key: 'observaciones',   width: 30 },
+      { header: 'Fecha Registro',    key: 'fechaRegistro',   width: 12 },
     ];
+    ws.getRow(1).eachCell((cell) => Object.assign(cell, ESTILO_ENCABEZADO));
 
-    const rows = items.map((r) => [
-      r.id, fmtDate(r.fechaEmision), r.numeroFactura, r.numeroAutorizacion || '',
-      r.razonSocialProveedor, r.identificacionProveedor,
-      fmtNum(r.subtotal0), fmtNum(r.subtotal5), fmtNum(r.subtotal12), fmtNum(r.subtotal15),
-      fmtNum(r.totalDescuento), fmtNum(r.totalIva), fmtNum(r.importeTotal),
-      fmtNum(r.retencionIVA), fmtNum(r.retencionRenta),
-      r.origenRegistro || 'MANUAL', r.tipoGasto || '',
-      r.anulada ? 'Si' : 'No', r.observaciones || '', fmtDate(r.createdAt),
-    ]);
+    const montoCols = ['subtotal0', 'subtotal5', 'subtotal12', 'subtotal15', 'descuento', 'iva', 'total', 'retencionIva', 'retencionRenta'];
+    items.forEach((r) => {
+      const fila = ws.addRow({
+        id: r.id,
+        fechaEmision: r.fechaEmision ? new Date(r.fechaEmision) : null,
+        numeroFactura: r.numeroFactura,
+        numeroAutorizacion: r.numeroAutorizacion || '',
+        proveedor: r.razonSocialProveedor,
+        ruc: r.identificacionProveedor,
+        subtotal0: Number(r.subtotal0 || 0),
+        subtotal5: Number(r.subtotal5 || 0),
+        subtotal12: Number(r.subtotal12 || 0),
+        subtotal15: Number(r.subtotal15 || 0),
+        descuento: Number(r.totalDescuento || 0),
+        iva: Number(r.totalIva || 0),
+        total: Number(r.importeTotal || 0),
+        retencionIva: Number(r.retencionIVA || 0),
+        retencionRenta: Number(r.retencionRenta || 0),
+        origen: r.origenRegistro || 'MANUAL',
+        tipoGasto: r.tipoGasto || '',
+        anulada: r.anulada ? 'Si' : 'No',
+        observaciones: r.observaciones || '',
+        fechaRegistro: r.createdAt ? new Date(r.createdAt) : null,
+      });
+      fila.getCell('fechaEmision').numFmt = 'dd/mm/yyyy';
+      fila.getCell('fechaRegistro').numFmt = 'dd/mm/yyyy';
+      montoCols.forEach((k) => { fila.getCell(k).numFmt = FORMATO_MONEDA; });
+    });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = [
-      { wch: 6 }, { wch: 12 }, { wch: 22 }, { wch: 30 },
-      { wch: 36 }, { wch: 14 },
-      { wch: 11 }, { wch: 10 }, { wch: 11 }, { wch: 11 }, { wch: 10 }, { wch: 10 }, { wch: 12 },
-      { wch: 13 }, { wch: 14 },
-      { wch: 14 }, { wch: 20 }, { wch: 8 }, { wch: 30 }, { wch: 12 },
-    ];
-    XLSX.utils.book_append_sheet(wb, ws, 'Compras');
-
-    const buf   = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     const fecha = new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="compras-${fecha}.xlsx"`);
-    res.send(buf);
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (error) {
     console.error('GET /compras/exportar/xlsx:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo exportar el Excel de compras' });

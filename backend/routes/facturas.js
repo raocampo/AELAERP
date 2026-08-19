@@ -851,7 +851,7 @@ router.get('/exportar/pdf', permitirVerFacturacion, async (req, res) => {
 // GET /api/facturas/exportar/xlsx — Excel de ventas con los mismos filtros que el listado
 router.get('/exportar/xlsx', permitirVerFacturacion, async (req, res) => {
   try {
-    const XLSX = require('xlsx');
+    const ExcelJS = require('exceljs');
     const { estado, fechaDesde, fechaHasta, busqueda } = req.query;
     const where = { empresaId: req.empresa.id };
 
@@ -886,39 +886,73 @@ router.get('/exportar/xlsx', permitirVerFacturacion, async (req, res) => {
       },
     });
 
-    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
-    const fmtNum  = (v) => Number(v || 0).toFixed(2);
+    // Mismo fix que compras.js /exportar/xlsx: xlsx (SheetJS) escribía los
+    // montos/fechas como texto (venían pre-formateados a string antes de
+    // pasarlos a aoa_to_sheet, que infiere el tipo de celda del valor JS) —
+    // el archivo no se podía sumar/ordenar/usar en fórmulas en Excel.
+    // exceljs escribe números y fechas reales con su propio numFmt.
+    const FORMATO_MONEDA = '"$"#,##0.00';
+    const ESTILO_ENCABEZADO = {
+      font: { bold: true, color: { argb: 'FF1E293B' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } },
+      border: { bottom: { style: 'thin', color: { argb: 'FF94A3B8' } } },
+    };
 
-    const headers = [
-      'ID', 'Nro Factura', 'Fecha Emisión', 'Nro Autorización',
-      'Cliente', 'CI/RUC', 'Tipo ID',
-      'Subtotal 0%', 'Subtotal 5%', 'Subtotal 15%', 'IVA', 'Total',
-      'Estado SRI', 'Anulada', 'Origen', 'Fecha Registro',
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'AELA ERP';
+    workbook.created = new Date();
+    const ws = workbook.addWorksheet('Ventas');
+    ws.columns = [
+      { header: 'ID',               key: 'id',            width: 6 },
+      { header: 'Nro Factura',      key: 'numeroFactura', width: 22 },
+      { header: 'Fecha Emisión',    key: 'fechaEmision',  width: 12 },
+      { header: 'Nro Autorización', key: 'numeroAutorizacion', width: 30 },
+      { header: 'Cliente',          key: 'cliente',       width: 36 },
+      { header: 'CI/RUC',           key: 'ciRuc',         width: 14 },
+      { header: 'Tipo ID',          key: 'tipoId',        width: 8 },
+      { header: 'Subtotal 0%',      key: 'subtotal0',     width: 11 },
+      { header: 'Subtotal 5%',      key: 'subtotal5',     width: 10 },
+      { header: 'Subtotal 15%',     key: 'subtotal15',    width: 11 },
+      { header: 'IVA',              key: 'iva',           width: 10 },
+      { header: 'Total',            key: 'total',         width: 12 },
+      { header: 'Estado SRI',       key: 'estadoSri',     width: 16 },
+      { header: 'Anulada',          key: 'anulada',       width: 8 },
+      { header: 'Origen',           key: 'origen',        width: 14 },
+      { header: 'Fecha Registro',   key: 'fechaRegistro', width: 12 },
     ];
+    ws.getRow(1).eachCell((cell) => Object.assign(cell, ESTILO_ENCABEZADO));
 
-    const rows = facturas.map((f) => [
-      f.id, f.numeroFactura, fmtDate(f.fechaEmision), f.numeroAutorizacion || '',
-      f.razonSocialComprador, f.identificacionComprador, f.tipoIdentificacionComprador || '',
-      fmtNum(f.subtotal0), fmtNum(f.subtotal5), fmtNum(f.subtotal15), fmtNum(f.totalIva), fmtNum(f.importeTotal),
-      f.estadoSri || '', f.anulada ? 'Si' : 'No',
-      f.origenRegistro || 'MANUAL', fmtDate(f.createdAt),
-    ]);
+    const montoCols = ['subtotal0', 'subtotal5', 'subtotal15', 'iva', 'total'];
+    facturas.forEach((f) => {
+      const fila = ws.addRow({
+        id: f.id,
+        numeroFactura: f.numeroFactura,
+        fechaEmision: f.fechaEmision ? new Date(f.fechaEmision) : null,
+        numeroAutorizacion: f.numeroAutorizacion || '',
+        cliente: f.razonSocialComprador,
+        ciRuc: f.identificacionComprador,
+        tipoId: f.tipoIdentificacionComprador || '',
+        subtotal0: Number(f.subtotal0 || 0),
+        subtotal5: Number(f.subtotal5 || 0),
+        subtotal15: Number(f.subtotal15 || 0),
+        iva: Number(f.totalIva || 0),
+        total: Number(f.importeTotal || 0),
+        estadoSri: f.estadoSri || '',
+        anulada: f.anulada ? 'Si' : 'No',
+        origen: f.origenRegistro || 'MANUAL',
+        fechaRegistro: f.createdAt ? new Date(f.createdAt) : null,
+      });
+      fila.getCell('fechaEmision').numFmt = 'dd/mm/yyyy';
+      fila.getCell('fechaRegistro').numFmt = 'dd/mm/yyyy';
+      montoCols.forEach((k) => { fila.getCell(k).numFmt = FORMATO_MONEDA; });
+    });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = [
-      { wch: 6 }, { wch: 22 }, { wch: 12 }, { wch: 30 },
-      { wch: 36 }, { wch: 14 }, { wch: 8 },
-      { wch: 11 }, { wch: 10 }, { wch: 11 }, { wch: 10 }, { wch: 12 },
-      { wch: 16 }, { wch: 8 }, { wch: 14 }, { wch: 12 },
-    ];
-    XLSX.utils.book_append_sheet(wb, ws, 'Ventas');
-
-    const buf   = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     const fecha = new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="ventas-${fecha}.xlsx"`);
-    res.send(buf);
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (error) {
     console.error('GET /facturas/exportar/xlsx:', error);
     res.status(500).json({ ok: false, error: error.message });
@@ -1554,7 +1588,7 @@ router.get('/:id/xml', permitirVerFacturacion, async (req, res) => {
 // GET /api/facturas/notas-credito/exportar/xlsx
 router.get('/notas-credito/exportar/xlsx', permitirVerFacturacion, async (req, res) => {
   try {
-    const XLSX = require('xlsx');
+    const ExcelJS = require('exceljs');
     const ncs = await prisma.notas_credito.findMany({
       where: { empresaId: req.empresa.id },
       orderBy: { createdAt: 'desc' },
@@ -1565,24 +1599,49 @@ router.get('/notas-credito/exportar/xlsx', permitirVerFacturacion, async (req, r
       },
     });
 
-    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
-    const fmtNum  = (v) => Number(v || 0).toFixed(2);
+    // Mismo fix que /facturas/exportar/xlsx: exceljs en vez de xlsx, para
+    // que Total/Fecha salgan como número/fecha real, no texto.
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'AELA ERP';
+    workbook.created = new Date();
+    const ws = workbook.addWorksheet('NC Emitidas');
+    ws.columns = [
+      { header: 'N° NC',             key: 'numeroNC',   width: 22 },
+      { header: 'Fecha',             key: 'fecha',      width: 12 },
+      { header: 'Cliente',           key: 'cliente',    width: 36 },
+      { header: 'CI/RUC',            key: 'ciRuc',      width: 14 },
+      { header: 'Factura Afectada',  key: 'facturaAfectada', width: 22 },
+      { header: 'Total',             key: 'total',      width: 10 },
+      { header: 'Estado SRI',        key: 'estadoSri',  width: 16 },
+      { header: 'Motivo',            key: 'motivo',     width: 40 },
+    ];
+    ws.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FF1E293B' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FF94A3B8' } } };
+    });
 
-    const headers = ['N° NC', 'Fecha', 'Cliente', 'CI/RUC', 'Factura Afectada', 'Total', 'Estado SRI', 'Motivo'];
-    const rows    = ncs.map(nc => [
-      nc.numeroNC, fmtDate(nc.fechaEmision), nc.razonSocialComprador, nc.identificacionComprador,
-      nc.numeroFacturaAfectada, fmtNum(nc.importeTotal), nc.estadoSri || '', nc.motivoModificacion || '',
-    ]);
+    ncs.forEach((nc) => {
+      const fila = ws.addRow({
+        numeroNC: nc.numeroNC,
+        fecha: nc.fechaEmision ? new Date(nc.fechaEmision) : null,
+        cliente: nc.razonSocialComprador,
+        ciRuc: nc.identificacionComprador,
+        facturaAfectada: nc.numeroFacturaAfectada,
+        total: Number(nc.importeTotal || 0),
+        estadoSri: nc.estadoSri || '',
+        motivo: nc.motivoModificacion || '',
+      });
+      fila.getCell('fecha').numFmt = 'dd/mm/yyyy';
+      fila.getCell('total').numFmt = '"$"#,##0.00';
+    });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 36 }, { wch: 14 }, { wch: 22 }, { wch: 10 }, { wch: 16 }, { wch: 40 }];
-    XLSX.utils.book_append_sheet(wb, ws, 'NC Emitidas');
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     const fecha = new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="notas-credito-${fecha}.xlsx"`);
-    res.send(buf);
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (err) {
     console.error('GET /notas-credito/exportar/xlsx:', err);
     res.status(500).json({ ok: false, error: err.message });

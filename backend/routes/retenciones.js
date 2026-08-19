@@ -194,7 +194,7 @@ function buildWhereRetenciones(empresaId, q) {
 // GET /api/retenciones/exportar/xlsx
 router.get('/exportar/xlsx', async (req, res) => {
   try {
-    const XLSX = require('xlsx');
+    const ExcelJS = require('exceljs');
     const items = await prisma.retenciones.findMany({
       where: buildWhereRetenciones(req.empresa.id, req.query),
       orderBy: { fechaEmision: 'desc' },
@@ -206,25 +206,50 @@ router.get('/exportar/xlsx', async (req, res) => {
       },
     });
 
-    const fmtDate = (v) => v ? new Date(v).toLocaleDateString('es-EC') : '';
-    const fmtNum  = (v) => Number(v || 0).toFixed(2);
+    // Mismo fix que facturas.js/compras.js /exportar/xlsx: exceljs en vez
+    // de xlsx, para que Total Retenido/Fecha salgan como número/fecha
+    // real, no texto (no se podía sumar/ordenar en Excel).
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'AELA ERP';
+    workbook.created = new Date();
+    const ws = workbook.addWorksheet('Retenciones');
+    ws.columns = [
+      { header: 'N° Retención',    key: 'numero',    width: 22 },
+      { header: 'Fecha',           key: 'fecha',     width: 12 },
+      { header: 'Período Fiscal',  key: 'periodo',   width: 10 },
+      { header: 'Proveedor',       key: 'proveedor', width: 36 },
+      { header: 'RUC/CI',          key: 'ruc',       width: 14 },
+      { header: 'Total Retenido',  key: 'total',     width: 14 },
+      { header: 'Estado SRI',      key: 'estadoSri', width: 16 },
+      { header: 'Anulada',         key: 'anulada',   width: 8 },
+    ];
+    ws.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FF1E293B' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FF94A3B8' } } };
+    });
 
-    const headers = ['N° Retención', 'Fecha', 'Período Fiscal', 'Proveedor', 'RUC/CI', 'Total Retenido', 'Estado SRI', 'Anulada'];
-    const rows    = items.map(r => [
-      r.numeroRetencion, fmtDate(r.fechaEmision), r.periodoFiscal || '',
-      r.razonSocialProveedor, r.identificacionProveedor,
-      fmtNum(r.totalRetenido), r.estadoSri || '', r.anulada ? 'Si' : 'No',
-    ]);
+    items.forEach((r) => {
+      const fila = ws.addRow({
+        numero: r.numeroRetencion,
+        fecha: r.fechaEmision ? new Date(r.fechaEmision) : null,
+        periodo: r.periodoFiscal || '',
+        proveedor: r.razonSocialProveedor,
+        ruc: r.identificacionProveedor,
+        total: Number(r.totalRetenido || 0),
+        estadoSri: r.estadoSri || '',
+        anulada: r.anulada ? 'Si' : 'No',
+      });
+      fila.getCell('fecha').numFmt = 'dd/mm/yyyy';
+      fila.getCell('total').numFmt = '"$"#,##0.00';
+    });
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 10 }, { wch: 36 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 8 }];
-    XLSX.utils.book_append_sheet(wb, ws, 'Retenciones');
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     const fecha = new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="retenciones-${fecha}.xlsx"`);
-    res.send(buf);
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (err) {
     console.error('GET /retenciones/exportar/xlsx:', err);
     res.status(500).json({ ok: false, error: err.message });
