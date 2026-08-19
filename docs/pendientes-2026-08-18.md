@@ -344,6 +344,11 @@ conserva los `.zip`/XML originales que subió, se puede volver a correr
 `--ejecutar`, modo dry-run) para comparar contra lo ya guardado sin
 escribir nada — pendiente de que el usuario decida si quiere hacerlo.
 
+**Decisión del usuario**: son facturas antiguas (contabilidad atrasada,
+empresas 1/4/5 de `aela_lsac`) — queda en manos de la contadora de cada
+cliente revisarlas si hace falta, no se va a re-correr el importador desde
+este lado. Cerrado sin acción de código.
+
 **Áreas revisadas sin encontrar problemas** (mismo patrón buscado
 explícitamente, no solo lectura superficial):
 - `utils/sri.js` — generación de XML de factura/liquidación de compra/nota
