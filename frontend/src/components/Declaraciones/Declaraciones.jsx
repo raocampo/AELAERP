@@ -328,12 +328,32 @@ function CreditoAnteriorSection({ anio, mes, resultado, onRecargar }) {
 function F103View({ data }) {
   if (!data?.periodo || !Array.isArray(data?.detallePorCodigo)) return null;
   const { detallePorCodigo, totalRetenido, cantidadComprobantes, meta } = data;
+  const { anio, mes } = data.periodo;
+
+  const descargarPdf = async () => {
+    try {
+      const res = await api.get(`/declaraciones/f103/pdf?anio=${anio}&mes=${mes}`, { responseType: 'blob' });
+      const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.setAttribute('download', `f103_${anio}_${String(mes).padStart(2, '0')}.pdf`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo generar el PDF del Formulario 103');
+    }
+  };
 
   return (
     <div className="decl-formulario">
       <div className="decl-formulario-header">
         <span className="decl-form-badge">Formulario 103</span>
-        <span>Retenciones en la Fuente — {MESES[data.periodo.mes - 1]} {data.periodo.anio}</span>
+        <span>Retenciones en la Fuente — {MESES[mes - 1]} {anio}</span>
+        <button className="btn-secondary" style={{ marginLeft: 'auto' }} onClick={descargarPdf}>
+          📄 Generar Formulario (PDF)
+        </button>
       </div>
 
       <div className="decl-meta" style={{ marginBottom: 16 }}>

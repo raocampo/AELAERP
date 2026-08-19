@@ -65,6 +65,89 @@ lectura de código (mismo patrón ya probado en Contabilidad) y build
 exitoso, no por clic real. Pendiente de que el usuario lo pruebe en
 `Declaraciones → F104 → Generar Formulario (PDF)`.
 
+# Parte 3 — PDF de apoyo para el Formulario 103 (Retenciones en la Fuente)
+
+## Pedido del usuario
+
+Compartió la URL `https://www.sri.gob.ec/formularios-e-instructivos`
+("los demás formularios están en esta URL") pidiendo investigar, revisar,
+analizar, planear e implementar — continuación directa del pendiente de
+F103/F101 dejado abierto el 2026-08-16.
+
+## Investigación
+
+Se descargó de la propia página del SRI (vía `WebFetch` para ubicar los
+links reales, luego `curl` directo con User-Agent de navegador — sin UA
+el servidor del SRI colgaba la conexión): el Excel oficial del
+Formulario 103 (`FORMULARIO RETENCIONES EN LA FUENTE.xls`, con una hoja
+por versión histórica — la más reciente, **"Formulario RF desde ago
+2026"**, es la vigente) y la "Guía del contribuyente Formulario 103" (19
+páginas, resolución NAC-DGERCGC26-00000009 de feb/2026).
+
+**Hallazgo clave**: los códigos que usa `utils/sri.js`
+(`CODIGOS_RETENCION_RENTA`) en el XML del comprobante de retención SON,
+en su mayoría, casi literalmente los casilleros del formulario en papel
+(303, 304, 307, 308, 310, 312, 319, 320, 322, 323, 325, 327, 328, 332,
+343, 346, 350...) — confirma lo que la sesión del 08-16 ya sospechaba
+("F103 más simple, ya casi listo estructuralmente"). Pero AELA también
+tiene códigos más granulares con sufijo de letra (303A, 304A-E, 312A,
+312C, 323A-U, 332B-I, 343A-C, 344A-B, 346A-D) que representan categorías
+más finas del comprobante electrónico y que el formulario en papel
+agrupa bajo un casillero más general — construir el PDF exigía mapear
+cada uno de esos ~84 códigos contra su casillero real, no solo los
+"planos".
+
+Se hizo ese mapeo cruzando **ambas fuentes oficiales línea por línea**
+(no por inferencia) y la guía corrigió dos supuestos iniciales sacados
+solo del Excel:
+- Código **343A** (Energía eléctrica) es **1%** y cae en el casillero
+  **343/393**, no en 344/394 como sugería la redacción agrupada de la
+  celda del Excel.
+- Códigos **332E/332F** (cooperativas de transporte / compraventa de
+  divisas) caen en el casillero **3230** (rendimientos financieros 0%),
+  NO en el casillero 332 genérico como el resto de la familia 332B-332I.
+
+Quedaron sin mapeo confirmado (la guía no los menciona de forma
+inequívoca): `346` (genérico), `346A`, `346C`. Y se encontró que el
+código `3481` está marcado por la propia guía como **vigente solo hasta
+junio 2021** — no debería seguir ofreciéndose en comprobantes nuevos
+(no se tocó el catálogo, solo se documenta el hallazgo).
+
+## Implementación (mismo patrón que F104)
+
+- `calcularF103()` extraída de `GET /f103` para reutilizar en el PDF.
+- `CASILLEROS_F103`: tabla de mapeo código→{casillero base, casillero
+  retenido} para los ~64 códigos con mapeo confirmado.
+- `GET /f103/pdf`: tabla con cada código del período junto a su
+  casillero oficial, fila TOTAL (399/499), aviso de "documento de
+  apoyo" y nota al final listando lo no soportado (relación de
+  dependencia/nómina, pagos al exterior, IRU banano, pronósticos
+  deportivos, los 3 códigos sin mapeo confirmado, código 3481 obsoleto).
+  Los códigos sin mapeo se marcan `(!)` en vez del número de casillero
+  — **al principio usé el glifo ⚠, que salió como un carácter roto en
+  el PDF** (Helvetica/WinAnsiEncoding de PDFKit no lo tiene — el mismo
+  bug ya documentado el 2026-08-13 con ✓/⚠ en el balance general).
+  Corregido a texto plano `(!)` antes de terminar.
+- Botón "Generar Formulario (PDF)" en `F103View` (`Declaraciones.jsx`),
+  mismo patrón blob-download que F104.
+
+## Verificado
+
+QATEST con 7 comprobantes cubriendo códigos representativos (303, 304C,
+312A, 332E, 343A, 343B, 346C) — PDF renderizado a PNG con `pymupdf`,
+confirmado casillero por casillero contra la tabla mapeada a mano, y
+que el código sin mapeo (346C) sale marcado `(!)` con su nota al pie.
+Total 399/499 = suma exacta de bases/retenidos. Datos de prueba
+eliminados al terminar. `node --test`: 49/49. `vite build`: sin errores.
+
+## F101 — solo investigación, sin implementar (a propósito)
+
+Se descargó también el Excel oficial de F101 (Renta Sociedades): **869
+filas** — confirma lo ya anotado el 2026-08-16, es un formulario mucho
+más grande (balance completo + conciliación tributaria, cientos de
+casilleros), un proyecto aparte. No se implementó nada — queda para
+cuando el usuario decida abordarlo como su propio proyecto.
+
 
 ## Contexto — sincronización entre equipos
 

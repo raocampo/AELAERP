@@ -619,15 +619,10 @@ router.put('/f104/credito-anterior', async (req, res) => {
   }
 });
 
-// ─── GET /f103 — Formulario 103 Retenciones en la Fuente mensual ───────────────
-// Query: ?anio=2025&mes=3
-router.get('/f103', async (req, res) => {
-  try {
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
-    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
+// ─── calcularF103 — cálculo completo del Formulario 103, reutilizado por el
+// endpoint JSON (GET /f103) y por el generador de PDF (GET /f103/pdf) ─────────
+async function calcularF103(db, empresaId, anio, mes) {
     const { desde, hasta } = rangoMes(anio, mes);
-    const empresaId = req.empresa.id;
-    const db = req.prisma || prisma;
     const filtroFecha = { gte: desde, lte: hasta };
 
     const retenciones = await db.retenciones.findMany({
@@ -710,9 +705,216 @@ router.get('/f103', async (req, res) => {
       },
     };
 
+    return f103;
+}
+
+// ─── GET /f103 — Formulario 103 Retenciones en la Fuente mensual ───────────────
+// Query: ?anio=2025&mes=3
+router.get('/f103', async (req, res) => {
+  try {
+    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
+    const empresaId = req.empresa.id;
+    const db = req.prisma || prisma;
+
+    const f103 = await calcularF103(db, empresaId, anio, mes);
     res.json({ ok: true, data: f103 });
   } catch (err) {
     console.error('Error F103:', err);
+    res.status(500).json({ ok: false, mensaje: err.message });
+  }
+});
+
+// ─── Mapeo de códigos de retención (los que usa AELA en el XML del comprobante,
+// ver utils/sri.js CODIGOS_RETENCION_RENTA) contra el casillero oficial del
+// Formulario 103 vigente — confirmado 2026-08-19 contra dos fuentes oficiales
+// del SRI descargadas de sri.gob.ec/formularios-e-instructivos: el diseño
+// Excel del formulario (hoja "Formulario RF desde ago 2026") y la "Guía del
+// contribuyente Formulario 103" (19 páginas, resolución NAC-DGERCGC26-00000009
+// de feb/2026). base = casillero de base imponible, retenido = casillero de
+// valor retenido (null cuando el casillero real es 0%/no tiene par retenido,
+// ej. "Pagos no sujetos a retención"). Casilleros de un solo dígito distinto
+// al código no son error de tipeo — el SRI a veces agrupa varios códigos de
+// comprobante bajo un casillero distinto de todos ellos (ej. 343A es 1%
+// "Energía eléctrica" y cae en el casillero 343, NO en 344 como sugeriría el
+// nombre — corregido contra la guía tras una primera lectura equivocada del
+// Excel solo).
+const CASILLEROS_F103 = {
+  '303':   { base: '303',  retenido: '353'  },
+  '303A':  { base: '3030', retenido: '3530' },
+  '304':   { base: '304',  retenido: '354'  },
+  '304A':  { base: '304',  retenido: '354'  },
+  '304B':  { base: '304',  retenido: '354'  },
+  '304C':  { base: '304',  retenido: '354'  },
+  '304D':  { base: '304',  retenido: '354'  },
+  '304E':  { base: '304',  retenido: '354'  },
+  '307':   { base: '307',  retenido: '357'  },
+  '308':   { base: '308',  retenido: '358'  },
+  '310':   { base: '310',  retenido: '360'  },
+  '311':   { base: '311',  retenido: '361'  },
+  '312':   { base: '312',  retenido: '362'  },
+  '312A':  { base: '3120', retenido: '3620' },
+  '312C':  { base: '3121', retenido: '3621' },
+  '314A':  { base: '314',  retenido: '364'  },
+  '314B':  { base: '314',  retenido: '364'  },
+  '314C':  { base: '314',  retenido: '364'  },
+  '314D':  { base: '314',  retenido: '364'  },
+  '319':   { base: '319',  retenido: '369'  },
+  '320':   { base: '320',  retenido: '370'  },
+  '322':   { base: '322',  retenido: '372'  },
+  '323':   { base: '323',  retenido: '373'  },
+  '323A':  { base: '323',  retenido: '373'  },
+  '323B1': { base: '323',  retenido: '373'  },
+  '323E':  { base: '323',  retenido: '373'  },
+  '323E2': { base: '3230', retenido: null   },
+  '323F':  { base: '323',  retenido: '373'  },
+  '323G':  { base: '323',  retenido: '373'  },
+  '323H':  { base: '323',  retenido: '373'  },
+  '323I':  { base: '323',  retenido: '373'  },
+  '323M':  { base: '323',  retenido: '373'  },
+  '323N':  { base: '3230', retenido: null   },
+  '323O':  { base: '3230', retenido: null   },
+  '323P':  { base: '323',  retenido: '373'  },
+  '323Q':  { base: '323',  retenido: '373'  },
+  '323R':  { base: '3230', retenido: null   },
+  '323S':  { base: '323',  retenido: '373'  },
+  '323T':  { base: '3230', retenido: null   },
+  '323U':  { base: '3230', retenido: null   },
+  '324A':  { base: '324',  retenido: '374'  },
+  '324B':  { base: '324',  retenido: '374'  },
+  '324C':  { base: '324',  retenido: '374'  },
+  '325':   { base: '325',  retenido: '375'  },
+  '325A':  { base: '325',  retenido: '375'  },
+  '3250':  { base: '3250', retenido: null   },
+  '326':   { base: '326',  retenido: '376'  },
+  '327':   { base: '327',  retenido: '377'  },
+  '328':   { base: '328',  retenido: '378'  },
+  '329':   { base: '329',  retenido: '379'  },
+  '331':   { base: '331',  retenido: null   },
+  '332':   { base: '332',  retenido: null   },
+  '332B':  { base: '332',  retenido: null   },
+  '332C':  { base: '332',  retenido: null   },
+  '332D':  { base: '332',  retenido: null   },
+  '332E':  { base: '3230', retenido: null   },
+  '332F':  { base: '3230', retenido: null   },
+  '332G':  { base: '332',  retenido: null   },
+  '332H':  { base: '332',  retenido: null   },
+  '332I':  { base: '332',  retenido: null   },
+  '333':   { base: '333',  retenido: '383'  },
+  '334':   { base: '334',  retenido: '384'  },
+  '335':   { base: '335',  retenido: '385'  },
+  '336':   { base: '336',  retenido: '386'  },
+  '337':   { base: '337',  retenido: '387'  },
+  '343':   { base: '343',  retenido: '393'  },
+  '343A':  { base: '343',  retenido: '393'  },
+  '343B':  { base: '3430', retenido: '3450' },
+  '343C':  { base: '344',  retenido: '394'  },
+  '3440':  { base: '3440', retenido: '3940' },
+  '344A':  { base: '344',  retenido: '394'  },
+  '344B':  { base: '344',  retenido: '394'  },
+  '346B':  { base: '346',  retenido: '396'  },
+  '346D':  { base: '3370', retenido: '3870' },
+  '350':   { base: '350',  retenido: '400'  },
+  '3482':  { base: '3140', retenido: '3640' },
+};
+
+// ─── GET /f103/pdf — Documento de apoyo para el llenado del Formulario 103 ─────
+// NO es el formulario oficial ni lo reemplaza. Mapea el detalle por código de
+// retención (que AELA ya calcula) contra el casillero oficial usando
+// CASILLEROS_F103 de arriba. Query: ?anio=2025&mes=3
+router.get('/f103/pdf', async (req, res) => {
+  try {
+    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
+    const empresaId = req.empresa.id;
+    const db = req.prisma || prisma;
+
+    const f103 = await calcularF103(db, empresaId, anio, mes);
+    const config = await db.configuracion_sri.findFirst({ where: { empresaId } });
+    const money = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+    const doc = crearDocumentoPdf(res, `f103_${anio}_${String(mes).padStart(2, '0')}.pdf`);
+    dibujarEncabezadoContable(doc, config, 'Formulario 103 — Retenciones en la Fuente del IR');
+
+    doc.fontSize(9).font('Helvetica-Bold')
+      .text(`Período: ${NOMBRES_MES[mes - 1]} ${anio}`, { align: 'center' });
+    doc.font('Helvetica').fontSize(8).fillColor('#94a3b8')
+      .text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`, { align: 'center' })
+      .fillColor('#000000');
+    doc.moveDown(0.3);
+
+    const ML = doc.page.margins.left;
+    const Wtotal = doc.page.width - ML - doc.page.margins.right;
+    const yAviso = doc.y;
+    const textoAviso = 'Documento de apoyo para declarar en SRI en Línea — NO es el formulario oficial ni lo reemplaza. Verifique cada casillero contra el sistema del SRI antes de presentar la declaración. Solo cubre retenciones a residentes/establecimientos permanentes en Ecuador (no pagos al exterior, IRU banano ni pronósticos deportivos) — ver notas al final.';
+    const altoAviso = doc.heightOfString(textoAviso, { width: Wtotal - 12 }) + 10;
+    doc.rect(ML, yAviso, Wtotal, altoAviso).fillAndStroke('#fef3c7', '#f59e0b');
+    doc.fillColor('#78350f').fontSize(7.5).font('Helvetica')
+      .text(textoAviso, ML + 6, yAviso + 5, { width: Wtotal - 12 });
+    doc.fillColor('#000000');
+    doc.y = yAviso + altoAviso + 8;
+    doc.x = ML;
+
+    const columnas = [
+      { header: 'Cas. Base',    key: 'casBase',     width: 55 },
+      { header: 'Cas. Ret.',    key: 'casRetenido', width: 55 },
+      { header: 'Descripción',  key: 'descripcion', width: 210 },
+      { header: '%',            key: 'porcentaje',   width: 40,  align: 'right', formato: (v) => (v == null ? '—' : `${v}%`) },
+      { header: 'Base Imp.',    key: 'baseImponible', width: 78, align: 'right', formato: money },
+      { header: 'Val. Retenido', key: 'valorRetenido', width: 78, align: 'right', formato: money },
+    ];
+
+    const sinCasillero = [];
+    const filas = f103.detallePorCodigo.map((r) => {
+      const cas = CASILLEROS_F103[r.codigo];
+      if (!cas) sinCasillero.push(r);
+      return {
+        casBase: cas ? cas.base : '(!)',
+        casRetenido: cas ? (cas.retenido || '—') : '(!)',
+        descripcion: `${r.descripcion} (código ${r.codigo})`,
+        porcentaje: r.porcentaje,
+        baseImponible: r.baseImponible,
+        valorRetenido: r.valorRetenido,
+      };
+    });
+    filas.push({
+      casBase: '399', casRetenido: '499', descripcion: 'TOTAL DE RETENCIÓN DE IMPUESTO A LA RENTA', porcentaje: null,
+      baseImponible: f103.detallePorCodigo.reduce((s, r) => s + r.baseImponible, 0), valorRetenido: f103.totalRetenido,
+      _destacado: true,
+    });
+
+    doc.fontSize(10).font('Helvetica-Bold').text('DETALLE POR CÓDIGO DE RETENCIÓN');
+    doc.y = dibujarTablaPdf(doc, columnas, filas, doc.y);
+    doc.moveDown(0.3);
+
+    if (sinCasillero.length > 0) {
+      doc.fontSize(7.5).fillColor('#b45309').font('Helvetica-Bold')
+        .text(`(!) ${sinCasillero.length} código(s) sin casillero confirmado (marcados arriba con "(!)") — verificar manualmente contra "SRI en Línea": ${sinCasillero.map((r) => r.codigo).join(', ')}.`, { width: Wtotal });
+      doc.fillColor('#000000').font('Helvetica');
+      doc.moveDown(0.4);
+    }
+
+    doc.fontSize(9).font('Helvetica-Bold').text(`${f103.cantidadComprobantes} comprobante(s) de retención en el período`);
+    doc.font('Helvetica').fontSize(8)
+      .text(`${f103.meta.comprobantesAutorizados} autorizado(s)${f103.meta.comprobantesPendientes > 0 ? `, ${f103.meta.comprobantesPendientes} pendiente(s) de autorización` : ''}.`);
+    doc.moveDown(0.5);
+
+    if (doc.y > 640) doc.addPage();
+    doc.fontSize(9).font('Helvetica-Bold').text('Casilleros no incluidos — requieren revisión y llenado manual');
+    doc.font('Helvetica').fontSize(7.5).fillColor('#334155');
+    [
+      'Relación de dependencia (302/352): AELA no emite el comprobante de retención tipo 07 para nómina (usa el Formulario 107 anual, no soportado hoy).',
+      'Pagos a no residentes (402-433/497-498): retenciones a proveedores del exterior no se registran en AELA.',
+      'IRU Banano exportador y Pronósticos deportivos (3400-3999, 3480-3498, 5100/5300): sectores especializados no soportados.',
+      'Códigos 346 (genérico), 346A y 346C: existen en el catálogo interno de AELA pero la guía oficial no confirma su casillero exacto de forma inequívoca — si aparecen en el detalle de arriba, revisar el porcentaje/concepto contra "SRI en Línea" antes de transcribir.',
+      'Código 3481 (Autorretenciones Sociedades Grandes Contribuyentes): la guía oficial lo marca vigente solo hasta junio 2021 — no debería usarse en comprobantes nuevos.',
+      'Compensación por pago a cuenta sobre utilidades no distribuidas (500/501), pagos previos e imputación de sustitutivas (880-899), intereses/multas (903/904).',
+    ].forEach((linea) => { doc.text(`• ${linea}`); doc.moveDown(0.15); });
+    doc.fillColor('#000000');
+
+    doc.end();
+  } catch (err) {
+    console.error('Error F103 PDF:', err);
     res.status(500).json({ ok: false, mensaje: err.message });
   }
 });
