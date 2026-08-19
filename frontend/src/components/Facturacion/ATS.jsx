@@ -602,6 +602,10 @@ export default function ATS() {
   const [descPdf,     setDescPdf]         = useState(false);
   const [error,   setError]   = useState('');
   const [tabActiva, setTabActiva] = useState('ventas');
+  // Compras a cédula que el contador ya revisó y NO aprobó (distinto de las
+  // que aún no revisó) — checkbox opcional para excluirlas del ATS. Por
+  // defecto (sin marcar) el ATS reporta todo, igual que siempre.
+  const [excluirCedula, setExcluirCedula] = useState(false);
 
   const anios = Array.from({ length: 6 }, (_, i) => String(hoy.getFullYear() - i));
 
@@ -611,7 +615,7 @@ export default function ATS() {
     setData(null);
     try {
       const { data: resp } = await api.get('/ats/preview', {
-        params: { mes: parseInt(mes), anio: parseInt(anio) },
+        params: { mes: parseInt(mes), anio: parseInt(anio), excluirCedulaNoAprobada: excluirCedula },
       });
       setData(resp.data);
       setTabActiva('ventas');
@@ -620,13 +624,13 @@ export default function ATS() {
     } finally {
       setLoading(false);
     }
-  }, [mes, anio]);
+  }, [mes, anio, excluirCedula]);
 
   const descargarXML = async () => {
     setDescargando(true);
     try {
       const resp = await api.get('/ats/exportar', {
-        params: { mes: parseInt(mes), anio: parseInt(anio) },
+        params: { mes: parseInt(mes), anio: parseInt(anio), excluirCedulaNoAprobada: excluirCedula },
         responseType: 'blob',
       });
       const filename = `ats_${anio}${mes}.xml`;
@@ -649,7 +653,7 @@ export default function ATS() {
     try {
       await descargarPdf(
         api, '/ats/exportar/pdf',
-        { mes: parseInt(mes), anio: parseInt(anio) },
+        { mes: parseInt(mes), anio: parseInt(anio), excluirCedulaNoAprobada: excluirCedula },
         `talonATS_${anio}${mes}.pdf`,
       );
     } catch {
@@ -702,6 +706,21 @@ export default function ATS() {
           )}
         </div>
       </div>
+
+      {data?.cedulaNoAprobada?.cantidad > 0 && (
+        <div style={{ margin: '0 0 16px', padding: '10px 14px', borderRadius: 8, background: '#fffbeb', border: '1px solid #f59e0b', fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span>
+            ⚠️ Hay <strong>{data.cedulaNoAprobada.cantidad}</strong> compra(s) facturada(s) a cédula que el contador revisó
+            y NO aprobó para la declaración (a diferencia de las que aún esperan revisión). Por defecto el ATS las reporta
+            igual — es lo correcto, informan al SRI que la transacción existió. Si estás seguro de que estas específicas
+            no deben reportarse, actívalo aquí y vuelve a generar:
+          </span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={excluirCedula} onChange={(e) => setExcluirCedula(e.target.checked)} />
+            Excluir del ATS
+          </label>
+        </div>
+      )}
 
       {error && <div className="ats-error">{error}</div>}
 

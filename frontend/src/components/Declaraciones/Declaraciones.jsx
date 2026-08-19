@@ -133,7 +133,7 @@ export default function Declaraciones() {
 // ─── F104 ────────────────────────────────────────────────────────────────────────
 function F104View({ data, onRecargar }) {
   if (!data?.ventas || !data?.resultado) return null;
-  const { ventas, compras, retenciones, resultado, meta } = data;
+  const { ventas, compras, retenciones, retencionesEmitidas, resultado, meta } = data;
   const esDebito  = resultado.ivaACobrarPagar > 0;
   const esCredito = resultado.ivaACobrarPagar < 0;
   const { anio, mes } = data.periodo;
@@ -208,6 +208,21 @@ function F104View({ data, onRecargar }) {
           </section>
         )}
 
+        {/* RETENCIONES EMITIDAS — agente de retención de IVA a proveedores */}
+        {retencionesEmitidas?.ivaRetenidoAProveedores > 0 && (
+          <section className="decl-seccion">
+            <h3>Agente de retención de IVA (a proveedores)</h3>
+            <p className="decl-seccion-hint">IVA que su empresa retuvo a sus proveedores al pagarles — es una obligación aparte, se suma al total a pagar (casillero 799/801/859).</p>
+            {retencionesEmitidas.iva10  > 0 && <FilaDecl label="Retención 10% IVA" valor={fmtNum(retencionesEmitidas.iva10)} />}
+            {retencionesEmitidas.iva20  > 0 && <FilaDecl label="Retención 20% IVA" valor={fmtNum(retencionesEmitidas.iva20)} />}
+            {retencionesEmitidas.iva30  > 0 && <FilaDecl label="Retención 30% IVA" valor={fmtNum(retencionesEmitidas.iva30)} />}
+            {retencionesEmitidas.iva50  > 0 && <FilaDecl label="Retención 50% IVA" valor={fmtNum(retencionesEmitidas.iva50)} />}
+            {retencionesEmitidas.iva70  > 0 && <FilaDecl label="Retención 70% IVA" valor={fmtNum(retencionesEmitidas.iva70)} />}
+            {retencionesEmitidas.iva100 > 0 && <FilaDecl label="Retención 100% IVA" valor={fmtNum(retencionesEmitidas.iva100)} />}
+            <FilaDecl label="Total retenido a proveedores" valor={fmtNum(retencionesEmitidas.ivaRetenidoAProveedores)} highlight />
+          </section>
+        )}
+
         {/* CRÉDITO TRIBUTARIO ARRASTRADO */}
         <CreditoAnteriorSection
           anio={data.periodo.anio}
@@ -224,6 +239,16 @@ function F104View({ data, onRecargar }) {
           <div className="decl-resultado-valor">
             {esDebito ? fmt(resultado.ivaACobrarPagar) : fmt(Math.abs(resultado.ivaACobrarPagar))}
           </div>
+          {esCredito && (
+            <div style={{ fontSize: 12, marginTop: 6, opacity: 0.85 }}>
+              Saldo para el próximo mes — 615 (adquisiciones): {fmt(resultado.saldoCreditoAdquisicionesProximoMes)} · 617 (retenciones): {fmt(resultado.saldoCreditoRetencionesProximoMes)}
+            </div>
+          )}
+          {retencionesEmitidas?.ivaRetenidoAProveedores > 0 && (
+            <div style={{ fontSize: 12, marginTop: 6, opacity: 0.85 }}>
+              + {fmt(retencionesEmitidas.ivaRetenidoAProveedores)} de retención a proveedores (799/801) → Total consolidado (859): {fmt(resultado.totalConsolidado)}
+            </div>
+          )}
         </section>
 
         <div className="decl-meta">
@@ -264,27 +289,34 @@ function F104View({ data, onRecargar }) {
   );
 }
 
-// ─── Crédito tributario arrastrado del mes anterior ───────────────────────────────
+// ─── Crédito tributario arrastrado del mes anterior — 605 (adquisiciones) y
+// 606 (retenciones) por separado desde 2026-08-19, antes era un solo valor
+// combinado ─────────────────────────────────────────────────────────────────
 function CreditoAnteriorSection({ anio, mes, resultado, onRecargar }) {
-  const [valor, setValor] = useState(String(resultado.creditoTributarioAnterior ?? 0));
+  const [valorAdq, setValorAdq] = useState(String(resultado.creditoPorAdquisicionesAnterior ?? 0));
+  const [valorRet, setValorRet] = useState(String(resultado.creditoPorRetencionesAnterior ?? 0));
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
-    setValor(String(resultado.creditoTributarioAnterior ?? 0));
+    setValorAdq(String(resultado.creditoPorAdquisicionesAnterior ?? 0));
+    setValorRet(String(resultado.creditoPorRetencionesAnterior ?? 0));
     setMsg('');
-  }, [anio, mes, resultado.creditoTributarioAnterior]);
+  }, [anio, mes, resultado.creditoPorAdquisicionesAnterior, resultado.creditoPorRetencionesAnterior]);
 
   const guardar = async () => {
-    const monto = parseFloat(valor);
-    if (Number.isNaN(monto) || monto < 0) {
-      setMsg('Ingresa un monto válido (0 o mayor).');
+    const montoAdq = parseFloat(valorAdq);
+    const montoRet = parseFloat(valorRet);
+    if (Number.isNaN(montoAdq) || montoAdq < 0 || Number.isNaN(montoRet) || montoRet < 0) {
+      setMsg('Ingresa montos válidos (0 o mayor) en ambos campos.');
       return;
     }
     setGuardando(true);
     setMsg('');
     try {
-      await api.put('/declaraciones/f104/credito-anterior', { anio, mes, creditoTributarioAnterior: monto });
+      await api.put('/declaraciones/f104/credito-anterior', {
+        anio, mes, creditoPorAdquisiciones: montoAdq, creditoPorRetenciones: montoRet,
+      });
       setMsg('Guardado.');
       onRecargar?.();
     } catch (err) {
@@ -298,17 +330,35 @@ function CreditoAnteriorSection({ anio, mes, resultado, onRecargar }) {
     <section className="decl-seccion">
       <h3>Crédito tributario arrastrado del mes anterior</h3>
       <p className="decl-seccion-hint">
-        Ingresa aquí el saldo a favor que arrastras de tu última declaración real ante el SRI (casillero 617/619
-        del F104). Este sistema no lo calcula encadenando meses automáticamente — se guarda una vez por período
-        y se resta del IVA a pagar de {MESES[mes - 1]} {anio}.
+        Ingresa el saldo a favor que arrastras de tu última declaración real ante el SRI, separado por casillero
+        — el 605 arrastra el 615 y el 606 arrastra el 617 de la declaración de {MESES[mes - 1]} {anio} anterior.
+        Este sistema no lo calcula encadenando meses automáticamente, se guarda una vez por período.
       </p>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 11, color: '#94a3b8', marginBottom: 3 }}>605 · Por adquisiciones e importaciones</label>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: '#64748b' }}>$</span>
+            <input
+              type="number" min="0" step="0.01" value={valorAdq}
+              onChange={(e) => setValorAdq(e.target.value)}
+              style={{ width: 130, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}
+            />
+          </div>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 11, color: '#94a3b8', marginBottom: 3 }}>606 · Por retenciones de IVA efectuadas</label>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: '#64748b' }}>$</span>
+            <input
+              type="number" min="0" step="0.01" value={valorRet}
+              onChange={(e) => setValorRet(e.target.value)}
+              style={{ width: 130, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}
+            />
+          </div>
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 13, color: '#64748b' }}>$</span>
-        <input
-          type="number" min="0" step="0.01" value={valor}
-          onChange={(e) => setValor(e.target.value)}
-          style={{ width: 140, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}
-        />
         <button className="btn-secondary" onClick={guardar} disabled={guardando}>
           {guardando ? 'Guardando...' : 'Guardar'}
         </button>
@@ -317,8 +367,15 @@ function CreditoAnteriorSection({ anio, mes, resultado, onRecargar }) {
           <span style={{ fontSize: 12, color: '#94a3b8' }}>(sin guardar para este período — usando $0.00)</span>
         )}
       </div>
-      {resultado.creditoTributarioAnterior > 0 && (
-        <FilaDecl label="(-) Crédito tributario mes anterior" valor={`-${fmtNum(resultado.creditoTributarioAnterior)}`} warn />
+      {(resultado.creditoPorAdquisicionesAnterior > 0 || resultado.creditoPorRetencionesAnterior > 0) && (
+        <>
+          {resultado.creditoPorAdquisicionesAnterior > 0 && (
+            <FilaDecl label="(-) 605 Crédito mes anterior (adquisiciones)" valor={`-${fmtNum(resultado.creditoPorAdquisicionesAnterior)}`} warn />
+          )}
+          {resultado.creditoPorRetencionesAnterior > 0 && (
+            <FilaDecl label="(-) 606 Crédito mes anterior (retenciones)" valor={`-${fmtNum(resultado.creditoPorRetencionesAnterior)}`} warn />
+          )}
+        </>
       )}
     </section>
   );

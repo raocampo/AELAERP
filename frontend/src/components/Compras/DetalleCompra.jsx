@@ -417,11 +417,9 @@ export default function DetalleCompra() {
                   onChange={(e) => setEditCategoriaGastoPersonal(e.target.value)}
                 >
                   <option value="">— Seleccione categoría —</option>
-                  <option value="alimentacion">Alimentación</option>
-                  <option value="salud">Salud</option>
-                  <option value="vivienda">Vivienda</option>
-                  <option value="vestimenta">Vestimenta</option>
-                  <option value="educacion">Educación y arte</option>
+                  <option value="personal">Gastos personales</option>
+                  <option value="profesional">Gastos profesionales</option>
+                  <option value="otros_deducibles">Otros deducibles</option>
                 </select>
               </label>
             )}

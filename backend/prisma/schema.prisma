@@ -783,7 +783,12 @@ model facturas_compra {
   // Gasto personal (persona natural): se excluye de la declaración F104 y del crédito tributario.
   esGastoPersonal             Boolean  @default(false)
   categoriaGastoPersonal      String?  @db.VarChar(30)
-  // alimentacion | salud | vivienda | vestimenta | educacion
+  // personal | profesional | otros_deducibles — simplificado 2026-08-19 desde
+  // 5 valores (alimentacion/salud/vivienda/vestimenta/educacion, pensados
+  // para los rubros de deducción personal del F101/F102). Puramente
+  // informativo/UI: no afecta la exclusión del F104, eso lo decide solo
+  // esGastoPersonal. Registros viejos con los valores anteriores quedan
+  // como texto libre (el campo no tiene enum en BD) — no se migraron.
   // Compras de importación (tipoComprobante = 'IMPORTACION', código SRI 20 —
   // Documento de Importación DIM, antes DAU). Todos nulos en compras
   // domésticas. importeTotal/totalIva se siguen usando para lo debido al
@@ -1432,7 +1437,17 @@ model declaraciones_credito_iva {
   empresaId                 Int
   anio                      Int
   mes                       Int
+  // Legado — se mantiene sincronizado como la suma de los 2 campos de abajo
+  // para no romper lecturas antiguas, pero ya no es la fuente de verdad.
   creditoTributarioAnterior Decimal  @default(0) @db.Decimal(14, 2)
+  // Casillero 605 del F104 real — saldo crédito tributario del mes anterior
+  // POR ADQUISICIONES E IMPORTACIONES (arrastra el campo 615 del período previo).
+  creditoPorAdquisiciones   Decimal  @default(0) @db.Decimal(14, 2)
+  // Casillero 606 del F104 real — saldo crédito tributario del mes anterior
+  // POR RETENCIONES DE IVA QUE LE HAN SIDO EFECTUADAS (arrastra el campo 617).
+  // Antes del 2026-08-19 ambos se guardaban sumados en un solo campo, lo que
+  // no permitía saber en qué casillero real ubicar cada uno.
+  creditoPorRetenciones     Decimal  @default(0) @db.Decimal(14, 2)
   usuarioId                 Int?
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt

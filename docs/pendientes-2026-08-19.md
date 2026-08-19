@@ -213,3 +213,124 @@ cada columna de fecha es un objeto `datetime` con formato `dd/mm/yyyy`
 (antes: `str` en las 5, sin excepción). `node --test`: 49/49.
 
 Sin pendientes abiertos de este tema.
+
+# Parte 4 — F104 refinado con declaración real + checkbox ATS + crédito 605/606 + gastos
+
+## Pedido del usuario
+
+Cuatro pedidos en un solo mensaje, además de compartir el PDF de una
+declaración F104 REAL descargada del portal del SRI (con número de
+serial y fecha de recaudación) y, después, capturas de pantalla del
+formulario F104 cargado con datos en el sistema "SOFIA WEB 2" (una
+plataforma contable de terceros, no el SRI, pero que replica el
+formulario oficial con el mismo layout):
+
+1. En el ATS, agregar un checkbox para excluir compras a cédula que el
+   contador YA revisó y NO aprobó (distinto de las que aún no revisó) —
+   ejemplo del usuario: de 11 facturas a cédula, la contadora aprobó 5,
+   el sistema debe avisar que hay 6 para excluir con un check.
+2. Replicar el formato exacto del PDF de declaración del SRI para el
+   reporte del F104.
+3. Separar el crédito tributario arrastrado en 2 casilleros (605
+   adquisiciones / 606 retenciones) en vez de un solo valor combinado.
+4. Simplificar la clasificación de gastos personales a 3 categorías
+   (personales/profesionales/otros deducibles).
+
+## 1. ATS — checkbox de exclusión de cédula no aprobada
+
+`whereComprasAts()` (`routes/ats.js`) ahora acepta un segundo parámetro
+opcional `excluirCedulaNoAprobada` — por defecto `false` (comportamiento
+idéntico al de siempre, reporta TODO, sin repetir el error revertido el
+2026-08-18). Cuando el contador marca el checkbox, aplica el mismo `OR`
+de `condicionComprasDeducibles()` que ya usa F104 (no una regla nueva).
+Nuevo conteo `cedulaNoAprobada` en `/preview` (siempre calculado,
+esté o no marcado el checkbox) para que el contador vea cuántas hay
+antes de decidir. Aplicado también a `/exportar` (XML) y
+`/exportar/pdf` (talón resumen).
+
+**Bug encontrado y corregido en la propia verificación**: la primera
+implementación usaba `NOT: { OR: condicionComprasDeducibles() }` como
+filtro de exclusión — lógicamente invertido: eso SELECCIONA las que no
+pasan ninguna condición (justo las que había que excluir), en vez de
+excluirlas. Se detectó de inmediato al probar con datos reales (11
+compras: 6 sin aprobar + 5 aprobadas) — con el checkbox activado
+quedaban 6 en vez de 5. Corregido a `where.OR = condicionComprasDeducibles()`
+(mismo patrón ya usado en declaraciones.js), verificado de nuevo: 11 sin
+marcar, 5 con el checkbox activado.
+
+## 2. F104 PDF — replicado contra la declaración real
+
+Con el PDF real del SRI (RUC 1103568240001, julio 2026) se verificaron
+campo por campo las fórmulas de la sección "RESUMEN IMPOSITIVO" (601-620)
+y se confirmó que el factor de proporcionalidad (563) es **1.0000** por
+defecto cuando no hay ventas mixtas gravadas/exentas (antes se excluía
+todo ese bloque del PDF por prudencia) — ahora se incluye (563/564/565).
+
+## 3. Crédito tributario — 605/606 separados (antes: 1 solo campo)
+
+Confirmado con la declaración real: 605 (saldo por adquisiciones) y 606
+(saldo por retenciones de IVA) son casilleros independientes, cada uno
+arrastra su propio 615/617 del período anterior — **no se suman**.
+Nuevo esquema: `declaraciones_credito_iva.creditoPorAdquisiciones` +
+`.creditoPorRetenciones` (columnas nuevas, agregadas también a
+`applySchemaFixes.js`; el campo viejo `creditoTributarioAnterior` se
+mantiene sincronizado como la suma, por si algo viejo todavía lo lee).
+`PUT /f104/credito-anterior` acepta ambos valores por separado.
+`Declaraciones.jsx` ahora tiene 2 inputs en vez de 1.
+
+**Algoritmo de consumo verificado exacto contra la declaración real**
+(605=0, 606=1487.68, 609=62.07, 601=163.89 → esperado 617=1385.86,
+620=0.00): el crédito disponible se agrupa en 2 orígenes — "adquisiciones"
+(605 arrastrado + 602 generado este mismo período si lo hay) y
+"retenciones" (606 arrastrado + 609 de este período) — y se consume
+secuencialmente contra el 601 en ese orden (adquisiciones primero,
+retenciones después), dejando el remanente de cada origen en 615/617
+para el próximo mes. Reproducido exacto con datos QATEST usando los
+mismos montos de la declaración real (mismas facturas 15%: ventas
+1387.43/compras 294.80, mismo 606=1487.68, mismo 609=62.07) — 601, 617,
+620 y 859 salieron exactos a los del PDF real.
+
+También se agregó el desglose de "Agente de retención del IVA" (IVA que
+la empresa retiene a SUS proveedores, casilleros 721-731 por tramo de
+10/20/30/50/70/100%) — antes solo se sumaba `facturas_compra.retencionIVA`
+como un bloque; ahora se lee directo de la tabla `retenciones` (mismo
+patrón que ya usa el detalle de retenciones recibidas) para poder
+desglosar por porcentaje real.
+
+**Bug de glifo roto encontrado DOS VECES la misma tarde** (ver memoria
+`feedback_pdfkit_unicode_glyphs.md`, actualizada): primero ⚠ en el PDF
+del F103 (sesión de la mañana), después → en una nota nueva del PDF del
+F104 — mismo bug documentado horas antes, repetido por no revisarlo
+antes de escribir texto nuevo. Ambos corregidos a texto plano.
+
+## 4. Clasificación de gastos personales simplificada
+
+Se aclaró con el usuario (2 preguntas, había 2 campos distintos y
+parcialmente redundantes: `tipoGasto`, 9 opciones siempre visible, y
+`categoriaGastoPersonal`, 5 opciones solo bajo el checkbox "Es gasto
+personal") — el pedido era sobre `categoriaGastoPersonal` únicamente,
+sin tocar `tipoGasto` ni la lógica de exclusión del F104 (que depende
+solo de `esGastoPersonal`, no de esta categoría). Sus 5 opciones
+(alimentación/salud/vivienda/vestimenta/educación, pensadas para los
+rubros de deducción personal del F101) se reemplazaron por 3: personales
+/ profesionales / otros deducibles, en `FormCompra.jsx` y
+`DetalleCompra.jsx`. Sin datos existentes que migrar (campo de texto
+libre, sin registros locales con los valores viejos).
+
+## Verificado
+
+`node --test`: 49/49 en todo momento. `vite build`: sin errores. F104
+verificado dato por dato contra la declaración real del usuario
+(601=163.89, 605=0, 606=1487.68, 609=62.07, 615=0, 617=1385.86,
+620=0.00, 799/801=10.00 con datos de retención sintéticos, 859=10.00 —
+todos exactos). ATS checkbox verificado con 11 compras sintéticas (6
+sin aprobar + 5 aprobadas), confirmado 11→5 al activar el checkbox.
+Todos los datos QATEST eliminados al terminar.
+
+## Pendiente para retomar
+
+No se probó nada de esto en un navegador real (sin herramienta de
+automatización disponible en este entorno) — verificado solo por HTTP
+directo + PDF renderizado a PNG + lectura de código. Sugerir al usuario
+una pasada por Declaraciones (F104, los 2 inputs de crédito) y ATS (el
+nuevo checkbox) antes de darlo por cerrado del todo.

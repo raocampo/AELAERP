@@ -226,7 +226,7 @@ async function calcularF104(db, empresaId, anio, mes) {
       select: {
         subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
         subtotalNoObjeto: true, subtotalExento: true,
-        totalIva: true, importeTotal: true, retencionIVA: true,
+        totalIva: true, importeTotal: true,
       },
     });
 
@@ -242,8 +242,6 @@ async function calcularF104(db, empresaId, anio, mes) {
     let comprasSubtotalNoObjeto = 0;
     let comprasSubtotalExento = 0;
     let ivaCompras        = 0;
-    let retencionIvaCompras = 0;
-
     compras.forEach((c) => {
       comprasSubtotal0  += d(c.subtotal0);
       comprasSubtotal5  += d(c.subtotal5);
@@ -252,7 +250,6 @@ async function calcularF104(db, empresaId, anio, mes) {
       comprasSubtotalNoObjeto += d(c.subtotalNoObjeto);
       comprasSubtotalExento += d(c.subtotalExento);
       ivaCompras        += d(c.totalIva);
-      retencionIvaCompras += d(c.retencionIVA);
     });
 
     // ── LIQUIDACIONES DE COMPRA ─────────────────────────────────────────────────
@@ -308,6 +305,37 @@ async function calcularF104(db, empresaId, anio, mes) {
       });
     });
 
+    // ── RETENCIONES DE IVA EMITIDAS A PROVEEDORES (agente de retención) ─────────
+    // Distinto de lo anterior: esto es el IVA que la propia empresa retiene a
+    // SUS proveedores al pagarles (tabla `retenciones`, comprobante que AELA
+    // emite) — casilleros 721-731/799/801 del formulario real ("AGENTE DE
+    // RETENCIÓN DEL IVA"). Se lee directo del detalle de impuestos (igual que
+    // arriba con las recibidas) para poder desglosar por tramo de porcentaje
+    // (10/20/30/50/70/100%) en vez de un solo total — AELA hoy solo ofrece
+    // 30/70/100% al crear un comprobante (CODIGOS_RETENCION_IVA en sri.js),
+    // pero el bucketing por porcentaje real deja soportados 10/20/50% también
+    // si en el futuro se agregan esos códigos, sin tocar este cálculo de nuevo.
+    const retencionesEmitidasRaw = await db.retenciones.findMany({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: { in: ['AUTORIZADO', 'FIRMADO_PENDIENTE_ENVIO', 'RECHAZADO'] } },
+      select: { impuestos: true },
+    });
+
+    let retEmitidaIVA10 = 0, retEmitidaIVA20 = 0, retEmitidaIVA30 = 0, retEmitidaIVA50 = 0, retEmitidaIVA70 = 0, retEmitidaIVA100 = 0;
+    retencionesEmitidasRaw.forEach((ret) => {
+      const impuestos = typeof ret.impuestos === 'string' ? JSON.parse(ret.impuestos) : (ret.impuestos || []);
+      impuestos.forEach((imp) => {
+        if (String(imp.codigo) !== '2') return; // código 2 = IVA (1 = Renta)
+        const valor = d(imp.valorRetenido);
+        const pct = Math.round(d(imp.porcentajeRetener));
+        if (pct === 10) retEmitidaIVA10 += valor;
+        else if (pct === 20) retEmitidaIVA20 += valor;
+        else if (pct === 30) retEmitidaIVA30 += valor;
+        else if (pct === 50) retEmitidaIVA50 += valor;
+        else if (pct === 70) retEmitidaIVA70 += valor;
+        else retEmitidaIVA100 += valor; // 100% y cualquier otro no clasificado
+      });
+    });
+
     // ── NC RECIBIDAS DE PROVEEDORES ──────────────────────────────────────────────
     // Almacenadas en docs_recibidos_otros con tipoDocumento='04'. Solo tienen
     // importeTotal; el IVA se extrae del xmlAutorizado si está disponible.
@@ -342,17 +370,59 @@ async function calcularF104(db, empresaId, anio, mes) {
     // No se calcula automáticamente encadenando meses (el saldo oficial ante el
     // SRI puede no coincidir con lo que este sistema calcularía solo, p.ej. si
     // la empresa empezó a usar AELA a mitad de año). El usuario lo ingresa una
-    // vez por período en PUT /f104/credito-anterior y queda guardado.
+    // vez por período en PUT /f104/credito-anterior y queda guardado — desde
+    // 2026-08-19 separado en 2 casilleros reales, confirmado contra una
+    // declaración real del SRI compartida por el usuario:
+    //   605 = saldo por ADQUISICIONES E IMPORTACIONES (arrastra el 615 anterior)
+    //   606 = saldo por RETENCIONES DE IVA QUE LE HAN SIDO EFECTUADAS (arrastra el 617 anterior)
+    // Antes se guardaban sumados en un solo campo — no permitía saber en qué
+    // casillero real ubicar cada uno al declarar.
     const creditoGuardado = await db.declaraciones_credito_iva.findUnique({
       where: { empresaId_anio_mes: { empresaId, anio, mes } },
     });
-    const creditoTributarioAnterior = creditoGuardado ? d(creditoGuardado.creditoTributarioAnterior) : 0;
+    const creditoPorAdquisicionesAnterior = creditoGuardado ? d(creditoGuardado.creditoPorAdquisiciones) : 0;
+    const creditoPorRetencionesAnterior   = creditoGuardado ? d(creditoGuardado.creditoPorRetenciones)   : 0;
 
     // ── CÁLCULO FINAL ────────────────────────────────────────────────────────────
+    // Replica la sección "RESUMEN IMPOSITIVO: AGENTE DE PERCEPCIÓN" del
+    // formulario real (casilleros 601-620), verificada campo por campo contra
+    // una declaración real del SRI del usuario (2026-08-19): 499 (=429, sin
+    // arrastre de ventas a crédito — AELA no distingue contado/crédito) menos
+    // 564 (crédito fiscal con factor de proporcionalidad — AELA asume factor
+    // 1.0000 al no soportar ventas mixtas gravadas/exentas) da el 601 o 602.
+    // El saldo a favor disponible se agrupa en 2 orígenes — "adquisiciones"
+    // (605 arrastrado + 602 generado este mismo período, si lo hay) y
+    // "retenciones" (606 arrastrado + 609 de este período) — y se consume
+    // secuencialmente contra el 601 en ese orden (adquisiciones primero,
+    // retenciones después), dejando el remanente de cada origen en 615/617
+    // para el próximo mes. Verificado exacto contra el ejemplo real (605=0,
+    // 606=1487.68, 609=62.07, 601=163.89 → 617=1385.86, 620=0.00).
     const ivaGenerado    = parseFloat(ivaVentasNeto.toFixed(2));
     const ivaCreditoFiscal = parseFloat((ivaCompras + liqIva - ncReciIva).toFixed(2));
     const ivaRetenidoClientes = parseFloat((retencionIVA30 + retencionIVA70 + retencionIVA100 + retencionIVAOtro).toFixed(2));
-    const ivaACobrarPagar = parseFloat((ivaGenerado - ivaCreditoFiscal - ivaRetenidoClientes - creditoTributarioAnterior).toFixed(2));
+    const ivaRetenidoAProveedores = parseFloat((retEmitidaIVA10 + retEmitidaIVA20 + retEmitidaIVA30 + retEmitidaIVA50 + retEmitidaIVA70 + retEmitidaIVA100).toFixed(2));
+
+    const impuestoCausado  = Math.max(0, parseFloat((ivaGenerado - ivaCreditoFiscal).toFixed(2))); // 601
+    const creditoDelPeriodo = Math.max(0, parseFloat((ivaCreditoFiscal - ivaGenerado).toFixed(2))); // 602
+
+    const creditoDisponibleAdquisiciones = parseFloat((creditoPorAdquisicionesAnterior + creditoDelPeriodo).toFixed(2));
+    const creditoDisponibleRetenciones   = parseFloat((creditoPorRetencionesAnterior + ivaRetenidoClientes).toFixed(2));
+
+    // Neto del período sin capar en 0 — positivo = queda algo por pagar,
+    // negativo = el crédito disponible superó al impuesto causado (magnitud =
+    // nuevo saldo a favor). Mismo valor que devolvía ivaACobrarPagar antes de
+    // separar 605/606, ahora incluyendo también el 602 generado este período.
+    const netoDelPeriodo = parseFloat((impuestoCausado - creditoDisponibleAdquisiciones - creditoDisponibleRetenciones).toFixed(2));
+
+    let restante = impuestoCausado;
+    const consumidoAdq = Math.min(creditoDisponibleAdquisiciones, restante); restante = parseFloat((restante - consumidoAdq).toFixed(2));
+    const consumidoRet = Math.min(creditoDisponibleRetenciones, restante);   restante = parseFloat((restante - consumidoRet).toFixed(2));
+
+    const saldoCreditoAdquisicionesProximoMes = parseFloat((creditoDisponibleAdquisiciones - consumidoAdq).toFixed(2)); // 615
+    const saldoCreditoRetencionesProximoMes   = parseFloat((creditoDisponibleRetenciones - consumidoRet).toFixed(2));   // 617
+    const subtotalAPagar = Math.max(0, parseFloat(restante.toFixed(2))); // 620/699
+
+    const totalConsolidado = parseFloat((subtotalAPagar + ivaRetenidoAProveedores).toFixed(2)); // 859 (699+801)
 
     const f104 = {
       periodo: { anio, mes },
@@ -391,15 +461,29 @@ async function calcularF104(db, empresaId, anio, mes) {
       },
       // IVA que la propia empresa retuvo a sus proveedores al pagarles (agente
       // de retención de IVA — casilleros 721-731/799/801 del formulario real).
-      // AELA no desglosa por porcentaje (10/20/30/50/70/100%), solo el total.
       retencionesEmitidas: {
-        ivaRetenidoAProveedores: parseFloat(retencionIvaCompras.toFixed(2)),
+        iva10:  parseFloat(retEmitidaIVA10.toFixed(2)),
+        iva20:  parseFloat(retEmitidaIVA20.toFixed(2)),
+        iva30:  parseFloat(retEmitidaIVA30.toFixed(2)),
+        iva50:  parseFloat(retEmitidaIVA50.toFixed(2)),
+        iva70:  parseFloat(retEmitidaIVA70.toFixed(2)),
+        iva100: parseFloat(retEmitidaIVA100.toFixed(2)),
+        ivaRetenidoAProveedores: ivaRetenidoAProveedores,
       },
       resultado: {
-        creditoTributarioAnterior,
+        creditoPorAdquisicionesAnterior,
+        creditoPorRetencionesAnterior,
         creditoTributarioGuardado: !!creditoGuardado,
-        ivaACobrarPagar,
-        estado: ivaACobrarPagar > 0 ? 'A_PAGAR' : ivaACobrarPagar < 0 ? 'CREDITO_TRIBUTARIO' : 'CERO',
+        impuestoCausado,
+        creditoDelPeriodo,
+        saldoCreditoAdquisicionesProximoMes,
+        saldoCreditoRetencionesProximoMes,
+        subtotalAPagar,
+        totalConsolidado,
+        // Compatibilidad: mismo nombre/semántica que antes (lo que hay que
+        // pagar o el crédito a favor de este período, sin contar 801).
+        ivaACobrarPagar: netoDelPeriodo,
+        estado: netoDelPeriodo > 0 ? 'A_PAGAR' : netoDelPeriodo < 0 ? 'CREDITO_TRIBUTARIO' : 'CERO',
       },
       meta: {
         cantidadFacturas:    facturas.length,
@@ -446,13 +530,16 @@ const NOMBRES_MES = [
 // ─── GET /f104/pdf — Documento de apoyo para el llenado del Formulario 104 ─────
 // NO es el formulario oficial ni lo reemplaza — es una ayuda para que el
 // contador arme la declaración en "SRI en Línea". Mapea los valores que AELA
-// calcula contra el casillero oficial correspondiente (confirmado 2026-08-19
-// contra el diseño oficial vigente post-reforma abril/2024: "Guía para el
-// llenado del Formulario IVA.PDF" + "FORMULARIO IVA.xlsx" del SRI). Deja en
-// blanco / con nota los casilleros que el sistema no puede determinar solo
-// (activos fijos por separado, exportaciones, importaciones DIM/DAU, tarifa
-// turística variable, factor de proporcionalidad, arrastre de NC, desglose de
-// retención IVA por porcentaje, saldo de crédito tributario por origen).
+// calcula contra el casillero oficial correspondiente. Confirmado 2026-08-19
+// contra 3 fuentes oficiales: la guía + Excel de diseño del SRI, Y una
+// declaración real del propio usuario descargada del portal del SRI (PDF con
+// número de serial), que permitió verificar exactamente las fórmulas de
+// 601-620 (secuencia de consumo 605→606→609) y confirmar que el factor de
+// proporcionalidad (563) es 1.0000 cuando no hay ventas mixtas gravadas/
+// exentas — antes se excluía todo ese bloque por prudencia, ahora se incluye.
+// Deja en blanco / con nota los casilleros que el sistema aún no puede
+// determinar solo (activos fijos por separado, exportaciones, importaciones
+// DIM/DAU, tarifa turística variable, ventas a crédito 480-485, arrastre de NC).
 // Query: ?anio=2025&mes=3
 router.get('/f104/pdf', async (req, res) => {
   try {
@@ -483,10 +570,8 @@ router.get('/f104/pdf', async (req, res) => {
     const iva5Compras   = round2(compBase5 * 0.05);
     const baseTotalCompras = round2(compBase0 + compBase12 + compBase15 + compBase5);
 
-    const subtotalAPagar = round2(Math.max(0, f104.resultado.ivaACobrarPagar));
-    const saldoCreditoProxMes = round2(Math.max(0, -f104.resultado.ivaACobrarPagar));
-    const ivaRetProveedores = f104.retencionesEmitidas.ivaRetenidoAProveedores;
-    const totalAPagar = round2(subtotalAPagar + ivaRetProveedores);
+    const r = f104.resultado;
+    const re = f104.retencionesEmitidas;
 
     const doc = crearDocumentoPdf(res, `f104_${anio}_${String(mes).padStart(2, '0')}.pdf`);
     dibujarEncabezadoContable(doc, config, 'Formulario 104 — Declaración del IVA');
@@ -501,7 +586,7 @@ router.get('/f104/pdf', async (req, res) => {
     const ML = doc.page.margins.left;
     const Wtotal = doc.page.width - ML - doc.page.margins.right;
     const yAviso = doc.y;
-    const textoAviso = 'Documento de apoyo para declarar en SRI en Línea — NO es el formulario oficial ni lo reemplaza. Verifique cada casillero contra el sistema del SRI antes de presentar la declaración. Los casilleros no soportados por AELA (activos fijos por separado, exportaciones, importaciones, tarifa turística variable, factor de proporcionalidad, notas de crédito por compensar, desglose de retención IVA por %) se detallan al final.';
+    const textoAviso = 'Documento de apoyo para declarar en SRI en Línea — NO es el formulario oficial ni lo reemplaza. Verifique cada casillero contra el sistema del SRI antes de presentar la declaración. Los casilleros no soportados por AELA (activos fijos por separado, exportaciones, importaciones, tarifa turística variable, ventas/compras a crédito, notas de crédito por compensar) se detallan al final.';
     const altoAviso = doc.heightOfString(textoAviso, { width: Wtotal - 12 }) + 10;
     doc.rect(ML, yAviso, Wtotal, altoAviso).fillAndStroke('#fef3c7', '#f59e0b');
     doc.fillColor('#78350f').fontSize(7.5).font('Helvetica')
@@ -517,7 +602,7 @@ router.get('/f104/pdf', async (req, res) => {
       { header: 'IVA', key: 'iva', width: 90, align: 'right', formato: (val) => (val === '' ? '' : money(val)) },
     ];
 
-    doc.fontSize(10).font('Helvetica-Bold').text('VENTAS Y OTRAS OPERACIONES');
+    doc.fontSize(10).font('Helvetica-Bold').text('RESUMEN DE VENTAS Y OTRAS OPERACIONES');
     doc.y = dibujarTablaPdf(doc, colCasillero, [
       { cas: '401/411/421', desc: 'Ventas locales gravadas tarifa general (12%/15%)', base: v.subtotalNeto12 + v.subtotalNeto15, iva: ivaDif0Ventas },
       { cas: '425/435/445', desc: 'Ventas locales gravadas tarifa 5% (materiales de construcción)', base: v.subtotalNeto5, iva: iva5Ventas },
@@ -530,7 +615,7 @@ router.get('/f104/pdf', async (req, res) => {
       .fillColor('#000000');
     doc.moveDown(0.5);
 
-    doc.fontSize(10).font('Helvetica-Bold').text('ADQUISICIONES Y PAGOS (COMPRAS)');
+    doc.fontSize(10).font('Helvetica-Bold').text('RESUMEN DE ADQUISICIONES Y PAGOS');
     doc.y = dibujarTablaPdf(doc, colCasillero, [
       { cas: '500/510/520', desc: 'Adquisiciones gravadas tarifa general (12%/15%), con derecho a crédito', base: compBase12 + compBase15, iva: ivaDif0Compras },
       { cas: '540/550/560', desc: 'Adquisiciones gravadas tarifa 5% (materiales de construcción)', base: compBase5, iva: iva5Compras },
@@ -550,24 +635,44 @@ router.get('/f104/pdf', async (req, res) => {
       { header: 'Valor', key: 'valor', width: 90, align: 'right', formato: money },
     ];
 
-    doc.fontSize(10).font('Helvetica-Bold').text('LIQUIDACIÓN DEL IVA Y RESUMEN IMPOSITIVO');
+    doc.fontSize(10).font('Helvetica-Bold').text('FACTOR DE PROPORCIONALIDAD Y CRÉDITO TRIBUTARIO');
     doc.y = dibujarTablaPdf(doc, colResumen, [
-      { cas: '601/602', desc: 'Impuesto causado (429-529, antes de crédito/retenciones)', valor: round2(v.ivaGenerado - c.ivaCreditoFiscal) },
-      { cas: '605', desc: 'Saldo crédito tributario del mes anterior (AELA no separa por origen)', valor: f104.resultado.creditoTributarioAnterior },
-      { cas: '609', desc: 'Retenciones de IVA que le han sido efectuadas por clientes', valor: f104.retenciones.totalRetenido },
-      { cas: '620/699', desc: 'SUBTOTAL A PAGAR POR PERCEPCIÓN', valor: subtotalAPagar, _destacado: true },
-      { cas: '615', desc: 'Saldo crédito tributario para el próximo mes', valor: saldoCreditoProxMes },
-      { cas: '799/801', desc: 'IVA retenido a proveedores (agente de retención — sin desglose por %)', valor: ivaRetProveedores },
-      { cas: '859/902', desc: 'TOTAL IMPUESTO A PAGAR', valor: totalAPagar, _destacado: true },
+      { cas: '563', desc: 'Factor de proporcionalidad (AELA asume 1.0000 — no soporta ventas mixtas gravadas/exentas)', valor: 1 },
+      { cas: '564', desc: 'Crédito tributario aplicable en este período (529 x factor)', valor: c.ivaCreditoFiscal, _destacado: true },
+      { cas: '565', desc: 'Valor de IVA no considerado como crédito tributario por factor de proporcionalidad', valor: 0 },
     ], doc.y);
-    doc.moveDown(0.3);
+    doc.moveDown(0.4);
 
-    doc.fontSize(7.5).font('Helvetica-Bold').text('Retenciones de IVA recibidas de clientes, por porcentaje (detalle del 609):');
-    doc.font('Helvetica').fontSize(7.5)
-      .text(`30%: ${money(f104.retenciones.iva30)}   ·   70%: ${money(f104.retenciones.iva70)}   ·   100%: ${money(f104.retenciones.iva100)}   ·   Otro: ${money(f104.retenciones.otro)}`);
+    doc.fontSize(10).font('Helvetica-Bold').text('RESUMEN IMPOSITIVO: AGENTE DE PERCEPCIÓN DEL IVA');
+    doc.y = dibujarTablaPdf(doc, colResumen, [
+      { cas: '601', desc: 'Impuesto causado (si 429-564 es mayor que cero)', valor: r.impuestoCausado },
+      { cas: '602', desc: 'Crédito tributario aplicable en este período (si 429-564 es menor que cero)', valor: r.creditoDelPeriodo },
+      { cas: '605', desc: 'Saldo crédito tributario del mes anterior — por adquisiciones e importaciones', valor: r.creditoPorAdquisicionesAnterior },
+      { cas: '606', desc: 'Saldo crédito tributario del mes anterior — por retenciones de IVA que le han sido efectuadas', valor: r.creditoPorRetencionesAnterior },
+      { cas: '609', desc: 'Retenciones de IVA que le han sido efectuadas en este período', valor: f104.retenciones.totalRetenido },
+      { cas: '615', desc: 'Saldo crédito tributario para el próximo mes — por adquisiciones e importaciones', valor: r.saldoCreditoAdquisicionesProximoMes },
+      { cas: '617', desc: 'Saldo crédito tributario para el próximo mes — por retenciones de IVA que le han sido efectuadas', valor: r.saldoCreditoRetencionesProximoMes },
+      { cas: '620/699', desc: 'SUBTOTAL / TOTAL A PAGAR POR PERCEPCIÓN', valor: r.subtotalAPagar, _destacado: true },
+    ], doc.y);
+    doc.fontSize(7).fillColor('#64748b')
+      .text('605/606 se ingresan en Declaraciones, sección "Crédito tributario arrastrado" — cada uno arrastra el 615/617 de la declaración del período anterior. El orden de consumo contra el 601 es: primero 605+602, luego 606+609 (verificado contra una declaración real).')
+      .fillColor('#000000');
     doc.moveDown(0.5);
 
-    if (doc.y > 640) doc.addPage();
+    doc.fontSize(10).font('Helvetica-Bold').text('AGENTE DE RETENCIÓN DEL IVA (a proveedores)');
+    doc.y = dibujarTablaPdf(doc, colResumen, [
+      { cas: '721', desc: 'Retención del 10%', valor: re.iva10 },
+      { cas: '723', desc: 'Retención del 20%', valor: re.iva20 },
+      { cas: '725', desc: 'Retención del 30%', valor: re.iva30 },
+      { cas: '727', desc: 'Retención del 50%', valor: re.iva50 },
+      { cas: '729', desc: 'Retención del 70%', valor: re.iva70 },
+      { cas: '731', desc: 'Retención del 100%', valor: re.iva100 },
+      { cas: '799/801', desc: 'TOTAL IMPUESTO A PAGAR POR RETENCIÓN', valor: re.ivaRetenidoAProveedores, _destacado: true },
+      { cas: '859', desc: 'TOTAL CONSOLIDADO DE IVA (699 + 801)', valor: r.totalConsolidado, _destacado: true },
+    ], doc.y);
+    doc.moveDown(0.5);
+
+    if (doc.y > 600) doc.addPage();
     doc.fontSize(9).font('Helvetica-Bold').text('Casilleros no incluidos — requieren revisión y llenado manual');
     doc.font('Helvetica').fontSize(7.5).fillColor('#334155');
     [
@@ -575,10 +680,9 @@ router.get('/f104/pdf', async (req, res) => {
       'Exportaciones de bienes y servicios (407/408/417/418): no se registran en AELA.',
       'Importaciones de bienes, servicios y activos fijos (503/504/505 y DIM/DAU): revisar aduana manualmente.',
       'Tarifa turística variable (410/420/430, requiere casilla 203): no aplica salvo sector turismo.',
-      'Factor de proporcionalidad (563/564/565): solo aplica si hay ventas mixtas gravadas y no gravadas/exentas.',
+      'Ventas/compras a crédito (480/481/483/484/485 y 526/527): AELA no distingue cobro a contado vs a crédito, asume todo se declara en el mes de la venta.',
       'Notas de crédito por compensar en próximo mes (442/443/453/543/544/554): AELA neta todo en el período emitido.',
-      'Saldo de crédito tributario por origen (605 vs 606/607/608, 615 vs 617/618/619): AELA guarda un solo saldo combinado (ver PUT /f104/credito-anterior).',
-      'Compensaciones e IVA presuntivo (603/604/607/608/621), ISD devolución exportadores (700-702), pagos previos e imputación de sustitutivas (880-899).',
+      'Compensaciones e IVA presuntivo (603/604/607/608/610-614/621/622/623), ISD devolución exportadores (700-702), pagos previos e imputación de sustitutivas (880-899).',
     ].forEach((linea) => { doc.text(`• ${linea}`); doc.moveDown(0.15); });
     doc.fillColor('#000000');
 
@@ -597,22 +701,42 @@ router.put('/f104/credito-anterior', async (req, res) => {
     const empresaId = req.empresa.id;
     const anio = parseInt(req.body.anio);
     const mes  = parseInt(req.body.mes);
-    const valor = d(req.body.creditoTributarioAnterior);
+    // Casilleros 605 (adquisiciones) y 606 (retenciones) por separado desde
+    // 2026-08-19 — antes era un solo valor combinado. Se acepta también el
+    // campo viejo `creditoTributarioAnterior` como fallback → se guarda todo
+    // en `creditoPorAdquisiciones` (mismo comportamiento visible que antes,
+    // por si algún cliente viejo del API todavía lo manda así).
+    const valorAdquisiciones = req.body.creditoPorAdquisiciones != null
+      ? d(req.body.creditoPorAdquisiciones)
+      : d(req.body.creditoTributarioAnterior);
+    const valorRetenciones = d(req.body.creditoPorRetenciones);
 
     if (!anio || !mes || mes < 1 || mes > 12) {
       return res.status(400).json({ ok: false, mensaje: 'Período inválido' });
     }
-    if (valor < 0) {
+    if (valorAdquisiciones < 0 || valorRetenciones < 0) {
       return res.status(400).json({ ok: false, mensaje: 'El crédito tributario no puede ser negativo' });
     }
+    const valorCombinado = parseFloat((valorAdquisiciones + valorRetenciones).toFixed(2));
 
     await db.declaraciones_credito_iva.upsert({
       where: { empresaId_anio_mes: { empresaId, anio, mes } },
-      update: { creditoTributarioAnterior: valor, usuarioId: req.usuario?.id || null },
-      create: { empresaId, anio, mes, creditoTributarioAnterior: valor, usuarioId: req.usuario?.id || null },
+      update: {
+        creditoPorAdquisiciones: valorAdquisiciones,
+        creditoPorRetenciones: valorRetenciones,
+        creditoTributarioAnterior: valorCombinado,
+        usuarioId: req.usuario?.id || null,
+      },
+      create: {
+        empresaId, anio, mes,
+        creditoPorAdquisiciones: valorAdquisiciones,
+        creditoPorRetenciones: valorRetenciones,
+        creditoTributarioAnterior: valorCombinado,
+        usuarioId: req.usuario?.id || null,
+      },
     });
 
-    res.json({ ok: true, data: { anio, mes, creditoTributarioAnterior: valor } });
+    res.json({ ok: true, data: { anio, mes, creditoPorAdquisiciones: valorAdquisiciones, creditoPorRetenciones: valorRetenciones } });
   } catch (err) {
     console.error('Error PUT /f104/credito-anterior:', err);
     res.status(500).json({ ok: false, mensaje: err.message });

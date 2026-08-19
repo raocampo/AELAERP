@@ -340,6 +340,9 @@ const FIXES = [
     "updatedAt"                 TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "declaraciones_credito_iva_empresaId_anio_mes_key" ON "declaraciones_credito_iva"("empresaId", "anio", "mes")`,
+  // Crédito tributario de IVA — separar 605 (adquisiciones) de 606 (retenciones) (2026-08-19)
+  `ALTER TABLE "declaraciones_credito_iva" ADD COLUMN IF NOT EXISTS "creditoPorAdquisiciones" DECIMAL(14,2) NOT NULL DEFAULT 0`,
+  `ALTER TABLE "declaraciones_credito_iva" ADD COLUMN IF NOT EXISTS "creditoPorRetenciones" DECIMAL(14,2) NOT NULL DEFAULT 0`,
   // Compras facturadas a cédula vs RUC — no deducibles si NO es RUC (2026-07-12)
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "receptorEsRuc" BOOLEAN`,
   // Anticipos de clientes y proveedores (2026-07-13)

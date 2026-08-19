@@ -12,21 +12,53 @@ const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { CODIGOS_RETENCION_RENTA, parsearNotaCreditoRecibidaXml } = require('../utils/sri');
+const { condicionComprasDeducibles } = require('../utils/comprasFiscal');
 
 // El ATS es un reporte TRANSACCIONAL (informa al SRI qué compras existieron,
 // para que cruce contra lo que cada proveedor declaró que vendió) — a
 // diferencia del F104/F101, que determinan si una compra da derecho a
-// crédito tributario/deducción. Por eso el ATS SÍ reporta compras
-// facturadas a cédula personal aunque el contador aún no las haya aprobado
-// (esa regla de comprasFiscal.js/condicionComprasDeducibles() es correcta
-// para F104/F101, pero no aplica aquí — se intentó extenderla al ATS el
-// 2026-08-18 y se revirtió el mismo día al confirmarlo con el usuario, ver
-// docs/pendientes-2026-08-18.md). Lo único que sí se excluye siempre es
-// esGastoPersonal: si el usuario marcó la compra como gasto personal, no es
-// una transacción comercial de la empresa y no corresponde reportarla en su
-// anexo transaccional.
-function whereComprasAts(base) {
-  return { ...base, esGastoPersonal: { not: true } };
+// crédito tributario/deducción. Por eso, POR DEFECTO, el ATS SÍ reporta
+// compras facturadas a cédula personal aunque el contador aún no las haya
+// aprobado (esa regla de comprasFiscal.js/condicionComprasDeducibles() es
+// correcta para F104/F101, pero no aplica aquí por defecto — se intentó
+// extenderla al ATS el 2026-08-18 y se revirtió el mismo día al confirmarlo
+// con el usuario, ver docs/pendientes-2026-08-18.md). Lo único que sí se
+// excluye siempre es esGastoPersonal: si el usuario marcó la compra como
+// gasto personal, no es una transacción comercial de la empresa.
+//
+// 2026-08-19: se agregó un segundo filtro OPCIONAL y explícito
+// (excluirCedulaNoAprobada, un checkbox que el contador activa a propósito
+// por cada generación del ATS) — no es el mismo error que se revirtió: por
+// defecto (checkbox sin marcar) el comportamiento es idéntico al de
+// siempre, reporta TODO. Solo cuando el contador ya revisó las compras a
+// cédula del período y decidió cuáles NO son transacciones de negocio
+// reales (no solo "no deducibles", sino que directamente no debieran
+// reportarse), puede marcar el checkbox para excluir del ATS exactamente
+// las mismas que F104 ya excluye del crédito tributario —aplicando el MISMO
+// OR de inclusión que usa condicionComprasDeducibles() (no su negación: acá
+// se quiere QUEDARSE con las que sí pasan esa condición, es decir, excluir
+// del resultado a las que no pasan ninguna).
+function whereComprasAts(base, excluirCedulaNoAprobada = false) {
+  const where = { ...base, esGastoPersonal: { not: true } };
+  if (excluirCedulaNoAprobada) {
+    where.OR = condicionComprasDeducibles();
+  }
+  return where;
+}
+
+// Cuenta cuántas compras del período son candidatas a excluir con el
+// checkbox de arriba (facturadas a cédula, sin aprobar por el contador,
+// después del corte de contabilidad atrasada) — se informa siempre en
+// /preview, esté o no marcado el checkbox, para que el contador sepa que
+// existen antes de decidir. Acá SÍ se usa la negación — se cuenta
+// exactamente lo que NO pasa ninguna condición de condicionComprasDeducibles().
+async function contarCedulaNoAprobada(empresaId, periodoWhere) {
+  return prisma.facturas_compra.count({
+    where: {
+      empresaId, anulada: false, esGastoPersonal: { not: true }, ...periodoWhere,
+      NOT: { OR: condicionComprasDeducibles() },
+    },
+  });
 }
 
 const LOGO_SRI = path.join(__dirname, '../assets/LogoSRI.png');
@@ -101,12 +133,13 @@ router.get('/preview', async (req, res) => {
   try {
     const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
     const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const excluirCedulaNoAprobada = req.query.excluirCedulaNoAprobada === 'true';
     const { desde, hasta } = rangoPeriodo(mes, anio);
     const empresaId = req.empresa.id;
     const config = await prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
 
     const periodoWhere = { fechaEmision: { gte: desde, lte: hasta } };
-    const [facturas, liquidaciones, retenciones, compras, ncs, anuladosFacturas, retencionesRecibidas, notasVenta, ncsRecibidas] = await Promise.all([
+    const [facturas, liquidaciones, retenciones, compras, ncs, anuladosFacturas, retencionesRecibidas, notasVenta, ncsRecibidas, cedulaNoAprobadaCandidatas] = await Promise.all([
       // Ventas: facturas emitidas autorizadas
       prisma.facturas.findMany({
         where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere },
@@ -144,7 +177,7 @@ router.get('/preview', async (req, res) => {
       }),
       // Compras: facturas_compra NO anuladas del período, sin gasto personal (ver whereComprasAts)
       prisma.facturas_compra.findMany({
-        where: whereComprasAts({ empresaId, anulada: false, ...periodoWhere }),
+        where: whereComprasAts({ empresaId, anulada: false, ...periodoWhere }, excluirCedulaNoAprobada),
         include: {
           retenciones: {
             where: { anulada: false },
@@ -209,6 +242,9 @@ router.get('/preview', async (req, res) => {
         },
         orderBy: { fechaEmision: 'asc' },
       }),
+      // Candidatas a excluir con el checkbox "cédula no aprobada" — se cuenta
+      // siempre (esté o no marcado el checkbox) para informar al contador.
+      contarCedulaNoAprobada(empresaId, periodoWhere),
     ]);
 
     const sumar = (arr, campo) => arr.reduce((s, r) => s + r2(r[campo]), 0);
@@ -256,6 +292,7 @@ router.get('/preview', async (req, res) => {
         retencionesRecibidas,
         ncsRecibidas: ncsRecibidasVista,
         totales,
+        cedulaNoAprobada: { cantidad: cedulaNoAprobadaCandidatas, excluidas: excluirCedulaNoAprobada },
         gastosPersonalesExcluidos,
       },
     });
@@ -270,6 +307,7 @@ router.get('/exportar', async (req, res) => {
   try {
     const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
     const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const excluirCedulaNoAprobada = req.query.excluirCedulaNoAprobada === 'true';
     const { desde, hasta } = rangoPeriodo(mes, anio);
     const empresaId = req.empresa.id;
     const config = await getConfigSRI(empresaId);
@@ -287,7 +325,7 @@ router.get('/exportar', async (req, res) => {
         orderBy: { secuencial: 'asc' },
       }),
       prisma.facturas_compra.findMany({
-        where: whereComprasAts({ empresaId, anulada: false, ...periodoWhere }),
+        where: whereComprasAts({ empresaId, anulada: false, ...periodoWhere }, excluirCedulaNoAprobada),
         include: {
           retenciones: {
             where: { anulada: false },
@@ -590,6 +628,7 @@ router.get('/exportar/pdf', async (req, res) => {
   try {
     const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
     const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const excluirCedulaNoAprobada = req.query.excluirCedulaNoAprobada === 'true';
     const { desde, hasta } = rangoPeriodo(mes, anio);
     const empresaId = req.empresa.id;
     const config = await getConfigSRI(empresaId);
@@ -602,7 +641,7 @@ router.get('/exportar/pdf', async (req, res) => {
       prisma.facturas.findMany({ where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere } }),
       prisma.liquidaciones_compra.findMany({ where: { empresaId, estadoSri: 'AUTORIZADO', ...periodoWhere } }),
       prisma.facturas_compra.findMany({
-        where: whereComprasAts({ empresaId, anulada: false, ...periodoWhere }),
+        where: whereComprasAts({ empresaId, anulada: false, ...periodoWhere }, excluirCedulaNoAprobada),
         include: { retenciones: { where: { anulada: false } } },
       }),
       prisma.notas_credito.findMany({ where: { empresaId, estadoSri: 'AUTORIZADO', fechaEmision: { gte: desde, lte: hasta } } }),
