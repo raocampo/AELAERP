@@ -602,14 +602,43 @@ function F101View({ data }) {
   if (!data?.ingresos || !data?.gastos || !data?.retenciones) return null;
   const { ingresos, gastos, retenciones, nota } = data;
   const utilidadBruta = ingresos.totalFacturado - gastos.totalCompras;
+  const [vista, setVista] = useState('resumen'); // 'resumen' | 'formulario'
+
+  const descargarPdf = async () => {
+    try {
+      const res = await api.get(`/declaraciones/f101/pdf?anio=${data.anio}`, { responseType: 'blob' });
+      const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.setAttribute('download', `f101_${data.anio}.pdf`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo generar el PDF del Formulario 101');
+    }
+  };
 
   return (
     <div className="decl-formulario">
       <div className="decl-formulario-header">
         <span className="decl-form-badge">F101</span>
         <span>Resumen Anual IR — {data.anio}</span>
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+          <div className="decl-vista-toggle">
+            <button className={vista === 'resumen' ? 'active' : ''} onClick={() => setVista('resumen')}>Resumen</button>
+            <button className={vista === 'formulario' ? 'active' : ''} onClick={() => setVista('formulario')}>Formulario</button>
+          </div>
+          <button className="btn-secondary" onClick={descargarPdf}>
+            📄 Generar Formulario (PDF)
+          </button>
+        </div>
       </div>
 
+      {vista === 'formulario' && data.casilleros ? (
+        <F101FormularioView casilleros={data.casilleros} balance={data.balance} />
+      ) : (
       <div className="decl-secciones">
         <section className="decl-seccion">
           <h3>Ingresos del ejercicio</h3>
@@ -628,6 +657,9 @@ function F101View({ data }) {
         <section className="decl-seccion">
           <h3>Retenciones</h3>
           <FilaDecl label="Comprobantes de retención emitidos" valor={retenciones.cantidadComprobantes} />
+          {retenciones.totalRetencionRentaRecibida > 0 && (
+            <FilaDecl label="Retención de renta recibida en el año" valor={fmtNum(retenciones.totalRetencionRentaRecibida)} />
+          )}
         </section>
 
         <section className={`decl-resultado ${utilidadBruta >= 0 ? 'credito' : 'a-pagar'}`}>
@@ -639,6 +671,50 @@ function F101View({ data }) {
           ⚠️ {nota}
         </div>
       </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Vista "tipo formulario" del F101 — solo los ~7 casilleros que AELA
+// puede respaldar con datos reales (ingresos/costos netos, utilidad
+// contable, retención de renta recibida y, si Contabilidad está activa,
+// Activo/Pasivo/Patrimonio). El F101 real tiene 869 casilleros — ver el
+// aviso y la nota al pie sobre lo que queda fuera. ──────────────────────────
+function F101FormularioView({ casilleros, balance }) {
+  return (
+    <div className="decl-formvista">
+      <div className="decl-formvista-seccion">
+        <h4>TOTALES DISPONIBLES CON DATOS DEL SISTEMA</h4>
+        <table className="decl-tabla decl-tabla-formvista">
+          <thead>
+            <tr>
+              <th style={{ width: 100 }}>Casillero</th>
+              <th>Descripción</th>
+              <th style={{ textAlign: 'right', width: 130 }}>Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {casilleros.map((f, i) => (
+              <tr key={i} className={f.destacado ? 'decl-tabla-total' : ''}>
+                <td><span className="decl-formvista-cas">{f.cas}</span></td>
+                <td>{f.desc}</td>
+                <td style={{ textAlign: 'right' }}>{fmt(f.valor)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!balance && (
+        <p style={{ fontSize: 12, color: '#b45309', margin: 0 }}>
+          ⚠ Casilleros 499/599/698 (Balance General) no disponibles — el módulo de Contabilidad no tiene asientos registrados para este ejercicio.
+        </p>
+      )}
+      <p className="decl-formvista-nota">
+        El F101 real tiene 869 casilleros (balance NIIF completo + conciliación tributaria: participación a trabajadores,
+        gastos no deducibles, amortización de pérdidas, ISD, etc.) — este resumen cubre solo los totales grandes que AELA
+        puede calcular con datos reales. El resto requiere llenado manual con un contador.
+      </p>
     </div>
   );
 }

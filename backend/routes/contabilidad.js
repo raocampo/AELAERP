@@ -3152,4 +3152,10 @@ router.post('/cierre-ejercicio', autorizarPermiso('contabilidad.gestionar'), asy
   }
 });
 
+// obtenerBalanceGeneral se reutiliza desde routes/declaraciones.js (F101 —
+// totales de Activo/Pasivo/Patrimonio, casilleros 499/599/698 del formulario
+// real) — se cuelga como propiedad del router en vez de mover la función a
+// utils/contabilidad.js para no arriesgar tocar el resto de este archivo.
+router.obtenerBalanceGeneral = obtenerBalanceGeneral;
+
 module.exports = router;

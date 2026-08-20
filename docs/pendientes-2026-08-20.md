@@ -136,9 +136,72 @@ de retenido, 346C sin mapeo) — JSON y PDF confirmados coincidentes:
 303→303/353, 331→331/"—", 346C→"(!)"/"(!)". `node --test`: 49/49. `vite
 build`: sin errores. Datos de prueba eliminados al terminar.
 
+## 4. Continuación — F101 (con investigación previa a implementar)
+
+Tercer "sigue con lo planificado". Dado que F101 es un salto de escala
+real frente a F103/F104 (869 casilleros vs ~30-90), se le preguntó al
+usuario cómo avanzar antes de escribir código — eligió "investigar la
+guía oficial primero" en vez de implementar directo con la propuesta
+acotada o pausar del todo.
+
+### Investigación
+
+Se descargó la guía oficial de 177 páginas
+(`sri.gob.ec/formularios-e-instructivos`, "Guía Sociedades.pdf") y se
+confirmó contra el Excel de diseño (869 filas, ya descargado el
+2026-08-19) que el F101 real es un balance completo estilo NIIF
+(activos/pasivos/patrimonio desglosados a un nivel que AELA no maneja —
+ej. "deterioro acumulado de cuentas por cobrar comerciales
+relacionadas", "plantas productoras agricultura") más una sección de
+conciliación tributaria (participación a trabajadores 15%, gastos no
+deducibles, amortización de pérdidas de años anteriores, ajustes por
+precios de transferencia, ISD) que AELA no calcula en ningún lugar hoy.
+
+Se extrajeron los casilleros de los **totales grandes** (los únicos con
+una fuente de datos real y verificable en el sistema):
+`499` Total Activo, `599` Total Pasivo, `698` Total Patrimonio, `699`
+Pasivo+Patrimonio, `6999` Total Ingresos, `7999` Total Costos y Gastos,
+`801`/`802` Utilidad/Pérdida del ejercicio, `857` Retenciones de renta
+recibidas, `902` Total impuesto a pagar, `999` Total pagado.
+
+### Implementación (alcance acotado, igual honestidad que F103/F104)
+
+`calcularF101()` extraída (antes vivía inline en el handler) — ahora
+calcula ingresos/costos **netos de IVA** (antes el resumen viejo
+mezclaba `importeTotal` con IVA incluido, lo cual no es el dato correcto
+para un casillero de ingresos/gastos), utilidad contable, y retenciones
+de renta recibidas (`retenciones_recibidas.totalRetencionRenta`, dato
+que ya existía en el sistema pero nunca se usaba para F101).
+
+**Activo/Pasivo/Patrimonio (499/599/698) reutilizan `obtenerBalanceGeneral()`
+de Contabilidad** — cruce entre módulos: se colgó la función como
+propiedad del router exportado en `contabilidad.js` (`router.obtenerBalanceGeneral = ...`,
+antes de `module.exports = router`) en vez de moverla a
+`utils/contabilidad.js`, para no tocar el resto de ese archivo. Si el
+tenant no tiene Contabilidad activa (plan de cuentas vacío/sin
+asientos), `balance` sale `null` y esos 3 casilleros no se muestran —
+no se inventa un cero falso.
+
+`GET /f101/pdf` nuevo (mismo patrón que F103/F104), `F101FormularioView`
+en el frontend con el mismo toggle. Al final del PDF se listan
+explícitamente las categorías completas que quedan fuera (balance
+detallado NIIF, conciliación tributaria, IR único de sectores
+especializados, partes relacionadas/APS).
+
+### Verificado
+
+Contra el tenant local real (empresaId=1, que sí tiene Contabilidad
+activa con asientos): `499/599/698` = $276.54/$66.54/$210.00, cuadrado
+(`balanceado: true`) — coincide exacto con lo que ya mostraba
+Contabilidad → Balance General. `6999` = $210.00 (neto de IVA, factura
+real de julio con subtotal15=$210). Probado también con un año sin
+datos (2020): `balance: null`, solo 4 casilleros base, sin error.
+`node --test`: 49/49. `vite build`: sin errores. No se tocó ni insertó
+ningún dato — todo verificado contra datos reales ya existentes.
+
 ## Pendiente para retomar
 
 Nada de esto se probó en navegador real. Sugerir al usuario:
-Declaraciones → F104 y F103 → toggle "Formulario" (vista nueva en ambos),
-y ATS → generar talón PDF de cualquier período con compras No Obj./Exento
-para confirmar visualmente las 2 columnas separadas.
+Declaraciones → F104, F103 y F101 → toggle "Formulario" (vista nueva en
+los 3), y ATS → generar talón PDF de cualquier período con compras No
+Obj./Exento para confirmar visualmente las 2 columnas separadas.

@@ -20,6 +20,9 @@ const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
 const { condicionComprasDeducibles, CUTOFF_APROBACION_CEDULA } = require('../utils/comprasFiscal');
+// obtenerBalanceGeneral vive en routes/contabilidad.js (colgada del router,
+// ver comentario ahí) — se reutiliza para los casilleros 499/599/698 del F101.
+const { obtenerBalanceGeneral } = require('./contabilidad');
 
 router.use(proteger);
 router.use(requiereModulo('tributarioHabilitado'));
@@ -1083,53 +1086,208 @@ router.get('/f103/pdf', async (req, res) => {
 
 // ─── GET /f101 — Resumen anual (datos para IR) ─────────────────────────────────
 // Query: ?anio=2025
+// ─── calcularF101 — datos del F101 (IR anual), reutilizado por el endpoint
+// JSON y por el PDF. NO es un sustituto del F101 real: el formulario oficial
+// (confirmado 2026-08-20 contra la guía de 177 páginas + el Excel de diseño
+// del SRI, ambos descargados de sri.gob.ec/formularios-e-instructivos) tiene
+// 869 filas — un balance completo estilo NIIF (activos/pasivos/patrimonio
+// desglosados a un nivel que AELA no maneja, ej. "deterioro acumulado de
+// cuentas por cobrar comerciales relacionadas") más una sección de
+// conciliación tributaria (participación trabajadores, gastos no deducibles,
+// amortización de pérdidas de años anteriores, ISD, etc.) que AELA no calcula
+// en ningún lugar hoy. Este cálculo cubre SOLO los totales grandes que sí
+// tienen una fuente de datos real y verificable en el sistema: ingresos y
+// costos/gastos netos de IVA (facturas/compras), utilidad o pérdida contable
+// del ejercicio, retenciones de renta recibidas, y — si el tenant tiene el
+// módulo de Contabilidad activo con asientos — los totales de Activo/Pasivo/
+// Patrimonio del balance general real.
+async function calcularF101(db, empresaId, anio) {
+  const { desde, hasta } = rangoAnio(anio);
+  const filtroFecha = { gte: desde, lte: hasta };
+
+  const [facturas, compras, retenciones, retencionesRecibidas] = await Promise.all([
+    db.facturas.aggregate({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS } },
+      _sum:   { importeTotal: true, totalIva: true },
+      _count: { id: true },
+    }),
+    db.facturas_compra.aggregate({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false, OR: condicionComprasDeducibles() },
+      _sum:   { importeTotal: true, totalIva: true },
+      _count: { id: true },
+    }),
+    db.retenciones.aggregate({
+      where: { empresaId, fechaEmision: filtroFecha, estadoSri: 'AUTORIZADO' },
+      _count: { id: true },
+    }),
+    db.retenciones_recibidas.aggregate({
+      where: { empresaId, fechaEmision: filtroFecha, anulada: false },
+      _sum: { totalRetencionRenta: true },
+    }),
+  ]);
+
+  // Ingresos/costos NETOS de IVA (importeTotal ya incluye IVA — para el
+  // casillero real hace falta la base imponible, no el total facturado).
+  const ingresosNetos = parseFloat((d(facturas._sum.importeTotal) - d(facturas._sum.totalIva)).toFixed(2));
+  const costosGastosNetos = parseFloat((d(compras._sum.importeTotal) - d(compras._sum.totalIva)).toFixed(2));
+  const utilidadContable = parseFloat((ingresosNetos - costosGastosNetos).toFixed(2));
+
+  // Balance general (Activo/Pasivo/Patrimonio) — solo si el tenant tiene
+  // Contabilidad activa con asientos reales; si el plan de cuentas está
+  // vacío o el módulo no se usa, obtenerBalanceGeneral devuelve todo en 0,
+  // que se interpreta como "no disponible" para no mostrar un cero falso.
+  let balance = null;
+  try {
+    const bg = await obtenerBalanceGeneral(empresaId, hasta);
+    if (bg && (bg.totalActivos !== 0 || bg.totalPasivos !== 0 || bg.totalPatrimonioNeto !== 0)) {
+      balance = {
+        totalActivos: bg.totalActivos,
+        totalPasivos: bg.totalPasivos,
+        totalPatrimonio: bg.totalPatrimonioNeto,
+        balanceado: bg.balanceado,
+      };
+    }
+  } catch (err) {
+    console.error('F101: no se pudo obtener balance general (Contabilidad puede no estar activa):', err.message);
+  }
+
+  return {
+    anio,
+    ingresos: {
+      totalFacturado: d(facturas._sum.importeTotal),
+      totalIvaVentas: d(facturas._sum.totalIva),
+      cantidadFacturas: facturas._count.id,
+    },
+    gastos: {
+      totalCompras: d(compras._sum.importeTotal),
+      totalIvaCompras: d(compras._sum.totalIva),
+      cantidadCompras: compras._count.id,
+    },
+    retenciones: {
+      cantidadComprobantes: retenciones._count.id,
+      totalRetencionRentaRecibida: d(retencionesRecibidas._sum.totalRetencionRenta),
+    },
+    resultado: {
+      ingresosNetos,
+      costosGastosNetos,
+      utilidadContable,
+    },
+    balance,
+    nota: 'Este resumen es orientativo. Consulte a un contador para el llenado oficial del F101.',
+  };
+}
+
+// ─── casillerosF101 — filas "tipo formulario oficial" del F101, a partir de
+// un f101 ya calculado. Función pura, reutilizada por GET /f101 (vista en
+// pantalla) y GET /f101/pdf.
+function casillerosF101(f101) {
+  const r = f101.resultado;
+  const filas = [
+    { cas: '6999', desc: 'TOTAL INGRESOS (neto de IVA)', valor: r.ingresosNetos, destacado: true },
+    { cas: '7999', desc: 'TOTAL COSTOS Y GASTOS (neto de IVA)', valor: r.costosGastosNetos, destacado: true },
+    { cas: r.utilidadContable >= 0 ? '801' : '802', desc: r.utilidadContable >= 0 ? 'UTILIDAD DEL EJERCICIO (contable, antes de conciliación tributaria)' : 'PÉRDIDA DEL EJERCICIO (contable, antes de conciliación tributaria)', valor: Math.abs(r.utilidadContable), destacado: true },
+    { cas: '857', desc: '(-) Retenciones en la fuente de renta que le han sido efectuadas en el ejercicio', valor: f101.retenciones.totalRetencionRentaRecibida },
+  ];
+  if (f101.balance) {
+    filas.push(
+      { cas: '499', desc: 'TOTAL DEL ACTIVO (Balance General de Contabilidad)', valor: f101.balance.totalActivos },
+      { cas: '599', desc: 'TOTAL DEL PASIVO (Balance General de Contabilidad)', valor: f101.balance.totalPasivos },
+      { cas: '698', desc: 'TOTAL DEL PATRIMONIO (Balance General de Contabilidad)', valor: f101.balance.totalPatrimonio },
+    );
+  }
+  return filas;
+}
+
 router.get('/f101', async (req, res) => {
   try {
     const anio = parseInt(req.query.anio) || new Date().getFullYear();
-    const { desde, hasta } = rangoAnio(anio);
     const empresaId = req.empresa.id;
     const db = req.prisma || prisma;
-    const filtroFecha = { gte: desde, lte: hasta };
 
-    const [facturas, compras, retenciones] = await Promise.all([
-      db.facturas.aggregate({
-        where: { empresaId, fechaEmision: filtroFecha, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS } },
-        _sum:   { importeTotal: true, totalIva: true },
-        _count: { id: true },
-      }),
-      db.facturas_compra.aggregate({
-        where: { empresaId, fechaEmision: filtroFecha, anulada: false, OR: condicionComprasDeducibles() },
-        _sum:   { importeTotal: true, totalIva: true },
-        _count: { id: true },
-      }),
-      db.retenciones.aggregate({
-        where: { empresaId, fechaEmision: filtroFecha, estadoSri: 'AUTORIZADO' },
-        _count: { id: true },
-      }),
-    ]);
-
-    res.json({
-      ok: true,
-      data: {
-        anio,
-        ingresos: {
-          totalFacturado: d(facturas._sum.importeTotal),
-          totalIvaVentas: d(facturas._sum.totalIva),
-          cantidadFacturas: facturas._count.id,
-        },
-        gastos: {
-          totalCompras: d(compras._sum.importeTotal),
-          totalIvaCompras: d(compras._sum.totalIva),
-          cantidadCompras: compras._count.id,
-        },
-        retenciones: {
-          cantidadComprobantes: retenciones._count.id,
-        },
-        nota: 'Este resumen es orientativo. Consulte a un contador para el llenado oficial del F101.',
-      },
-    });
+    const f101 = await calcularF101(db, empresaId, anio);
+    f101.casilleros = casillerosF101(f101);
+    res.json({ ok: true, data: f101 });
   } catch (err) {
     console.error('Error F101:', err);
+    res.status(500).json({ ok: false, mensaje: err.message });
+  }
+});
+
+// ─── GET /f101/pdf — Documento de apoyo para el llenado del Formulario 101 ─────
+// NO es el formulario oficial ni lo reemplaza — cubre solo los ~7 casilleros
+// de "totales grandes" que AELA puede respaldar con datos reales (ver
+// calcularF101 arriba). El resto de los 869 casilleros del F101 real
+// (balance NIIF detallado + conciliación tributaria completa) requieren
+// llenado manual por un contador — se listan las categorías principales al
+// final, igual que en F103/F104.
+router.get('/f101/pdf', async (req, res) => {
+  try {
+    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const empresaId = req.empresa.id;
+    const db = req.prisma || prisma;
+
+    const f101 = await calcularF101(db, empresaId, anio);
+    const filas = casillerosF101(f101);
+    const config = await db.configuracion_sri.findFirst({ where: { empresaId } });
+    const money = (v) => `$${Number(v || 0).toFixed(2)}`;
+
+    const doc = crearDocumentoPdf(res, `f101_${anio}.pdf`);
+    dibujarEncabezadoContable(doc, config, 'Formulario 101 — Impuesto a la Renta Sociedades (resumen)');
+
+    doc.fontSize(9).font('Helvetica-Bold').text(`Ejercicio fiscal: ${anio}`, { align: 'center' });
+    doc.font('Helvetica').fontSize(8).fillColor('#94a3b8')
+      .text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`, { align: 'center' })
+      .fillColor('#000000');
+    doc.moveDown(0.3);
+
+    const ML = doc.page.margins.left;
+    const Wtotal = doc.page.width - ML - doc.page.margins.right;
+    const yAviso = doc.y;
+    const textoAviso = 'Documento de apoyo — NO es el formulario oficial ni lo reemplaza. El F101 real tiene 869 casilleros (balance NIIF completo + conciliación tributaria); este resumen cubre solo los totales grandes que AELA puede calcular con datos reales. Consulte a un contador para el llenado oficial.';
+    const altoAviso = doc.heightOfString(textoAviso, { width: Wtotal - 12 }) + 10;
+    doc.rect(ML, yAviso, Wtotal, altoAviso).fillAndStroke('#fef3c7', '#f59e0b');
+    doc.fillColor('#78350f').fontSize(7.5).font('Helvetica')
+      .text(textoAviso, ML + 6, yAviso + 5, { width: Wtotal - 12 });
+    doc.fillColor('#000000');
+    doc.y = yAviso + altoAviso + 8;
+    doc.x = ML;
+
+    const columnas = [
+      { header: 'Casillero', key: 'cas',   width: 70 },
+      { header: 'Descripción', key: 'desc', width: 340 },
+      { header: 'Valor', key: 'valor', width: 90, align: 'right', formato: money },
+    ];
+
+    doc.fontSize(10).font('Helvetica-Bold').text('TOTALES DISPONIBLES CON DATOS DEL SISTEMA');
+    doc.y = dibujarTablaPdf(doc, columnas, filas, doc.y);
+    doc.moveDown(0.3);
+
+    if (!f101.balance) {
+      doc.fontSize(7.5).fillColor('#b45309')
+        .text('Casilleros 499/599/698 (Balance General) no disponibles — el módulo de Contabilidad no tiene asientos registrados para este ejercicio en esta empresa.')
+        .fillColor('#000000');
+      doc.moveDown(0.3);
+    }
+
+    doc.fontSize(9).font('Helvetica-Bold')
+      .text(`${f101.ingresos.cantidadFacturas} factura(s) de venta, ${f101.gastos.cantidadCompras} compra(s), ${f101.retenciones.cantidadComprobantes} comprobante(s) de retención emitidos en el ejercicio.`);
+    doc.moveDown(0.5);
+
+    if (doc.y > 600) doc.addPage();
+    doc.fontSize(9).font('Helvetica-Bold').text('Casilleros no incluidos — requieren llenado manual con un contador');
+    doc.font('Helvetica').fontSize(7.5).fillColor('#334155');
+    [
+      'Balance detallado por cuenta (activos/pasivos/patrimonio desglosados a nivel NIIF, ej. deterioro de cartera, activos biológicos, propiedad planta y equipo por categoría): el plan de cuentas de AELA no llega a ese nivel de detalle.',
+      'Conciliación tributaria completa: participación a trabajadores (15%), gastos no deducibles, ingresos exentos, amortización de pérdidas tributarias de años anteriores, ajustes por precios de transferencia — nada de esto se calcula en AELA hoy.',
+      'Impuesto a la Renta causado, anticipo, crédito tributario por ISD, reducciones de tarifa por reinversión o incentivos — requieren la conciliación tributaria completa primero.',
+      'Impuesto a la Renta Único (banano, agropecuario, pronósticos deportivos) y regímenes especiales (RIMPE, ZEDE): sectores especializados no soportados.',
+      'Operaciones con partes relacionadas y anexo de composición societaria (APS): información societaria que AELA no registra.',
+    ].forEach((linea) => { doc.text(`• ${linea}`); doc.moveDown(0.15); });
+    doc.fillColor('#000000');
+
+    doc.end();
+  } catch (err) {
+    console.error('Error F101 PDF:', err);
     res.status(500).json({ ok: false, mensaje: err.message });
   }
 });
