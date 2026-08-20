@@ -283,3 +283,81 @@ simple (50% del impuesto causado del año anterior, usando la utilidad
 CONTABLE como aproximación del impuesto causado, con la advertencia
 explícita de que no incluye conciliación tributaria) o esperar a tener
 el impuesto causado real?
+
+## 6. Investigación Anexo RDEP + hallazgo urgente: tabla LORTI de nómina desactualizada
+
+Siguiendo el roadmap "Camino a AELA PRO" (Anexo RDEP como siguiente
+candidato, ya que la nómina está completa), se leyeron dos fuentes
+oficiales del SRI: el instructivo de generación desde Excel (mecanismo:
+plantilla de 2 hojas → exportar XML con Programador/XML Tools de Excel →
+subir con DIMM Multiplataforma) y, más importante, la **Ficha Técnica
+RDEP 2023** (26 páginas, catálogo completo de campos, descargada de
+sri.gob.ec).
+
+### RDEP es más grande de lo que asumía el roadmap
+
+El catálogo real de RDEP pide datos que AELA hoy **no captura en
+absoluto** en el modelo `empleados`: discapacidad (tipo/condición/%,
+dependiente a quien sustituye), beneficio provincia de Galápagos,
+enfermedad catastrófica/rara/huérfana, código de establecimiento SRI,
+residencia/país (si es extranjero) y convenio de doble imposición — y,
+el más importante, la **proyección de gastos personales por categoría**
+(vivienda/salud/educación/alimentación/vestimenta/turismo) que cada
+empleado debe declarar y que alimenta una fórmula legal de "rebaja"
+(tabla basada en canasta familiar básica × cargas familiares, tope
+18%). Ninguno de estos campos existe hoy en el módulo de Empleados.
+
+Una v1 acotada (defaults seguros: residente local, sin discapacidad,
+sin Galápagos, gastos personales = 0) es técnicamente construible y
+razonable para la PYME típica de AELA — pero es un anexo real que se
+presenta al SRI, no un reporte interno: si un empleado real tiene una
+discapacidad y el sistema lo reporta como "no aplica" por default, eso
+es un error de fondo, no solo una cifra optimista. Se dejó sin
+implementar, pendiente de que el usuario decida si vale la pena
+capturar esos campos nuevos en Empleados primero.
+
+### Hallazgo no buscado, más urgente: tabla LORTI 2024 desactualizada en producción
+
+Al revisar cómo AELA calcula hoy el Impuesto a la Renta de nómina (para
+comparar contra la metodología exacta que pide RDEP), se encontró que
+`calcularImpuestoRentaMensual()` en
+[backend/routes/talentoHumano.js](../backend/routes/talentoHumano.js)
+usaba una tabla LORTI **fechada 2024** (`TABLA_LORTI_2024`), con 8
+tramos y tarifa máxima 35%. Esta función corre en cada cálculo de
+retención de nómina real — no es un cálculo hipotético para RDEP, es
+lo que ya se está usando para pagar sueldos.
+
+Se descargó y leyó la **Resolución NAC-DGERCGC25-00000043** del SRI
+(vigente desde 01/01/2026, que actualiza los rangos del Art. 36 LRTI
+por la variación del IPC a noviembre 2025). La tabla oficial 2026 tiene
+**9 tramos** — todos los umbrales corridos hacia arriba por la
+inflación acumulada de 2 años, y agrega un **tramo nuevo del 37%**
+(sobre USD 109,956) que no existía en el código.
+
+**Corregido**: se reemplazó `TABLA_LORTI_2024` por `TABLA_LORTI_2026`
+con los 9 tramos oficiales, y se corrigió el campo de respuesta
+`tablaAnio: 2024` (hardcodeado, quedaba desincronizado del comentario)
+a `2026`. Verificado end-to-end: empleado QATEST temporal (salario
+$3000, empresaId=1, eliminado después de la prueba) vía
+`GET /api/talento-humano/nomina/calcular-ir/:id` — base imponible
+$36,078 cae en el tramo 20% (35,136–46,575), IR anual calculado
+$2,866.40 = $2,678 + ($36,078−$35,136)×0.20, verificado a mano y
+también con un script standalone que compara los 5 límites exactos de
+tramo contra los valores oficiales de la resolución — todos coinciden.
+
+No se tocó la metodología de `gastosPersonalesAnuales` (deducción
+directa de la base, en vez de la rebaja post-tabla que exige la ley
+desde 2022) porque hoy nadie le pasa un valor distinto de 0 — es un
+hallazgo dormido, no un bug activo. Si se retoma RDEP, esa fórmula sí
+hay que implementarla correcta (tabla CFB × cargas), porque el propio
+casillero "Rebaja por gastos personales" del anexo la exige.
+
+### Pendiente
+
+- Anexo RDEP: sin implementar, bloqueado por decisión del usuario sobre
+  capturar campos nuevos en Empleados (ver arriba).
+- `gastosPersonalesAnuales`: metodología pre-2022, dormida pero
+  incorrecta si algún día se activa — documentado, no arreglado hoy.
+- La tabla LORTI debe actualizarse cada diciembre con la resolución
+  anual del SRI (mismo patrón que `SBU_ECUADOR`, ya documentado en el
+  comentario del código).
