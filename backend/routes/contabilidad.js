@@ -905,6 +905,106 @@ async function cerrarEjercicioAnual(empresaId, anio, usuarioId) {
   return { asiento, utilidadNeta, cuentasCerradas: cuentasHoja.length, cuentaResultado: { id: cuentaResultado.id, codigo: cuentaResultado.codigo, nombre: cuentaResultado.nombre } };
 }
 
+// ─── Apertura del ejercicio siguiente — traspasa el resultado del ejercicio
+// recién cerrado ("Utilidad/Pérdida del Ejercicio") a la cuenta de patrimonio
+// permanente ("Resultados/Ganancias Acumuladas"), continuación natural de
+// cerrarEjercicioAnual. Pura mecánica contable de partida doble — no
+// involucra ninguna fórmula tributaria (a diferencia del Anticipo de
+// Impuesto a la Renta, que quedó pendiente el 2026-08-20 al descubrir que el
+// Art. 41 LRTI vigente ya no tiene la fórmula clásica 0.2%/0.4% que se
+// recordaba — ver docs/pendientes-2026-08-20.md).
+//
+// Encuentra la cuenta de resultado REAL que usó el cierre (leyendo la línea
+// del propio asiento de cierre por su descripción, no re-derivando con la
+// misma regex que cerrarEjercicioAnual) para no arriesgar una inconsistencia
+// si el plan de cuentas cambió entre el cierre y la apertura. La cuenta
+// destino "acumulados" se busca por nombre (/acumulad/i) entre las cuentas
+// de patrimonio que aceptan movimiento — funciona tanto con el plan base
+// (una sola cuenta "Resultados Acumulados") como con el plan NIIF/Supercías
+// (cuentas separadas "GANACIAS ACUMULADAS" / "(-) PÉRDIDAS ACUMULADAS").
+async function abrirEjercicioSiguiente(empresaId, anioCerrado, usuarioId) {
+  const inicio = new Date(anioCerrado, 0, 1);
+  const fin = endOfDay(new Date(anioCerrado, 11, 31));
+
+  const cierre = await prisma.asientos_contables.findFirst({
+    where: { empresaId, tipo: 'CIERRE_ANUAL', fecha: { gte: inicio, lte: fin } },
+    include: { detalles: { include: { cuenta: true } } },
+  });
+  if (!cierre) {
+    const err = new Error(`El ejercicio ${anioCerrado} todavía no ha sido cerrado — ciérrelo primero.`);
+    err.status = 400;
+    throw err;
+  }
+
+  const anioSiguiente = anioCerrado + 1;
+  const yaExiste = await prisma.asientos_contables.findFirst({
+    where: { empresaId, tipo: 'APERTURA_EJERCICIO', referencia: `APERTURA-${anioSiguiente}` },
+  });
+  if (yaExiste) {
+    const err = new Error(`La apertura del ejercicio ${anioSiguiente} ya fue registrada (asiento ${yaExiste.numero}).`);
+    err.status = 400;
+    throw err;
+  }
+
+  const lineaResultado = cierre.detalles.find((det) =>
+    new RegExp(`^(Utilidad|P.rdida) del ejercicio ${anioCerrado}$`, 'i').test((det.descripcion || '').trim())
+  );
+  if (!lineaResultado) {
+    const err = new Error(`No se pudo identificar la línea de resultado en el asiento de cierre ${cierre.numero}.`);
+    err.status = 400;
+    throw err;
+  }
+  const montoResultado = round2(Number(lineaResultado.haber) - Number(lineaResultado.debe));
+  if (montoResultado === 0) {
+    const err = new Error(`El resultado del ejercicio ${anioCerrado} es cero — no hay nada que traspasar.`);
+    err.status = 400;
+    throw err;
+  }
+
+  const filasPatrimonio = await construirJerarquiaContable(empresaId, ['PATRIMONIO'], {});
+  const candidatosAcumulado = filasPatrimonio.filter((f) => f.aceptaMovimiento && /acumulad/i.test(f.nombre));
+  if (!candidatosAcumulado.length) {
+    const err = new Error('No se encontró una cuenta de patrimonio "Resultados/Ganancias Acumuladas" que acepte movimiento. Créala en el Plan de Cuentas antes de abrir el ejercicio.');
+    err.status = 400;
+    throw err;
+  }
+  const esPerdida = /p.rdida/i;
+  let cuentaDestino;
+  if (montoResultado >= 0) {
+    cuentaDestino = candidatosAcumulado.find((c) => !esPerdida.test(c.nombre) && !c.nombre.trim().startsWith('(-)')) || candidatosAcumulado[0];
+  } else {
+    cuentaDestino = candidatosAcumulado.find((c) => esPerdida.test(c.nombre) || c.nombre.trim().startsWith('(-)')) || candidatosAcumulado[0];
+  }
+
+  const monto = Math.abs(montoResultado);
+  const detalles = montoResultado >= 0
+    ? [
+        { cuentaId: lineaResultado.cuentaId, debe: monto, haber: 0, descripcion: `Apertura ${anioSiguiente} — traspaso resultado ${anioCerrado} a acumulados` },
+        { cuentaId: cuentaDestino.id, debe: 0, haber: monto, descripcion: `Apertura ${anioSiguiente} — resultado ${anioCerrado} (${cuentaDestino.nombre})` },
+      ]
+    : [
+        { cuentaId: lineaResultado.cuentaId, debe: 0, haber: monto, descripcion: `Apertura ${anioSiguiente} — traspaso resultado ${anioCerrado} a acumulados` },
+        { cuentaId: cuentaDestino.id, debe: monto, haber: 0, descripcion: `Apertura ${anioSiguiente} — resultado ${anioCerrado} (${cuentaDestino.nombre})` },
+      ];
+
+  const asiento = await crearAsientoContable({
+    empresaId,
+    fecha: new Date(anioSiguiente, 0, 1),
+    descripcion: `Apertura de ejercicio ${anioSiguiente} — traspaso de resultado ${anioCerrado}`,
+    tipo: 'APERTURA_EJERCICIO',
+    referencia: `APERTURA-${anioSiguiente}`,
+    usuarioId,
+    detalles,
+    cerrado: true,
+  });
+
+  return {
+    asiento, anioCerrado, anioSiguiente, montoResultado,
+    cuentaResultado: { id: lineaResultado.cuentaId, nombre: lineaResultado.cuenta?.nombre },
+    cuentaDestino: { id: cuentaDestino.id, codigo: cuentaDestino.codigo, nombre: cuentaDestino.nombre },
+  };
+}
+
 async function obtenerConsultasResumen(empresaId, filtros = {}) {
   const where = construirWhereAsientos(empresaId, filtros);
   const asientos = await prisma.asientos_contables.findMany({
@@ -3149,6 +3249,20 @@ router.post('/cierre-ejercicio', autorizarPermiso('contabilidad.gestionar'), asy
   } catch (error) {
     console.error('POST /contabilidad/cierre-ejercicio:', error);
     res.status(error.status || 500).json({ success: false, mensaje: error.message || 'Error al cerrar el ejercicio anual' });
+  }
+});
+
+// POST /api/contabilidad/apertura-ejercicio
+router.post('/apertura-ejercicio', autorizarPermiso('contabilidad.gestionar'), async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const anioCerrado = parseInt(req.body?.anioCerrado, 10) || (new Date().getFullYear() - 1);
+    const data = await abrirEjercicioSiguiente(empresaId, anioCerrado, req.usuario?.id);
+    const signo = data.montoResultado >= 0 ? 'ganancia' : 'pérdida';
+    res.json({ success: true, data, mensaje: `Ejercicio ${data.anioSiguiente} abierto — ${signo} de $${Math.abs(data.montoResultado).toFixed(2)} de ${anioCerrado} trasladada a ${data.cuentaDestino.nombre}.` });
+  } catch (error) {
+    console.error('POST /contabilidad/apertura-ejercicio:', error);
+    res.status(error.status || 500).json({ success: false, mensaje: error.message || 'Error al abrir el ejercicio siguiente' });
   }
 });
 

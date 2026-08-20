@@ -199,9 +199,87 @@ datos (2020): `balance: null`, solo 4 casilleros base, sin error.
 `node --test`: 49/49. `vite build`: sin errores. No se tocó ni insertó
 ningún dato — todo verificado contra datos reales ya existentes.
 
+## 5. "Camino a AELA PRO" — auditoría de completitud + apertura de ejercicio
+
+El usuario preguntó qué le falta a AELA para cubrir todo lo comercial/
+administrativo/financiero/contable/tributario de una PYME. Se armó un
+roadmap actualizado (verificado contra el código de hoy, no contra la
+auditoría de hace 3 semanas — algunos ítems que esa memoria daba por
+pendientes ya estaban hechos) y se publicó como artifact. Recomendación:
+empezar por Anticipo de Impuesto a la Renta y Apertura automática de
+ejercicio — ambos son cálculo sobre datos que el sistema ya tiene.
+
+### Anticipo de Impuesto a la Renta — bloqueado, hallazgo importante
+
+Antes de escribir código se investigó el Art. 41 de la LRTI (bajado
+directo de `sri.gob.ec`, texto oficial codificado). **La fórmula clásica
+que se recordaba (0.2% patrimonio + 0.2% costos/gastos + 0.4% activos +
+0.4% ingresos) YA NO EXISTE en el texto vigente** — el artículo fue
+reformado varias veces (2016 dos veces, 2017) y hoy dice literalmente:
+*"El pago del impuesto podrá anticiparse de forma VOLUNTARIA, y será
+equivalente al 50% del impuesto a la renta causado del ejercicio fiscal
+anterior, menos las retenciones en la fuente efectuadas en dicho
+ejercicio"*. Confirmado además con el propio Excel del F101 (casilleros
+891/892 "Anticipo de Impuesto a la Renta pagado VOLUNTARIAMENTE").
+
+**Por qué sigue sin implementarse**: aunque la fórmula nueva es más
+simple, requiere "impuesto a la renta causado" (casillero 850) como
+insumo — y ese valor depende de la conciliación tributaria completa
+(participación trabajadores, gastos no deducibles, etc.) que el propio
+F101 de esta sesión dejó explícitamente fuera de alcance. Implementar el
+anticipo ahora significaría o inventar el impuesto causado (riesgo real)
+o bloquearse en la misma conciliación tributaria que ya se decidió no
+construir. Se pausa aquí — mismo criterio que la tabla de retenciones
+del 2026-07-29 (no adivinar, esperar a tener el dato de entrada
+confiable). Se le reportó el hallazgo al usuario en vez de implementar
+algo basado en una fórmula que ya no es la ley vigente.
+
+### Apertura de ejercicio siguiente — implementado
+
+Pura mecánica contable de partida doble, sin ninguna ambigüedad legal —
+continuación natural de `cerrarEjercicioAnual()` que ya existía. Nueva
+`abrirEjercicioSiguiente()` en `contabilidad.js`: encuentra la línea de
+resultado del asiento de CIERRE real (leyendo su descripción, no
+re-derivando con la misma regex del cierre — evita una posible
+inconsistencia si el plan de cuentas cambió entre cierre y apertura), y
+traspasa el monto a la cuenta de patrimonio "Resultados/Ganancias
+Acumuladas" (busca por `/acumulad/i` entre las cuentas de patrimonio con
+movimiento — funciona tanto con el plan base como con el NIIF/Supercías,
+que separa "GANACIAS ACUMULADAS" de "(-) PÉRDIDAS ACUMULADAS" en cuentas
+distintas). Nuevo `POST /contabilidad/apertura-ejercicio`, botón "📂
+Abrir ejercicio" en Contabilidad → Cierre y Estados, junto al de cierre.
+
+**Hallazgo de paso**: la búsqueda de la cuenta de resultado en
+`cerrarEjercicioAnual()` (regex `/utilidad|resultado/i`) NO encontraría
+ninguna cuenta en el plan NIIF/Supercías — sus cuentas de resultado se
+llaman "GANANCIA NETA DEL PERIODO" / "(-) PÉRDIDA NETA DEL PERIODO", sin
+las palabras "utilidad" ni "resultado". El cierre de ejercicio podría
+estar roto hoy para tenants con el plan Supercías (no confirmado con un
+tenant real que lo use — se documenta como sospecha, no como bug
+verificado). `abrirEjercicioSiguiente()` no depende de esa regex (usa la
+línea real del asiento de cierre), así que no hereda el problema.
+
+### Verificado
+
+Contra el tenant local, en un año 2019 aislado sin datos reales (0
+asientos previos) para no arriesgar los libros reales de empresaId=1:
+asiento de ingreso QATEST de $500 → cierre 2019 (utilidad $500 →
+"Utilidad del Ejercicio") → apertura 2020 (traspasa $500 de "Utilidad
+del Ejercicio" a "Resultados Acumulados", ambas cuentas correctas,
+partida cuadrada). Verificados también los 2 guardarraíles: apertura
+duplicada rechazada, apertura sin cierre previo rechazada con mensaje
+claro. Datos de prueba eliminados (cascade delete confirmado). `node
+--test`: 49/49. `vite build`: sin errores.
+
 ## Pendiente para retomar
 
 Nada de esto se probó en navegador real. Sugerir al usuario:
 Declaraciones → F104, F103 y F101 → toggle "Formulario" (vista nueva en
-los 3), y ATS → generar talón PDF de cualquier período con compras No
-Obj./Exento para confirmar visualmente las 2 columnas separadas.
+los 3); ATS → generar talón PDF de cualquier período con compras No
+Obj./Exento; Contabilidad → Cierre y Estados → probar "Abrir ejercicio"
+después de un cierre real. El Anticipo de Impuesto a la Renta queda
+pendiente de una decisión: ¿implementar solo la fórmula voluntaria
+simple (50% del impuesto causado del año anterior, usando la utilidad
+CONTABLE como aproximación del impuesto causado, con la advertencia
+explícita de que no incluye conciliación tributaria) o esperar a tener
+el impuesto causado real?

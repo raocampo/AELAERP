@@ -249,6 +249,8 @@ const ContabilidadHub = () => {
   const [cambiosPatrimonio, setCambiosPatrimonio] = useState(null);
   const [anioCierre, setAnioCierre] = useState(String(new Date().getFullYear()));
   const [cerrandoEjercicio, setCerrandoEjercicio] = useState(false);
+  const [anioApertura, setAnioApertura] = useState(String(new Date().getFullYear()));
+  const [abriendoEjercicio, setAbriendoEjercicio] = useState(false);
   const [estadosFiltros, setEstadosFiltros] = useState({ periodo: '', desde: '', hasta: '', fechaBalance: '' });
   const [asientoInicialForm, setAsientoInicialForm] = useState({
     periodo: '',
@@ -454,6 +456,28 @@ const ContabilidadHub = () => {
       toast.error(error.response?.data?.mensaje || 'Error al cerrar el ejercicio');
     } finally {
       setCerrandoEjercicio(false);
+    }
+  };
+
+  const abrirEjercicioSiguiente = async () => {
+    const anio = parseInt(anioApertura, 10);
+    if (!anio) return toast.error('Escribe un año válido');
+    const anioCerrado = anio - 1;
+    if (!window.confirm(
+      `¿Abrir el ejercicio ${anio}? Esto genera el asiento de apertura que traslada el resultado ` +
+      `del ejercicio ${anioCerrado} (ya cerrado) a la cuenta de patrimonio "Resultados/Ganancias ` +
+      `Acumuladas". Requiere que ${anioCerrado} ya esté cerrado. No se puede deshacer con un botón — ` +
+      `solo anulando el asiento manualmente si fue un error.`
+    )) return;
+    setAbriendoEjercicio(true);
+    try {
+      const res = await api.post('/contabilidad/apertura-ejercicio', { anioCerrado });
+      toast.success(res.data?.mensaje || 'Ejercicio abierto correctamente');
+      await cargarEstadosFinancieros();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al abrir el ejercicio siguiente');
+    } finally {
+      setAbriendoEjercicio(false);
     }
   };
 
@@ -2807,6 +2831,25 @@ const ContabilidadHub = () => {
               <div className="conta-form-actions" style={{ alignItems: 'flex-end' }}>
                 <button className="btn-danger-outline" disabled={cerrandoEjercicio} onClick={cerrarEjercicioAnual}>
                   {cerrandoEjercicio ? 'Cerrando...' : `🔒 Cerrar ejercicio ${anioCierre}`}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="conta-card">
+            <h3>📂 Apertura del ejercicio siguiente</h3>
+            <p className="conta-import-sub">
+              Traslada el resultado del ejercicio ya cerrado a la cuenta de patrimonio "Resultados/Ganancias
+              Acumuladas", automatizando el paso que hasta ahora había que hacer a mano después de cerrar.
+            </p>
+            <div className="conta-form-grid">
+              <div>
+                <label>Año a abrir</label>
+                <input type="number" value={anioApertura} onChange={(e) => setAnioApertura(e.target.value)} style={{ maxWidth: 140 }} />
+              </div>
+              <div className="conta-form-actions" style={{ alignItems: 'flex-end' }}>
+                <button className="btn-danger-outline" disabled={abriendoEjercicio} onClick={abrirEjercicioSiguiente}>
+                  {abriendoEjercicio ? 'Abriendo...' : `📂 Abrir ejercicio ${anioApertura}`}
                 </button>
               </div>
             </div>
