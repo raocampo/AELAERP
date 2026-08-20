@@ -103,9 +103,42 @@ a PNG: compras muestra 15.00/25.00 en columnas separadas, ventas muestra
 correcto (ya lo era antes). `node --test`: 49/49. Datos de prueba
 eliminados al terminar.
 
+## 3. Continuación — misma vista "Formulario" para el F103
+
+El usuario dijo "sigue con lo planificado" tras cerrar los puntos 1 y 2
+— se interpretó como continuar el mismo patrón recién implementado para
+F104, aplicándolo a F103 (que hasta ahora solo tenía resumen + PDF, sin
+vista en pantalla tipo formulario, la misma brecha que tenía F104 antes
+de esta sesión).
+
+Mismo refactor que F104: se extrajo `casillerosF103(f103)` (función
+pura) del handler de `GET /f103/pdf` — ahora la usan tanto `GET /f103`
+(expone `data.casilleros`) como el PDF. Nuevo componente
+`F103FormularioView` en `Declaraciones.jsx`, mismo toggle
+"Resumen | Formulario" que ya tiene F104.
+
+**Bug encontrado y corregido en el propio refactor, antes de que
+llegara a producción**: al extraer la lógica, la distinción entre "código
+sin casillero confirmado" (marcar `(!)`) y "código con casillero pero sin
+casillero de valor retenido, por ser tarifa 0%" (marcar `—`, ej. código
+331 dividendos en acciones) se perdía — ambos casos colapsaban al mismo
+`null` y salían marcados `(!)` por igual, lo cual habría sido engañoso
+(marcar como "sin verificar" un casillero que en realidad SÍ está bien
+mapeado, solo que no tiene contraparte de retención). Se agregó un flag
+`mapeado: boolean` explícito para distinguir los 2 casos. Detectado
+comparando el JSON de prueba contra el PDF antes de dar el cambio por
+bueno — no llegó a commitearse la versión con el bug.
+
+### Verificado
+
+3 casos de prueba (303 con casillero completo, 331 mapeado sin casillero
+de retenido, 346C sin mapeo) — JSON y PDF confirmados coincidentes:
+303→303/353, 331→331/"—", 346C→"(!)"/"(!)". `node --test`: 49/49. `vite
+build`: sin errores. Datos de prueba eliminados al terminar.
+
 ## Pendiente para retomar
 
 Nada de esto se probó en navegador real. Sugerir al usuario:
-Declaraciones → F104 → toggle "Formulario" (vista nueva), y ATS →
-generar talón PDF de cualquier período con compras No Obj./Exento para
-confirmar visualmente las 2 columnas separadas.
+Declaraciones → F104 y F103 → toggle "Formulario" (vista nueva en ambos),
+y ATS → generar talón PDF de cualquier período con compras No Obj./Exento
+para confirmar visualmente las 2 columnas separadas.

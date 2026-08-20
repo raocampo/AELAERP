@@ -858,6 +858,7 @@ router.get('/f103', async (req, res) => {
     const db = req.prisma || prisma;
 
     const f103 = await calcularF103(db, empresaId, anio, mes);
+    f103.casilleros = casillerosF103(f103);
     res.json({ ok: true, data: f103 });
   } catch (err) {
     console.error('Error F103:', err);
@@ -958,6 +959,40 @@ const CASILLEROS_F103 = {
   '3482':  { base: '3140', retenido: '3640' },
 };
 
+// ─── casillerosF103 — arma las filas "tipo formulario oficial" (casillero +
+// descripción + valores) a partir de un f103 ya calculado. Función pura, sin
+// acceso a BD — la usan tanto GET /f103 (vista en pantalla tipo formulario)
+// como GET /f103/pdf, así ambas vistas muestran siempre los mismos números.
+function casillerosF103(f103) {
+  const sinCasillero = [];
+  const filas = f103.detallePorCodigo.map((r) => {
+    const cas = CASILLEROS_F103[r.codigo];
+    if (!cas) sinCasillero.push(r.codigo);
+    return {
+      // mapeado=false → código sin casillero confirmado, mostrar "(!)".
+      // mapeado=true con casRetenido=null → SÍ tiene mapeo, pero el
+      // casillero real no tiene par de "valor retenido" (ej. tarifas 0%
+      // como 3230/331/332) — mostrar "—", no "(!)".
+      mapeado: !!cas,
+      casBase: cas ? cas.base : null,
+      casRetenido: cas ? cas.retenido : null,
+      codigo: r.codigo,
+      descripcion: r.descripcion,
+      porcentaje: r.porcentaje,
+      baseImponible: r.baseImponible,
+      valorRetenido: r.valorRetenido,
+    };
+  });
+  filas.push({
+    mapeado: true, casBase: '399', casRetenido: '499', codigo: null,
+    descripcion: 'TOTAL DE RETENCIÓN DE IMPUESTO A LA RENTA', porcentaje: null,
+    baseImponible: parseFloat(f103.detallePorCodigo.reduce((s, r) => s + r.baseImponible, 0).toFixed(2)),
+    valorRetenido: f103.totalRetenido,
+    destacado: true,
+  });
+  return { filas, sinCasillero };
+}
+
 // ─── GET /f103/pdf — Documento de apoyo para el llenado del Formulario 103 ─────
 // NO es el formulario oficial ni lo reemplaza. Mapea el detalle por código de
 // retención (que AELA ya calcula) contra el casillero oficial usando
@@ -996,32 +1031,19 @@ router.get('/f103/pdf', async (req, res) => {
     doc.x = ML;
 
     const columnas = [
-      { header: 'Cas. Base',    key: 'casBase',     width: 55 },
-      { header: 'Cas. Ret.',    key: 'casRetenido', width: 55 },
+      { header: 'Cas. Base',    key: 'casBase',     width: 55, formato: (v, fila) => (fila.mapeado ? v : '(!)') },
+      { header: 'Cas. Ret.',    key: 'casRetenido', width: 55, formato: (v, fila) => (!fila.mapeado ? '(!)' : (v || '—')) },
       { header: 'Descripción',  key: 'descripcion', width: 210 },
       { header: '%',            key: 'porcentaje',   width: 40,  align: 'right', formato: (v) => (v == null ? '—' : `${v}%`) },
       { header: 'Base Imp.',    key: 'baseImponible', width: 78, align: 'right', formato: money },
       { header: 'Val. Retenido', key: 'valorRetenido', width: 78, align: 'right', formato: money },
     ];
 
-    const sinCasillero = [];
-    const filas = f103.detallePorCodigo.map((r) => {
-      const cas = CASILLEROS_F103[r.codigo];
-      if (!cas) sinCasillero.push(r);
-      return {
-        casBase: cas ? cas.base : '(!)',
-        casRetenido: cas ? (cas.retenido || '—') : '(!)',
-        descripcion: `${r.descripcion} (código ${r.codigo})`,
-        porcentaje: r.porcentaje,
-        baseImponible: r.baseImponible,
-        valorRetenido: r.valorRetenido,
-      };
-    });
-    filas.push({
-      casBase: '399', casRetenido: '499', descripcion: 'TOTAL DE RETENCIÓN DE IMPUESTO A LA RENTA', porcentaje: null,
-      baseImponible: f103.detallePorCodigo.reduce((s, r) => s + r.baseImponible, 0), valorRetenido: f103.totalRetenido,
-      _destacado: true,
-    });
+    const { filas: filasCasillero, sinCasillero } = casillerosF103(f103);
+    const filas = filasCasillero.map((f) => ({
+      ...f,
+      descripcion: f.codigo ? `${f.descripcion} (código ${f.codigo})` : f.descripcion,
+    }));
 
     doc.fontSize(10).font('Helvetica-Bold').text('DETALLE POR CÓDIGO DE RETENCIÓN');
     doc.y = dibujarTablaPdf(doc, columnas, filas, doc.y);
@@ -1029,7 +1051,7 @@ router.get('/f103/pdf', async (req, res) => {
 
     if (sinCasillero.length > 0) {
       doc.fontSize(7.5).fillColor('#b45309').font('Helvetica-Bold')
-        .text(`(!) ${sinCasillero.length} código(s) sin casillero confirmado (marcados arriba con "(!)") — verificar manualmente contra "SRI en Línea": ${sinCasillero.map((r) => r.codigo).join(', ')}.`, { width: Wtotal });
+        .text(`(!) ${sinCasillero.length} código(s) sin casillero confirmado (marcados arriba con "(!)") — verificar manualmente contra "SRI en Línea": ${sinCasillero.join(', ')}.`, { width: Wtotal });
       doc.fillColor('#000000').font('Helvetica');
       doc.moveDown(0.4);
     }

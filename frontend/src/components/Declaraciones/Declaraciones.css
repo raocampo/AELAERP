@@ -275,6 +275,11 @@
   margin: 0;
 }
 
+.decl-formvista-cas-warn {
+  color: #b45309;
+  background: rgba(245,158,11,0.15);
+}
+
 .alert-info {
   background: rgba(124,58,237,0.08);
   border: 1px solid rgba(124,58,237,0.2);

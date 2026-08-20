@@ -441,6 +441,7 @@ function F103View({ data }) {
   if (!data?.periodo || !Array.isArray(data?.detallePorCodigo)) return null;
   const { detallePorCodigo, totalRetenido, cantidadComprobantes, meta } = data;
   const { anio, mes } = data.periodo;
+  const [vista, setVista] = useState('resumen'); // 'resumen' | 'formulario'
 
   const descargarPdf = async () => {
     try {
@@ -463,11 +464,21 @@ function F103View({ data }) {
       <div className="decl-formulario-header">
         <span className="decl-form-badge">Formulario 103</span>
         <span>Retenciones en la Fuente — {MESES[mes - 1]} {anio}</span>
-        <button className="btn-secondary" style={{ marginLeft: 'auto' }} onClick={descargarPdf}>
-          📄 Generar Formulario (PDF)
-        </button>
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+          <div className="decl-vista-toggle">
+            <button className={vista === 'resumen' ? 'active' : ''} onClick={() => setVista('resumen')}>Resumen</button>
+            <button className={vista === 'formulario' ? 'active' : ''} onClick={() => setVista('formulario')}>Formulario</button>
+          </div>
+          <button className="btn-secondary" onClick={descargarPdf}>
+            📄 Generar Formulario (PDF)
+          </button>
+        </div>
       </div>
 
+      {vista === 'formulario' && data.casilleros ? (
+        <F103FormularioView casilleros={data.casilleros} />
+      ) : (
+      <>
       <div className="decl-meta" style={{ marginBottom: 16 }}>
         <span>{cantidadComprobantes} comprobantes</span>
         <span>{meta.comprobantesAutorizados} autorizados</span>
@@ -534,6 +545,54 @@ function F103View({ data }) {
           </table>
         </details>
       )}
+      </>
+      )}
+    </div>
+  );
+}
+
+// ─── Vista "tipo formulario" del F103 — replica el layout del formulario
+// oficial (Casillero + Descripción + valores) usando data.casilleros que ya
+// calculó el backend (mismos números que el PDF, un solo lugar de cómputo) ──
+function F103FormularioView({ casilleros }) {
+  const { filas, sinCasillero } = casilleros;
+  return (
+    <div className="decl-formvista">
+      <div className="decl-formvista-seccion">
+        <h4>DETALLE POR CÓDIGO DE RETENCIÓN</h4>
+        <table className="decl-tabla decl-tabla-formvista">
+          <thead>
+            <tr>
+              <th style={{ width: 90 }}>Cas. Base</th>
+              <th style={{ width: 90 }}>Cas. Ret.</th>
+              <th>Descripción</th>
+              <th style={{ textAlign: 'right', width: 70 }}>%</th>
+              <th style={{ textAlign: 'right', width: 120 }}>Base Imp.</th>
+              <th style={{ textAlign: 'right', width: 120 }}>Val. Retenido</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((f, i) => (
+              <tr key={i} className={f.destacado ? 'decl-tabla-total' : ''}>
+                <td>{f.mapeado ? <span className="decl-formvista-cas">{f.casBase}</span> : <span className="decl-formvista-cas decl-formvista-cas-warn">(!)</span>}</td>
+                <td>{f.mapeado ? <span className="decl-formvista-cas">{f.casRetenido || '—'}</span> : <span className="decl-formvista-cas decl-formvista-cas-warn">(!)</span>}</td>
+                <td>{f.codigo ? `${f.descripcion} (código ${f.codigo})` : f.descripcion}</td>
+                <td style={{ textAlign: 'right' }}>{f.porcentaje == null ? '—' : `${f.porcentaje}%`}</td>
+                <td style={{ textAlign: 'right' }}>{fmt(f.baseImponible)}</td>
+                <td style={{ textAlign: 'right' }}>{fmt(f.valorRetenido)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {sinCasillero.length > 0 && (
+        <p style={{ fontSize: 12, color: '#b45309', margin: 0 }}>
+          ⚠ {sinCasillero.length} código(s) sin casillero confirmado (marcados con "(!)") — verificar manualmente contra "SRI en Línea": {sinCasillero.join(', ')}.
+        </p>
+      )}
+      <p className="decl-formvista-nota">
+        Documento de apoyo — no es el formulario oficial ni lo reemplaza. Verifique cada casillero contra "SRI en Línea" antes de presentar la declaración.
+      </p>
     </div>
   );
 }
