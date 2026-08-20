@@ -137,6 +137,7 @@ function F104View({ data, onRecargar }) {
   const esDebito  = resultado.ivaACobrarPagar > 0;
   const esCredito = resultado.ivaACobrarPagar < 0;
   const { anio, mes } = data.periodo;
+  const [vista, setVista] = useState('resumen'); // 'resumen' | 'formulario'
 
   const descargarPdf = async () => {
     try {
@@ -159,11 +160,20 @@ function F104View({ data, onRecargar }) {
       <div className="decl-formulario-header">
         <span className="decl-form-badge">Formulario 104</span>
         <span>IVA Mensual — {MESES[mes - 1]} {anio}</span>
-        <button className="btn-secondary" style={{ marginLeft: 'auto' }} onClick={descargarPdf}>
-          📄 Generar Formulario (PDF)
-        </button>
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+          <div className="decl-vista-toggle">
+            <button className={vista === 'resumen' ? 'active' : ''} onClick={() => setVista('resumen')}>Resumen</button>
+            <button className={vista === 'formulario' ? 'active' : ''} onClick={() => setVista('formulario')}>Formulario</button>
+          </div>
+          <button className="btn-secondary" onClick={descargarPdf}>
+            📄 Generar Formulario (PDF)
+          </button>
+        </div>
       </div>
 
+      {vista === 'formulario' && data.casilleros && <F104FormularioView casilleros={data.casilleros} />}
+
+      {vista === 'resumen' && (
       <div className="decl-secciones">
         {/* VENTAS */}
         <section className="decl-seccion">
@@ -285,6 +295,51 @@ function F104View({ data, onRecargar }) {
           </div>
         )}
       </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Vista "tipo formulario" — replica el layout del F104 oficial (Casillero
+// + Descripción + valores) en pantalla, usando data.casilleros que ya calculó
+// el backend (mismos números que el PDF, un solo lugar de cómputo) ─────────
+function F104FormularioView({ casilleros }) {
+  const TablaCasillero = ({ titulo, filas, columnas }) => (
+    <div className="decl-formvista-seccion">
+      <h4>{titulo}</h4>
+      <table className="decl-tabla decl-tabla-formvista">
+        <thead>
+          <tr>
+            <th style={{ width: 110 }}>Casillero</th>
+            <th>Descripción</th>
+            {columnas.map((c) => <th key={c.key} style={{ textAlign: 'right', width: 120 }}>{c.label}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map((f, i) => (
+            <tr key={i} className={f.destacado ? 'decl-tabla-total' : ''}>
+              <td><span className="decl-formvista-cas">{f.cas}</span></td>
+              <td>{f.desc}</td>
+              {columnas.map((c) => (
+                <td key={c.key} style={{ textAlign: 'right' }}>{f[c.key] == null ? '—' : fmt(f[c.key])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <div className="decl-formvista">
+      <TablaCasillero titulo="RESUMEN DE VENTAS Y OTRAS OPERACIONES" filas={casilleros.ventas} columnas={[{ key: 'base', label: 'Base Imp.' }, { key: 'iva', label: 'IVA' }]} />
+      <TablaCasillero titulo="RESUMEN DE ADQUISICIONES Y PAGOS" filas={casilleros.compras} columnas={[{ key: 'base', label: 'Base Imp.' }, { key: 'iva', label: 'IVA' }]} />
+      <TablaCasillero titulo="FACTOR DE PROPORCIONALIDAD Y CRÉDITO TRIBUTARIO" filas={casilleros.factorProporcionalidad} columnas={[{ key: 'valor', label: 'Valor' }]} />
+      <TablaCasillero titulo="RESUMEN IMPOSITIVO: AGENTE DE PERCEPCIÓN DEL IVA" filas={casilleros.resumenImpositivo} columnas={[{ key: 'valor', label: 'Valor' }]} />
+      <TablaCasillero titulo="AGENTE DE RETENCIÓN DEL IVA (a proveedores)" filas={casilleros.agenteRetencion} columnas={[{ key: 'valor', label: 'Valor' }]} />
+      <p className="decl-formvista-nota">
+        Documento de apoyo — no es el formulario oficial ni lo reemplaza. Verifique cada casillero contra "SRI en Línea" antes de presentar la declaración.
+      </p>
     </div>
   );
 }

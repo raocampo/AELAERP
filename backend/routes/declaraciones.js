@@ -134,11 +134,12 @@ function dibujarTablaPdf(doc, columnas, filas, startY) {
       dibujarEncabezado();
       doc.fontSize(8);
     }
-    if (fila._destacado) { doc.rect(ML, y, anchoTotal, altoFila).fill('#ede9fe').fillColor('#000000'); }
+    const destacado = fila._destacado || fila.destacado;
+    if (destacado) { doc.rect(ML, y, anchoTotal, altoFila).fill('#ede9fe').fillColor('#000000'); }
     else if (i % 2 === 1) { doc.rect(ML, y, anchoTotal, altoFila).fill('#f8fafc').fillColor('#000000'); }
     let x = ML;
     columnas.forEach((c, idx) => {
-      doc.font(fila._destacado ? 'Helvetica-Bold' : 'Helvetica');
+      doc.font(destacado ? 'Helvetica-Bold' : 'Helvetica');
       doc.text(valores[idx], x + 3, y + 4, { width: c.width - 6, align: c.align || 'left' });
       x += c.width;
     });
@@ -505,6 +506,75 @@ async function calcularF104(db, empresaId, anio, mes) {
     return f104;
 }
 
+// ─── casillerosF104 — arma las filas "tipo formulario oficial" (casillero +
+// descripción + valores) a partir de un f104 ya calculado. Función pura, sin
+// acceso a BD — la usan tanto GET /f104 (para la vista en pantalla tipo
+// formulario) como GET /f104/pdf (para las tablas del PDF), así ambas vistas
+// muestran siempre los mismos números, calculados una sola vez. ────────────
+function casillerosF104(f104) {
+  const round2 = (v) => parseFloat((v || 0).toFixed(2));
+
+  const v = f104.ventas;
+  const ivaDif0Ventas = round2(v.subtotalNeto12 * 0.12 + v.subtotalNeto15 * 0.15);
+  const iva5Ventas    = round2(v.subtotalNeto5 * 0.05);
+  const baseTotalVentas = round2(v.subtotalNeto0 + v.subtotalNeto12 + v.subtotalNeto15 + v.subtotalNeto5);
+
+  const c = f104.compras;
+  const compBase0    = round2(c.subtotal0 + c.liquidaciones.subtotal0);
+  const compBase5    = round2(c.subtotal5 + c.liquidaciones.subtotal5);
+  const compBase12   = round2(c.subtotal12 + c.liquidaciones.subtotal12);
+  const compBase15   = round2(c.subtotal15 + c.liquidaciones.subtotal15);
+  const ivaDif0Compras = round2(compBase12 * 0.12 + compBase15 * 0.15);
+  const iva5Compras   = round2(compBase5 * 0.05);
+  const baseTotalCompras = round2(compBase0 + compBase12 + compBase15 + compBase5);
+
+  const r  = f104.resultado;
+  const re = f104.retencionesEmitidas;
+
+  return {
+    ventas: [
+      { cas: '401/411/421', desc: 'Ventas locales gravadas tarifa general (12%/15%)', base: round2(v.subtotalNeto12 + v.subtotalNeto15), iva: ivaDif0Ventas },
+      { cas: '425/435/445', desc: 'Ventas locales gravadas tarifa 5% (materiales de construcción)', base: v.subtotalNeto5, iva: iva5Ventas },
+      { cas: '403-406/413-416', desc: 'Ventas tarifa 0% (sistema no distingue si dan o no derecho a crédito)', base: v.subtotalNeto0, iva: 0 },
+      { cas: '409/419/429', desc: 'TOTAL VENTAS Y OTRAS OPERACIONES', base: baseTotalVentas, iva: v.ivaGenerado, destacado: true },
+      { cas: '431/441', desc: 'Transferencias no objeto o exentas de IVA (informativo, fuera del total 429)', base: v.subtotalNoObjeto, iva: null },
+    ],
+    compras: [
+      { cas: '500/510/520', desc: 'Adquisiciones gravadas tarifa general (12%/15%), con derecho a crédito', base: round2(compBase12 + compBase15), iva: ivaDif0Compras },
+      { cas: '540/550/560', desc: 'Adquisiciones gravadas tarifa 5% (materiales de construcción)', base: compBase5, iva: iva5Compras },
+      { cas: '506/507/516/517', desc: 'Adquisiciones tarifa 0%', base: compBase0, iva: 0 },
+      { cas: '509/519/529', desc: 'TOTAL ADQUISICIONES Y PAGOS', base: baseTotalCompras, iva: c.ivaCreditoFiscal, destacado: true },
+      { cas: '531/541', desc: 'Adquisiciones no objeto de IVA', base: c.subtotalNoObjeto, iva: null },
+      { cas: '532/542', desc: 'Adquisiciones exentas del pago de IVA', base: c.subtotalExento, iva: null },
+    ],
+    factorProporcionalidad: [
+      { cas: '563', desc: 'Factor de proporcionalidad (AELA asume 1.0000 — no soporta ventas mixtas gravadas/exentas)', valor: 1 },
+      { cas: '564', desc: 'Crédito tributario aplicable en este período (529 x factor)', valor: c.ivaCreditoFiscal, destacado: true },
+      { cas: '565', desc: 'Valor de IVA no considerado como crédito tributario por factor de proporcionalidad', valor: 0 },
+    ],
+    resumenImpositivo: [
+      { cas: '601', desc: 'Impuesto causado (si 429-564 es mayor que cero)', valor: r.impuestoCausado },
+      { cas: '602', desc: 'Crédito tributario aplicable en este período (si 429-564 es menor que cero)', valor: r.creditoDelPeriodo },
+      { cas: '605', desc: 'Saldo crédito tributario del mes anterior — por adquisiciones e importaciones', valor: r.creditoPorAdquisicionesAnterior },
+      { cas: '606', desc: 'Saldo crédito tributario del mes anterior — por retenciones de IVA que le han sido efectuadas', valor: r.creditoPorRetencionesAnterior },
+      { cas: '609', desc: 'Retenciones de IVA que le han sido efectuadas en este período', valor: f104.retenciones.totalRetenido },
+      { cas: '615', desc: 'Saldo crédito tributario para el próximo mes — por adquisiciones e importaciones', valor: r.saldoCreditoAdquisicionesProximoMes },
+      { cas: '617', desc: 'Saldo crédito tributario para el próximo mes — por retenciones de IVA que le han sido efectuadas', valor: r.saldoCreditoRetencionesProximoMes },
+      { cas: '620/699', desc: 'SUBTOTAL / TOTAL A PAGAR POR PERCEPCIÓN', valor: r.subtotalAPagar, destacado: true },
+    ],
+    agenteRetencion: [
+      { cas: '721', desc: 'Retención del 10%', valor: re.iva10 },
+      { cas: '723', desc: 'Retención del 20%', valor: re.iva20 },
+      { cas: '725', desc: 'Retención del 30%', valor: re.iva30 },
+      { cas: '727', desc: 'Retención del 50%', valor: re.iva50 },
+      { cas: '729', desc: 'Retención del 70%', valor: re.iva70 },
+      { cas: '731', desc: 'Retención del 100%', valor: re.iva100 },
+      { cas: '799/801', desc: 'TOTAL IMPUESTO A PAGAR POR RETENCIÓN', valor: re.ivaRetenidoAProveedores, destacado: true },
+      { cas: '859', desc: 'TOTAL CONSOLIDADO DE IVA (699 + 801)', valor: r.totalConsolidado, destacado: true },
+    ],
+  };
+}
+
 // ─── GET /f104 — Formulario 104 IVA Mensual ────────────────────────────────────
 // Query: ?anio=2025&mes=3
 router.get('/f104', async (req, res) => {
@@ -515,6 +585,7 @@ router.get('/f104', async (req, res) => {
     const db = req.prisma || prisma;
 
     const f104 = await calcularF104(db, empresaId, anio, mes);
+    f104.casilleros = casillerosF104(f104);
     res.json({ ok: true, data: f104 });
   } catch (err) {
     console.error('Error F104:', err);
@@ -549,29 +620,10 @@ router.get('/f104/pdf', async (req, res) => {
     const db = req.prisma || prisma;
 
     const f104 = await calcularF104(db, empresaId, anio, mes);
-    const config = await db.configuracion_sri.findFirst({ where: { empresaId } });
-    const money = (v) => `$${Number(v || 0).toFixed(2)}`;
-    const round2 = (v) => parseFloat((v || 0).toFixed(2));
-
-    // ── VENTAS: desglose por tarifa contra el casillero oficial ──────────────
-    const v = f104.ventas;
-    const ivaDif0Ventas = round2(v.subtotalNeto12 * 0.12 + v.subtotalNeto15 * 0.15);
-    const iva5Ventas    = round2(v.subtotalNeto5 * 0.05);
-    const baseTotalVentas = round2(v.subtotalNeto0 + v.subtotalNeto12 + v.subtotalNeto15 + v.subtotalNeto5);
-
-    // ── COMPRAS: se suman facturas + liquidaciones de compra (el formulario
-    // oficial no distingue tipo de documento, solo tarifa) ───────────────────
+    const cas = casillerosF104(f104);
     const c = f104.compras;
-    const compBase0    = round2(c.subtotal0 + c.liquidaciones.subtotal0);
-    const compBase5    = round2(c.subtotal5 + c.liquidaciones.subtotal5);
-    const compBase12   = round2(c.subtotal12 + c.liquidaciones.subtotal12);
-    const compBase15   = round2(c.subtotal15 + c.liquidaciones.subtotal15);
-    const ivaDif0Compras = round2(compBase12 * 0.12 + compBase15 * 0.15);
-    const iva5Compras   = round2(compBase5 * 0.05);
-    const baseTotalCompras = round2(compBase0 + compBase12 + compBase15 + compBase5);
-
-    const r = f104.resultado;
-    const re = f104.retencionesEmitidas;
+    const config = await db.configuracion_sri.findFirst({ where: { empresaId } });
+    const money = (v) => (v == null ? '' : `$${Number(v).toFixed(2)}`);
 
     const doc = crearDocumentoPdf(res, `f104_${anio}_${String(mes).padStart(2, '0')}.pdf`);
     dibujarEncabezadoContable(doc, config, 'Formulario 104 — Declaración del IVA');
@@ -598,78 +650,42 @@ router.get('/f104/pdf', async (req, res) => {
     const colCasillero = [
       { header: 'Casillero', key: 'cas',   width: 88 },
       { header: 'Descripción', key: 'desc', width: 234 },
-      { header: 'Base Imp.', key: 'base', width: 90, align: 'right', formato: (val) => (val === '' ? '' : money(val)) },
-      { header: 'IVA', key: 'iva', width: 90, align: 'right', formato: (val) => (val === '' ? '' : money(val)) },
+      { header: 'Base Imp.', key: 'base', width: 90, align: 'right', formato: money },
+      { header: 'IVA', key: 'iva', width: 90, align: 'right', formato: money },
     ];
-
-    doc.fontSize(10).font('Helvetica-Bold').text('RESUMEN DE VENTAS Y OTRAS OPERACIONES');
-    doc.y = dibujarTablaPdf(doc, colCasillero, [
-      { cas: '401/411/421', desc: 'Ventas locales gravadas tarifa general (12%/15%)', base: v.subtotalNeto12 + v.subtotalNeto15, iva: ivaDif0Ventas },
-      { cas: '425/435/445', desc: 'Ventas locales gravadas tarifa 5% (materiales de construcción)', base: v.subtotalNeto5, iva: iva5Ventas },
-      { cas: '403-406/413-416', desc: 'Ventas tarifa 0% (sistema no distingue si dan o no derecho a crédito)', base: v.subtotalNeto0, iva: 0 },
-      { cas: '409/419/429', desc: 'TOTAL VENTAS Y OTRAS OPERACIONES', base: baseTotalVentas, iva: v.ivaGenerado, _destacado: true },
-      { cas: '431/441', desc: 'Transferencias no objeto o exentas de IVA (informativo, fuera del total 429)', base: v.subtotalNoObjeto, iva: '' },
-    ], doc.y);
-    doc.fontSize(7).fillColor('#64748b')
-      .text(`Notas de crédito del período netadas en las bases: ${money(v.notasCredito.subtotal)} (IVA ${money(v.notasCredito.iva)}).`)
-      .fillColor('#000000');
-    doc.moveDown(0.5);
-
-    doc.fontSize(10).font('Helvetica-Bold').text('RESUMEN DE ADQUISICIONES Y PAGOS');
-    doc.y = dibujarTablaPdf(doc, colCasillero, [
-      { cas: '500/510/520', desc: 'Adquisiciones gravadas tarifa general (12%/15%), con derecho a crédito', base: compBase12 + compBase15, iva: ivaDif0Compras },
-      { cas: '540/550/560', desc: 'Adquisiciones gravadas tarifa 5% (materiales de construcción)', base: compBase5, iva: iva5Compras },
-      { cas: '506/507/516/517', desc: 'Adquisiciones tarifa 0%', base: compBase0, iva: 0 },
-      { cas: '509/519/529', desc: 'TOTAL ADQUISICIONES Y PAGOS', base: baseTotalCompras, iva: c.ivaCreditoFiscal, _destacado: true },
-      { cas: '531/541', desc: 'Adquisiciones no objeto de IVA', base: c.subtotalNoObjeto, iva: '' },
-      { cas: '532/542', desc: 'Adquisiciones exentas del pago de IVA', base: c.subtotalExento, iva: '' },
-    ], doc.y);
-    doc.fontSize(7).fillColor('#64748b')
-      .text(`Incluye ${f104.meta.cantidadLiquidaciones} liquidación(es) de compra del período. Notas de crédito de proveedores netadas en el crédito fiscal: ${money(c.ncRecibidas.subtotal)} (IVA ${money(c.ncRecibidas.iva)}, ${c.ncRecibidas.cantidad} documento(s)).`)
-      .fillColor('#000000');
-    doc.moveDown(0.5);
-
     const colResumen = [
       { header: 'Casillero', key: 'cas',   width: 62 },
       { header: 'Descripción', key: 'desc', width: 350 },
       { header: 'Valor', key: 'valor', width: 90, align: 'right', formato: money },
     ];
 
+    doc.fontSize(10).font('Helvetica-Bold').text('RESUMEN DE VENTAS Y OTRAS OPERACIONES');
+    doc.y = dibujarTablaPdf(doc, colCasillero, cas.ventas, doc.y);
+    doc.fontSize(7).fillColor('#64748b')
+      .text(`Notas de crédito del período netadas en las bases: ${money(f104.ventas.notasCredito.subtotal)} (IVA ${money(f104.ventas.notasCredito.iva)}).`)
+      .fillColor('#000000');
+    doc.moveDown(0.5);
+
+    doc.fontSize(10).font('Helvetica-Bold').text('RESUMEN DE ADQUISICIONES Y PAGOS');
+    doc.y = dibujarTablaPdf(doc, colCasillero, cas.compras, doc.y);
+    doc.fontSize(7).fillColor('#64748b')
+      .text(`Incluye ${f104.meta.cantidadLiquidaciones} liquidación(es) de compra del período. Notas de crédito de proveedores netadas en el crédito fiscal: ${money(c.ncRecibidas.subtotal)} (IVA ${money(c.ncRecibidas.iva)}, ${c.ncRecibidas.cantidad} documento(s)).`)
+      .fillColor('#000000');
+    doc.moveDown(0.5);
+
     doc.fontSize(10).font('Helvetica-Bold').text('FACTOR DE PROPORCIONALIDAD Y CRÉDITO TRIBUTARIO');
-    doc.y = dibujarTablaPdf(doc, colResumen, [
-      { cas: '563', desc: 'Factor de proporcionalidad (AELA asume 1.0000 — no soporta ventas mixtas gravadas/exentas)', valor: 1 },
-      { cas: '564', desc: 'Crédito tributario aplicable en este período (529 x factor)', valor: c.ivaCreditoFiscal, _destacado: true },
-      { cas: '565', desc: 'Valor de IVA no considerado como crédito tributario por factor de proporcionalidad', valor: 0 },
-    ], doc.y);
+    doc.y = dibujarTablaPdf(doc, colResumen, cas.factorProporcionalidad, doc.y);
     doc.moveDown(0.4);
 
     doc.fontSize(10).font('Helvetica-Bold').text('RESUMEN IMPOSITIVO: AGENTE DE PERCEPCIÓN DEL IVA');
-    doc.y = dibujarTablaPdf(doc, colResumen, [
-      { cas: '601', desc: 'Impuesto causado (si 429-564 es mayor que cero)', valor: r.impuestoCausado },
-      { cas: '602', desc: 'Crédito tributario aplicable en este período (si 429-564 es menor que cero)', valor: r.creditoDelPeriodo },
-      { cas: '605', desc: 'Saldo crédito tributario del mes anterior — por adquisiciones e importaciones', valor: r.creditoPorAdquisicionesAnterior },
-      { cas: '606', desc: 'Saldo crédito tributario del mes anterior — por retenciones de IVA que le han sido efectuadas', valor: r.creditoPorRetencionesAnterior },
-      { cas: '609', desc: 'Retenciones de IVA que le han sido efectuadas en este período', valor: f104.retenciones.totalRetenido },
-      { cas: '615', desc: 'Saldo crédito tributario para el próximo mes — por adquisiciones e importaciones', valor: r.saldoCreditoAdquisicionesProximoMes },
-      { cas: '617', desc: 'Saldo crédito tributario para el próximo mes — por retenciones de IVA que le han sido efectuadas', valor: r.saldoCreditoRetencionesProximoMes },
-      { cas: '620/699', desc: 'SUBTOTAL / TOTAL A PAGAR POR PERCEPCIÓN', valor: r.subtotalAPagar, _destacado: true },
-    ], doc.y);
+    doc.y = dibujarTablaPdf(doc, colResumen, cas.resumenImpositivo, doc.y);
     doc.fontSize(7).fillColor('#64748b')
       .text('605/606 se ingresan en Declaraciones, sección "Crédito tributario arrastrado" — cada uno arrastra el 615/617 de la declaración del período anterior. El orden de consumo contra el 601 es: primero 605+602, luego 606+609 (verificado contra una declaración real).')
       .fillColor('#000000');
     doc.moveDown(0.5);
 
     doc.fontSize(10).font('Helvetica-Bold').text('AGENTE DE RETENCIÓN DEL IVA (a proveedores)');
-    doc.y = dibujarTablaPdf(doc, colResumen, [
-      { cas: '721', desc: 'Retención del 10%', valor: re.iva10 },
-      { cas: '723', desc: 'Retención del 20%', valor: re.iva20 },
-      { cas: '725', desc: 'Retención del 30%', valor: re.iva30 },
-      { cas: '727', desc: 'Retención del 50%', valor: re.iva50 },
-      { cas: '729', desc: 'Retención del 70%', valor: re.iva70 },
-      { cas: '731', desc: 'Retención del 100%', valor: re.iva100 },
-      { cas: '799/801', desc: 'TOTAL IMPUESTO A PAGAR POR RETENCIÓN', valor: re.ivaRetenidoAProveedores, _destacado: true },
-      { cas: '859', desc: 'TOTAL CONSOLIDADO DE IVA (699 + 801)', valor: r.totalConsolidado, _destacado: true },
-    ], doc.y);
+    doc.y = dibujarTablaPdf(doc, colResumen, cas.agenteRetencion, doc.y);
     doc.moveDown(0.5);
 
     if (doc.y > 600) doc.addPage();

@@ -211,6 +211,70 @@
   border-top: 2px solid #e2e8f0;
 }
 
+/* Toggle Resumen / Formulario */
+.decl-vista-toggle {
+  display: flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.decl-vista-toggle button {
+  border: none;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.decl-vista-toggle button + button { border-left: 1px solid #e2e8f0; }
+.decl-vista-toggle button.active { background: rgba(124,58,237,0.15); color: #7C3AED; }
+
+/* Vista tipo formulario — replica el layout del F104 oficial en pantalla */
+.decl-formvista {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.decl-formvista-seccion h4 {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #7C3AED;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+  padding: 7px 12px;
+  border-radius: 6px 6px 0 0;
+}
+
+.decl-tabla-formvista {
+  border: 1px solid #e2e8f0;
+  border-radius: 0 0 6px 6px;
+  overflow: hidden;
+}
+
+.decl-formvista-cas {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7C3AED;
+  background: rgba(124,58,237,0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.decl-formvista-nota {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+}
+
 .alert-info {
   background: rgba(124,58,237,0.08);
   border: 1px solid rgba(124,58,237,0.2);

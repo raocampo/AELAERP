@@ -661,9 +661,9 @@ router.get('/exportar/pdf', async (req, res) => {
     ]);
 
     // ── Totales por tipo de comprobante (separando 5%, 12% y 15%) ────────────
-    const vFact = { n: facturas.length,      b0: 0, bt5: 0, bt12: 0, bt15: 0, iva5: 0, iva12: 0, iva15: 0 };
-    const vLiq  = { n: liquidaciones.length, b0: 0, bt5: 0, bt12: 0, bt15: 0, iva5: 0, iva12: 0, iva15: 0 };
-    const vNcEm = { n: ncs.length,           b0: 0, bt5: 0, bt12: 0, bt15: 0, iva5: 0, iva12: 0, iva15: 0 };
+    const vFact = { n: facturas.length,      b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, iva5: 0, iva12: 0, iva15: 0 };
+    const vLiq  = { n: liquidaciones.length, b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, iva5: 0, iva12: 0, iva15: 0 };
+    const vNcEm = { n: ncs.length,           b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, iva5: 0, iva12: 0, iva15: 0 };
     // Notas de venta RIMPE: sin desglose de IVA (diseño del sistema), se
     // reportan íntegramente como base 0%.
     const vNV   = { n: notasVenta.length,    b0: r2(notasVenta.reduce((s, n) => s + r2(n.total), 0)) };
@@ -672,6 +672,12 @@ router.get('/exportar/pdf', async (req, res) => {
       vFact.bt5   += r2(f.subtotal5 || 0);
       vFact.bt12  += r2(f.subtotal12 || 0);
       vFact.bt15  += r2(f.subtotal15);
+      // No objeto + exenta de IVA van combinadas en un solo campo en ventas
+      // (facturas.subtotalNoObjetoIva) — a diferencia de compras, el XSD del
+      // SRI para ventas no tiene un casillero de "exenta" separado (mismo
+      // motivo ya documentado en declaraciones.js/F104). Antes esta columna
+      // se mostraba siempre en 0.00 en el talón — no estaba conectada.
+      vFact.noObj += r2(f.subtotalNoObjetoIva || 0);
       vFact.iva5  += r2((f.subtotal5 || 0) * 0.05);
       vFact.iva12 += r2((f.subtotal12 || 0) * 0.12);
       vFact.iva15 += r2(f.subtotal15 * 0.15);
@@ -691,6 +697,7 @@ router.get('/exportar/pdf', async (req, res) => {
     const vTotBt5  = vFact.bt5 + vLiq.bt5;
     const vTotBt12 = vFact.bt12 + vLiq.bt12;
     const vTotBt15 = vFact.bt15 + vLiq.bt15 + vNcEm.bt15;
+    const vTotNoObj = vFact.noObj + vLiq.noObj;
     const vTotIva5  = vFact.iva5 + vLiq.iva5;
     const vTotIva12 = vFact.iva12 + vLiq.iva12;
     const vTotIva15 = vFact.iva15 + vLiq.iva15 + vNcEm.iva15;
@@ -699,21 +706,24 @@ router.get('/exportar/pdf', async (req, res) => {
     // Negocio Popular — sin crédito tributario de IVA).
     const comprasFactura   = compras.filter(c => c.tipoComprobante !== 'NOTA_VENTA');
     const comprasNotaVenta = compras.filter(c => c.tipoComprobante === 'NOTA_VENTA');
-    // "No Obj." del talón combina No objeto + Exenta (dos casilleros legales
-    // distintos, ver subtotalExento) por espacio de columna en el PDF — el XML
-    // real (/exportar) sí las reporta por separado en baseNoGraIva/baseImpExe.
+    // "No Obj." y "Exento" son 2 casilleros legales distintos (ver
+    // subtotalNoObjeto/subtotalExento) — antes se combinaban en una sola
+    // columna del talón por espacio; desde 2026-08-20 van separados, igual
+    // que ya reporta el XML real (/exportar, baseNoGraIva/baseImpExe) y la
+    // vista previa en pantalla (ATS.jsx).
     const sumarCompras = (arr) => arr.reduce((acc, c) => {
       acc.n++;
-      acc.b0    += r2(c.subtotal0);
-      acc.bt5   += r2(c.subtotal5 || 0);
-      acc.bt12  += r2(c.subtotal12 || 0);
-      acc.bt15  += r2(c.subtotal15);
-      acc.noObj += r2(c.subtotalNoObjeto || 0) + r2(c.subtotalExento || 0);
-      acc.iva5  += r2((c.subtotal5 || 0) * 0.05);
-      acc.iva12 += r2((c.subtotal12 || 0) * 0.12);
-      acc.iva15 += r2(c.subtotal15 * 0.15);
+      acc.b0     += r2(c.subtotal0);
+      acc.bt5    += r2(c.subtotal5 || 0);
+      acc.bt12   += r2(c.subtotal12 || 0);
+      acc.bt15   += r2(c.subtotal15);
+      acc.noObj  += r2(c.subtotalNoObjeto || 0);
+      acc.exento += r2(c.subtotalExento || 0);
+      acc.iva5   += r2((c.subtotal5 || 0) * 0.05);
+      acc.iva12  += r2((c.subtotal12 || 0) * 0.12);
+      acc.iva15  += r2(c.subtotal15 * 0.15);
       return acc;
-    }, { n: 0, b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, iva5: 0, iva12: 0, iva15: 0 });
+    }, { n: 0, b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, exento: 0, iva5: 0, iva12: 0, iva15: 0 });
     const cFact = sumarCompras(comprasFactura);
     const cNV   = sumarCompras(comprasNotaVenta);
 
@@ -729,23 +739,25 @@ router.get('/exportar/pdf', async (req, res) => {
     const cNcRec = ncsRecibidas.reduce((acc, nc) => {
       const p = parsearNotaCreditoRecibidaXml(nc.xmlAutorizado);
       acc.n++;
-      acc.b0    -= p.base0;
-      acc.bt5   -= p.base5;
-      acc.bt12  -= p.base12;
-      acc.bt15  -= p.base15;
-      acc.noObj -= (p.baseNoObjeto + p.baseExenta);
-      acc.iva5  -= p.base5 * 0.05;
-      acc.iva12 -= p.base12 * 0.12;
-      acc.iva15 -= p.base15 * 0.15;
+      acc.b0     -= p.base0;
+      acc.bt5    -= p.base5;
+      acc.bt12   -= p.base12;
+      acc.bt15   -= p.base15;
+      acc.noObj  -= p.baseNoObjeto;
+      acc.exento -= p.baseExenta;
+      acc.iva5   -= p.base5 * 0.05;
+      acc.iva12  -= p.base12 * 0.12;
+      acc.iva15  -= p.base15 * 0.15;
       return acc;
-    }, { n: 0, b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, iva5: 0, iva12: 0, iva15: 0 });
+    }, { n: 0, b0: 0, bt5: 0, bt12: 0, bt15: 0, noObj: 0, exento: 0, iva5: 0, iva12: 0, iva15: 0 });
 
-    const cTotN    = cFact.n + cNV.n + cNcRec.n;
-    const cTotB0   = cFact.b0 + cNV.b0 + cNcRec.b0;
-    const cTotBt5  = cFact.bt5 + cNV.bt5 + cNcRec.bt5;
-    const cTotBt12 = cFact.bt12 + cNV.bt12 + cNcRec.bt12;
-    const cTotBt15 = cFact.bt15 + cNV.bt15 + cNcRec.bt15;
+    const cTotN     = cFact.n + cNV.n + cNcRec.n;
+    const cTotB0    = cFact.b0 + cNV.b0 + cNcRec.b0;
+    const cTotBt5   = cFact.bt5 + cNV.bt5 + cNcRec.bt5;
+    const cTotBt12  = cFact.bt12 + cNV.bt12 + cNcRec.bt12;
+    const cTotBt15  = cFact.bt15 + cNV.bt15 + cNcRec.bt15;
     const cTotNoObj = cFact.noObj + cNV.noObj + cNcRec.noObj;
+    const cTotExento = cFact.exento + cNV.exento + cNcRec.exento;
     const cTotIva5  = cFact.iva5 + cNV.iva5 + cNcRec.iva5;
     const cTotIva12 = cFact.iva12 + cNV.iva12 + cNcRec.iva12;
     const cTotIva15 = cFact.iva15 + cNV.iva15 + cNcRec.iva15;
@@ -791,7 +803,7 @@ router.get('/exportar/pdf', async (req, res) => {
     // ── PDFKit ────────────────────────────────────────────────────────────────
     const doc = new PDFDocument({
       size: 'A4',
-      margins: { top: 40, bottom: 40, left: 40, right: 40 },
+      margins: { top: 40, bottom: 40, left: 28, right: 28 },
       autoFirstPage: true,
     });
     res.setHeader('Content-Type', 'application/pdf');
@@ -799,8 +811,10 @@ router.get('/exportar/pdf', async (req, res) => {
     doc.pipe(res);
 
     // ── Constantes de diseño ─────────────────────────────────────────────────
-    const ML       = 40;
-    const PW       = 515;   // 595 − 80 (márgenes l+r)
+    // Márgenes l/r angostados de 40 a 28 (2026-08-20) para hacer espacio a la
+    // columna "Exento" nueva sin apretar las demás columnas.
+    const ML       = 28;
+    const PW       = 539;   // 595 − 56 (márgenes l+r)
     const PAGE_MAX = 802;   // 842 − 40 (margen inferior)
     const SRI_BLUE = '#003087';
     const HDR_BG   = '#1f3a6e';
@@ -933,18 +947,20 @@ router.get('/exportar/pdf', async (req, res) => {
     };
 
     // ── COMPRAS / VENTAS ─────────────────────────────────────────────────────
-    // Columnas: total PW=515
-    // 36+95+38+46+44+46+44+35+35+42+54 = 515
-    // Cod ampliada a 36 para que "TOTAL" no se corte; IVA 15% a 54 para números grandes
+    // Columnas: total PW=539
+    // 36+88+38+42+44+46+44+35+35+35+42+54 = 539
+    // Cod ampliada a 36 para que "TOTAL" no se corte; IVA 15% a 54 para números grandes.
+    // "Exento" nueva desde 2026-08-20 (antes se combinaba con "No Obj.").
     const tc = [
       { t: 'Cod.',       w: 36,  a: 'center' },
-      { t: 'Transacción', w: 95,  a: 'left'   },
+      { t: 'Transacción', w: 88,  a: 'left'   },
       { t: 'No. Reg.',   w: 38,  a: 'right'  },
-      { t: 'BI 0%',      w: 46,  a: 'right'  },
+      { t: 'BI 0%',      w: 42,  a: 'right'  },
       { t: 'BI T.5%',    w: 44,  a: 'right'  },
       { t: 'BI T.12%',   w: 46,  a: 'right'  },
       { t: 'BI T.15%',   w: 44,  a: 'right'  },
       { t: 'No Obj.',    w: 35,  a: 'right'  },
+      { t: 'Exento',     w: 35,  a: 'right'  },
       { t: 'IVA 5%',     w: 35,  a: 'right'  },
       { t: 'IVA 12%',    w: 42,  a: 'right'  },
       { t: 'IVA 15%',    w: 54,  a: 'right'  },
@@ -953,26 +969,29 @@ router.get('/exportar/pdf', async (req, res) => {
     secHdr('COMPRAS');
     colHdr(tc);
     if (cFact.n > 0)
-      dataRow(tc, ['01', 'FACTURA', cFact.n, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), n2(cFact.noObj), n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
+      dataRow(tc, ['01', 'FACTURA', cFact.n, n2(cFact.b0), n2(cFact.bt5), n2(cFact.bt12), n2(cFact.bt15), n2(cFact.noObj), n2(cFact.exento), n2(cFact.iva5), n2(cFact.iva12), n2(cFact.iva15)]);
     if (cNV.n > 0)
-      dataRow(tc, ['02', 'NOTA DE VENTA', cNV.n, n2(cNV.b0), n2(cNV.bt5), n2(cNV.bt12), n2(cNV.bt15), n2(cNV.noObj), n2(cNV.iva5), n2(cNV.iva12), n2(cNV.iva15)]);
+      dataRow(tc, ['02', 'NOTA DE VENTA', cNV.n, n2(cNV.b0), n2(cNV.bt5), n2(cNV.bt12), n2(cNV.bt15), n2(cNV.noObj), n2(cNV.exento), n2(cNV.iva5), n2(cNV.iva12), n2(cNV.iva15)]);
     if (cNcRec.n > 0)
-      dataRow(tc, ['04', 'NOTA DE CRÉDITO', cNcRec.n, n2(cNcRec.b0), n2(cNcRec.bt5), n2(cNcRec.bt12), n2(cNcRec.bt15), n2(cNcRec.noObj), n2(cNcRec.iva5), n2(cNcRec.iva12), n2(cNcRec.iva15)]);
-    totRow(tc,   ['TOTAL', '', cTotN, n2(cTotB0), n2(cTotBt5), n2(cTotBt12), n2(cTotBt15), n2(cTotNoObj), n2(cTotIva5), n2(cTotIva12), n2(cTotIva15)]);
+      dataRow(tc, ['04', 'NOTA DE CRÉDITO', cNcRec.n, n2(cNcRec.b0), n2(cNcRec.bt5), n2(cNcRec.bt12), n2(cNcRec.bt15), n2(cNcRec.noObj), n2(cNcRec.exento), n2(cNcRec.iva5), n2(cNcRec.iva12), n2(cNcRec.iva15)]);
+    totRow(tc,   ['TOTAL', '', cTotN, n2(cTotB0), n2(cTotBt5), n2(cTotBt12), n2(cTotBt15), n2(cTotNoObj), n2(cTotExento), n2(cTotIva5), n2(cTotIva12), n2(cTotIva15)]);
     curY += 10;
 
     secHdr('VENTAS');
     colHdr(tc);
     if (facturas.length > 0)
-      dataRow(tc, ['01', 'FACTURA', vFact.n, n2(vFact.b0), n2(vFact.bt5), n2(vFact.bt12), n2(vFact.bt15), '0.00', n2(vFact.iva5), n2(vFact.iva12), n2(vFact.iva15)]);
+      dataRow(tc, ['01', 'FACTURA', vFact.n, n2(vFact.b0), n2(vFact.bt5), n2(vFact.bt12), n2(vFact.bt15), n2(vFact.noObj), '0.00', n2(vFact.iva5), n2(vFact.iva12), n2(vFact.iva15)]);
     if (liquidaciones.length > 0)
-      dataRow(tc, ['03', 'LIQUIDACIÓN DE COMPRA', vLiq.n, n2(vLiq.b0), n2(vLiq.bt5), n2(vLiq.bt12), n2(vLiq.bt15), '0.00', n2(vLiq.iva5), n2(vLiq.iva12), n2(vLiq.iva15)]);
+      dataRow(tc, ['03', 'LIQUIDACIÓN DE COMPRA', vLiq.n, n2(vLiq.b0), n2(vLiq.bt5), n2(vLiq.bt12), n2(vLiq.bt15), n2(vLiq.noObj), '0.00', n2(vLiq.iva5), n2(vLiq.iva12), n2(vLiq.iva15)]);
     if (vNV.n > 0)
-      dataRow(tc, ['02', 'NOTA DE VENTA', vNV.n, n2(vNV.b0), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']);
+      dataRow(tc, ['02', 'NOTA DE VENTA', vNV.n, n2(vNV.b0), '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00', '0.00']);
     if (ncs.length > 0)
-      dataRow(tc, ['04', 'NOTA DE CRÉDITO', vNcEm.n, '0.00', n2(vNcEm.bt5), '0.00', n2(vNcEm.bt15), '0.00', n2(vNcEm.iva5), '0.00', n2(vNcEm.iva15)]);
-    totRow(tc,   ['TOTAL', '', vTotN, n2(vTotB0), n2(vTotBt5), n2(vTotBt12), n2(vTotBt15), '0.00', n2(vTotIva5), n2(vTotIva12), n2(vTotIva15)]);
+      dataRow(tc, ['04', 'NOTA DE CRÉDITO', vNcEm.n, '0.00', n2(vNcEm.bt5), '0.00', n2(vNcEm.bt15), '0.00', '0.00', n2(vNcEm.iva5), '0.00', n2(vNcEm.iva15)]);
+    totRow(tc,   ['TOTAL', '', vTotN, n2(vTotB0), n2(vTotBt5), n2(vTotBt12), n2(vTotBt15), n2(vTotNoObj), '0.00', n2(vTotIva5), n2(vTotIva12), n2(vTotIva15)]);
     curY += 10;
+    // Nota: la columna "Exento" de VENTAS siempre sale 0.00 — el SRI no
+    // separa exenta de no-objeto para ventas (solo para compras), la base
+    // combinada ya se refleja en "No Obj." arriba.
 
     // ── COMPROBANTES ANULADOS ─────────────────────────────────────────────────
     pgCheck(SEC_H + ROW_H + 12);
