@@ -35,6 +35,25 @@ export interface ItemComanda {
   facturado?: boolean;
 }
 
+export interface ItemCocinaPendiente {
+  comandaId: number;
+  mesaId: number;
+  mesaNombre: string;
+  codigoPrincipal: string;
+  descripcion: string;
+  cantidad: number;
+  nota?: string | null;
+  enviadoCocinaEn: string;
+}
+
+export interface LlamadaServicio {
+  id: number;
+  mesaId: number;
+  estado: 'PENDIENTE' | 'ATENDIDA';
+  createdAt: string;
+  mesa?: { nombre: string };
+}
+
 export interface Mesa {
   id: number;
   nombre: string;

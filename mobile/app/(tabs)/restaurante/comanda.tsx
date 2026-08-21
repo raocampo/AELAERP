@@ -27,6 +27,10 @@ export default function ComandaScreen() {
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState<Producto[]>([]);
   const busquedaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cuentas separadas: null = modo normal; Set<number> = modo "dividir
+  // cuenta" activo con los índices (dentro de comanda.items, arreglo
+  // completo incluyendo ítems ya facturados) seleccionados para esta ronda.
+  const [seleccion, setSeleccion] = useState<Set<number> | null>(null);
 
   const cargar = useCallback(() => {
     api.get(`/mesas/${mesaId}/comanda`)
@@ -144,16 +148,25 @@ export default function ComandaScreen() {
     ]);
   };
 
+  // Sin selección activa: cobra TODOS los ítems pendientes (de siempre).
+  // Con selección activa (modo "dividir cuenta"): cobra solo los índices
+  // marcados y le pasa `indices` a checkout.tsx para que POST
+  // /comandas/:id/cerrar sepa que es una cuenta dividida.
   const irACobrar = () => {
     if (!comanda) return;
     const pendientes = comanda.items.filter((it) => !it.facturado);
     if (!pendientes.length) { Alert.alert('Sin ítems', 'No hay ítems pendientes por cobrar'); return; }
-    const subtotal = pendientes.reduce((a, i) => a + i.cantidad * i.precioUnitario, 0);
-    const totalConIva = pendientes.reduce((a, i) => a + i.cantidad * i.precioUnitario * (1 + i.ivaPorcentaje / 100), 0);
+
+    const indices = seleccion ? [...seleccion] : null;
+    const itemsACobrar = indices ? comanda.items.filter((_, i) => indices.includes(i)) : pendientes;
+    if (indices && itemsACobrar.length === 0) { Alert.alert('Sin selección', 'Selecciona al menos un ítem para dividir la cuenta'); return; }
+
+    const subtotal = itemsACobrar.reduce((a, i) => a + i.cantidad * i.precioUnitario, 0);
+    const totalConIva = itemsACobrar.reduce((a, i) => a + i.cantidad * i.precioUnitario * (1 + i.ivaPorcentaje / 100), 0);
     router.push({
       pathname: '/(tabs)/pos/checkout',
       params: {
-        carrito: JSON.stringify(pendientes.map((it) => ({
+        carrito: JSON.stringify(itemsACobrar.map((it) => ({
           codigoPrincipal: it.codigoPrincipal, descripcion: it.descripcion,
           cantidad: it.cantidad, precioUnitario: it.precioUnitario, ivaPorcentaje: it.ivaPorcentaje,
         }))),
@@ -166,7 +179,17 @@ export default function ComandaScreen() {
         subtotal: subtotal.toFixed(2),
         comandaId: String(comanda.id),
         mesaNombre: comanda.mesa?.nombre || '',
+        ...(indices && { indices: JSON.stringify(indices) }),
       },
+    });
+  };
+
+  const toggleModoDividir = () => setSeleccion((prev) => (prev ? null : new Set()));
+  const toggleSeleccion = (idx: number) => {
+    setSeleccion((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
     });
   };
 
@@ -179,6 +202,10 @@ export default function ComandaScreen() {
   }
 
   const pendientesCocina = comanda.items.filter((it) => !it.enviadoCocina).length;
+  const editablesCount = comanda.items.filter((it) => !it.facturado).length;
+  const totalSeleccionado = seleccion
+    ? comanda.items.reduce((acc, it, i) => (seleccion.has(i) ? acc + it.cantidad * it.precioUnitario * (1 + it.ivaPorcentaje / 100) : acc), 0)
+    : 0;
 
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
@@ -221,29 +248,40 @@ export default function ComandaScreen() {
             <Text style={s.vacioTxt}>Busca un producto arriba para agregarlo al pedido.</Text>
           </View>
         }
-        renderItem={({ item, index }) => (
-          <View style={[s.itemRow, item.enviadoCocina ? s.itemEnviado : s.itemNuevo, item.facturado && s.itemFacturado]}>
-            <View style={s.itemCant}>
-              <TouchableOpacity style={s.ctrBtn} onPress={() => cambiarCantidad(index, -1)} disabled={item.facturado}>
-                <Ionicons name="remove" size={16} color="#1e40af" />
-              </TouchableOpacity>
-              <Text style={s.ctrQty}>{item.cantidad}</Text>
-              <TouchableOpacity style={s.ctrBtn} onPress={() => cambiarCantidad(index, 1)} disabled={item.facturado}>
-                <Ionicons name="add" size={16} color="#1e40af" />
-              </TouchableOpacity>
+        renderItem={({ item, index }) => {
+          return (
+            <View style={[s.itemRow, item.enviadoCocina ? s.itemEnviado : s.itemNuevo, item.facturado && s.itemFacturado]}>
+              {seleccion && !item.facturado && (
+                <TouchableOpacity onPress={() => toggleSeleccion(index)} style={s.checkbox}>
+                  <Ionicons
+                    name={seleccion.has(index) ? 'checkbox' : 'square-outline'}
+                    size={22}
+                    color={seleccion.has(index) ? '#1e40af' : '#94a3b8'}
+                  />
+                </TouchableOpacity>
+              )}
+              <View style={s.itemCant}>
+                <TouchableOpacity style={s.ctrBtn} onPress={() => cambiarCantidad(index, -1)} disabled={item.facturado || !!seleccion}>
+                  <Ionicons name="remove" size={16} color="#1e40af" />
+                </TouchableOpacity>
+                <Text style={s.ctrQty}>{item.cantidad}</Text>
+                <TouchableOpacity style={s.ctrBtn} onPress={() => cambiarCantidad(index, 1)} disabled={item.facturado || !!seleccion}>
+                  <Ionicons name="add" size={16} color="#1e40af" />
+                </TouchableOpacity>
+              </View>
+              <View style={s.itemInfo}>
+                <Text style={s.itemNombre} numberOfLines={2}>{item.descripcion}</Text>
+                {item.nota ? <Text style={s.itemNota}>📝 {item.nota}</Text> : null}
+              </View>
+              <Text style={s.itemPrecio}>${(item.cantidad * item.precioUnitario).toFixed(2)}</Text>
+              {!item.facturado && !seleccion && (
+                <TouchableOpacity onPress={() => quitarItem(index)}>
+                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                </TouchableOpacity>
+              )}
             </View>
-            <View style={s.itemInfo}>
-              <Text style={s.itemNombre} numberOfLines={2}>{item.descripcion}</Text>
-              {item.nota ? <Text style={s.itemNota}>📝 {item.nota}</Text> : null}
-            </View>
-            <Text style={s.itemPrecio}>${(item.cantidad * item.precioUnitario).toFixed(2)}</Text>
-            {!item.facturado && (
-              <TouchableOpacity onPress={() => quitarItem(index)}>
-                <Ionicons name="trash-outline" size={18} color="#ef4444" />
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+          );
+        }}
       />
 
       <View style={s.footer}>
@@ -254,24 +292,43 @@ export default function ComandaScreen() {
           <Text style={s.footerValor}>${comanda.totalIva.toFixed(2)}</Text>
         </View>
         <View style={[s.footerTotales, s.footerTotalBig]}>
-          <Text style={s.footerTotalLbl}>Total</Text>
+          <Text style={s.footerTotalLbl}>{seleccion ? 'Pendiente' : 'Total'}</Text>
           <Text style={s.footerTotalVal}>${comanda.total.toFixed(2)}</Text>
         </View>
+        {seleccion && seleccion.size > 0 && (
+          <View style={s.footerTotales}>
+            <Text style={s.footerLabel}>Seleccionado</Text>
+            <Text style={s.footerValor}>${totalSeleccionado.toFixed(2)}</Text>
+          </View>
+        )}
         <View style={s.acciones}>
-          <TouchableOpacity style={s.anularBtn} onPress={anular}>
-            <Text style={s.anularBtnTxt}>Anular</Text>
-          </TouchableOpacity>
+          {!seleccion && (
+            <TouchableOpacity style={s.anularBtn} onPress={anular}>
+              <Text style={s.anularBtnTxt}>Anular</Text>
+            </TouchableOpacity>
+          )}
+          {!seleccion && (
+            <TouchableOpacity
+              style={[s.cocinaBtn, (enviandoCocina || pendientesCocina === 0) && s.btnDisabled]}
+              onPress={enviarCocina}
+              disabled={enviandoCocina || pendientesCocina === 0}
+            >
+              {enviandoCocina
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={s.cocinaBtnTxt}>🔥 Cocina{pendientesCocina ? ` (${pendientesCocina})` : ''}</Text>}
+            </TouchableOpacity>
+          )}
+          {editablesCount > 1 && (
+            <TouchableOpacity style={s.dividirBtn} onPress={toggleModoDividir}>
+              <Text style={s.dividirBtnTxt}>{seleccion ? 'Cancelar' : '🔀 Dividir'}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
-            style={[s.cocinaBtn, (enviandoCocina || pendientesCocina === 0) && s.btnDisabled]}
-            onPress={enviarCocina}
-            disabled={enviandoCocina || pendientesCocina === 0}
+            style={[s.cobrarBtn, seleccion && seleccion.size === 0 && s.btnDisabled]}
+            onPress={irACobrar}
+            disabled={!!seleccion && seleccion.size === 0}
           >
-            {enviandoCocina
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={s.cocinaBtnTxt}>🔥 Cocina{pendientesCocina ? ` (${pendientesCocina})` : ''}</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity style={s.cobrarBtn} onPress={irACobrar}>
-            <Text style={s.cobrarBtnTxt}>💳 Cobrar</Text>
+            <Text style={s.cobrarBtnTxt}>{seleccion ? `💳 Cobrar (${seleccion.size})` : '💳 Cobrar'}</Text>
           </TouchableOpacity>
         </View>
         {guardando && <Text style={s.guardandoTxt}>Guardando...</Text>}
@@ -293,6 +350,7 @@ const s = StyleSheet.create({
   vacio: { alignItems: 'center', paddingVertical: 48 },
   vacioTxt: { fontSize: 14, color: '#94a3b8', marginTop: 12, textAlign: 'center' },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#f8fafc', borderRadius: 10, padding: 10, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#94a3b8' },
+  checkbox: { padding: 2 },
   itemNuevo: { borderLeftColor: '#f59e0b', backgroundColor: '#fffbeb' },
   itemEnviado: { borderLeftColor: '#10b981' },
   itemFacturado: { opacity: 0.6, borderLeftColor: '#16a34a' },
@@ -315,6 +373,8 @@ const s = StyleSheet.create({
   anularBtnTxt: { color: '#64748b', fontWeight: '600', fontSize: 13 },
   cocinaBtn: { flex: 1, backgroundColor: '#f59e0b', borderRadius: 10, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
   cocinaBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  dividirBtn: { paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: '#7c3aed' },
+  dividirBtnTxt: { color: '#7c3aed', fontWeight: '700', fontSize: 13 },
   cobrarBtn: { flex: 1, backgroundColor: '#1e40af', borderRadius: 10, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
   cobrarBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
   btnDisabled: { opacity: 0.5 },

@@ -13,7 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import api from '../../../services/api';
-import type { Mesa } from '../../../types';
+import type { LlamadaServicio, Mesa } from '../../../types';
+
+const POLL_LLAMADAS_MS = 15_000;
 
 export default function MesasScreen() {
   const router = useRouter();
@@ -21,6 +23,7 @@ export default function MesasScreen() {
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [abriendoId, setAbriendoId] = useState<number | null>(null);
+  const [llamadas, setLlamadas] = useState<LlamadaServicio[]>([]);
 
   const cargar = useCallback(async () => {
     try {
@@ -37,6 +40,26 @@ export default function MesasScreen() {
   // Recarga cada vez que se vuelve a esta pantalla (ej. al regresar de
   // cobrar una mesa) — expo-router no remonta el screen automáticamente.
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
+
+  // Llamadas de servicio (botón "Llamar al mesero" del menú por QR) — mismo
+  // patrón de polling que la Vista de Cocina, no hay WebSocket en el backend.
+  const cargarLlamadas = useCallback(() => {
+    api.get('/mesas/llamadas/pendientes').then((res) => setLlamadas(res.data?.data || [])).catch(() => {});
+  }, []);
+  useFocusEffect(useCallback(() => {
+    cargarLlamadas();
+    const id = setInterval(cargarLlamadas, POLL_LLAMADAS_MS);
+    return () => clearInterval(id);
+  }, [cargarLlamadas]));
+
+  const atenderLlamada = async (llamada: LlamadaServicio) => {
+    try {
+      await api.post(`/mesas/llamadas/${llamada.id}/atender`);
+      setLlamadas((prev) => prev.filter((l) => l.id !== llamada.id));
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.mensaje || 'No se pudo marcar la llamada como atendida');
+    }
+  };
 
   const onRefresh = () => { setRefrescando(true); cargar(); };
 
@@ -67,9 +90,35 @@ export default function MesasScreen() {
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
       <View style={s.header}>
-        <Text style={s.headerTitle}>🍽️ Mesas</Text>
-        <Text style={s.headerSub}>Toca una mesa libre para abrirla, u ocupada para ver su pedido.</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.headerTitle}>🍽️ Mesas</Text>
+            <Text style={s.headerSub}>Toca una mesa libre para abrirla, u ocupada para ver su pedido.</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={s.headerBtn} onPress={() => router.push('/(tabs)/restaurante/cocina')}>
+              <Ionicons name="flame-outline" size={20} color="#1e40af" />
+            </TouchableOpacity>
+            <TouchableOpacity style={s.headerBtn} onPress={() => router.push('/(tabs)/restaurante/reportes')}>
+              <Ionicons name="bar-chart-outline" size={20} color="#1e40af" />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
+
+      {llamadas.length > 0 && (
+        <View style={s.llamadasBanner}>
+          {llamadas.map((l) => (
+            <View key={l.id} style={s.llamadaItem}>
+              <Text style={s.llamadaTxt}>🔔 <Text style={{ fontWeight: '800' }}>{l.mesa?.nombre}</Text> está llamando</Text>
+              <TouchableOpacity style={s.atenderBtn} onPress={() => atenderLlamada(l)}>
+                <Text style={s.atenderBtnTxt}>Atender</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
       <FlatList
         data={mesas}
         keyExtractor={(m) => String(m.id)}
@@ -101,6 +150,9 @@ export default function MesasScreen() {
                   {item.comanda!.pendientesCocina > 0 && (
                     <View style={s.badge}><Text style={s.badgeTxt}>🔥 {item.comanda!.pendientesCocina} sin enviar</Text></View>
                   )}
+                  {item.comanda!.tieneCuentaDividida && (
+                    <View style={s.badge}><Text style={s.badgeTxt}>🔀 cuenta dividida</Text></View>
+                  )}
                 </>
               ) : (
                 <Text style={[s.mesaEstado, s.estadoLibre]}>
@@ -121,6 +173,12 @@ const s = StyleSheet.create({
   header: { padding: 16, paddingBottom: 8 },
   headerTitle: { fontSize: 22, fontWeight: '800', color: '#1e293b' },
   headerSub: { fontSize: 13, color: '#64748b', marginTop: 2 },
+  headerBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' },
+  llamadasBanner: { paddingHorizontal: 12, gap: 8, marginBottom: 8 },
+  llamadaItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fffbeb', borderWidth: 1.5, borderColor: '#f59e0b', borderRadius: 10, padding: 10 },
+  llamadaTxt: { fontSize: 13, color: '#92400e', flex: 1 },
+  atenderBtn: { backgroundColor: '#f59e0b', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12, marginLeft: 8 },
+  atenderBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 12 },
   lista: { padding: 12 },
   fila: { gap: 12 },
   vacio: { alignItems: 'center', paddingVertical: 64, paddingHorizontal: 32 },

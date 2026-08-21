@@ -152,6 +152,52 @@ reportes — el checkout móvil sigue con una sola forma de pago, "cobrar"
 siempre cobra TODO lo pendiente de una vez. Fase 2 quedaría pendiente
 de que el usuario la pida.
 
+### Fase 2 (implementada la misma sesión, tras "sigue con lo planificado")
+
+Con la fase 1 aceptada, el usuario pidió continuar — se llevó el resto
+del módulo web al móvil, mismo alcance que las secciones 2-5 de arriba:
+
+- **Pagos mixtos** (`pos/checkout.tsx`): de una sola `formaPago`/
+  `montoPagado` a un arreglo `pagos: {formaPago, monto}[]`. Con 1 sola
+  línea se mantiene el comportamiento de siempre (puede recibir de más
+  y calcular cambio); con 2+ líneas la suma debe cuadrar exacto con el
+  total (mismo criterio que la web — no tiene sentido repartir vuelto
+  entre varias formas de pago). Botón "Agregar forma de pago",
+  indicador de cuánto falta/sobra, "Emitir" deshabilitado si no cuadra.
+- **Cuentas separadas** (`restaurante/comanda.tsx`): modo "🔀 Dividir"
+  con checkbox por ítem pendiente (solo visible si hay 2+ ítems
+  editables); "Cobrar (N)" pasa los índices seleccionados a
+  `checkout.tsx`, que a su vez los reenvía a `POST
+  /comandas/:id/cerrar` — mismo mecanismo que la web, reutilizando el
+  backend ya probado. Fila "Seleccionado" en el resumen mientras se
+  arma la selección.
+- **Vista de Cocina** (`restaurante/cocina.tsx`, nueva): cola de ítems
+  pendientes con polling de 15s, botón "✓ Listo" por ítem, tarjeta roja
+  si lleva 10+ minutos esperando. Si el usuario no tiene el permiso
+  `mesas.cocina`, muestra un mensaje claro en vez de fallar.
+- **Llamadas de servicio** (`restaurante/index.tsx`): banner con
+  polling de 15s mostrando llamadas pendientes + botón "Atender" por
+  mesa, arriba del mapa de mesas. Se agregaron también botones de
+  header para navegar a Cocina y Reportes, y un badge "🔀 cuenta
+  dividida" en las tarjetas de mesa con cuenta parcial.
+- **Reportes gerenciales + punto de equilibrio**
+  (`restaurante/reportes.tsx`, nueva): tabs Ventas (agrupado por mesa/
+  mesero/franja horaria) / Punto de equilibrio, mismos endpoints que la
+  web. Sin permiso, muestra mensaje claro en vez de fallar.
+
+**Hallazgo de paso, corregido antes de terminar**: la primera versión
+de `checkout.tsx` mostraba "🍽️ Mesa liberada" en la pantalla de éxito
+incluso cuando `POST /comandas/:id/cerrar` había fallado con error (ya
+se le había avisado al usuario con una alerta separada, pero el texto
+de la pantalla de éxito seguía siendo engañoso). Corregido: el mensaje
+de mesa liberada/pendiente solo se muestra si el cierre realmente tuvo
+éxito (`cierre.ok === true`); si falló, no se muestra ningún mensaje
+extra (la alerta de error ya fue suficiente).
+
+Con esto, la app móvil queda con el **mismo alcance funcional que la
+web** para el módulo restaurante — arquitectura distinta (TypeScript/
+Expo Router vs JS/React Router) pero misma cobertura de features.
+
 ### Verificación
 
 Sin dispositivo/simulador Android o iOS disponible en este entorno —
@@ -172,11 +218,9 @@ no se pudo probar interactivamente. Sí se verificó:
    `curl`/API directa) ni la móvil (sin dispositivo) se probaron
    interactivamente. Antes de dar el módulo por completamente cerrado,
    conviene una pasada manual: web (Mesas → todo lo nuevo) y móvil
-   (Expo Go o build de desarrollo, tab "Mesas").
-2. **Fase 2 móvil** (si se pide): cuentas separadas, pagos mixtos,
-   vista de cocina, llamada de mesero, reportes — mismo alcance que la
-   web, sin empezar todavía.
-3. **Hallazgos previos de la sesión que siguen abiertos** (ver
+   (Expo Go o build de desarrollo, tab "Mesas" — mapa, comanda, dividir
+   cuenta, pagos mixtos, Cocina, Reportes).
+2. **Hallazgos previos de la sesión que siguen abiertos** (ver
    `docs/pendientes-2026-08-20.md`, sección "Cierre de sesión"): PDFKit
    rompe acentos en todos los PDFs, Anexo RDEP bloqueado, Anticipo de
    Impuesto a la Renta bloqueado — ninguno tocado hoy, no relacionado

@@ -11,6 +11,8 @@ export default function RestauranteLayout() {
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="comanda" options={{ title: 'Comanda', headerBackTitle: 'Mesas' }} />
+      <Stack.Screen name="cocina" options={{ title: 'Cocina', headerBackTitle: 'Mesas' }} />
+      <Stack.Screen name="reportes" options={{ title: 'Reportes', headerBackTitle: 'Mesas' }} />
     </Stack>
   );
 }
