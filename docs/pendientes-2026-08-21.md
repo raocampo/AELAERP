@@ -288,3 +288,78 @@ cerrada) si se repite en uso real.
    rompe acentos en todos los PDFs, Anexo RDEP bloqueado, Anticipo de
    Impuesto a la Renta bloqueado — ninguno tocado hoy, no relacionado
    con el módulo restaurante.
+
+---
+
+# Cierre de sesión — Módulo Restaurante (2026-08-21)
+
+Resumen consolidado para retomar sin releer todo el documento de
+arriba.
+
+## Resumen de commits (10, orden cronológico)
+
+| Commit | Qué |
+|---|---|
+| `650fb3e` | feat: roles avanzados (mesero/cajero/cocina) + Vista de Cocina |
+| `d5c8502` | feat: pagos mixtos en POS (facturas y notas de venta) |
+| `df3f46f` | feat: cuentas separadas (split bill) en mesas por ítem |
+| `83637f9` | feat: llamada de mesero por QR |
+| `10c85ac` | feat: reportes gerenciales y punto de equilibrio |
+| `0643631` | feat: app móvil — restaurante fase 1 (mapa de mesas, comanda, cobrar) |
+| `51aca36` | feat: app móvil — restaurante fase 2 (paridad completa con la web) |
+| `b594f13` | fix: 2 bugs hallados en verificación interactiva (Playwright) — overflow CSS pago mixto + huso horario en reportes |
+
+Todo lo de la sesión quedó **implementado, verificado y pusheado a
+`origin/main`** — no hay código a medio terminar ni bloqueado a nivel
+de git. Datos de prueba (QATEST-*) limpiados de la BD real
+(`aela_db`, empresaId=1) al cerrar; `configuracion_sistema` revertida
+(`restauranteHabilitado`/`costosFijosMensuales`) a su estado original.
+
+## ✅ Completado
+
+- **Web**: roles mesero/cajero/cocina, Vista de Cocina, pagos mixtos
+  (facturas + notas de venta), cuentas separadas por ítem, llamada de
+  mesero por QR, reportes de ventas + punto de equilibrio. Verificado
+  end-to-end por API (curl) **y** interactivamente en un navegador real
+  (Playwright/Chromium) — mapa de mesas → comanda → cocina → dividir
+  cuenta → pago mixto → cobro parcial/final → mesa liberada → QR →
+  reportes. 2 bugs reales encontrados y corregidos en esa pasada (ver
+  sección 7 arriba); ninguno era detectable por curl.
+- **Móvil** (Expo, fases 1+2): mismo alcance funcional que la web.
+  Verificado con `tsc --noEmit` limpio y contra el mismo backend real
+  ya probado — sin dispositivo/simulador disponible en este entorno,
+  así que **no** se hizo clic literal en la app móvil.
+- **49/49 tests de backend** pasan tras los 2 fixes del hallazgo de
+  Playwright.
+
+## 🔴 Pendientes para retomar (consolidado)
+
+1. **Verificación humana en dispositivo/emulador móvil real** — único
+   pendiente propio de esta sesión. La web ya está verificada
+   interactivamente; falta lo mismo en Android/iOS (Expo Go o build de
+   desarrollo): mapa de mesas, comanda, dividir cuenta, pagos mixtos,
+   Cocina, Reportes, y confirmar que el gateo por rol (que hoy solo
+   existe en el backend, no en la navegación móvil — ver
+   `mobile_app_estado.md` punto 4c) no deja pantallas confusas para un
+   mesero/cocina real.
+2. **Hallazgo de diseño sin corregir** (bajo riesgo, no bloqueante):
+   ítems de una comanda cobrada completamente antes de que cocina los
+   marque "listo" desaparecen de la cola de cocina — solo ocurre con un
+   orden de trabajo invertido al normal (cobrar antes de que cocina
+   termine). Documentado en sección 7 arriba.
+3. **Pendientes de sesiones anteriores, sin relación con el módulo
+   restaurante** (ver `docs/pendientes-2026-08-20.md`, sección "Cierre
+   de sesión" 2026-08-17/21): PDFKit rompe acentos (á/é/í/ó/ú/ñ) en
+   TODOS los PDFs del sistema — hallazgo grande, sin arreglar; Anexo
+   RDEP bloqueado (faltan campos en `empleados`: discapacidad,
+   Galápagos, enfermedad catastrófica); Anticipo de Impuesto a la Renta
+   bloqueado (la fórmula clásica ya no existe en la ley vigente,
+   pendiente decisión de alcance con el usuario).
+
+## Al retomar
+
+`git fetch` + revisar este documento o la memoria
+`aela-erp-estado-actual-del-proyecto` (mismo contenido, siempre
+actualizado). El único pendiente que bloquea cerrar el módulo
+restaurante del todo es el punto 1 (verificación móvil real); el resto
+son decisiones de alcance o hallazgos de bajo riesgo ya documentados.
