@@ -5,7 +5,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import './Restaurante.css';
 
-function ModalMenuQR({ onClose }) {
+function ModalMenuQR({ mesa, onClose }) {
   const { empresa } = useAuth();
   const [qrUrl, setQrUrl] = useState(null);
   const [urlPublica, setUrlPublica] = useState('');
@@ -15,8 +15,13 @@ function ModalMenuQR({ onClose }) {
     // multi-tenant) la ruta es /menu/:empresaId a secas; con slug real
     // (SaaS) es /menu/:slug/:empresaId. Ver App.jsx — un slug vacío en el
     // path produce /menu//1, que no matchea ninguna ruta.
+    // Con `mesa` (QR impreso para UNA mesa en particular) se agrega
+    // ?mesa=<id> — MenuPublico.jsx lo usa para mostrar el botón "Llamar al
+    // mesero" ya sabiendo de qué mesa viene, sin que el cliente tenga que
+    // escribir el número a mano.
     const slug = localStorage.getItem('aela_tenant_slug') || '';
-    const publica = `${window.location.origin}/menu/${slug ? `${slug}/` : ''}${empresa?.id}`;
+    const base = `${window.location.origin}/menu/${slug ? `${slug}/` : ''}${empresa?.id}`;
+    const publica = mesa ? `${base}?mesa=${mesa.id}` : base;
     setUrlPublica(publica);
 
     let objectUrl = null;
@@ -28,7 +33,7 @@ function ModalMenuQR({ onClose }) {
       .catch(() => toast.error('No se pudo generar el código QR'));
 
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [empresa?.id]);
+  }, [empresa?.id, mesa]);
 
   const copiarUrl = () => {
     navigator.clipboard?.writeText(urlPublica);
@@ -38,10 +43,11 @@ function ModalMenuQR({ onClose }) {
   return (
     <div className="rest-modal-overlay">
       <div className="rest-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>📋 Menú Digital</h2>
+        <h2>📋 Menú Digital{mesa ? ` — ${mesa.nombre}` : ''}</h2>
         <p style={{ color: '#64748b', fontSize: '.85rem', marginTop: -8 }}>
-          Imprime este código y pégalo en las mesas — tus clientes lo escanean con la cámara
-          de su celular y ven el menú al instante, sin instalar nada.
+          {mesa
+            ? `Imprime este código y pégalo en ${mesa.nombre} — el cliente ve el menú y puede llamar al mesero desde ahí, sin instalar nada.`
+            : 'Imprime este código y pégalo en las mesas — tus clientes lo escanean con la cámara de su celular y ven el menú al instante, sin instalar nada.'}
         </p>
         {qrUrl ? (
           <img src={qrUrl} alt="QR del menú digital" style={{ display: 'block', margin: '0 auto', width: 220, height: 220 }} />
@@ -121,7 +127,8 @@ export default function MapaMesas() {
   const [modalMesa, setModalMesa] = useState(null); // null=cerrado, {}=nueva, {...}=editar
   const [modoAdmin, setModoAdmin] = useState(false);
   const [abriendo, setAbriendo] = useState(null);
-  const [modalQR, setModalQR] = useState(false);
+  const [modalQR, setModalQR] = useState(null); // null=cerrado, true=QR general, {mesa}=QR de una mesa
+  const [llamadas, setLlamadas] = useState([]);
 
   const cargar = () => {
     setLoading(true);
@@ -132,6 +139,29 @@ export default function MapaMesas() {
   };
 
   useEffect(cargar, []);
+
+  // Llamadas de servicio (botón "Llamar al mesero" del menú por QR) — se
+  // revisan por polling, igual que la Vista de Cocina; no hay WebSocket en
+  // este backend.
+  const cargarLlamadas = () => {
+    api.get('/mesas/llamadas/pendientes')
+      .then((r) => setLlamadas(r.data?.data || []))
+      .catch(() => {});
+  };
+  useEffect(() => {
+    cargarLlamadas();
+    const id = setInterval(cargarLlamadas, 15_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const atenderLlamada = async (llamada) => {
+    try {
+      await api.post(`/mesas/llamadas/${llamada.id}/atender`);
+      setLlamadas((prev) => prev.filter((l) => l.id !== llamada.id));
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo marcar la llamada como atendida');
+    }
+  };
 
   const abrirMesa = async (mesa) => {
     if (mesa.comanda) {
@@ -167,6 +197,17 @@ export default function MapaMesas() {
         </div>
       </div>
 
+      {llamadas.length > 0 && (
+        <div className="rest-llamadas-banner">
+          {llamadas.map((l) => (
+            <div key={l.id} className="rest-llamada-item">
+              🔔 <strong>{l.mesa?.nombre}</strong> está llamando al mesero
+              <button type="button" className="btn-secondary" onClick={() => atenderLlamada(l)}>Atender</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className="rest-empty">Cargando...</div>
       ) : mesas.length === 0 ? (
@@ -193,13 +234,28 @@ export default function MapaMesas() {
                     {mesa.comanda.pendientesCocina > 0 && (
                       <div className="rest-mesa-badge">🔥 {mesa.comanda.pendientesCocina} sin enviar</div>
                     )}
+                    {mesa.comanda.tieneCuentaDividida && (
+                      <div className="rest-mesa-badge">🔀 cuenta dividida</div>
+                    )}
                   </>
                 ) : (
                   <div className="rest-mesa-estado">
                     {abriendo === mesa.id ? 'Abriendo...' : 'Libre'}
                   </div>
                 )}
-                {modoAdmin && <div className="rest-mesa-edit">✏️ Editar</div>}
+                {modoAdmin && (
+                  <>
+                    <div className="rest-mesa-edit">✏️ Editar</div>
+                    <button
+                      type="button"
+                      className="rest-mesa-qr-btn"
+                      onClick={(e) => { e.stopPropagation(); setModalQR({ mesa }); }}
+                      title={`Generar QR solo para ${mesa.nombre}`}
+                    >
+                      📋 QR
+                    </button>
+                  </>
+                )}
               </div>
             );
           })}
@@ -213,7 +269,7 @@ export default function MapaMesas() {
           onGuardado={() => { setModalMesa(null); cargar(); }}
         />
       )}
-      {modalQR && <ModalMenuQR onClose={() => setModalQR(false)} />}
+      {modalQR && <ModalMenuQR mesa={modalQR.mesa || null} onClose={() => setModalQR(null)} />}
     </div>
   );
 }

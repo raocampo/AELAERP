@@ -69,6 +69,43 @@ const P_VER        = ['mesas.gestionar', 'mesas.tomarPedido', 'mesas.cobrar', 'm
 const P_TOMAR       = ['mesas.gestionar', 'mesas.tomarPedido'];
 const P_COBRAR      = ['mesas.gestionar', 'mesas.cobrar'];
 const P_COCINA      = ['mesas.gestionar', 'mesas.cocina'];
+const P_SERVICIO    = ['mesas.gestionar', 'mesas.tomarPedido', 'mesas.cobrar'];
+
+// GET /api/mesas/llamadas/pendientes — llamadas de servicio sin atender
+// (botón "Llamar mesero" del menú digital por QR), más antiguas primero.
+router.get('/llamadas/pendientes', autorizarPermiso(P_SERVICIO), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const llamadas = await prisma.restaurante_llamadas.findMany({
+      where: { empresaId, estado: 'PENDIENTE' },
+      include: { mesa: { select: { nombre: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({ success: true, data: llamadas });
+  } catch (error) {
+    console.error('GET /mesas/llamadas/pendientes:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudieron obtener las llamadas de servicio' });
+  }
+});
+
+// POST /api/mesas/llamadas/:id/atender
+router.post('/llamadas/:id/atender', autorizarPermiso(P_SERVICIO), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const id = parseInt(req.params.id, 10);
+    const llamada = await prisma.restaurante_llamadas.findFirst({ where: { id, empresaId } });
+    if (!llamada) return res.status(404).json({ success: false, mensaje: 'Llamada no encontrada' });
+
+    await prisma.restaurante_llamadas.update({
+      where: { id },
+      data: { estado: 'ATENDIDA', atendidaEn: new Date(), atendidaPor: req.usuario.id },
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('POST /mesas/llamadas/:id/atender:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo marcar la llamada como atendida' });
+  }
+});
 
 // GET /api/mesas — mapa de mesas con resumen de su comanda abierta (si tiene)
 router.get('/', autorizarPermiso(P_VER), async (req, res) => {

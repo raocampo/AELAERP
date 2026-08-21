@@ -2,8 +2,11 @@
 // routes/menuPublico.js — AELA
 // Menú digital por QR (módulo Mesas y Comandas) — SIN autenticación, para
 // que cualquier cliente que escanee el QR de su mesa lo vea desde su
-// celular sin necesitar cuenta ni login. Es de SOLO LECTURA: no crea ni
-// modifica nada — el pedido lo sigue tomando el mesero como siempre.
+// celular sin necesitar cuenta ni login. GET es de SOLO LECTURA: no crea ni
+// modifica nada — el pedido lo sigue tomando el mesero como siempre. La
+// única excepción es POST /:empresaId/llamar-mesero (llamada de servicio),
+// que sigue sin requerir sesión por el mismo motivo (el cliente no tiene
+// cuenta) pero sí escribe una fila.
 //
 // El tenant se resuelve igual que cualquier otra ruta (X-Tenant-Slug vía
 // resolverTenant en app.js, ya montado globalmente) — el frontend público
@@ -33,7 +36,8 @@ router.get('/:empresaId', async (req, res) => {
       return res.status(404).json({ success: false, mensaje: 'Menú no disponible' });
     }
 
-    const [empresa, cfgSri, productos] = await Promise.all([
+    const mesaId = parseInt(req.query.mesa, 10) || null;
+    const [empresa, cfgSri, productos, mesa] = await Promise.all([
       db.empresas.findFirst({ where: { id: empresaId }, select: { id: true, razonSocial: true, nombreComercial: true } }),
       db.configuracion_sri.findFirst({ where: { empresaId }, select: { nombreComercial: true, logoUrl: true } }),
       db.productos_servicios.findMany({
@@ -44,6 +48,9 @@ router.get('/:empresaId', async (req, res) => {
         },
         orderBy: [{ categoriaMenu: 'asc' }, { ordenMenu: 'asc' }, { nombre: 'asc' }],
       }),
+      mesaId
+        ? db.restaurante_mesas.findFirst({ where: { id: mesaId, empresaId, activo: true }, select: { id: true, nombre: true } })
+        : Promise.resolve(null),
     ]);
 
     if (!empresa) return res.status(404).json({ success: false, mensaje: 'Restaurante no encontrado' });
@@ -75,11 +82,48 @@ router.get('/:empresaId', async (req, res) => {
           logoUrl: cfgSri?.logoUrl || null,
         },
         categorias,
+        mesa: mesa || null,
       },
     });
   } catch (error) {
     console.error('GET /menu-publico/:empresaId:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo cargar el menú' });
+  }
+});
+
+// POST /api/menu-publico/:empresaId/llamar-mesero — el único punto de
+// ESCRITURA de todo este archivo (ver comentario de cabecera: el resto es
+// solo lectura). Sigue sin sesión — cualquiera con el QR de su mesa puede
+// llamarlo, mismo modelo de confianza que tocar un timbre físico en la
+// mesa. Idempotente contra spam: si ya hay una llamada PENDIENTE para esa
+// mesa, no crea una segunda.
+router.post('/:empresaId/llamar-mesero', async (req, res) => {
+  try {
+    const empresaId = parseInt(req.params.empresaId, 10);
+    const mesaId = parseInt(req.body?.mesaId, 10);
+    if (!empresaId || !mesaId) {
+      return res.status(400).json({ success: false, mensaje: 'Faltan datos de la mesa' });
+    }
+
+    const db = req.prisma || prisma;
+    const cfgSistema = await db.configuracion_sistema.findUnique({ where: { empresaId }, select: { restauranteHabilitado: true } });
+    if (!cfgSistema?.restauranteHabilitado) {
+      return res.status(404).json({ success: false, mensaje: 'Función no disponible' });
+    }
+
+    const mesa = await db.restaurante_mesas.findFirst({ where: { id: mesaId, empresaId, activo: true } });
+    if (!mesa) return res.status(404).json({ success: false, mensaje: 'Mesa no encontrada' });
+
+    const yaPendiente = await db.restaurante_llamadas.findFirst({ where: { empresaId, mesaId, estado: 'PENDIENTE' } });
+    if (yaPendiente) {
+      return res.json({ success: true, mensaje: 'Ya avisamos al mesero — está en camino' });
+    }
+
+    await db.restaurante_llamadas.create({ data: { empresaId, mesaId } });
+    res.json({ success: true, mensaje: 'Mesero avisado' });
+  } catch (error) {
+    console.error('POST /menu-publico/:empresaId/llamar-mesero:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo avisar al mesero' });
   }
 });
 

@@ -38,6 +38,53 @@
   border-radius: 12px;
 }
 
+/* ── Llamadas de servicio (menú QR → mesero) ──────────────────── */
+
+.rest-llamadas-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.rest-llamada-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fffbeb;
+  border: 1.5px solid #f59e0b;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #92400e;
+}
+
+.rest-llamada-item button { margin-left: auto; }
+
+@media (prefers-color-scheme: dark) {
+  .rest-llamada-item {
+    background: linear-gradient(rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.12)), #1e293b;
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.4);
+  }
+}
+
+.rest-mesa-qr-btn {
+  margin-top: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #7C3AED;
+  background: #fff;
+  color: #7C3AED;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .rest-mesa-qr-btn { background: #1e293b; }
+}
+
 /* ── Mapa de mesas ─────────────────────────────────────────── */
 
 .rest-grid {

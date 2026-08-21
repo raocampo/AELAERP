@@ -734,6 +734,19 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "notas_estados_financieros_empresaId_anio_idx" ON "notas_estados_financieros"("empresaId", "anio")`,
   // Pagos mixtos en notas de venta
   `ALTER TABLE "notas_venta" ADD COLUMN IF NOT EXISTS "pagos" JSONB`,
+  // Llamadas de servicio (mesero) desde el menú digital por QR
+  `CREATE TABLE IF NOT EXISTS "restaurante_llamadas" (
+    "id"          SERIAL PRIMARY KEY,
+    "empresaId"   INTEGER NOT NULL,
+    "mesaId"      INTEGER NOT NULL,
+    "estado"      VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE',
+    "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "atendidaEn"  TIMESTAMP(3),
+    "atendidaPor" INTEGER,
+    CONSTRAINT "restaurante_llamadas_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "empresas"("id"),
+    CONSTRAINT "restaurante_llamadas_mesaId_fkey" FOREIGN KEY ("mesaId") REFERENCES "restaurante_mesas"("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "restaurante_llamadas_empresaId_estado_idx" ON "restaurante_llamadas"("empresaId", "estado")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

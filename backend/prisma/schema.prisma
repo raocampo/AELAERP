@@ -110,6 +110,7 @@ model empresas {
   itemsCompraPendientes            items_compra_pendientes[]
   restauranteMesas                 restaurante_mesas[]
   restauranteComandas              restaurante_comandas[]
+  restauranteLlamadas              restaurante_llamadas[]
 
   @@map("empresas")
 }
@@ -370,10 +371,34 @@ model restaurante_mesas {
 
   empresa  empresas               @relation(fields: [empresaId], references: [id])
   comandas restaurante_comandas[]
+  llamadas restaurante_llamadas[]
 
   @@unique([empresaId, nombre])
   @@index([empresaId])
   @@map("restaurante_mesas")
+}
+
+// Llamadas de servicio desde el menú digital por QR — el cliente escanea el
+// QR de SU mesa (que ya trae el mesaId codificado en la URL) y pide
+// atención sin tener que levantar la mano; el mesero/cajero lo ve en el
+// mapa de mesas (polling, ver GET /mesas/llamadas/pendientes) y lo marca
+// atendido. Solo requiere empresaId+mesaId — el endpoint que la crea es
+// público (el cliente no tiene sesión).
+model restaurante_llamadas {
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  mesaId      Int
+  estado      String    @default("PENDIENTE") @db.VarChar(20)
+  // PENDIENTE | ATENDIDA
+  createdAt   DateTime  @default(now())
+  atendidaEn  DateTime?
+  atendidaPor Int?
+
+  empresa empresas         @relation(fields: [empresaId], references: [id])
+  mesa    restaurante_mesas @relation(fields: [mesaId], references: [id])
+
+  @@index([empresaId, estado])
+  @@map("restaurante_llamadas")
 }
 
 model restaurante_comandas {
