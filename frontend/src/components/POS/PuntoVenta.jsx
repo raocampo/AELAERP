@@ -43,9 +43,12 @@ export default function PuntoVenta() {
   const [razonSocial, setRazonSocial] = useState('CONSUMIDOR FINAL');
   const [direccion, setDireccion] = useState('');
   const [email, setEmail] = useState('');
-  const [formaPagoFactura, setFormaPagoFactura] = useState('01');
-  const [pagoRefFactura, setPagoRefFactura] = useState('');
-  const [formaPagoNota, setFormaPagoNota] = useState('Efectivo');
+  // Pagos mixtos: 1+ líneas {formaPago, monto, referencia}. Con 1 sola línea
+  // se comporta igual que antes (el monto se autocompleta con el total); con
+  // 2+ el cajero reparte el total entre varias formas de pago. El valor de
+  // formaPago cambia de significado según tipoDocumento (código SRI para
+  // factura, texto libre para nota de venta) — ver FORMAS_FACTURA/FORMAS_NOTA.
+  const [pagos, setPagos] = useState([{ formaPago: '01', monto: '', referencia: '' }]);
   const [fechaEmision, setFechaEmision] = useState(hoyLocal());
   // Res. SRI NAC-DGERCGC25-00000014: fecha de emisión = fecha real de la
   // operación, sin backdating — el backend rechaza más de 3 días de atraso
@@ -84,6 +87,13 @@ export default function PuntoVenta() {
   useEffect(() => {
     setTipoDocumento(sistema?.documentoPosDefault || 'factura');
   }, [sistema?.documentoPosDefault]);
+
+  // Al cambiar entre factura/nota de venta, la forma de pago por defecto
+  // cambia de código SRI ('01') a texto libre ('Efectivo') — evita mandar
+  // un código SRI en una nota de venta o viceversa si el cajero no toca el selector.
+  useEffect(() => {
+    setPagos([{ formaPago: tipoDocumento === 'factura' ? '01' : 'Efectivo', monto: '', referencia: '' }]);
+  }, [tipoDocumento]);
 
   // Avisa cuando una venta guardada offline finalmente se sincroniza (evento
   // disparado por procesarCola() en utils/syncQueue.js) — el cajero puede
@@ -226,6 +236,36 @@ export default function PuntoVenta() {
 
   // Total a cobrar: con IVA para facturas, sin IVA para notas de venta (RIMPE)
   const total = tipoDocumento === 'factura' ? totalConIva : subtotal;
+
+  // Con una sola línea de pago, autocompletar el monto con el total (mismo
+  // comportamiento de siempre — el cajero no tiene que escribirlo). Con 2+
+  // líneas no se toca nada: el cajero está repartiendo el total a mano.
+  useEffect(() => {
+    if (pagos.length === 1) {
+      setPagos((prev) => [{ ...prev[0], monto: total > 0 ? total.toFixed(2) : '' }]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total]);
+
+  const totalPagos = useMemo(
+    () => pagos.reduce((acc, p) => acc + (parseFloat(p.monto) || 0), 0),
+    [pagos],
+  );
+  const restante = Number((total - totalPagos).toFixed(2));
+  const pagosCuadran = Math.abs(restante) < 0.01;
+
+  const agregarLineaPago = () => {
+    setPagos((prev) => [
+      ...prev,
+      { formaPago: tipoDocumento === 'factura' ? '01' : 'Efectivo', monto: restante > 0 ? restante.toFixed(2) : '', referencia: '' },
+    ]);
+  };
+  const quitarLineaPago = (index) => {
+    setPagos((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+  };
+  const actualizarLineaPago = (index, campo, valor) => {
+    setPagos((prev) => prev.map((p, i) => (i === index ? { ...p, [campo]: valor } : p)));
+  };
 
   const agregarProducto = (producto) => {
     setCarrito((prev) => {
@@ -370,6 +410,14 @@ export default function PuntoVenta() {
       toast.error('Agrega al menos un producto al carrito');
       return;
     }
+    if (pagos.some((p) => !(parseFloat(p.monto) > 0))) {
+      toast.error('Cada forma de pago necesita un monto mayor a cero');
+      return;
+    }
+    if (!pagosCuadran) {
+      toast.error(restante > 0 ? `Faltan $${restante.toFixed(2)} por cubrir en las formas de pago` : `Las formas de pago suman $${Math.abs(restante).toFixed(2)} de más`);
+      return;
+    }
 
     setGuardando(true);
     const online = estaOnline();
@@ -433,7 +481,8 @@ export default function PuntoVenta() {
             direccion: direccion || undefined,
             email: email || undefined,
             telefono: telefono || undefined,
-            formaPago: formaPagoNota,
+            formaPago: pagos.length === 1 ? pagos[0].formaPago : 'Mixto',
+            pagos: pagos.length > 1 ? pagos.map((p) => ({ formaPago: p.formaPago, total: Number(p.monto) || 0 })) : undefined,
             fechaEmision,
             clienteId: idClienteBD || undefined,
             detalles: carrito.map((item) => ({
@@ -486,15 +535,13 @@ export default function PuntoVenta() {
               descuento: 0,
               ivaPorcentaje: Number(item.ivaPorcentaje || 0),
             })),
-            pagos: [
-              {
-                formaPago: FORMAS_FACTURA.find(f => f.value === formaPagoFactura)?.sriCodigo || formaPagoFactura,
-                total: totalConIva,  // total con IVA para que coincida con el importe total de la factura
-                plazo: 0,
-                unidadTiempo: 'dias',
-                ...(pagoRefFactura && { referencia: pagoRefFactura }),
-              },
-            ],
+            pagos: pagos.map((p) => ({
+              formaPago: FORMAS_FACTURA.find(f => f.value === p.formaPago)?.sriCodigo || p.formaPago,
+              total: Number(p.monto) || 0,
+              plazo: 0,
+              unidadTiempo: 'dias',
+              ...(p.referencia && { referencia: p.referencia }),
+            })),
             ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
           },
         });
@@ -620,30 +667,52 @@ export default function PuntoVenta() {
               <input value={email} onChange={(e) => setEmail(e.target.value)} />
             </label>
             <label className="full">
-              <span>Forma de pago</span>
-              {tipoDocumento === 'factura' ? (
-                <>
-                  <select value={formaPagoFactura} onChange={(e) => { setFormaPagoFactura(e.target.value); setPagoRefFactura(''); }}>
-                    {FORMAS_FACTURA.map((forma) => <option key={forma.value} value={forma.value}>{forma.label}</option>)}
-                  </select>
-                  {(formaPagoFactura === 'CHQ' || formaPagoFactura === 'TRF' || formaPagoFactura === 'APP') && (
+              <span>Forma(s) de pago</span>
+              <div className="pos-pagos-lista">
+                {pagos.map((pago, index) => (
+                  <div className="pos-pago-linea" key={index}>
+                    {tipoDocumento === 'factura' ? (
+                      <select value={pago.formaPago} onChange={(e) => actualizarLineaPago(index, 'formaPago', e.target.value)}>
+                        {FORMAS_FACTURA.map((forma) => <option key={forma.value} value={forma.value}>{forma.label}</option>)}
+                      </select>
+                    ) : (
+                      <select value={pago.formaPago} onChange={(e) => actualizarLineaPago(index, 'formaPago', e.target.value)}>
+                        {FORMAS_NOTA.map((forma) => <option key={forma} value={forma}>{forma}</option>)}
+                      </select>
+                    )}
                     <input
-                      style={{ marginTop: 6 }}
-                      value={pagoRefFactura}
-                      onChange={(e) => setPagoRefFactura(e.target.value)}
-                      placeholder={
-                        formaPagoFactura === 'CHQ' ? 'N° cheque y banco (Ej: #001 Pichincha)' :
-                        formaPagoFactura === 'APP' ? 'App + código transacción (Ej: Ahorita ABC123)' :
-                        'N° referencia / comprobante'
-                      }
+                      type="number" min="0" step="0.01"
+                      value={pago.monto}
+                      onChange={(e) => actualizarLineaPago(index, 'monto', e.target.value)}
+                      placeholder="Monto"
+                      className="pos-pago-monto"
                     />
+                    {pagos.length > 1 && (
+                      <button type="button" className="btn-link danger" onClick={() => quitarLineaPago(index)} title="Quitar esta forma de pago">✕</button>
+                    )}
+                  </div>
+                ))}
+                {tipoDocumento === 'factura' && pagos.length === 1 && (pagos[0].formaPago === 'CHQ' || pagos[0].formaPago === 'TRF' || pagos[0].formaPago === 'APP') && (
+                  <input
+                    style={{ marginTop: 2 }}
+                    value={pagos[0].referencia}
+                    onChange={(e) => actualizarLineaPago(0, 'referencia', e.target.value)}
+                    placeholder={
+                      pagos[0].formaPago === 'CHQ' ? 'N° cheque y banco (Ej: #001 Pichincha)' :
+                      pagos[0].formaPago === 'APP' ? 'App + código transacción (Ej: Ahorita ABC123)' :
+                      'N° referencia / comprobante'
+                    }
+                  />
+                )}
+                <div className="pos-pagos-footer">
+                  <button type="button" className="btn-link" onClick={agregarLineaPago}>+ Agregar forma de pago</button>
+                  {!pagosCuadran && (
+                    <span className="pos-pago-restante">
+                      {restante > 0 ? `Falta $${restante.toFixed(2)}` : `Sobran $${Math.abs(restante).toFixed(2)}`}
+                    </span>
                   )}
-                </>
-              ) : (
-                <select value={formaPagoNota} onChange={(e) => setFormaPagoNota(e.target.value)}>
-                  {FORMAS_NOTA.map((forma) => <option key={forma} value={forma}>{forma}</option>)}
-                </select>
-              )}
+                </div>
+              </div>
             </label>
           </div>
         </section>
@@ -729,8 +798,8 @@ export default function PuntoVenta() {
             </div>
             <div className="pos-actions">
               <button type="button" className="btn-secondary" onClick={() => setCarrito([])}>Vaciar carrito</button>
-              <button type="button" className="btn-primary" onClick={emitirDocumento} disabled={guardando}>
-                {guardando ? 'Emitiendo...' : 'Cobrar y emitir'}
+              <button type="button" className="btn-primary" onClick={emitirDocumento} disabled={guardando || !pagosCuadran}>
+                {guardando ? 'Emitiendo...' : !pagosCuadran ? 'Formas de pago no cuadran' : 'Cobrar y emitir'}
               </button>
             </div>
           </div>
@@ -815,6 +884,7 @@ export default function PuntoVenta() {
                 setTelefono('');
                 setClienteIdBD(null);
                 setClienteOriginal({ direccion: '', email: '', telefono: '' });
+                setPagos([{ formaPago: tipoDocumento === 'factura' ? '01' : 'Efectivo', monto: '', referencia: '' }]);
               }}
             >
               ✓ Continuar vendiendo
@@ -882,6 +952,7 @@ export default function PuntoVenta() {
                 setClienteIdBD(null);
                 setClienteOriginal({ direccion: '', email: '', telefono: '' });
                 setMensajeSRI('');
+                setPagos([{ formaPago: tipoDocumento === 'factura' ? '01' : 'Efectivo', monto: '', referencia: '' }]);
               }}
             >
               ➕ Nueva venta

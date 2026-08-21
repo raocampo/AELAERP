@@ -732,6 +732,8 @@ const FIXES = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "notas_estados_financieros_empresaId_anio_numero_key" ON "notas_estados_financieros"("empresaId", "anio", "numero")`,
   `CREATE INDEX IF NOT EXISTS "notas_estados_financieros_empresaId_anio_idx" ON "notas_estados_financieros"("empresaId", "anio")`,
+  // Pagos mixtos en notas de venta
+  `ALTER TABLE "notas_venta" ADD COLUMN IF NOT EXISTS "pagos" JSONB`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

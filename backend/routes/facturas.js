@@ -1069,6 +1069,30 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Debe incluir al menos un detalle' });
     }
 
+    // Pagos mixtos (varias formas de pago para un mismo comprobante): si
+    // vienen 2+ líneas en `pagos`, la suma debe cuadrar con el total real
+    // de los detalles — antes de consumir un secuencial real del SRI con
+    // una venta que después el frontend rechazaría igual. Con 0-1 líneas no
+    // se valida aquí (el caso de una sola forma de pago siempre asumió el
+    // total completo, ver pagosFinales más abajo).
+    if (Array.isArray(pagos) && pagos.length > 1) {
+      const totalDetalles = detalles.reduce((acc, d) => {
+        const cant   = parseFloat(d.cantidad) || 0;
+        const precio = parseFloat(d.precioUnitario) || 0;
+        const desc   = parseFloat(d.descuento) || 0;
+        const base   = cant * precio - desc;
+        const iva    = base * (parseFloat(d.ivaPorcentaje) || 0) / 100;
+        return acc + base + iva;
+      }, 0);
+      const totalPagos = pagos.reduce((acc, p) => acc + (parseFloat(p.total) || 0), 0);
+      if (Math.abs(totalDetalles - totalPagos) > 0.02) {
+        return res.status(400).json({
+          ok: false,
+          error: `La suma de las formas de pago ($${totalPagos.toFixed(2)}) no coincide con el total de la factura ($${totalDetalles.toFixed(2)})`,
+        });
+      }
+    }
+
     // Sector transporte terrestre comercial (Res. NAC-DGERCGC26-00000024,
     // Anexo 25 Ficha Técnica v2.34): la placa es obligatoria en el XML — se
     // valida aquí, antes de consumir un secuencial, igual que el resto de

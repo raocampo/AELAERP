@@ -296,14 +296,25 @@ async function generarRIDENotaVenta(nota, configSri, outputPath) {
          .text(lbl, px + 3, yL2 + 3, { width: PG_WS[i] - 6, align: i === 0 ? 'left' : 'right', lineBreak: false });
       px += PG_WS[i];
     });
-    yL2 += PG_H;
-    doc.rect(ML, yL2, FP_W, PG_H).fill(BLANCO);
-    doc.rect(ML, yL2, FP_W, PG_H).lineWidth(0.2).stroke('#DDDDDD');
-    px = ML;
-    [nota.formaPago || 'Efectivo', fmtM(nota.total)].forEach((pv, i) => {
-      doc.fontSize(6.5).font('Helvetica').fillColor(NEGRO)
-         .text(pv, px + 3, yL2 + 3, { width: PG_WS[i] - 6, align: i === 0 ? 'left' : 'right', lineBreak: false });
-      px += PG_WS[i];
+    yL2 += PG_H; // pasa de la fila de encabezado a la primera fila de datos
+    // Pagos mixtos: una fila por cada forma de pago registrada; sin
+    // `pagos` (caso normal, un solo pago) se dibuja la misma fila única de
+    // siempre — mismo alto de fila (PG_H) y mismo número de incrementos de
+    // yL2 (uno por fila) que antes, así que el resto del recibo (que sigue
+    // con yL2 como cursor) no cambia para el caso de un pago.
+    const filasPagoPdf = Array.isArray(nota.pagos) && nota.pagos.length > 0
+      ? nota.pagos.map((p) => [p.formaPago || 'Efectivo', fmtM(p.total)])
+      : [[nota.formaPago || 'Efectivo', fmtM(nota.total)]];
+    filasPagoPdf.forEach((fila, idx) => {
+      if (idx > 0) yL2 += PG_H;
+      doc.rect(ML, yL2, FP_W, PG_H).fill(BLANCO);
+      doc.rect(ML, yL2, FP_W, PG_H).lineWidth(0.2).stroke('#DDDDDD');
+      px = ML;
+      fila.forEach((pv, i) => {
+        doc.fontSize(6.5).font('Helvetica').fillColor(NEGRO)
+           .text(pv, px + 3, yL2 + 3, { width: PG_WS[i] - 6, align: i === 0 ? 'left' : 'right', lineBreak: false });
+        px += PG_WS[i];
+      });
     });
     yL2 += PG_H;
 
@@ -488,10 +499,15 @@ async function generarReciboNotaVenta(nota, configSri, outputPath) {
     doc.fontSize(6.5).font('Helvetica-Bold').fillColor('#000000')
        .text('FORMA DE PAGO:', ML, y);
     y += 10;
-    doc.fontSize(6.5).font('Helvetica').fillColor('#333333')
-       .text(`${nota.formaPago || 'Efectivo'}:`, ML, y, { width: W * 0.65, lineBreak: false });
-    doc.text(`$${total.toFixed(2)}`, ML + W * 0.65, y, { width: W * 0.35, align: 'right', lineBreak: false });
-    y += 9;
+    const filasPagoTicket = Array.isArray(nota.pagos) && nota.pagos.length > 0
+      ? nota.pagos.map((p) => [p.formaPago || 'Efectivo', parseFloat(p.total) || 0])
+      : [[nota.formaPago || 'Efectivo', total]];
+    filasPagoTicket.forEach(([label, monto]) => {
+      doc.fontSize(6.5).font('Helvetica').fillColor('#333333')
+         .text(`${label}:`, ML, y, { width: W * 0.65, lineBreak: false });
+      doc.text(`$${monto.toFixed(2)}`, ML + W * 0.65, y, { width: W * 0.35, align: 'right', lineBreak: false });
+      y += 9;
+    });
 
     linea();
 
@@ -586,7 +602,7 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
 
     const {
       tipoIdentificacion, identificacion, razonSocial, direccion, email, telefono,
-      detalles, formaPago, fechaEmision, observaciones, clienteId,
+      detalles, formaPago, pagos, fechaEmision, observaciones, clienteId,
       establecimiento: establecimientoBody, puntoEmision: puntoEmisionBody,
       idempotencyKey,
     } = req.body;
@@ -639,6 +655,22 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
     subtotal = parseFloat(subtotal.toFixed(2));
     totalDescuento = parseFloat(totalDescuento.toFixed(2));
 
+    // Pagos mixtos: con 2+ líneas, formaPago pasa a ser un resumen ("Mixto")
+    // y el detalle real vive en `pagos`. La suma debe cuadrar con el total.
+    let pagosFinales = null;
+    let formaPagoFinal = formaPago || 'Efectivo';
+    if (Array.isArray(pagos) && pagos.length > 1) {
+      const totalPagos = pagos.reduce((acc, p) => acc + (parseFloat(p.total) || 0), 0);
+      if (Math.abs(total - totalPagos) > 0.02) {
+        return res.status(400).json({
+          success: false,
+          mensaje: `La suma de las formas de pago ($${totalPagos.toFixed(2)}) no coincide con el total de la nota de venta ($${total.toFixed(2)})`,
+        });
+      }
+      pagosFinales = pagos.map((p) => ({ formaPago: String(p.formaPago || 'Efectivo'), total: parseFloat(p.total) || 0 }));
+      formaPagoFinal = 'Mixto';
+    }
+
     // Siguiente secuencial para esta empresa (respeta secuencial inicial configurado)
     const ultimo = await prisma.notas_venta.findFirst({
       where: { empresaId: req.empresa.id },
@@ -675,7 +707,8 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
           totalDescuento,
           total,
           detalles,
-          formaPago: formaPago || 'Efectivo',
+          formaPago: formaPagoFinal,
+          pagos: pagosFinales,
           fechaEmision: fechaDoc,
           observaciones: observaciones || null,
           emisorId: req.usuario.id,
@@ -701,7 +734,7 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
         monto: total,
         descripcion: `Venta por nota ${numeroNota}`,
         referencia: numeroNota,
-        categoria: formaPago || 'Efectivo',
+        categoria: formaPagoFinal,
         origenId: creada.id,
         metadata: { notaVentaId: creada.id },
       });

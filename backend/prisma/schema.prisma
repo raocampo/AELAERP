@@ -1146,6 +1146,11 @@ model notas_venta {
   // Detalle en JSON
   detalles            Json
   formaPago           String   @default("Efectivo") @db.VarChar(50)
+  // Pagos mixtos: cuando hay más de una forma de pago, formaPago queda como
+  // "Mixto" (resumen legible) y este campo guarda el detalle real
+  // [{formaPago, total}]. NULL en ventas de un solo pago (la mayoría) —
+  // formaPago sigue siendo la fuente de verdad en ese caso.
+  pagos               Json?
   fechaEmision        DateTime
   observaciones       String?
   anulada             Boolean  @default(false)

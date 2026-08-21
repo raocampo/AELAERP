@@ -105,6 +105,40 @@
   color: #1e293b;
 }
 
+.pos-pagos-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pos-pago-linea {
+  display: grid;
+  grid-template-columns: 1fr 110px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.pos-pago-monto {
+  text-align: right;
+}
+
+.pos-pagos-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.pos-pago-restante {
+  font-size: 12px;
+  font-weight: 700;
+  color: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pos-pago-restante { color: #f87171; }
+}
+
 .pos-search-wrap {
   position: relative;
   margin-bottom: 16px;
