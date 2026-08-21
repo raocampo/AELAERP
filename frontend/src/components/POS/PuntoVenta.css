@@ -112,13 +112,25 @@
 }
 
 .pos-pago-linea {
-  display: grid;
-  grid-template-columns: 1fr 110px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pos-pago-linea select {
+  width: 100%;
+  min-width: 0;
+}
+
+.pos-pago-linea-row {
+  display: flex;
   gap: 8px;
   align-items: center;
 }
 
 .pos-pago-monto {
+  flex: 1;
+  min-width: 0;
   text-align: right;
 }
 

@@ -13,6 +13,7 @@ const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
 const { generarTicketCocina, imprimirBuffer } = require('../utils/impresoraEscPos');
+const { fechaHoyEC } = require('../utils/fechas');
 const bwipjs = require('bwip-js');
 
 router.use(proteger);
@@ -622,11 +623,21 @@ router.post('/comandas/:id/anular', autorizarPermiso(P_COBRAR), async (req, res)
 
 const P_REPORTES = ['mesas.gestionar', 'mesas.cobrar'];
 
+// Convierte un rango de fechas calendario (Ecuador, "YYYY-MM-DD") a límites
+// UTC precisos SIN usar setHours() — setHours() opera en la zona horaria del
+// PROCESO (en Railway es UTC, pero en un dev local puede ser cualquier otra),
+// lo que corría el corte de "fin de día" varias horas y excluía comandas
+// cerradas ese mismo día (encontrado verificando este reporte en el
+// navegador: una comanda cerrada minutos antes no aparecía). Ecuador es
+// UTC-5 sin horario de verano (ver utils/fechas.js) — 00:00 Ecuador = 05:00
+// UTC. `hasta` es el INICIO del día siguiente, exclusivo (usar "lt", no
+// "lte", en la comparación de Prisma).
 function _rangoFechas(query) {
-  const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const desde = query.desde ? new Date(query.desde) : inicioMes;
-  const hasta = query.hasta ? new Date(query.hasta) : new Date();
-  hasta.setHours(23, 59, 59, 999);
+  const hoyEC = fechaHoyEC();
+  const desdeCal = /^\d{4}-\d{2}-\d{2}$/.test(query.desde) ? query.desde : `${hoyEC.slice(0, 7)}-01`;
+  const hastaCal = /^\d{4}-\d{2}-\d{2}$/.test(query.hasta) ? query.hasta : hoyEC;
+  const desde = new Date(`${desdeCal}T05:00:00.000Z`);
+  const hasta = new Date(new Date(`${hastaCal}T05:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000);
   return { desde, hasta };
 }
 
@@ -642,7 +653,7 @@ router.get('/reportes/ventas', autorizarPermiso(P_REPORTES), async (req, res) =>
     const { desde, hasta } = _rangoFechas(req.query);
 
     const comandas = await prisma.restaurante_comandas.findMany({
-      where: { empresaId, estado: 'CERRADA', cerradaEn: { gte: desde, lte: hasta } },
+      where: { empresaId, estado: 'CERRADA', cerradaEn: { gte: desde, lt: hasta } },
       include: { mesa: { select: { nombre: true } }, mesero: { select: { id: true, nombre: true } } },
     });
 
@@ -703,7 +714,7 @@ router.get('/reportes/punto-equilibrio', autorizarPermiso(P_REPORTES), async (re
     const costosFijosMensuales = Number(config?.costosFijosMensuales || 0);
 
     const comandas = await prisma.restaurante_comandas.findMany({
-      where: { empresaId, estado: 'CERRADA', cerradaEn: { gte: desde, lte: hasta } },
+      where: { empresaId, estado: 'CERRADA', cerradaEn: { gte: desde, lt: hasta } },
       select: { items: true },
     });
     const todosLosItems = comandas.flatMap((c) => parseItems(c));

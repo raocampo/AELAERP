@@ -689,16 +689,18 @@ export default function PuntoVenta() {
                         {FORMAS_NOTA.map((forma) => <option key={forma} value={forma}>{forma}</option>)}
                       </select>
                     )}
-                    <input
-                      type="number" min="0" step="0.01"
-                      value={pago.monto}
-                      onChange={(e) => actualizarLineaPago(index, 'monto', e.target.value)}
-                      placeholder="Monto"
-                      className="pos-pago-monto"
-                    />
-                    {pagos.length > 1 && (
-                      <button type="button" className="btn-link danger" onClick={() => quitarLineaPago(index)} title="Quitar esta forma de pago">✕</button>
-                    )}
+                    <div className="pos-pago-linea-row">
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={pago.monto}
+                        onChange={(e) => actualizarLineaPago(index, 'monto', e.target.value)}
+                        placeholder="Monto"
+                        className="pos-pago-monto"
+                      />
+                      {pagos.length > 1 && (
+                        <button type="button" className="btn-link danger" onClick={() => quitarLineaPago(index)} title="Quitar esta forma de pago">✕</button>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {tipoDocumento === 'factura' && pagos.length === 1 && (pagos[0].formaPago === 'CHQ' || pagos[0].formaPago === 'TRF' || pagos[0].formaPago === 'APP') && (

@@ -212,14 +212,77 @@ no se pudo probar interactivamente. Sí se verificó:
   secciones 1-5 de arriba — el móvil llama a los mismos endpoints, sin
   código de servidor nuevo.
 
+## 7. Verificación interactiva en navegador real (Playwright)
+
+Hasta este punto todo lo de arriba se había probado solo con `curl`/API
+directa. Se levantó el backend + frontend (Vite dev) y se manejó un
+Chromium headless real (Playwright, encontrado ya instalado en
+`frontend/node_modules/playwright` — `chromium-cli` del skill `run` no
+estaba disponible en este entorno) inyectando una sesión de admin
+directo en `localStorage` (sin tocar contraseñas reales) para recorrer
+el flujo completo: mapa de mesas → tomar pedido → enviar a cocina →
+Vista de Cocina → dividir cuenta → pago mixto → cobro parcial → cobro
+final → mesa liberada → QR llamar al mesero → atender llamada →
+reportes de ventas → punto de equilibrio. 25 capturas de pantalla
+revisadas una por una.
+
+Esta pasada encontró **2 bugs reales** invisibles a las pruebas por
+`curl` anteriores:
+
+- **Desbordamiento visual en pagos mixtos** (`PuntoVenta.jsx` /
+  `PuntoVenta.css`): la segunda línea de forma de pago se salía del
+  borde de la tarjeta "Cliente" (320px de ancho). Causa:
+  `.pos-pago-linea` usaba `grid-template-columns: 1fr 110px auto`, y el
+  `1fr` de CSS Grid tiene un mínimo implícito `auto` (basado en
+  contenido) que no encoge por debajo del ancho intrínseco del
+  `<select>`. Arreglado cambiando a `flex-direction: column` (select en
+  su propia fila, monto+botón quitar en una segunda fila con
+  `min-width: 0`). Confirmado visualmente antes/después con 2 formas de
+  pago incluyendo "Tarjeta crédito".
+- **Bug de huso horario en reportes gerenciales** (`mesas.js`,
+  `_rangoFechas`): el reporte de ventas mostraba "0 comandas cerradas /
+  $0.00" para el día en curso pese a haber una comanda recién cerrada.
+  Causa: `_rangoFechas` construía el límite superior con
+  `new Date(query.hasta).setHours(23,59,59,999)`, y `.setHours()` opera
+  en la zona horaria del PROCESO del servidor (no la de Ecuador, ni
+  necesariamente UTC) — confirmado por curl: el `hasta` calculado daba
+  `...T04:59:59.999Z`, varias horas antes del verdadero fin de día. Es
+  la misma clase de bug ya conocida y resuelta en otras partes del
+  código (`backend/utils/fechas.js`, de la sesión de cumplimiento de
+  fechas SRI — "Railway corre en UTC"). Arreglado reescribiendo
+  `_rangoFechas` con el helper existente `fechaHoyEC()` y límites UTC
+  explícitos (`T05:00:00.000Z` = medianoche Ecuador, sin DST), con
+  límite superior EXCLUSIVO del día siguiente (`lt` en vez de `lte` en
+  Prisma). Verificado por curl y con un cálculo de punto de equilibrio
+  hecho a mano que coincide exacto.
+
+Ambos bugs solo se hicieron visibles al mirar la interfaz real
+renderizada — ningún test por `curl` con fechas ISO exactas los había
+detectado, porque no ejercitaban el mismo camino de código
+(strings `YYYY-MM-DD` simples) que usa el frontend real. Esto confirma
+que valía la pena esta pasada.
+
+**Hallazgo de diseño anotado, no corregido** (no es un bug con el flujo
+normal): si una comanda se cobra completamente ANTES de que cocina
+marque sus ítems como "listo", esos ítems desaparecen silenciosamente
+de `GET /mesas/cocina/pendientes` (la consulta filtra
+`estado: 'ABIERTA'` solamente, y al cobrar todo la comanda pasa a
+`CERRADA`). En el flujo real de un restaurante (se cocina y LUEGO se
+cobra) esto no debería ocurrir; solo lo provocó el orden artificial y
+comprimido de esta prueba (dividir cuenta y cobrar sin esperar a
+cocina). Queda documentado para decidir si vale la pena un fix (p.ej.
+no excluir ítems con `listoCocina:false` aunque la comanda ya esté
+cerrada) si se repite en uso real.
+
 ## Pendiente para retomar
 
-1. **Verificación humana real** — ni la parte web (probada solo con
-   `curl`/API directa) ni la móvil (sin dispositivo) se probaron
-   interactivamente. Antes de dar el módulo por completamente cerrado,
-   conviene una pasada manual: web (Mesas → todo lo nuevo) y móvil
-   (Expo Go o build de desarrollo, tab "Mesas" — mapa, comanda, dividir
-   cuenta, pagos mixtos, Cocina, Reportes).
+1. **Verificación humana real en dispositivo móvil** — la parte web ya
+   se probó interactivamente en navegador real (sección 7); la móvil
+   sigue sin probarse porque no hay dispositivo/simulador Android o iOS
+   en este entorno. Antes de dar el módulo por completamente cerrado,
+   conviene una pasada manual en Expo Go o build de desarrollo, tab
+   "Mesas" — mapa, comanda, dividir cuenta, pagos mixtos, Cocina,
+   Reportes.
 2. **Hallazgos previos de la sesión que siguen abiertos** (ver
    `docs/pendientes-2026-08-20.md`, sección "Cierre de sesión"): PDFKit
    rompe acentos en todos los PDFs, Anexo RDEP bloqueado, Anticipo de
