@@ -370,6 +370,126 @@
   color: #94a3b8;
 }
 
+/* ── Reportes ──────────────────────────────────────────────── */
+
+.rest-reportes-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rest-reportes-tabs button {
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-weight: 600;
+  color: #64748b;
+  border-bottom: 2px solid transparent;
+}
+
+.rest-reportes-tabs button.active {
+  color: #7C3AED;
+  border-bottom-color: #7C3AED;
+}
+
+.rest-filters {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.rest-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.rest-filters input,
+.rest-filters select {
+  padding: 7px 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.rest-kpis {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.rest-kpi {
+  flex: 1;
+  min-width: 160px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rest-kpi span { font-size: 12px; color: #64748b; }
+.rest-kpi strong { font-size: 20px; color: #1e293b; }
+
+.rest-reportes-tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rest-reportes-tabla th {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  padding: 8px 12px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.rest-reportes-tabla td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+}
+
+.rest-equilibrio-resultado {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.rest-equilibrio-resultado div { display: flex; flex-direction: column; gap: 4px; }
+.rest-equilibrio-resultado span { font-size: 12px; color: #64748b; }
+.rest-equilibrio-resultado strong { font-size: 22px; color: #7C3AED; }
+
+.rest-equilibrio-nota {
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  .rest-reportes-tabs { border-bottom-color: #334155; }
+  .rest-filters label { color: #94a3b8; }
+  .rest-filters input, .rest-filters select { background: #0f172a; border-color: #334155; color: #f1f5f9; }
+  .rest-kpi, .rest-equilibrio-resultado { background: #1e293b; }
+  .rest-kpi strong { color: #f1f5f9; }
+  .rest-reportes-tabla th { border-bottom-color: #334155; }
+  .rest-reportes-tabla td { border-bottom-color: #334155; }
+}
+
 /* ── Vista de cocina ───────────────────────────────────────── */
 
 .rest-cocina-grid {

@@ -73,6 +73,7 @@ const PuntoVenta = lazy(() => import('./components/POS/PuntoVenta'));
 const MapaMesas = lazy(() => import('./components/Restaurante/MapaMesas'));
 const ComandaMesa = lazy(() => import('./components/Restaurante/ComandaMesa'));
 const VistaCocina = lazy(() => import('./components/Restaurante/VistaCocina'));
+const ReportesRestaurante = lazy(() => import('./components/Restaurante/ReportesRestaurante'));
 const MenuPublico = lazy(() => import('./components/Restaurante/MenuPublico'));
 const ConfiguracionSistema = lazy(() => import('./components/Sistema/ConfiguracionSistema'));
 const TablaUtilidades      = lazy(() => import('./components/Configuracion/TablaUtilidades'));
@@ -246,6 +247,7 @@ function App() {
                 <Route path="restaurante/mesas" element={<ModuleRoute moduleKey="restaurante"><PermissionRoute permission={['mesas.gestionar', 'mesas.tomarPedido', 'mesas.cobrar']}><MapaMesas /></PermissionRoute></ModuleRoute>} />
                 <Route path="restaurante/mesas/:mesaId/comanda" element={<ModuleRoute moduleKey="restaurante"><PermissionRoute permission={['mesas.gestionar', 'mesas.tomarPedido', 'mesas.cobrar']}><ComandaMesa /></PermissionRoute></ModuleRoute>} />
                 <Route path="restaurante/cocina" element={<ModuleRoute moduleKey="restaurante"><PermissionRoute permission={['mesas.gestionar', 'mesas.cocina']}><VistaCocina /></PermissionRoute></ModuleRoute>} />
+                <Route path="restaurante/reportes" element={<ModuleRoute moduleKey="restaurante"><PermissionRoute permission={['mesas.gestionar', 'mesas.cobrar']}><ReportesRestaurante /></PermissionRoute></ModuleRoute>} />
 
                 {/* Inventario — disponible desde Lite (máx 200 productos) */}
                 <Route path="inventario" element={<ModuleRoute moduleKey="inventario"><PermissionRoute permission="inventario.ver"><GestionProductos initialTab="inventario" /></PermissionRoute></ModuleRoute>} />

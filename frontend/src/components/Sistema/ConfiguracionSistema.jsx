@@ -66,6 +66,7 @@ const FORM_INICIAL = {
   regimenDecimoCuarto: 'sierra',
   importacionesHabilitado: false,
   restauranteHabilitado: false,
+  costosFijosMensuales: 0,
 };
 
 export default function ConfiguracionSistema() {
@@ -429,6 +430,20 @@ export default function ConfiguracionSistema() {
             />
             <span>Habilitar Mesas y Comandas</span>
           </label>
+          {form.restauranteHabilitado && (
+            <label className="syscfg-field" style={{ marginTop: 12, maxWidth: 260 }}>
+              <span>Costos fijos mensuales ($)</span>
+              <input
+                type="number" min="0" step="0.01"
+                value={form.costosFijosMensuales}
+                onChange={(e) => actualizar('costosFijosMensuales', parseFloat(e.target.value) || 0)}
+                placeholder="Arriendo, sueldos administrativos, servicios..."
+              />
+              <small className="syscfg-note" style={{ margin: '4px 0 0' }}>
+                Usado solo para el reporte de Punto de Equilibrio (Mesas → Reportes).
+              </small>
+            </label>
+          )}
         </section>
 
         {/* ── Impresión y kiosko ────────────────────────────────────────── */}

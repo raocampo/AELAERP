@@ -618,4 +618,160 @@ router.post('/comandas/:id/anular', autorizarPermiso(P_COBRAR), async (req, res)
   }
 });
 
+// ─── REPORTES GERENCIALES ───────────────────────────────────────────────────
+
+const P_REPORTES = ['mesas.gestionar', 'mesas.cobrar'];
+
+function _rangoFechas(query) {
+  const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const desde = query.desde ? new Date(query.desde) : inicioMes;
+  const hasta = query.hasta ? new Date(query.hasta) : new Date();
+  hasta.setHours(23, 59, 59, 999);
+  return { desde, hasta };
+}
+
+// GET /api/mesas/reportes/ventas?desde=&hasta=&agruparPor=mesa|mesero|hora
+// Ventas de comandas CERRADAS, recalculadas desde los ítems (no desde
+// facturaId/notaVentaId, que en una cuenta dividida por ítems solo guarda el
+// ÚLTIMO documento que la cerró) — así el reporte cuadra sin importar si el
+// cobro fue de una vez o dividido.
+router.get('/reportes/ventas', autorizarPermiso(P_REPORTES), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const agruparPor = ['mesa', 'mesero', 'hora'].includes(req.query.agruparPor) ? req.query.agruparPor : 'mesa';
+    const { desde, hasta } = _rangoFechas(req.query);
+
+    const comandas = await prisma.restaurante_comandas.findMany({
+      where: { empresaId, estado: 'CERRADA', cerradaEn: { gte: desde, lte: hasta } },
+      include: { mesa: { select: { nombre: true } }, mesero: { select: { id: true, nombre: true } } },
+    });
+
+    const grupos = new Map();
+    for (const c of comandas) {
+      const totales = calcularTotales(parseItems(c));
+      let clave, etiqueta;
+      if (agruparPor === 'mesero') {
+        clave = c.meseroId || 0;
+        etiqueta = c.mesero?.nombre || 'Sin asignar';
+      } else if (agruparPor === 'hora') {
+        const hora = c.cerradaEn ? new Date(c.cerradaEn).getHours() : 0;
+        clave = hora;
+        etiqueta = `${String(hora).padStart(2, '0')}:00 - ${String((hora + 1) % 24).padStart(2, '0')}:00`;
+      } else {
+        clave = c.mesaId;
+        etiqueta = c.mesa?.nombre || `Mesa ${c.mesaId}`;
+      }
+      const g = grupos.get(clave) || { etiqueta, cantidadComandas: 0, subtotal: 0, totalIva: 0, total: 0 };
+      g.cantidadComandas += 1;
+      g.subtotal += totales.subtotal;
+      g.totalIva += totales.totalIva;
+      g.total += totales.total;
+      grupos.set(clave, g);
+    }
+
+    const data = [...grupos.entries()]
+      .map(([clave, g]) => ({
+        clave,
+        ...g,
+        subtotal: Number(g.subtotal.toFixed(2)),
+        totalIva: Number(g.totalIva.toFixed(2)),
+        total: Number(g.total.toFixed(2)),
+      }))
+      .sort((a, b) => (agruparPor === 'hora' ? a.clave - b.clave : b.total - a.total));
+
+    const totalGeneral = Number(data.reduce((acc, g) => acc + g.total, 0).toFixed(2));
+    res.json({ success: true, data, totalGeneral, cantidadComandas: comandas.length, agruparPor, desde, hasta });
+  } catch (error) {
+    console.error('GET /mesas/reportes/ventas:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo generar el reporte de ventas' });
+  }
+});
+
+// GET /api/mesas/reportes/punto-equilibrio?desde=&hasta=
+// Punto de equilibrio mensual: costosFijosMensuales (configurado por el
+// dueño) / margen de contribución (1 - costo variable como % de ventas,
+// calculado con costoUnitario de cada producto vendido en el período). No
+// es contabilidad de costos completa (no reparte costos fijos indirectos
+// por producto) — es la estimación estándar de punto de equilibrio en
+// dólares de venta mensual que necesita el negocio para no perder.
+router.get('/reportes/punto-equilibrio', autorizarPermiso(P_REPORTES), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const { desde, hasta } = _rangoFechas(req.query);
+
+    const config = await prisma.configuracion_sistema.findUnique({ where: { empresaId }, select: { costosFijosMensuales: true } });
+    const costosFijosMensuales = Number(config?.costosFijosMensuales || 0);
+
+    const comandas = await prisma.restaurante_comandas.findMany({
+      where: { empresaId, estado: 'CERRADA', cerradaEn: { gte: desde, lte: hasta } },
+      select: { items: true },
+    });
+    const todosLosItems = comandas.flatMap((c) => parseItems(c));
+    const codigos = [...new Set(todosLosItems.map((it) => it.codigoPrincipal).filter(Boolean))];
+    const productos = await prisma.productos_servicios.findMany({
+      where: { empresaId, codigoPrincipal: { in: codigos } },
+      select: { codigoPrincipal: true, costoUnitario: true },
+    });
+    const costoPorCodigo = new Map(productos.map((p) => [p.codigoPrincipal, Number(p.costoUnitario || 0)]));
+
+    let ventasNetas = 0;
+    let costoVariableTotal = 0;
+    for (const it of todosLosItems) {
+      const cant = Number(it.cantidad) || 0;
+      ventasNetas += cant * (Number(it.precioUnitario) || 0);
+      costoVariableTotal += cant * (costoPorCodigo.get(it.codigoPrincipal) || 0);
+    }
+
+    if (!costosFijosMensuales) {
+      return res.json({
+        success: true,
+        configurado: false,
+        mensaje: 'Configura tus costos fijos mensuales (arriendo, sueldos administrativos, servicios) para calcular el punto de equilibrio.',
+      });
+    }
+    if (ventasNetas <= 0) {
+      return res.json({
+        success: true,
+        configurado: true,
+        costosFijosMensuales,
+        mensaje: 'No hay ventas en el período seleccionado para estimar el costo variable.',
+      });
+    }
+
+    const ratioCostoVariable = Number((costoVariableTotal / ventasNetas).toFixed(4));
+    const margenContribucion = Number((1 - ratioCostoVariable).toFixed(4));
+    const ticketPromedio = comandas.length > 0 ? Number((ventasNetas / comandas.length).toFixed(2)) : 0;
+
+    if (margenContribucion <= 0) {
+      return res.json({
+        success: true,
+        configurado: true,
+        costosFijosMensuales,
+        ratioCostoVariable,
+        margenContribucion,
+        mensaje: 'El costo variable iguala o supera el precio de venta en este período — revisa tus precios o costos antes de fiarte del punto de equilibrio.',
+      });
+    }
+
+    const puntoEquilibrioVentas = Number((costosFijosMensuales / margenContribucion).toFixed(2));
+    const puntoEquilibrioComandas = ticketPromedio > 0 ? Math.ceil(puntoEquilibrioVentas / ticketPromedio) : null;
+
+    res.json({
+      success: true,
+      configurado: true,
+      costosFijosMensuales,
+      ratioCostoVariable,
+      margenContribucion,
+      ticketPromedio,
+      puntoEquilibrioVentas,
+      puntoEquilibrioComandas,
+      ventasNetasPeriodo: Number(ventasNetas.toFixed(2)),
+      desde, hasta,
+    });
+  } catch (error) {
+    console.error('GET /mesas/reportes/punto-equilibrio:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo calcular el punto de equilibrio' });
+  }
+});
+
 module.exports = router;

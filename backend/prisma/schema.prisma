@@ -340,6 +340,7 @@ model configuracion_sistema {
   // imprime el recibo de venta) porque físicamente son equipos distintos:
   // una en caja, otra en cocina.
   restauranteHabilitado      Boolean @default(false)
+  costosFijosMensuales       Decimal @default(0) @db.Decimal(12, 2)
   impresoraCocinaIp          String? @db.VarChar(50)
   impresoraCocinaPuerto      Int?    @default(9100)
   impresoraCocinaHabilitada  Boolean @default(false)

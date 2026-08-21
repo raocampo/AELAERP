@@ -93,6 +93,7 @@ const ITEMS_SUELTOS = [
   { to: '/pos',       icon: '🛍️', label: 'POS', permiso: 'pos.usar', modulo: 'posHabilitado' },
   { to: '/restaurante/mesas', icon: '🍽️', label: 'Mesas', permiso: ['mesas.gestionar', 'mesas.tomarPedido', 'mesas.cobrar'], modulo: 'restauranteHabilitado' },
   { to: '/restaurante/cocina', icon: '🔥', label: 'Cocina', permiso: ['mesas.gestionar', 'mesas.cocina'], modulo: 'restauranteHabilitado' },
+  { to: '/restaurante/reportes', icon: '📊', label: 'Reportes Restaurante', permiso: ['mesas.gestionar', 'mesas.cobrar'], modulo: 'restauranteHabilitado' },
   { to: '/ayuda',     icon: '❓', label: 'Ayuda' },
 ];
 

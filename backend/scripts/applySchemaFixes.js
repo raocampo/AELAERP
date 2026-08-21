@@ -747,6 +747,8 @@ const FIXES = [
     CONSTRAINT "restaurante_llamadas_mesaId_fkey" FOREIGN KEY ("mesaId") REFERENCES "restaurante_mesas"("id")
   )`,
   `CREATE INDEX IF NOT EXISTS "restaurante_llamadas_empresaId_estado_idx" ON "restaurante_llamadas"("empresaId", "estado")`,
+  // Punto de equilibrio (módulo restaurante) — costos fijos mensuales
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "costosFijosMensuales" DECIMAL(12,2) NOT NULL DEFAULT 0`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

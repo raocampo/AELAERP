@@ -303,6 +303,11 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
     // Mesas y Comandas (restaurantes) — sin flag(), igual que sucursales/importaciones:
     // no gateado por plan, cualquier tenant puede activarlo si su negocio lo necesita.
     restauranteHabilitado:    Boolean(reqBody.restauranteHabilitado !== undefined ? reqBody.restauranteHabilitado : actual.restauranteHabilitado),
+    // Costos fijos mensuales (arriendo, sueldos administrativos, servicios) —
+    // usado solo por el reporte de punto de equilibrio del módulo restaurante.
+    costosFijosMensuales:     reqBody.costosFijosMensuales !== undefined
+                                ? Math.max(0, parseFloat(reqBody.costosFijosMensuales) || 0)
+                                : parseFloat(actual.costosFijosMensuales) || 0,
   };
 }
 
