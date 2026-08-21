@@ -27,6 +27,18 @@ const ROLE_DEFINITIONS = {
     key: 'operador',
     label: 'Operador',
   },
+  mesero: {
+    key: 'mesero',
+    label: 'Mesero',
+  },
+  cajero: {
+    key: 'cajero',
+    label: 'Cajero',
+  },
+  cocina: {
+    key: 'cocina',
+    label: 'Cocina',
+  },
 };
 
 const ROLE_ALIASES = {
@@ -39,8 +51,8 @@ const ROLE_ALIASES = {
   medico: 'facturador',
   gerente: 'supervisor',
   visor: 'supervisor',
-  mesero: 'operador',
-  mesera: 'operador',
+  mesera: 'mesero',
+  cajera: 'cajero',
 };
 
 const PERMISSIONS = {
@@ -50,8 +62,8 @@ const PERMISSIONS = {
   'sistema.configurar': ['admin', 'contador'],
   'sucursales.gestionar': ['admin', 'contador'],
 
-  'facturacion.ver':    ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],
-  'facturacion.emitir': ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],
+  'facturacion.ver':    ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'cajero'],
+  'facturacion.emitir': ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'cajero'],
   'facturacion.anular': ['admin', 'supervisor', 'contador'],
 
   'compras.gestionar':        ['admin', 'supervisor', 'contador'],
@@ -78,16 +90,16 @@ const PERMISSIONS = {
   'cajaChica.ver':       ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'secretaria', 'operador'],
   'cajaChica.gestionar': ['admin', 'supervisor', 'contador'],
 
-  'clientes.gestionar':   ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador'],
-  'productos.ver':        ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador'],
+  'clientes.gestionar':   ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'cajero'],
+  'productos.ver':        ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'mesero', 'cajero'],
   'productos.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],
   'productos.eliminar':   ['admin', 'supervisor'],
-  'notasVenta.gestionar': ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
+  'notasVenta.gestionar': ['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero'],
   'inventario.ver':       ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador'],
   'inventario.gestionar': ['admin', 'supervisor', 'facturador', 'secretaria'],
-  'caja.ver':             ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador'],
-  'caja.gestionar':       ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
-  'pos.usar':             ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
+  'caja.ver':             ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'cajero'],
+  'caja.gestionar':       ['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero'],
+  'pos.usar':             ['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero'],
 
   'rrhh.ver':             ['admin', 'supervisor', 'contador'],
   'rrhh.gestionar':       ['admin', 'supervisor'],
@@ -97,8 +109,20 @@ const PERMISSIONS = {
   'proformas.convertir':  ['admin', 'supervisor', 'facturador'],
   'proformas.anular':     ['admin', 'supervisor'],
 
-  // Mesas y Comandas (restaurantes) — mismos roles que ya usan el POS.
+  // Mesas y Comandas (restaurantes).
+  // mesas.gestionar   → umbral amplio: puede tomar Y cobrar pedidos (roles
+  //                     generales de POS que ya lo tenían).
+  // mesas.tomarPedido → solo abrir/editar comanda y enviar a cocina (mesero).
+  // mesas.cobrar      → solo cerrar/cobrar y anular comanda (cajero).
+  // mesas.cocina      → ver la cola de cocina y marcar ítems listos.
+  // mesas.administrar → crear/editar/eliminar mesas del local.
+  // Las rutas de mesas.js que aceptan varios roles usan
+  // autorizarPermiso(['mesas.gestionar', 'mesas.tomarPedido']) (OR), así que
+  // basta con estar en UNA de las dos listas para esa acción puntual.
   'mesas.gestionar':     ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
+  'mesas.tomarPedido':   ['mesero'],
+  'mesas.cobrar':        ['cajero'],
+  'mesas.cocina':        ['admin', 'supervisor', 'cocina'],
   'mesas.administrar':   ['admin', 'supervisor'],
 };
 

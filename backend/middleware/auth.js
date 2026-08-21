@@ -133,11 +133,16 @@ const autorizarRoles = (...roles) => (req, res, next) => {
   next();
 };
 
+// `permiso` puede ser un string único o un array — en ese caso basta con
+// tener CUALQUIERA de los permisos listados (OR), útil para acciones que
+// varios roles distintos pueden hacer por razones distintas (ej. cobrar una
+// mesa: mesas.gestionar del rol genérico, o mesas.cobrar del rol cajero).
 const autorizarPermiso = (permiso) => (req, res, next) => {
   if (!req.usuario) {
     return res.status(401).json({ success: false, mensaje: 'No autenticado' });
   }
-  if (!tienePermiso(req.usuario.rol, permiso)) {
+  const permisos = Array.isArray(permiso) ? permiso : [permiso];
+  if (!permisos.some((p) => tienePermiso(req.usuario.rol, p))) {
     return res.status(403).json({
       success: false,
       mensaje: 'Acceso denegado — tu rol no tiene permiso para esta acción',

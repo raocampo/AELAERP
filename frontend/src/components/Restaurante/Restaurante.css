@@ -301,6 +301,57 @@
   color: #94a3b8;
 }
 
+/* ── Vista de cocina ───────────────────────────────────────── */
+
+.rest-cocina-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.rest-cocina-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border-left: 4px solid #94a3b8;
+}
+
+.rest-cocina-card.urgente {
+  border-left-color: #ef4444;
+  background: #fef2f2;
+}
+
+.rest-cocina-mesa {
+  font-weight: 800;
+  font-size: 13px;
+  color: #7C3AED;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.rest-cocina-item {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.rest-cocina-cant { color: #7C3AED; }
+
+.rest-cocina-nota {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.rest-cocina-tiempo {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.rest-cocina-card.urgente .rest-cocina-tiempo { color: #dc2626; font-weight: 700; }
+
 @media (max-width: 640px) {
   .rest-page { padding: 14px; }
   .rest-item-row { grid-template-columns: auto 1fr auto; }
@@ -333,4 +384,7 @@
   .rest-item-cant button { background: #0f172a; border-color: #334155; color: #f1f5f9; }
   .rest-comanda-footer { background: #1e293b; }
   .rest-comanda-totales strong { color: #f1f5f9; }
+  .rest-cocina-card { background: #1e293b; }
+  .rest-cocina-card.urgente { background: rgba(239, 68, 68, 0.15); }
+  .rest-cocina-item { color: #f1f5f9; }
 }

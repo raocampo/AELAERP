@@ -6,6 +6,9 @@ export const ROLE_OPTIONS = [
   { value: 'facturador',             label: 'Facturador' },
   { value: 'secretaria',             label: 'Secretaria' },
   { value: 'operador',               label: 'Operador' },
+  { value: 'mesero',                 label: 'Mesero' },
+  { value: 'cajero',                 label: 'Cajero' },
+  { value: 'cocina',                 label: 'Cocina' },
 ];
 
 const ROLE_LABELS = Object.fromEntries(ROLE_OPTIONS.map((role) => [role.value, role.label]));
@@ -20,8 +23,8 @@ const ROLE_ALIASES = {
   medico: 'facturador',
   gerente: 'supervisor',
   visor: 'supervisor',
-  mesero: 'operador',
-  mesera: 'operador',
+  mesera: 'mesero',
+  cajera: 'cajero',
 };
 
 const PERMISSIONS = {
@@ -31,8 +34,8 @@ const PERMISSIONS = {
   'sistema.configurar': ['admin', 'contador'],
   'sucursales.gestionar': ['admin', 'contador'],
 
-  'facturacion.ver':    ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],
-  'facturacion.emitir': ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],
+  'facturacion.ver':    ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'cajero'],
+  'facturacion.emitir': ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'cajero'],
   'facturacion.anular': ['admin', 'supervisor', 'contador'],
 
   'compras.gestionar':        ['admin', 'supervisor', 'contador'],
@@ -56,16 +59,16 @@ const PERMISSIONS = {
   'cajaChica.ver':       ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'secretaria', 'operador'],
   'cajaChica.gestionar': ['admin', 'supervisor', 'contador'],
 
-  'clientes.gestionar':   ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador'],
-  'productos.ver':        ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador'],
+  'clientes.gestionar':   ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'cajero'],
+  'productos.ver':        ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'mesero', 'cajero'],
   'productos.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],
   'productos.eliminar':   ['admin', 'supervisor'],
-  'notasVenta.gestionar': ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
+  'notasVenta.gestionar': ['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero'],
   'inventario.ver':       ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador'],
   'inventario.gestionar': ['admin', 'supervisor', 'facturador', 'secretaria'],
-  'caja.ver':             ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador'],
-  'caja.gestionar':       ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
-  'pos.usar':             ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
+  'caja.ver':             ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'cajero'],
+  'caja.gestionar':       ['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero'],
+  'pos.usar':             ['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero'],
 
   'rrhh.ver':             ['admin', 'supervisor', 'contador'],
   'rrhh.gestionar':       ['admin', 'supervisor'],
@@ -76,6 +79,9 @@ const PERMISSIONS = {
   'proformas.anular':     ['admin', 'supervisor'],
 
   'mesas.gestionar':   ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
+  'mesas.tomarPedido': ['mesero'],
+  'mesas.cobrar':      ['cajero'],
+  'mesas.cocina':      ['admin', 'supervisor', 'cocina'],
   'mesas.administrar': ['admin', 'supervisor'],
 };
 
@@ -87,10 +93,14 @@ export const normalizarRol = (rol) => {
 
 export const obtenerRolLabel = (rol) => ROLE_LABELS[normalizarRol(rol)] || normalizarRol(rol);
 
+// `permiso` puede ser un string único o un array de alternativas (OR) —
+// mismo patrón que autorizarPermiso en el backend (middleware/auth.js).
 export const tienePermiso = (rol, permiso, permisosExtra = []) => {
   const role = normalizarRol(rol);
-  if ((PERMISSIONS[permiso] || []).includes(role)) return true;
-  return Array.isArray(permisosExtra) && permisosExtra.includes(permiso);
+  const permisos = Array.isArray(permiso) ? permiso : [permiso];
+  return permisos.some((p) => (
+    (PERMISSIONS[p] || []).includes(role) || (Array.isArray(permisosExtra) && permisosExtra.includes(p))
+  ));
 };
 
 // Permisos agrupados por módulo — usados en la UI de asignación de permisos adicionales
@@ -108,7 +118,7 @@ export const PERMISOS_POR_MODULO = [
   { modulo: 'Productos',       permisos: ['productos.ver', 'productos.gestionar', 'productos.eliminar'] },
   { modulo: 'Proformas',        permisos: ['proformas.gestionar', 'proformas.convertir', 'proformas.anular'] },
   { modulo: 'Ventas / Caja',   permisos: ['notasVenta.gestionar', 'caja.ver', 'caja.gestionar', 'pos.usar'] },
-  { modulo: 'Mesas y Comandas', permisos: ['mesas.gestionar', 'mesas.administrar'] },
+  { modulo: 'Mesas y Comandas', permisos: ['mesas.gestionar', 'mesas.tomarPedido', 'mesas.cobrar', 'mesas.cocina', 'mesas.administrar'] },
   { modulo: 'Inventario',      permisos: ['inventario.ver', 'inventario.gestionar'] },
   { modulo: 'RRHH / Nómina',   permisos: ['rrhh.ver', 'rrhh.gestionar', 'rrhh.nomina'] },
 ];
@@ -150,6 +160,9 @@ export const PERMISO_LABELS = {
   'proformas.gestionar':   'Gestionar proformas',
   'proformas.convertir':   'Convertir proforma a factura',
   'proformas.anular':      'Anular proformas',
-  'mesas.gestionar':       'Tomar y cobrar pedidos de mesa',
+  'mesas.gestionar':       'Tomar y cobrar pedidos de mesa (rol general)',
+  'mesas.tomarPedido':     'Tomar pedidos de mesa (mesero)',
+  'mesas.cobrar':          'Cobrar y anular pedidos de mesa (cajero)',
+  'mesas.cocina':          'Ver cola de cocina y marcar listos',
   'mesas.administrar':     'Crear/editar mesas del local',
 };

@@ -62,8 +62,16 @@ function calcularTotales(items) {
 
 // ─── MESAS ──────────────────────────────────────────────────────────────────
 
+// Permisos combinados (OR) — ver comentario en utils/roles.js sobre el
+// split mesas.gestionar (rol general) / mesas.tomarPedido (mesero) /
+// mesas.cobrar (cajero) / mesas.cocina (cocina).
+const P_VER        = ['mesas.gestionar', 'mesas.tomarPedido', 'mesas.cobrar', 'mesas.cocina'];
+const P_TOMAR       = ['mesas.gestionar', 'mesas.tomarPedido'];
+const P_COBRAR      = ['mesas.gestionar', 'mesas.cobrar'];
+const P_COCINA      = ['mesas.gestionar', 'mesas.cocina'];
+
 // GET /api/mesas — mapa de mesas con resumen de su comanda abierta (si tiene)
-router.get('/', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+router.get('/', autorizarPermiso(P_VER), async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const mesas = await prisma.restaurante_mesas.findMany({
@@ -181,7 +189,7 @@ router.delete('/:id', autorizarPermiso('mesas.administrar'), async (req, res) =>
 // ─── COMANDAS ───────────────────────────────────────────────────────────────
 
 // GET /api/mesas/:id/comanda — comanda abierta de la mesa (o null)
-router.get('/:id/comanda', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+router.get('/:id/comanda', autorizarPermiso(P_VER), async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const mesaId = parseInt(req.params.id, 10);
@@ -201,7 +209,7 @@ router.get('/:id/comanda', autorizarPermiso('mesas.gestionar'), async (req, res)
 });
 
 // POST /api/mesas/:id/comanda — abrir una comanda nueva (la mesa debe estar LIBRE)
-router.post('/:id/comanda', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+router.post('/:id/comanda', autorizarPermiso(P_TOMAR), async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const mesaId = parseInt(req.params.id, 10);
@@ -236,7 +244,7 @@ router.post('/:id/comanda', autorizarPermiso('mesas.gestionar'), async (req, res
 });
 
 // PUT /api/mesas/comandas/:id — reemplaza la lista de ítems (agregar/quitar/editar)
-router.put('/comandas/:id', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+router.put('/comandas/:id', autorizarPermiso(P_TOMAR), async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const id = parseInt(req.params.id, 10);
@@ -267,6 +275,8 @@ router.put('/comandas/:id', autorizarPermiso('mesas.gestionar'), async (req, res
         nota: it.nota?.trim() || null,
         enviadoCocina: previo ? Boolean(previo.enviadoCocina) : false,
         enviadoCocinaEn: previo?.enviadoCocinaEn || null,
+        listoCocina: previo ? Boolean(previo.listoCocina) : false,
+        listoCocinaEn: previo?.listoCocinaEn || null,
       };
     }).filter((it) => it.codigoPrincipal && it.cantidad > 0);
 
@@ -283,7 +293,7 @@ router.put('/comandas/:id', autorizarPermiso('mesas.gestionar'), async (req, res
 });
 
 // POST /api/mesas/comandas/:id/enviar-cocina — imprime solo los ítems nuevos
-router.post('/comandas/:id/enviar-cocina', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+router.post('/comandas/:id/enviar-cocina', autorizarPermiso(P_TOMAR), async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const id = parseInt(req.params.id, 10);
@@ -351,9 +361,78 @@ router.post('/comandas/:id/enviar-cocina', autorizarPermiso('mesas.gestionar'), 
   }
 });
 
+// GET /api/mesas/cocina/pendientes — cola de cocina: ítems ya enviados y aún
+// no marcados como listos, de todas las comandas abiertas, más antiguos
+// primero. Complementa (no reemplaza) el ticket ESC/POS impreso — pensada
+// para el rol "cocina", que hoy no tiene ninguna pantalla propia.
+router.get('/cocina/pendientes', autorizarPermiso(P_COCINA), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const comandas = await prisma.restaurante_comandas.findMany({
+      where: { empresaId, estado: 'ABIERTA' },
+      include: { mesa: true },
+    });
+
+    const pendientes = [];
+    for (const c of comandas) {
+      for (const it of parseItems(c)) {
+        if (it.enviadoCocina && !it.listoCocina) {
+          pendientes.push({
+            comandaId: c.id,
+            mesaId: c.mesaId,
+            mesaNombre: c.mesa.nombre,
+            codigoPrincipal: it.codigoPrincipal,
+            descripcion: it.descripcion,
+            cantidad: it.cantidad,
+            nota: it.nota,
+            enviadoCocinaEn: it.enviadoCocinaEn,
+          });
+        }
+      }
+    }
+    pendientes.sort((a, b) => new Date(a.enviadoCocinaEn) - new Date(b.enviadoCocinaEn));
+
+    res.json({ success: true, data: pendientes });
+  } catch (error) {
+    console.error('GET /mesas/cocina/pendientes:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo obtener la cola de cocina' });
+  }
+});
+
+// POST /api/mesas/comandas/:id/items/listo — marca un ítem como listo.
+// Identifica el ítem por (codigoPrincipal, nota) — mismo criterio de
+// identidad que ya usa PUT /comandas/:id para no depender del índice del
+// arreglo, que puede correrse si el mesero edita la comanda al mismo tiempo.
+router.post('/comandas/:id/items/listo', autorizarPermiso(P_COCINA), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const id = parseInt(req.params.id, 10);
+    const { codigoPrincipal, nota } = req.body || {};
+
+    const comanda = await prisma.restaurante_comandas.findFirst({ where: { id, empresaId } });
+    if (!comanda) return res.status(404).json({ success: false, mensaje: 'Comanda no encontrada' });
+    if (comanda.estado !== 'ABIERTA') {
+      return res.status(400).json({ success: false, mensaje: 'Esta comanda ya está cerrada' });
+    }
+
+    const items = parseItems(comanda);
+    const notaBuscada = nota?.trim() || null;
+    const idx = items.findIndex((it) => it.codigoPrincipal === codigoPrincipal && (it.nota || null) === notaBuscada);
+    if (idx === -1) return res.status(404).json({ success: false, mensaje: 'Ítem no encontrado en la comanda' });
+
+    items[idx] = { ...items[idx], listoCocina: true, listoCocinaEn: new Date() };
+    await prisma.restaurante_comandas.update({ where: { id }, data: { items } });
+
+    res.json({ success: true, data: { items } });
+  } catch (error) {
+    console.error('POST /mesas/comandas/:id/items/listo:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudo marcar el ítem como listo' });
+  }
+});
+
 // POST /api/mesas/comandas/:id/cerrar — enlaza la factura/nota de venta ya
 // creada (por el POS reutilizado) y libera la mesa.
-router.post('/comandas/:id/cerrar', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+router.post('/comandas/:id/cerrar', autorizarPermiso(P_COBRAR), async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const id = parseInt(req.params.id, 10);
@@ -398,7 +477,7 @@ router.post('/comandas/:id/cerrar', autorizarPermiso('mesas.gestionar'), async (
 });
 
 // POST /api/mesas/comandas/:id/anular — cierra sin cobrar (mesa se va sin consumir, error, etc.)
-router.post('/comandas/:id/anular', autorizarPermiso('mesas.gestionar'), async (req, res) => {
+router.post('/comandas/:id/anular', autorizarPermiso(P_COBRAR), async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const id = parseInt(req.params.id, 10);
