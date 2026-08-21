@@ -436,3 +436,124 @@ verá con `�` hasta que se arregle la fuente.
   cuándo, dado el riesgo de tener que re-verificar el layout de varios
   reportes ya dados por buenos.
 - Nada de esto se probó en navegador real.
+
+---
+
+# Cierre de sesión — resumen completo (2026-08-17 al 2026-08-21)
+
+Sesión larga y continua, documentada día a día en archivos separados.
+Este cierre consolida todo lo hecho y todo lo que queda abierto, para
+retomar sin tener que releer los 5 documentos completos.
+
+## Índice de documentos de la sesión
+
+| Doc | Tema |
+|---|---|
+| `pendientes-2026-08-15.md` | ATS/F104: ventas No Objeto/Exento de IVA no se sumaban (`baseNoGraIva`) |
+| `pendientes-2026-08-16.md` | Investigación + plan para generar los formularios reales F104/F103/F101 |
+| `pendientes-2026-08-18.md` | ATS: filtro cédula sin aprobar/gasto personal, 3 bugs de parseo de XML de compras (codigoPorcentaje, tarifa 12/14%, importador de ventas) |
+| `pendientes-2026-08-19.md` | PDF de apoyo F104/F103 con casilleros oficiales; export a Excel escribía texto en vez de números |
+| `pendientes-2026-08-20.md` (este archivo) | Vista "Formulario" en pantalla para F104/F103/F101; fix Exento en ATS; checkbox cédula ATS; crédito 605/606 separado; gastos personales simplificado; Apertura de ejercicio; Anticipo IR (bloqueado); Anexo RDEP (investigado, bloqueado); tabla LORTI 2026 (corregida); Notas a los EEFF |
+
+## Resumen de commits (23, orden cronológico)
+
+| Fecha | Commit | Qué |
+|---|---|---|
+| 08-17 | `1555739` | fix: ATS no sumaba ventas No Objeto/Exento de IVA (`baseNoGraIva`) + 2 bugs relacionados |
+| 08-17 | `5c9ee90` | fix: F104 tampoco sumaba ventas No Objeto/Exento de IVA + desglose en Compras |
+| 08-17 | `233ddca` | docs: plan para generar los formularios reales F104/F103/F101 |
+| 08-18 | `e03f3da` | fix: ATS — No Objeto/Exenta en Ventas + excluir compras a cédula sin aprobar y gasto personal |
+| 08-18 | `108b4f5` | docs: sesión ATS 2026-08-18 |
+| 08-18 | `db0d1f3` | docs: checklist de casilleros SRI + aviso "ATS no cuadra" (sin detalle aún) |
+| 08-18 | `748625c` | fix: ATS vuelve a reportar TODAS las compras — la regla de cédula/aprobación es solo de F104/F101 |
+| 08-18 | `0980118` | fix: parser de XML de compras usaba tabla de codigoPorcentaje SRI incorrecta |
+| 08-18 | `c3b511b` | fix: normalizarTarifaIva no reconocía 12%/14% — los redondeaba a 15% |
+| 08-18 | `efa8b11` | docs: corrección aplicada en producción (aela_lsac, empresa 4) — 30 compras |
+| 08-18 | `78a1d9e` | fix: importador de XML de facturas de venta también perdía No Objeto/Exento |
+| 08-18 | `17cb17e` | docs: cerrar auditoría de tributación 2026-08-18 |
+| 08-18 | `449dd6d` | docs: cerrar pendiente de las 40 facturas antiguas sin subtotalNoObjetoIva |
+| 08-19 | `e7c5dc5` | fix: exportar a Excel de Compras/Ventas/NC/Retenciones escribía montos y fechas como texto |
+| 08-19 | `58438d2` | docs: sesión 2026-08-19 |
+| 08-19 | `1a0691a` | feat: Formulario 104 — PDF de apoyo con mapeo de casilleros oficiales |
+| 08-19 | `9ed5625` | feat: Formulario 103 — PDF de apoyo con mapeo de casilleros oficiales |
+| 08-19 | `996a3d2` | feat: F104 verificado contra declaración real, checkbox ATS cédula, crédito 605/606 separado |
+| 08-20 | `ddebd88` | feat: vista en pantalla del F104 tipo formulario + fix columna Exento en ATS |
+| 08-20 | `9b2bf4a` | feat: vista en pantalla tipo formulario también para el F103 |
+| 08-20 | `c72498c` | feat: F101 — resumen de apoyo con totales grandes (investigado contra guía oficial) |
+| 08-20 | `9538570` | feat: apertura automática de ejercicio; investigado Anticipo IR (bloqueado) |
+| 08-20 | `bad38b9` | fix: nómina — tabla LORTI actualizada de 2024 a 2026 (faltaba tramo 37%) |
+| 08-21 | `4854c29` | feat: Notas a los Estados Financieros (Contabilidad) |
+
+Todo lo de la sesión quedó **implementado, verificado (tests/build/PDFs
+renderizados/llamadas API reales) y pusheado a `origin/main`** — no hay
+código a medio terminar ni bloqueado a nivel de git.
+
+## 🔴 Pendientes consolidados para continuar
+
+**1. Nada de esta sesión se probó en un navegador real** — todo se
+verificó con `node --test`, `vite build`, llamadas API directas
+(curl/JWT de desarrollo) y PDFs renderizados a PNG con pymupdf, pero
+ninguna pantalla se hizo clic literalmente. Antes de dar la sesión por
+cerrada del todo, conviene una pasada manual por: Declaraciones (F104,
+F103, F101 → toggle "Formulario"), ATS (checkbox cédula + talón PDF con
+columna Exento), Contabilidad → Cierre y Estados (Apertura de
+ejercicio, sub-tab nuevo "Notas a los EEFF").
+
+**2. PDFKit rompe acentos del español en todos los PDFs** (hallazgo
+2026-08-21, ver sección "7. Notas a los EEFF" arriba y memoria
+`pdfkit-acentos-rotos`) — "Situación" sale "Situaci�n" en TODO
+documento generado con PDFKit (Helvetica estándar, sin fuente TTF
+registrada). Verificado con repro mínimo aislado de AELA. Arreglo
+correcto requiere empaquetar una fuente Unicode y re-verificar el
+layout de los PDFs ya medidos con precisión (F103/F104/F101). Sin
+decidir cuándo.
+
+**3. Anexo RDEP — investigado, sin implementar** (ver sección "6"
+arriba) — el catálogo oficial (ficha técnica SRI) pide campos que
+`empleados` no tiene (discapacidad, Galápagos, enfermedad catastrófica,
+proyección de gastos personales del trabajador). Es un anexo real ante
+el SRI, no un reporte interno — bloqueado hasta decidir si vale la pena
+capturar esos campos nuevos primero.
+
+**4. Anticipo de Impuesto a la Renta — bloqueado** — la fórmula clásica
+(0.2%/0.4%) ya no existe en la LRTI vigente (Art. 41 reformado, ahora
+es 50% voluntario del impuesto causado del año anterior). Implementarlo
+necesita "impuesto causado" real, que depende de la conciliación
+tributaria que el propio F101 dejó fuera de alcance. Pendiente decisión
+del usuario: ¿versión simplificada (utilidad contable como aproximación,
+con advertencia explícita) o esperar a tener el dato real?
+
+**5. ~~"El ATS no cuadra"~~ — YA RESUELTO, no es pendiente.** Reportado
+el 2026-08-18 sin detalle; el resumen prometido llegó horas después esa
+misma tarde (Excel de 91 compras reales) y confirmó 2 causas reales: un
+fix de esa misma mañana mal alcanzado (aplicado al ATS cuando debía
+quedarse solo en F104/F101 — revertido con confirmación explícita del
+usuario) y un bug más profundo en `importacionProductos.js`
+(`parsearFacturaCompraDesdeXml` tenía su propia tabla de
+`codigoPorcentaje` SRI incorrecta) — ambos ya corregidos y verificados
+ese mismo día. (Corrección a este mismo documento: la nota de
+`pendientes-2026-08-18.md` que decía "sin detalle aún" quedó
+desactualizada por trabajo posterior del mismo día — la memoria
+`aela-erp-estado-actual-del-proyecto` sí tiene el cierre completo.)
+
+**6. Hallazgos menores documentados, sin arreglar (bajo riesgo, no
+urgentes)**:
+   - `gastosPersonalesAnuales` en nómina usa metodología pre-2022
+     (deducción directa de la base) — dormida, nadie le pasa un valor
+     hoy, pero incorrecta si se activa. Relevante si se retoma RDEP.
+   - `cerrarEjercicioAnual()` usa una regex (`/utilidad|resultado/i`)
+     que podría no matchear las cuentas de resultado del plan
+     NIIF/Supercías ("GANANCIA NETA DEL PERIODO") — sospecha, no
+     confirmada con un tenant real de ese plan.
+   - `.env.example` tiene una diferencia sin relación a esta sesión
+     (un `)` de más en una línea comentada de `DATABASE_URL` de
+     Railway) — sigue sin resolver desde antes del 2026-08-14, nunca
+     confirmada como intencional.
+
+## Al retomar
+
+`git fetch` + revisar este documento (o directamente la memoria
+`aela-erp-estado-actual-del-proyecto`, que tiene el mismo contenido
+resumido y siempre actualizado). Ningún pendiente de la lista de arriba
+es un bug bloqueante de producción — son decisiones de alcance
+(RDEP, Anticipo IR, fuente PDF) y una verificación humana pendiente.
