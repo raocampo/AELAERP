@@ -70,6 +70,17 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="restaurante"
+        options={{
+          title: 'Mesas',
+          tabBarLabel: 'Mesas',
+          href: hrefSiHabilitado(sistema?.restauranteHabilitado),
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="restaurant-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="inventario"
         options={{
           title: 'Inventario',

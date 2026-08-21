@@ -19,8 +19,50 @@ export interface Sistema {
   posHabilitado: boolean;
   inventarioHabilitado: boolean;
   facturacionHabilitada: boolean;
+  restauranteHabilitado: boolean;
   documentoPosDefault?: 'factura' | 'nota_venta';
   cajaNombre?: string;
+}
+
+export interface ItemComanda {
+  codigoPrincipal: string;
+  descripcion: string;
+  cantidad: number;
+  precioUnitario: number;
+  ivaPorcentaje: number;
+  nota?: string | null;
+  enviadoCocina: boolean;
+  facturado?: boolean;
+}
+
+export interface Mesa {
+  id: number;
+  nombre: string;
+  capacidad?: number | null;
+  estado: 'LIBRE' | 'OCUPADA';
+  comanda: {
+    id: number;
+    numeroComensales?: number | null;
+    cantidadItems: number;
+    pendientesCocina: number;
+    tieneCuentaDividida?: boolean;
+    subtotal: number;
+    totalIva: number;
+    total: number;
+  } | null;
+}
+
+export interface Comanda {
+  id: number;
+  mesaId: number;
+  mesa?: { nombre: string };
+  estado: 'ABIERTA' | 'CERRADA' | 'ANULADA';
+  items: ItemComanda[];
+  numeroComensales?: number | null;
+  subtotal: number;
+  totalIva: number;
+  total: number;
+  totalFacturado?: number;
 }
 
 export interface Producto {

@@ -32,7 +32,13 @@ export default function CheckoutScreen() {
     carrito: string; tipoDocumento: string; tipoId: string;
     identificacion: string; razonSocial: string;
     total: string; totalConIva: string; subtotal: string;
+    // Mesas y Comandas: si esta venta viene de "Cobrar" en una comanda
+    // (ver restaurante/comanda.tsx), estos vienen presentes — al emitir con
+    // éxito se enlaza el documento y se libera la mesa (best-effort, igual
+    // que PuntoVenta.jsx en la web).
+    comandaId?: string; mesaNombre?: string;
   }>();
+  const vieneDeComanda = Boolean(params.comandaId);
 
   const carrito: ItemCarrito[] = JSON.parse(params.carrito || '[]');
   const tipoDocumento = params.tipoDocumento as 'factura' | 'nota_venta';
@@ -45,6 +51,15 @@ export default function CheckoutScreen() {
   const [docEmitido, setDocEmitido] = useState<{ id: number; numero: string; total: number; tipo: 'nota_venta' | 'factura' } | null>(null);
 
   const cambio = Math.max(0, parseFloat(montoPagado || '0') - total);
+
+  const cerrarComandaSiCorresponde = async (tipo: 'factura' | 'nota_venta', documentoId: number) => {
+    if (!vieneDeComanda || !documentoId) return;
+    try {
+      await api.post(`/mesas/comandas/${params.comandaId}/cerrar`, { tipo, documentoId });
+    } catch (err: any) {
+      Alert.alert('Aviso', err.response?.data?.mensaje || 'La venta se registró, pero no se pudo liberar la mesa automáticamente — libérala a mano desde Mesas.');
+    }
+  };
 
   const emitir = async () => {
     setEmitiendo(true);
@@ -65,6 +80,7 @@ export default function CheckoutScreen() {
         });
         const d = res.data?.data;
         setDocEmitido({ id: d?.id, numero: d?.numeroNota || '—', total: d?.total ?? total, tipo: 'nota_venta' });
+        void cerrarComandaSiCorresponde('nota_venta', d?.id);
       } else {
         const res = await api.post('/facturas', {
           tipoIdentificacionComprador: params.tipoId,
@@ -80,6 +96,7 @@ export default function CheckoutScreen() {
         });
         const d = res.data?.data;
         setDocEmitido({ id: d?.id, numero: d?.numeroFactura || '—', total: d?.importeTotal ?? total, tipo: 'factura' });
+        void cerrarComandaSiCorresponde('factura', d?.id);
       }
     } catch (err: any) {
       Alert.alert('Error al emitir', err.response?.data?.mensaje || err.response?.data?.error || 'No se pudo emitir el documento');
@@ -100,6 +117,9 @@ export default function CheckoutScreen() {
           <Text style={s.exitoTipo}>{docEmitido.tipo === 'factura' ? 'Factura' : 'Nota de venta'}</Text>
           <Text style={s.exitoNumero}>{docEmitido.numero}</Text>
           <Text style={s.exitoTotal}>${docEmitido.total.toFixed(2)}</Text>
+          {vieneDeComanda && (
+            <Text style={s.mesaLiberadaTxt}>🍽️ {params.mesaNombre || 'Mesa'} liberada</Text>
+          )}
           {cambio > 0 && (
             <View style={s.cambioBox}>
               <Text style={s.cambioLbl}>Cambio al cliente</Text>
@@ -123,9 +143,13 @@ export default function CheckoutScreen() {
             }
           </TouchableOpacity>
 
-          <TouchableOpacity style={s.nuevoBtn} onPress={() => router.replace('/(tabs)/pos')} activeOpacity={0.85}>
-            <Ionicons name="add-circle-outline" size={20} color="#fff" />
-            <Text style={s.nuevoBtnTxt}>Nueva venta</Text>
+          <TouchableOpacity
+            style={s.nuevoBtn}
+            onPress={() => router.replace(vieneDeComanda ? '/(tabs)/restaurante' : '/(tabs)/pos')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name={vieneDeComanda ? 'restaurant-outline' : 'add-circle-outline'} size={20} color="#fff" />
+            <Text style={s.nuevoBtnTxt}>{vieneDeComanda ? 'Volver a Mesas' : 'Nueva venta'}</Text>
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
@@ -266,6 +290,7 @@ const s = StyleSheet.create({
   exitoTipo: { fontSize: 14, color: '#64748b', marginBottom: 4 },
   exitoNumero: { fontSize: 18, fontWeight: '700', color: '#1e40af', marginBottom: 4 },
   exitoTotal: { fontSize: 36, fontWeight: '800', color: '#22c55e', marginBottom: 16 },
+  mesaLiberadaTxt: { fontSize: 14, fontWeight: '700', color: '#166534', marginBottom: 12 },
   cambioBox: { backgroundColor: '#f0fdf4', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12, alignItems: 'center', marginBottom: 24 },
   cambioLbl: { fontSize: 13, color: '#166534' },
   cambioVal: { fontSize: 28, fontWeight: '800', color: '#166534' },
