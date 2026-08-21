@@ -3193,6 +3193,27 @@ router.get('/reportes/balance-general', async (req, res) => {
       .text(data.balanceado ? 'Balance cuadrado' : 'ATENCIÓN: el balance NO cuadra — revisar antes de firmar', { align: 'right' })
       .fillColor('#000000');
 
+    // Notas a los Estados Financieros — anexo del mismo año fiscal de la
+    // fecha de corte, si el contador las redactó. NIIF exige que el paquete
+    // de EEFF vaya acompañado de notas explicativas.
+    const anioNotas = new Date(data.fecha).getFullYear();
+    const notasEEFF = await prisma.notas_estados_financieros.findMany({
+      where: { empresaId, anio: anioNotas },
+      orderBy: { numero: 'asc' },
+    });
+    if (notasEEFF.length > 0) {
+      doc.addPage();
+      doc.fontSize(12).font('Helvetica-Bold').text('NOTAS A LOS ESTADOS FINANCIEROS', { align: 'left' });
+      doc.fontSize(8).fillColor('#94a3b8').text(`Año fiscal ${anioNotas}`).fillColor('#000000');
+      doc.moveDown(0.6);
+      for (const n of notasEEFF) {
+        if (doc.y > doc.page.height - 100) doc.addPage();
+        doc.fontSize(10).font('Helvetica-Bold').text(`Nota ${n.numero} — ${n.titulo}`);
+        doc.fontSize(9).font('Helvetica').text(n.contenido, { align: 'justify' });
+        doc.moveDown(0.8);
+      }
+    }
+
     // Firmas al final del documento — si no queda espacio suficiente en la
     // página actual, arranca una página nueva en vez de apretarlas al pie.
     const ML = doc.page.margins.left;
@@ -3236,6 +3257,92 @@ router.get('/cambios-patrimonio', async (req, res) => {
   } catch (error) {
     console.error('GET /contabilidad/cambios-patrimonio:', error);
     res.status(500).json({ success: false, mensaje: 'Error al generar el estado de cambios en el patrimonio' });
+  }
+});
+
+// ─── Notas a los Estados Financieros ──────────────────────────────────────
+// Texto narrativo libre (sin cálculo legal detrás) numerado por año fiscal —
+// NIIF exige que el paquete de EEFF vaya acompañado de notas (entidad,
+// políticas contables, detalle de rubros, contingencias, hechos
+// posteriores, etc.). Redacción del contador, AELA solo la almacena y la
+// ordena.
+
+// GET /api/contabilidad/notas-eeff?anio=2026
+router.get('/notas-eeff', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const notas = await prisma.notas_estados_financieros.findMany({
+      where: { empresaId, anio },
+      orderBy: { numero: 'asc' },
+    });
+    res.json({ success: true, data: notas });
+  } catch (error) {
+    console.error('GET /contabilidad/notas-eeff:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al obtener las notas a los estados financieros' });
+  }
+});
+
+// POST /api/contabilidad/notas-eeff
+router.post('/notas-eeff', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const { anio, numero, titulo, contenido } = req.body;
+    if (!anio || !numero || !titulo?.trim() || !contenido?.trim()) {
+      return res.status(400).json({ success: false, mensaje: 'Año, número, título y contenido son obligatorios' });
+    }
+    const nota = await prisma.notas_estados_financieros.create({
+      data: { empresaId, anio: parseInt(anio), numero: parseInt(numero), titulo: titulo.trim(), contenido: contenido.trim() },
+    });
+    res.json({ success: true, data: nota });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({ success: false, mensaje: `Ya existe una Nota ${req.body.numero} para el año ${req.body.anio}` });
+    }
+    console.error('POST /contabilidad/notas-eeff:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al crear la nota' });
+  }
+});
+
+// PUT /api/contabilidad/notas-eeff/:id
+router.put('/notas-eeff/:id', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseInt(req.params.id);
+    const existente = await prisma.notas_estados_financieros.findFirst({ where: { id, empresaId } });
+    if (!existente) return res.status(404).json({ success: false, mensaje: 'Nota no encontrada' });
+
+    const { numero, titulo, contenido } = req.body;
+    if (!numero || !titulo?.trim() || !contenido?.trim()) {
+      return res.status(400).json({ success: false, mensaje: 'Número, título y contenido son obligatorios' });
+    }
+    const nota = await prisma.notas_estados_financieros.update({
+      where: { id },
+      data: { numero: parseInt(numero), titulo: titulo.trim(), contenido: contenido.trim() },
+    });
+    res.json({ success: true, data: nota });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({ success: false, mensaje: `Ya existe una Nota ${req.body.numero} para ese año` });
+    }
+    console.error('PUT /contabilidad/notas-eeff/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al actualizar la nota' });
+  }
+});
+
+// DELETE /api/contabilidad/notas-eeff/:id
+router.delete('/notas-eeff/:id', async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseInt(req.params.id);
+    const existente = await prisma.notas_estados_financieros.findFirst({ where: { id, empresaId } });
+    if (!existente) return res.status(404).json({ success: false, mensaje: 'Nota no encontrada' });
+
+    await prisma.notas_estados_financieros.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('DELETE /contabilidad/notas-eeff/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al eliminar la nota' });
   }
 });
 

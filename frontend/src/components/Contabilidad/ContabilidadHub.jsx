@@ -251,6 +251,10 @@ const ContabilidadHub = () => {
   const [cerrandoEjercicio, setCerrandoEjercicio] = useState(false);
   const [anioApertura, setAnioApertura] = useState(String(new Date().getFullYear()));
   const [abriendoEjercicio, setAbriendoEjercicio] = useState(false);
+  const [notasEEFF, setNotasEEFF] = useState([]);
+  const [notasAnio, setNotasAnio] = useState(String(new Date().getFullYear()));
+  const [notaForm, setNotaForm] = useState(null); // null = cerrado; {} = nueva; {id,...} = editando
+  const [guardandoNota, setGuardandoNota] = useState(false);
   const [estadosFiltros, setEstadosFiltros] = useState({ periodo: '', desde: '', hasta: '', fechaBalance: '' });
   const [asientoInicialForm, setAsientoInicialForm] = useState({
     periodo: '',
@@ -478,6 +482,54 @@ const ContabilidadHub = () => {
       toast.error(error.response?.data?.mensaje || 'Error al abrir el ejercicio siguiente');
     } finally {
       setAbriendoEjercicio(false);
+    }
+  };
+
+  const cargarNotasEEFF = useCallback(async () => {
+    const anio = parseInt(notasAnio, 10);
+    if (!anio) return;
+    try {
+      const res = await api.get('/contabilidad/notas-eeff', { params: { anio } });
+      setNotasEEFF(res.data?.data || []);
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al cargar las notas a los EEFF');
+    }
+  }, [notasAnio]);
+
+  useEffect(() => { cargarNotasEEFF(); }, [cargarNotasEEFF]);
+
+  const siguienteNumeroNota = () => notasEEFF.reduce((max, n) => Math.max(max, n.numero), 0) + 1;
+
+  const guardarNota = async () => {
+    if (!notaForm?.titulo?.trim() || !notaForm?.contenido?.trim()) {
+      return toast.error('Título y contenido son obligatorios');
+    }
+    setGuardandoNota(true);
+    try {
+      const payload = { numero: notaForm.numero, titulo: notaForm.titulo.trim(), contenido: notaForm.contenido.trim() };
+      if (notaForm.id) {
+        await api.put(`/contabilidad/notas-eeff/${notaForm.id}`, payload);
+      } else {
+        await api.post('/contabilidad/notas-eeff', { ...payload, anio: parseInt(notasAnio, 10) });
+      }
+      toast.success('Nota guardada');
+      setNotaForm(null);
+      await cargarNotasEEFF();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al guardar la nota');
+    } finally {
+      setGuardandoNota(false);
+    }
+  };
+
+  const eliminarNota = async (nota) => {
+    if (!window.confirm(`¿Eliminar la Nota ${nota.numero} — ${nota.titulo}?`)) return;
+    try {
+      await api.delete(`/contabilidad/notas-eeff/${nota.id}`);
+      toast.success('Nota eliminada');
+      await cargarNotasEEFF();
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al eliminar la nota');
     }
   };
 
@@ -2614,6 +2666,7 @@ const ContabilidadHub = () => {
               <button className={`conta-subtab${cierreSubTab === 'comprobacion' ? ' active' : ''}`} onClick={() => setCierreSubTab('comprobacion')}>Balance de Comprobación</button>
               <button className={`conta-subtab${cierreSubTab === 'flujo'        ? ' active' : ''}`} onClick={() => setCierreSubTab('flujo')}>Flujo de Efectivo</button>
               <button className={`conta-subtab${cierreSubTab === 'patrimonio'   ? ' active' : ''}`} onClick={() => setCierreSubTab('patrimonio')}>Cambios en el Patrimonio</button>
+              <button className={`conta-subtab${cierreSubTab === 'notas'       ? ' active' : ''}`} onClick={() => setCierreSubTab('notas')}>Notas a los EEFF</button>
             </div>
 
             {cierreLoading ? (
@@ -2810,6 +2863,77 @@ const ContabilidadHub = () => {
                         </tr>
                       </tbody>
                     </table>
+                  </>
+                )}
+
+                {/* ── Notas a los EEFF ── */}
+                {cierreSubTab === 'notas' && (
+                  <>
+                    <div className="conta-note" style={{ marginBottom: 12 }}>
+                      <p>Texto libre que acompaña al paquete de estados financieros (entidad y
+                      actividades, políticas contables, detalle de rubros, contingencias, hechos
+                      posteriores, etc.). Se numeran por año fiscal y se agregan como apéndice al
+                      final del PDF de "Balance General (para firmar)" cuando la fecha de corte
+                      cae en ese año.</p>
+                    </div>
+                    <div className="conta-filters" style={{ marginBottom: 12 }}>
+                      <label>Año fiscal</label>
+                      <input type="number" value={notasAnio} onChange={(e) => setNotasAnio(e.target.value)} style={{ maxWidth: 120 }} />
+                      {!notaForm && (
+                        <button className="btn-secondary" onClick={() => setNotaForm({ numero: siguienteNumeroNota(), titulo: '', contenido: '' })}>
+                          + Nueva nota
+                        </button>
+                      )}
+                    </div>
+
+                    {notaForm && (
+                      <div className="conta-card" style={{ marginBottom: 16 }}>
+                        <h4>{notaForm.id ? `Editar Nota ${notaForm.numero}` : 'Nueva nota'}</h4>
+                        <div className="conta-form-grid">
+                          <div style={{ maxWidth: 100 }}>
+                            <label>Número</label>
+                            <input type="number" value={notaForm.numero} onChange={(e) => setNotaForm({ ...notaForm, numero: parseInt(e.target.value) || 0 })} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label>Título</label>
+                            <input type="text" value={notaForm.titulo} onChange={(e) => setNotaForm({ ...notaForm, titulo: e.target.value })} placeholder="Ej: Entidad y actividades" />
+                          </div>
+                        </div>
+                        <div style={{ marginTop: 8 }}>
+                          <label>Contenido</label>
+                          <textarea
+                            rows={6}
+                            value={notaForm.contenido}
+                            onChange={(e) => setNotaForm({ ...notaForm, contenido: e.target.value })}
+                            placeholder="Redacción de la nota..."
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div className="conta-form-actions" style={{ marginTop: 8 }}>
+                          <button className="btn-secondary" onClick={() => setNotaForm(null)}>Cancelar</button>
+                          <button className="btn-primary" disabled={guardandoNota} onClick={guardarNota}>
+                            {guardandoNota ? 'Guardando...' : 'Guardar nota'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {notasEEFF.length === 0 ? (
+                      <div className="conta-empty">Sin notas para el año {notasAnio}</div>
+                    ) : (
+                      notasEEFF.map((n) => (
+                        <div key={n.id} className="conta-card" style={{ marginBottom: 10 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <h4 style={{ margin: 0 }}>Nota {n.numero} — {n.titulo}</h4>
+                            <div className="conta-form-actions">
+                              <button className="btn-secondary" onClick={() => setNotaForm({ id: n.id, numero: n.numero, titulo: n.titulo, contenido: n.contenido })}>Editar</button>
+                              <button className="btn-danger-outline" onClick={() => eliminarNota(n)}>Eliminar</button>
+                            </div>
+                          </div>
+                          <p style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>{n.contenido}</p>
+                        </div>
+                      ))
+                    )}
                   </>
                 )}
               </>

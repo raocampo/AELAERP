@@ -361,3 +361,78 @@ casillero "Rebaja por gastos personales" del anexo la exige.
 - La tabla LORTI debe actualizarse cada diciembre con la resolución
   anual del SRI (mismo patrón que `SBU_ECUADOR`, ya documentado en el
   comentario del código).
+
+## 7. Notas a los Estados Financieros — implementado
+
+Con RDEP bloqueado y LORTI corregido, se continuó al siguiente ítem
+tractable del roadmap "Camino a AELA PRO": Notas a los EEFF, el pedazo
+que quedó pendiente cuando se hicieron Flujo de Efectivo y Cambios en
+el Patrimonio (2026-07-30). Es texto narrativo libre — sin cálculo
+legal detrás — que NIIF exige acompañar al paquete de EEFF (entidad y
+actividades, políticas contables, detalle de rubros, contingencias,
+hechos posteriores).
+
+### Implementado
+
+- Modelo nuevo `notas_estados_financieros` (empresaId, anio, numero,
+  titulo, contenido) — único por (empresaId, anio, numero). Agregado a
+  `applySchemaFixes.js` (verificado: 209 sentencias, 0 advertencias
+  contra la BD principal real).
+- CRUD completo en `contabilidad.js`: `GET/POST/PUT/DELETE
+  /notas-eeff`. Verificado end-to-end (crear, listar, editar, duplicado
+  rechazado con 409, eliminar) contra empresaId=1 con datos QATEST,
+  limpiados después.
+- Nuevo sub-tab "Notas a los EEFF" en Contabilidad → Cierre y Estados
+  (`ContabilidadHub.jsx`), con formulario de alta/edición y lista
+  numerada.
+- Las notas del año fiscal correspondiente a la fecha de corte se
+  agregan como apéndice (página nueva) al final del PDF "Balance
+  General (para firmar)", antes de las líneas de firma — verificado
+  generando el PDF con una nota real y confirmando el apéndice con
+  pymupdf.
+- `node --test`: 49/49. `vite build`: sin errores.
+
+### Hallazgo importante, no buscado: acentos rotos en TODOS los PDFs de Contabilidad
+
+Al revisar el PDF generado para verificar el apéndice de notas, se vio
+que "Situación" salía como "Situaci�n", "Provisión" como "Provisi�n",
+"Año" como "A�o" — en **todo el documento**, no solo en la sección
+nueva. Se aisló la causa con un repro mínimo (4 líneas de PDFKit puro,
+sin nada de AELA): `doc.font('Helvetica').text('Situación, ñ, á é í ó
+ú')` — el mismo resultado roto. **Ningún archivo del backend registra
+una fuente TTF/Unicode** (`grep -r registerFont` no encontró nada) —
+todo el PDF del sistema depende de las 14 fuentes estándar de PDFKit
+(Helvetica vía AFM/WinAnsiEncoding), que en esta versión de pdfkit
+(0.17.2) no está renderizando correctamente los caracteres acentuados
+del español.
+
+Esto es un hallazgo **más grande de lo que toca hoy**: probablemente
+afecta TODOS los PDFs del sistema con texto en español acentuado —
+facturas/RIDE, F103/F104/F101, talón ATS, asientos, libro mayor,
+balance general — no solo el nuevo apéndice de notas. No se investigó
+ni se arregló más allá del diagnóstico porque:
+
+1. El arreglo correcto (registrar una fuente TTF Unicode real, ej.
+   Noto Sans o Liberation Sans, vía `doc.registerFont()`) toca un
+   archivo de fuente que no existe hoy en el repo — hay que conseguirlo
+   y empaquetarlo.
+2. Cambiar la fuente en los PDFs ya verificados este mes (F103/F104/F101,
+   cuyo layout se midió con precisión de puntos con `heightOfString`)
+   podría correr el texto de ancho y requerir re-verificar el layout de
+   cada uno — no es un cambio de una línea sin riesgo.
+3. No estaba pedido — se encontró de paso revisando el PDF de Notas a
+   los EEFF.
+
+Para la funcionalidad de hoy (Notas a los EEFF) el bug ya estaba ahí en
+el helper compartido de `contabilidad.js` — no se introdujo con este
+cambio, se heredó. El feature en sí funciona (CRUD, apéndice se agrega
+en la página correcta), pero el texto en español con tildes/eñes se
+verá con `�` hasta que se arregle la fuente.
+
+### Pendiente
+
+- Decidir con el usuario si vale la pena registrar una fuente TTF
+  Unicode (arreglaría el bug en todos los PDFs de una vez) y priorizar
+  cuándo, dado el riesgo de tener que re-verificar el layout de varios
+  reportes ya dados por buenos.
+- Nada de esto se probó en navegador real.

@@ -718,6 +718,20 @@ const FIXES = [
   `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "imagenMenuUrl" TEXT`,
   `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "visibleEnMenu" BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "ordenMenu" INTEGER NOT NULL DEFAULT 0`,
+  // Notas a los Estados Financieros — texto libre numerado por año fiscal
+  `CREATE TABLE IF NOT EXISTS "notas_estados_financieros" (
+    "id"          SERIAL PRIMARY KEY,
+    "empresaId"   INTEGER NOT NULL DEFAULT 1,
+    "anio"        INTEGER NOT NULL,
+    "numero"      INTEGER NOT NULL,
+    "titulo"      VARCHAR(200) NOT NULL,
+    "contenido"   TEXT NOT NULL,
+    "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "notas_estados_financieros_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "empresas"("id")
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "notas_estados_financieros_empresaId_anio_numero_key" ON "notas_estados_financieros"("empresaId", "anio", "numero")`,
+  `CREATE INDEX IF NOT EXISTS "notas_estados_financieros_empresaId_anio_idx" ON "notas_estados_financieros"("empresaId", "anio")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

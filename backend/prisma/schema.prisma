@@ -1187,6 +1187,25 @@ model periodos_contables {
   @@map("periodos_contables")
 }
 
+// Notas a los Estados Financieros — texto narrativo libre que acompaña al
+// paquete de EEFF (NIIF exige notas: entidad, políticas contables, detalle
+// de rubros, contingencias, hechos posteriores, etc.). Sin cálculo legal
+// detrás — solo redacción del contador, numerada y ordenable por año fiscal.
+model notas_estados_financieros {
+  id        Int      @id @default(autoincrement())
+  empresaId Int      @default(1)
+  anio      Int
+  numero    Int
+  titulo    String   @db.VarChar(200)
+  contenido String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([empresaId, anio, numero])
+  @@index([empresaId, anio])
+  @@map("notas_estados_financieros")
+}
+
 // ====================================
 // CONTABILIDAD — Plan de Cuentas
 // ====================================
