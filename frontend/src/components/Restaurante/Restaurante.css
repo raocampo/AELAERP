@@ -266,6 +266,28 @@
   padding: 4px;
 }
 
+.rest-comanda-facturados {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rest-comanda-facturados-titulo {
+  font-size: 12px;
+  font-weight: 700;
+  color: #16a34a;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.rest-item-row.facturado {
+  opacity: 0.6;
+  border-left-color: #16a34a;
+}
+
 .rest-comanda-footer {
   display: flex;
   justify-content: space-between;

@@ -397,11 +397,20 @@ export default function PuntoVenta() {
   const cerrarComandaSiCorresponde = async (tipo, documentoId) => {
     if (!comandaOrigen || !documentoId) return;
     try {
-      await api.post(`/mesas/comandas/${comandaOrigen.id}/cerrar`, { tipo, documentoId });
-      toast.success(`Mesa ${comandaOrigen.mesaNombre || ''} liberada`);
+      const res = await api.post(`/mesas/comandas/${comandaOrigen.id}/cerrar`, {
+        tipo, documentoId,
+        // indices: null = cobra todo lo pendiente (mesa normal); array =
+        // cuenta dividida por ítems, ver ComandaMesa.jsx → irACobrar.
+        ...(comandaOrigen.indices && { indices: comandaOrigen.indices }),
+      });
+      if (res.data?.mesaLiberada) {
+        toast.success(`Mesa ${comandaOrigen.mesaNombre || ''} liberada`);
+      } else {
+        toast(`Cobro registrado — quedan $${Number(res.data?.totalRestante || 0).toFixed(2)} pendientes en ${comandaOrigen.mesaNombre || 'la mesa'}`, { icon: '🔀' });
+      }
       setComandaOrigen(null);
     } catch (err) {
-      toast.error(err.response?.data?.mensaje || 'La venta se registró, pero no se pudo liberar la mesa automáticamente');
+      toast.error(err.response?.data?.mensaje || 'La venta se registró, pero no se pudo actualizar la comanda automáticamente');
     }
   };
 

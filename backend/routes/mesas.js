@@ -88,7 +88,9 @@ router.get('/', autorizarPermiso(P_VER), async (req, res) => {
       const comanda = porMesa.get(m.id);
       if (!comanda) return { ...m, comanda: null };
       const items = parseItems(comanda);
-      const totales = calcularTotales(items);
+      // Cuentas separadas: el total que se muestra en el mapa de mesas es lo
+      // que FALTA por cobrar, no el consumo total (ya se cobró parte).
+      const totales = calcularTotales(items.filter((it) => !it.facturado));
       return {
         ...m,
         comanda: {
@@ -97,6 +99,7 @@ router.get('/', autorizarPermiso(P_VER), async (req, res) => {
           abiertaEn: comanda.abiertaEn,
           cantidadItems: items.length,
           pendientesCocina: items.filter((it) => !it.enviadoCocina).length,
+          tieneCuentaDividida: items.some((it) => it.facturado),
           ...totales,
         },
       };
@@ -201,7 +204,18 @@ router.get('/:id/comanda', autorizarPermiso(P_VER), async (req, res) => {
     if (!comanda) return res.json({ success: true, data: null });
 
     const items = parseItems(comanda);
-    res.json({ success: true, data: { ...comanda, items, ...calcularTotales(items) } });
+    // Cuentas separadas: total/subtotal/totalIva reflejan lo PENDIENTE por
+    // cobrar (mismo criterio que el mapa de mesas); totalFacturado es lo que
+    // ya se cobró en documentos anteriores de esta misma comanda.
+    res.json({
+      success: true,
+      data: {
+        ...comanda,
+        items,
+        ...calcularTotales(items.filter((it) => !it.facturado)),
+        totalFacturado: calcularTotales(items.filter((it) => it.facturado)).total,
+      },
+    });
   } catch (error) {
     console.error('GET /mesas/:id/comanda:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo obtener la comanda' });
@@ -260,12 +274,19 @@ router.put('/comandas/:id', autorizarPermiso(P_TOMAR), async (req, res) => {
       return res.status(400).json({ success: false, mensaje: 'Esta comanda ya está cerrada' });
     }
 
-    // Preservar el estado enviadoCocina de los ítems que ya existían — el
-    // mesero puede reordenar/editar cantidades sin que se vuelvan a marcar
-    // como "nuevos" para cocina.
+    // Preservar el estado enviadoCocina/listoCocina de los ítems que ya
+    // existían — el mesero puede reordenar/editar cantidades sin que se
+    // vuelvan a marcar como "nuevos" para cocina. Los ítems ya FACTURADOS
+    // (cuentas separadas) son de solo lectura desde acá: se restauran tal
+    // cual estaban aunque el request los traiga editados, y si el request
+    // los omite (el cajero los filtró de la vista editable) se agregan de
+    // vuelta igual — nunca se pierde ni se altera un ítem ya cobrado
+    // editando la comanda.
     const itemsAnteriores = parseItems(comanda);
+    const clave = (it) => `${it.codigoPrincipal}||${it.nota || ''}`;
     const itemsNormalizados = items.map((it) => {
       const previo = itemsAnteriores.find((p) => p.codigoPrincipal === it.codigoPrincipal && p.nota === it.nota);
+      if (previo?.facturado) return previo; // solo lectura, ignora cualquier edición entrante
       return {
         codigoPrincipal: String(it.codigoPrincipal || ''),
         descripcion: String(it.descripcion || ''),
@@ -277,8 +298,18 @@ router.put('/comandas/:id', autorizarPermiso(P_TOMAR), async (req, res) => {
         enviadoCocinaEn: previo?.enviadoCocinaEn || null,
         listoCocina: previo ? Boolean(previo.listoCocina) : false,
         listoCocinaEn: previo?.listoCocinaEn || null,
+        facturado: false,
+        facturadoEn: null,
+        documentoTipo: null,
+        documentoId: null,
       };
     }).filter((it) => it.codigoPrincipal && it.cantidad > 0);
+    // Ítems ya facturados que el request omitió (la vista editable del
+    // cajero no los muestra) — se reincorporan sin tocar.
+    const clavesIncluidas = new Set(itemsNormalizados.map(clave));
+    for (const p of itemsAnteriores) {
+      if (p.facturado && !clavesIncluidas.has(clave(p))) itemsNormalizados.push(p);
+    }
 
     const actualizada = await prisma.restaurante_comandas.update({
       where: { id },
@@ -431,12 +462,17 @@ router.post('/comandas/:id/items/listo', autorizarPermiso(P_COCINA), async (req,
 });
 
 // POST /api/mesas/comandas/:id/cerrar — enlaza la factura/nota de venta ya
-// creada (por el POS reutilizado) y libera la mesa.
+// creada (por el POS reutilizado) y, si cubre TODOS los ítems pendientes,
+// libera la mesa. Cuentas separadas: `indices` (opcional) limita el cobro a
+// un subconjunto de ítems (por posición en el arreglo, tal como lo ve el
+// cajero al armar esa cuenta) — los demás quedan pendientes en la MISMA
+// comanda para cobrarse después con otro documento. Sin `indices`, cobra
+// todos los ítems aún no facturados (comportamiento de siempre).
 router.post('/comandas/:id/cerrar', autorizarPermiso(P_COBRAR), async (req, res) => {
   try {
     const empresaId = req.empresa.id;
     const id = parseInt(req.params.id, 10);
-    const { tipo, documentoId } = req.body || {};
+    const { tipo, documentoId, indices } = req.body || {};
 
     if (!['factura', 'nota_venta'].includes(tipo) || !documentoId) {
       return res.status(400).json({ success: false, mensaje: 'tipo y documentoId son requeridos' });
@@ -455,21 +491,62 @@ router.post('/comandas/:id/cerrar', autorizarPermiso(P_COBRAR), async (req, res)
       : await prisma.notas_venta.findFirst({ where: { id: docId, empresaId } });
     if (!doc) return res.status(404).json({ success: false, mensaje: 'El documento indicado no existe' });
 
+    const items = parseItems(comanda);
+    const pendientesIdx = items.reduce((acc, it, i) => { if (!it.facturado) acc.push(i); return acc; }, []);
+    if (pendientesIdx.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'Todos los ítems de esta comanda ya están facturados' });
+    }
+
+    let indicesACobrar = pendientesIdx;
+    if (Array.isArray(indices) && indices.length > 0) {
+      const invalidos = indices.filter((i) => !pendientesIdx.includes(i));
+      if (invalidos.length > 0) {
+        return res.status(400).json({ success: false, mensaje: 'Alguno de los ítems seleccionados ya fue facturado o no existe' });
+      }
+      indicesACobrar = indices;
+    }
+
+    const ahora = new Date();
+    const itemsActualizados = items.map((it, i) => (
+      indicesACobrar.includes(i)
+        ? { ...it, facturado: true, facturadoEn: ahora, documentoTipo: tipo, documentoId: docId }
+        : it
+    ));
+    const quedanPendientes = itemsActualizados.some((it) => !it.facturado);
+
     const resultado = await prisma.$transaction(async (tx) => {
       const actualizada = await tx.restaurante_comandas.update({
         where: { id },
-        data: {
-          estado: 'CERRADA',
-          cerradaEn: new Date(),
-          facturaId: tipo === 'factura' ? docId : null,
-          notaVentaId: tipo === 'nota_venta' ? docId : null,
-        },
+        data: quedanPendientes
+          ? { items: itemsActualizados }
+          : {
+              items: itemsActualizados,
+              estado: 'CERRADA',
+              cerradaEn: ahora,
+              // Con un solo documento (caso normal) queda enlazado aquí para
+              // consultas rápidas; en una cuenta dividida en varios
+              // documentos, este campo queda con el ÚLTIMO que la cerró — el
+              // detalle completo de qué pagó cada ítem vive en items[].
+              facturaId: tipo === 'factura' ? docId : null,
+              notaVentaId: tipo === 'nota_venta' ? docId : null,
+            },
       });
-      await tx.restaurante_mesas.update({ where: { id: comanda.mesaId }, data: { estado: 'LIBRE' } });
+      if (!quedanPendientes) {
+        await tx.restaurante_mesas.update({ where: { id: comanda.mesaId }, data: { estado: 'LIBRE' } });
+      }
       return actualizada;
     });
 
-    res.json({ success: true, data: resultado, mensaje: 'Mesa cobrada y liberada' });
+    const totalRestante = calcularTotales(itemsActualizados.filter((it) => !it.facturado)).total;
+    res.json({
+      success: true,
+      data: { ...resultado, items: itemsActualizados },
+      mesaLiberada: !quedanPendientes,
+      totalRestante,
+      mensaje: quedanPendientes
+        ? `Cobrado — quedan $${totalRestante.toFixed(2)} pendientes en la mesa`
+        : 'Mesa cobrada y liberada',
+    });
   } catch (error) {
     console.error('POST /mesas/comandas/:id/cerrar:', error);
     res.status(500).json({ success: false, mensaje: 'No se pudo cerrar la comanda' });

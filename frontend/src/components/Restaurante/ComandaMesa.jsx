@@ -16,6 +16,12 @@ export default function ComandaMesa() {
   const [resultados, setResultados] = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [enviandoCocina, setEnviandoCocina] = useState(false);
+  // Cuentas separadas: null = modo normal; Set<number> = modo "dividir
+  // cuenta" activo, con los índices (dentro de comanda.items) seleccionados
+  // para cobrar en esta ronda. Los índices son sobre el arreglo COMPLETO
+  // (incluye ítems ya facturados) para que coincidan 1:1 con lo que espera
+  // el backend en POST /comandas/:id/cerrar.
+  const [seleccion, setSeleccion] = useState(null);
   const dropRef = useRef(null);
 
   const cargar = () => {
@@ -135,23 +141,57 @@ export default function ComandaMesa() {
     }
   };
 
+  // Sin selección activa: cobra TODOS los ítems pendientes (comportamiento
+  // de siempre). Con selección activa (modo "dividir cuenta"): cobra solo
+  // los índices marcados, y le avisa a PuntoVenta.jsx cuáles son para que
+  // se los pase de vuelta a POST /comandas/:id/cerrar.
   const irACobrar = () => {
-    if (!comanda.items.length) return toast.error('Agrega al menos un ítem antes de cobrar');
+    const pendientes = comanda.items.filter((it) => !it.facturado);
+    if (!pendientes.length) return toast.error('No hay ítems pendientes por cobrar');
+
+    const indices = seleccion ? [...seleccion] : null;
+    const itemsACobrar = indices
+      ? comanda.items.filter((_, i) => indices.includes(i))
+      : pendientes;
+    if (indices && itemsACobrar.length === 0) return toast.error('Selecciona al menos un ítem para dividir la cuenta');
+
     navigate('/pos', {
       state: {
         comandaParaCobrar: {
           id: comanda.id,
           mesaId: Number(mesaId),
           mesaNombre: comanda.mesa?.nombre,
-          items: comanda.items,
+          items: itemsACobrar,
+          indices, // null = cobra todo lo pendiente; array = cuenta dividida
         },
       },
     });
   };
 
+  const toggleModoDividir = () => {
+    setSeleccion((prev) => (prev ? null : new Set()));
+  };
+
+  const toggleSeleccion = (idx) => {
+    setSeleccion((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+
   if (loading || !comanda) return <div className="rest-page"><div className="rest-empty">Cargando...</div></div>;
 
-  const pendientes = comanda.items.filter((it) => !it.enviadoCocina).length;
+  const pendientesCocina = comanda.items.filter((it) => !it.enviadoCocina).length;
+  // idx = posición real dentro de comanda.items (no del arreglo filtrado) —
+  // es lo que esperan cambiarCantidad/quitarItem/toggleSeleccion y lo que
+  // el backend espera en POST /comandas/:id/cerrar { indices }.
+  const conIndice = comanda.items.map((it, idx) => ({ it, idx }));
+  const filasEditables = conIndice.filter(({ it }) => !it.facturado);
+  const filasFacturadas = conIndice.filter(({ it }) => it.facturado);
+  const totalSeleccionado = seleccion
+    ? conIndice.filter(({ idx }) => seleccion.has(idx)).reduce((acc, { it }) => acc + it.cantidad * it.precioUnitario * (1 + (it.ivaPorcentaje || 0) / 100), 0)
+    : 0;
 
   return (
     <div className="rest-page">
@@ -191,30 +231,55 @@ export default function ComandaMesa() {
           {comanda.items.length === 0 ? (
             <div className="rest-empty">Busca un producto arriba para agregarlo al pedido.</div>
           ) : (
-            comanda.items.map((item, idx) => (
-              <div key={idx} className={`rest-item-row ${item.enviadoCocina ? 'enviado' : 'nuevo'}`}>
-                <div className="rest-item-cant">
-                  <button type="button" onClick={() => cambiarCantidad(idx, -1)}>−</button>
-                  <span>{item.cantidad}</span>
-                  <button type="button" onClick={() => cambiarCantidad(idx, 1)}>+</button>
+            <>
+              {filasEditables.map(({ it: item, idx }) => (
+                <div key={idx} className={`rest-item-row ${item.enviadoCocina ? 'enviado' : 'nuevo'}`}>
+                  {seleccion && (
+                    <input
+                      type="checkbox"
+                      checked={seleccion.has(idx)}
+                      onChange={() => toggleSeleccion(idx)}
+                      title="Incluir en esta cuenta"
+                    />
+                  )}
+                  <div className="rest-item-cant">
+                    <button type="button" onClick={() => cambiarCantidad(idx, -1)} disabled={!!seleccion}>−</button>
+                    <span>{item.cantidad}</span>
+                    <button type="button" onClick={() => cambiarCantidad(idx, 1)} disabled={!!seleccion}>+</button>
+                  </div>
+                  <div className="rest-item-info">
+                    <div className="rest-item-nombre">{item.descripcion}</div>
+                    <input
+                      className="rest-item-nota"
+                      placeholder="Nota para cocina (ej. sin cebolla)"
+                      value={item.nota || ''}
+                      onChange={(e) => cambiarNota(idx, e.target.value)}
+                      onBlur={() => guardarNota(idx)}
+                      disabled={!!seleccion}
+                    />
+                  </div>
+                  <div className="rest-item-precio">${(item.cantidad * item.precioUnitario).toFixed(2)}</div>
+                  <div className="rest-item-estado">
+                    {item.enviadoCocina ? <span title="Ya enviado a cocina">✅</span> : <span title="Sin enviar">🆕</span>}
+                  </div>
+                  {!seleccion && <button type="button" className="rest-item-quitar" onClick={() => quitarItem(idx)}>✕</button>}
                 </div>
-                <div className="rest-item-info">
-                  <div className="rest-item-nombre">{item.descripcion}</div>
-                  <input
-                    className="rest-item-nota"
-                    placeholder="Nota para cocina (ej. sin cebolla)"
-                    value={item.nota || ''}
-                    onChange={(e) => cambiarNota(idx, e.target.value)}
-                    onBlur={() => guardarNota(idx)}
-                  />
+              ))}
+              {filasFacturadas.length > 0 && (
+                <div className="rest-comanda-facturados">
+                  <div className="rest-comanda-facturados-titulo">✅ Ya cobrado (${comanda.totalFacturado?.toFixed(2)})</div>
+                  {filasFacturadas.map(({ it: item, idx }) => (
+                    <div key={idx} className="rest-item-row facturado">
+                      <div className="rest-item-cant"><span>{item.cantidad}</span></div>
+                      <div className="rest-item-info">
+                        <div className="rest-item-nombre">{item.descripcion}</div>
+                      </div>
+                      <div className="rest-item-precio">${(item.cantidad * item.precioUnitario).toFixed(2)}</div>
+                    </div>
+                  ))}
                 </div>
-                <div className="rest-item-precio">${(item.cantidad * item.precioUnitario).toFixed(2)}</div>
-                <div className="rest-item-estado">
-                  {item.enviadoCocina ? <span title="Ya enviado a cocina">✅</span> : <span title="Sin enviar">🆕</span>}
-                </div>
-                <button type="button" className="rest-item-quitar" onClick={() => quitarItem(idx)}>✕</button>
-              </div>
-            ))
+              )}
+            </>
           )}
         </div>
 
@@ -222,21 +287,33 @@ export default function ComandaMesa() {
           <div className="rest-comanda-totales">
             <div><span>Subtotal</span><strong>${comanda.subtotal?.toFixed(2)}</strong></div>
             <div><span>IVA</span><strong>${comanda.totalIva?.toFixed(2)}</strong></div>
-            <div className="rest-total-final"><span>Total</span><strong>${comanda.total?.toFixed(2)}</strong></div>
+            <div className="rest-total-final"><span>{seleccion ? 'Pendiente' : 'Total'}</span><strong>${comanda.total?.toFixed(2)}</strong></div>
+            {seleccion && seleccion.size > 0 && (
+              <div><span>Seleccionado</span><strong>${totalSeleccionado.toFixed(2)}</strong></div>
+            )}
           </div>
           <div className="rest-comanda-acciones">
-            <button
-              className="btn-secondary"
-              onClick={enviarCocina}
-              disabled={enviandoCocina || pendientes === 0}
-            >
-              {enviandoCocina
-                ? 'Guardando...'
-                : hayImpresoraCocina
-                  ? `🔥 Enviar a cocina${pendientes ? ` (${pendientes})` : ''}`
-                  : `✅ Marcar pedido completo${pendientes ? ` (${pendientes})` : ''}`}
+            {!seleccion && (
+              <button
+                className="btn-secondary"
+                onClick={enviarCocina}
+                disabled={enviandoCocina || pendientesCocina === 0}
+              >
+                {enviandoCocina
+                  ? 'Guardando...'
+                  : hayImpresoraCocina
+                    ? `🔥 Enviar a cocina${pendientesCocina ? ` (${pendientesCocina})` : ''}`
+                    : `✅ Marcar pedido completo${pendientesCocina ? ` (${pendientesCocina})` : ''}`}
+              </button>
+            )}
+            {filasEditables.length > 1 && (
+              <button className="btn-secondary" onClick={toggleModoDividir}>
+                {seleccion ? 'Cancelar división' : '🔀 Dividir cuenta'}
+              </button>
+            )}
+            <button className="btn-primary" onClick={irACobrar} disabled={seleccion && seleccion.size === 0}>
+              {seleccion ? `💳 Cobrar seleccionados (${seleccion.size})` : '💳 Cobrar mesa'}
             </button>
-            <button className="btn-primary" onClick={irACobrar}>💳 Cobrar mesa</button>
           </div>
           {guardando && <span className="rest-guardando">Guardando...</span>}
         </div>
