@@ -21,6 +21,7 @@ const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
 const { condicionComprasDeducibles, CUTOFF_APROBACION_CEDULA } = require('../utils/comprasFiscal');
+const { calcularAnticipoIR } = require('../utils/anticipoIR');
 // obtenerBalanceGeneral vive en routes/contabilidad.js (colgada del router,
 // ver comentario ahí) — se reutiliza para los casilleros 499/599/698 del F101.
 const { obtenerBalanceGeneral } = require('./contabilidad');
@@ -1153,7 +1154,7 @@ async function calcularF101(db, empresaId, anio) {
     console.error('F101: no se pudo obtener balance general (Contabilidad puede no estar activa):', err.message);
   }
 
-  return {
+  const f101 = {
     anio,
     ingresos: {
       totalFacturado: d(facturas._sum.importeTotal),
@@ -1177,6 +1178,14 @@ async function calcularF101(db, empresaId, anio) {
     balance,
     nota: 'Este resumen es orientativo. Consulte a un contador para el llenado oficial del F101.',
   };
+
+  const [config, empresa] = await Promise.all([
+    db.configuracion_sri.findFirst({ where: { empresaId } }),
+    db.empresas.findUnique({ where: { id: empresaId }, select: { tipoContribuyente: true } }),
+  ]);
+  f101.anticipoIR = calcularAnticipoIR(f101, empresa, config);
+
+  return f101;
 }
 
 // ─── casillerosF101 — filas "tipo formulario oficial" del F101, a partir de
@@ -1195,6 +1204,15 @@ function casillerosF101(f101) {
       { cas: '499', desc: 'TOTAL DEL ACTIVO (Balance General de Contabilidad)', valor: f101.balance.totalActivos },
       { cas: '599', desc: 'TOTAL DEL PASIVO (Balance General de Contabilidad)', valor: f101.balance.totalPasivos },
       { cas: '698', desc: 'TOTAL DEL PATRIMONIO (Balance General de Contabilidad)', valor: f101.balance.totalPatrimonio },
+    );
+  }
+  const a = f101.anticipoIR;
+  if (a?.aplicable) {
+    filas.push(
+      { cas: '855', desc: '(-) 15% Participación a trabajadores (simplificado)', valor: a.participacionTrabajadores },
+      { cas: '839', desc: `BASE IMPONIBLE (simplificada) — ${a.tarifaDesc}`, valor: a.baseImponibleSimplificada, destacado: true },
+      { cas: '839+', desc: 'IMPUESTO A LA RENTA CAUSADO (simplificado, Fase 1)', valor: a.impuestoCausado, destacado: true },
+      { cas: 'ANTICIPO', desc: 'Anticipo de IR sugerido para el SIGUIENTE ejercicio (50% causado - retenciones, voluntario — Art. 41 LRTI)', valor: a.anticipoSugerido, destacado: true },
     );
   }
   return filas;
@@ -1271,6 +1289,19 @@ router.get('/f101/pdf', async (req, res) => {
       doc.moveDown(0.3);
     }
 
+    if (!f101.anticipoIR.aplicable) {
+      doc.fontSize(7.5).fillColor('#b45309')
+        .text(`Anticipo de Impuesto a la Renta (Art. 41 LRTI) no calculado: ${f101.anticipoIR.motivo}`)
+        .fillColor('#000000');
+      doc.moveDown(0.3);
+    } else if (f101.anticipoIR.advertencias?.length) {
+      doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#b45309').text('Anticipo de IR — advertencias:');
+      doc.font('Helvetica');
+      f101.anticipoIR.advertencias.forEach((linea) => { doc.text(`• ${linea}`); });
+      doc.fillColor('#000000');
+      doc.moveDown(0.3);
+    }
+
     doc.fontSize(9).font('Helvetica-Bold')
       .text(`${f101.ingresos.cantidadFacturas} factura(s) de venta, ${f101.gastos.cantidadCompras} compra(s), ${f101.retenciones.cantidadComprobantes} comprobante(s) de retención emitidos en el ejercicio.`);
     doc.moveDown(0.5);
@@ -1280,8 +1311,8 @@ router.get('/f101/pdf', async (req, res) => {
     doc.font('Helvetica').fontSize(7.5).fillColor('#334155');
     [
       'Balance detallado por cuenta (activos/pasivos/patrimonio desglosados a nivel NIIF, ej. deterioro de cartera, activos biológicos, propiedad planta y equipo por categoría): el plan de cuentas de AELA no llega a ese nivel de detalle.',
-      'Conciliación tributaria completa: participación a trabajadores (15%), gastos no deducibles, ingresos exentos, amortización de pérdidas tributarias de años anteriores, ajustes por precios de transferencia — nada de esto se calcula en AELA hoy.',
-      'Impuesto a la Renta causado, anticipo, crédito tributario por ISD, reducciones de tarifa por reinversión o incentivos — requieren la conciliación tributaria completa primero.',
+      'Conciliación tributaria completa: gastos no deducibles, ingresos exentos, amortización de pérdidas tributarias de años anteriores, ajustes por precios de transferencia — nada de esto se calcula en AELA hoy (el Impuesto Causado y Anticipo de IR de arriba SÍ incluyen la participación a trabajadores 15%, pero asumen $0 en estos otros conceptos — ver advertencias).',
+      'Crédito tributario por ISD, reducciones de tarifa por reinversión, micro/pequeña empresa, exportador habitual o nueva inversión (Art. 37/37.1/37.2/37.3 LRTI) — requieren datos que AELA no registra hoy.',
       'Impuesto a la Renta Único (banano, agropecuario, pronósticos deportivos) y regímenes especiales (RIMPE, ZEDE): sectores especializados no soportados.',
       'Operaciones con partes relacionadas y anexo de composición societaria (APS): información societaria que AELA no registra.',
     ].forEach((linea) => { doc.text(`• ${linea}`); doc.moveDown(0.15); });

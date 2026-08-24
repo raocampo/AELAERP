@@ -13,6 +13,7 @@ const {
   crearAsientoPagoVacaciones, crearAsientoPagoEspecialNomina,
   round2,
 } = require('../utils/contabilidad');
+const { aplicarTablaProgresivaRenta } = require('../utils/tablaRentaPN');
 
 const verRRHH      = [proteger, autorizarPermiso('rrhh.ver')];
 const gestionarRRHH = [proteger, autorizarPermiso('rrhh.gestionar')];
@@ -22,23 +23,6 @@ const nominaRRHH   = [proteger, autorizarPermiso('rrhh.nomina')];
 const SBU_ECUADOR = 480.00; // SBU 2025
 const APORTE_PERSONAL_IESS = 0.0945;
 const APORTE_PATRONAL_IESS = 0.1115;
-
-// ─── Tabla LORTI Impuesto a la Renta — Ecuador 2026 ──────────────────────────
-// Fuente: SRI, Resolución NAC-DGERCGC25-00000043 (vigente desde 01/01/2026).
-// Actualizar cada año con la resolución que publica el SRI en diciembre.
-// Cada fila: [fracciónDesde, fracciónHasta, impuestoFraccionBasica, porcentajeExcedente]
-const TABLA_LORTI_2026 = [
-  [       0,  12_208,      0, 0.00],
-  [  12_208,  15_549,      0, 0.05],
-  [  15_549,  20_188,    167, 0.10],
-  [  20_188,  26_700,    631, 0.12],
-  [  26_700,  35_136,  1_412, 0.15],
-  [  35_136,  46_575,  2_678, 0.20],
-  [  46_575,  62_005,  4_965, 0.25],
-  [  62_005,  82_679,  8_823, 0.30],
-  [  82_679, 109_956, 15_025, 0.35],
-  [ 109_956, Infinity, 24_572, 0.37],
-];
 
 /**
  * Calcula el Impuesto a la Renta mensual a retener a un empleado.
@@ -84,16 +68,7 @@ function calcularImpuestoRentaMensual({
 
   const baseImponible = Math.max(0, ingresosAnuales - deducciones);
 
-  // Tabla progresiva
-  let irAnual = 0;
-  for (const [desde, hasta, impFB, pctExc] of TABLA_LORTI_2026) {
-    if (baseImponible > desde) {
-      const excedente = Math.min(baseImponible, hasta === Infinity ? baseImponible : hasta) - desde;
-      irAnual = impFB + excedente * pctExc;
-    }
-  }
-
-  irAnual = Math.max(0, +irAnual.toFixed(2));
+  const irAnual = aplicarTablaProgresivaRenta(baseImponible);
   const irMensual = +(irAnual / 12).toFixed(2);
 
   return {

@@ -637,7 +637,7 @@ function F101View({ data }) {
       </div>
 
       {vista === 'formulario' && data.casilleros ? (
-        <F101FormularioView casilleros={data.casilleros} balance={data.balance} />
+        <F101FormularioView casilleros={data.casilleros} balance={data.balance} anticipoIR={data.anticipoIR} />
       ) : (
       <div className="decl-secciones">
         <section className="decl-seccion">
@@ -681,7 +681,7 @@ function F101View({ data }) {
 // contable, retención de renta recibida y, si Contabilidad está activa,
 // Activo/Pasivo/Patrimonio). El F101 real tiene 869 casilleros — ver el
 // aviso y la nota al pie sobre lo que queda fuera. ──────────────────────────
-function F101FormularioView({ casilleros, balance }) {
+function F101FormularioView({ casilleros, balance, anticipoIR }) {
   return (
     <div className="decl-formvista">
       <div className="decl-formvista-seccion">
@@ -710,10 +710,24 @@ function F101FormularioView({ casilleros, balance }) {
           ⚠ Casilleros 499/599/698 (Balance General) no disponibles — el módulo de Contabilidad no tiene asientos registrados para este ejercicio.
         </p>
       )}
+      {anticipoIR && !anticipoIR.aplicable && (
+        <p style={{ fontSize: 12, color: '#b45309', margin: 0 }}>
+          ⚠ Anticipo de Impuesto a la Renta (Art. 41 LRTI) no calculado: {anticipoIR.motivo}
+        </p>
+      )}
+      {anticipoIR?.aplicable && anticipoIR.advertencias?.length > 0 && (
+        <div style={{ fontSize: 12, color: '#b45309' }}>
+          <strong>Anticipo de IR — advertencias:</strong>
+          <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+            {anticipoIR.advertencias.map((a, i) => <li key={i}>{a}</li>)}
+          </ul>
+        </div>
+      )}
       <p className="decl-formvista-nota">
-        El F101 real tiene 869 casilleros (balance NIIF completo + conciliación tributaria: participación a trabajadores,
-        gastos no deducibles, amortización de pérdidas, ISD, etc.) — este resumen cubre solo los totales grandes que AELA
-        puede calcular con datos reales. El resto requiere llenado manual con un contador.
+        El F101 real tiene 869 casilleros (balance NIIF completo + conciliación tributaria: gastos no deducibles,
+        amortización de pérdidas, ISD, etc.) — este resumen cubre solo los totales grandes que AELA puede calcular con
+        datos reales (el Impuesto Causado y Anticipo de IR de arriba sí incluyen la participación a trabajadores 15%,
+        de forma simplificada). El resto requiere llenado manual con un contador.
       </p>
     </div>
   );
