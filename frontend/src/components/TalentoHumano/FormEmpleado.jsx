@@ -11,12 +11,33 @@ const EMPTY_EMP = {
   departamentoId: '', cargoId: '',
   afiliadoIESS: true, codigoIESS: '', tieneRenta: false, fondosReserva: false,
   cargasFamiliares: 0,
+  // Anexo RDEP (Relación de Dependencia) — ver docs/pendientes-2026-08-24-rdep.md
+  beneficiarioGalapagos: false,
+  enfermedadCatastrofica: false,
+  condicionDiscapacidad: 'NO_APLICA',
+  porcentajeDiscapacidad: '',
+  tipoIdDependienteDiscap: '',
+  idDependienteDiscap: '',
+  residenciaFiscal: 'LOCAL',
+  paisResidencia: '',
+  aplicaConvenioDobleImposicion: '',
+  gastosPersonalesProyectados: 0,
   observaciones: '',
 };
 
 const TIPOS_CONTRATO = ['indefinido','plazo_fijo','por_obra','eventual','aprendizaje'];
 const SEXOS = ['masculino','femenino','otro'];
 const ESTADOS_CIVILES = ['soltero','casado','divorciado','viudo','union_libre'];
+const CONDICIONES_DISCAPACIDAD = [
+  { value: 'NO_APLICA', label: 'No aplica' },
+  { value: 'TRABAJADOR_CON_DISCAPACIDAD', label: 'Trabajador con discapacidad' },
+  { value: 'SUSTITUTO', label: 'Sustituto (a cargo de una persona con discapacidad)' },
+];
+const TIPOS_ID_DEPENDIENTE = [
+  { value: 'CEDULA', label: 'Cédula' },
+  { value: 'PASAPORTE', label: 'Pasaporte' },
+  { value: 'ID_TRIBUTARIA_EXTERIOR', label: 'Identificación tributaria del exterior' },
+];
 
 const FormEmpleado = () => {
   const { id } = useParams();
@@ -48,6 +69,8 @@ const FormEmpleado = () => {
           departamentoId: emp.departamentoId || '',
           cargoId: emp.cargoId || '',
           salarioBase: emp.salarioBase?.toString() || '',
+          porcentajeDiscapacidad: emp.porcentajeDiscapacidad?.toString() || '',
+          gastosPersonalesProyectados: emp.gastosPersonalesProyectados?.toString() || 0,
         });
       }
     } catch {
@@ -223,6 +246,94 @@ const FormEmpleado = () => {
               <label style={{ display:'flex', gap:'0.5rem', alignItems:'center', cursor:'pointer', fontSize:'0.875rem' }}>
                 <input type="checkbox" checked={form.fondosReserva} onChange={e => set('fondosReserva', e.target.checked)} />
                 Acumula fondos de reserva (&gt;1 año)
+              </label>
+            </div>
+          </div>
+        </fieldset>
+
+        {/* ANEXO RDEP — RELACIÓN DE DEPENDENCIA */}
+        <fieldset style={{ border:'1px solid var(--color-border,#e2e8f0)', borderRadius:10, padding:'1.25rem', marginBottom:'1.25rem' }}>
+          <legend style={{ fontWeight:700, fontSize:'0.9rem', padding:'0 0.5rem', color:'var(--color-text-muted,#718096)' }}>
+            ANEXO RDEP — RELACIÓN DE DEPENDENCIA
+          </legend>
+          <div className="th-form-grid">
+            <div className="th-form-group">
+              <label>Gastos personales proyectados (anual)</label>
+              <input
+                type="number" min="0" step="0.01"
+                value={form.gastosPersonalesProyectados}
+                onChange={e => set('gastosPersonalesProyectados', e.target.value)}
+                placeholder="0.00"
+              />
+              <small style={{ color:'var(--color-text-muted,#718096)' }}>
+                Total del formulario de proyección que el empleado entrega en febrero. La rebaja legal (18%, con tope según cargas familiares) se calcula automáticamente en la retención mensual.
+              </small>
+            </div>
+            <div className="th-form-group">
+              <label>Condición respecto a discapacidad</label>
+              <select value={form.condicionDiscapacidad} onChange={e => set('condicionDiscapacidad', e.target.value)}>
+                {CONDICIONES_DISCAPACIDAD.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
+            {form.condicionDiscapacidad !== 'NO_APLICA' && (
+              <>
+                <div className="th-form-group">
+                  <label>Porcentaje de discapacidad *</label>
+                  <input
+                    type="number" min="0" max="100" step="0.01"
+                    value={form.porcentajeDiscapacidad}
+                    onChange={e => set('porcentajeDiscapacidad', e.target.value)}
+                    placeholder="30.00"
+                  />
+                </div>
+                {form.condicionDiscapacidad === 'SUSTITUTO' && (
+                  <>
+                    <div className="th-form-group">
+                      <label>Tipo ID de la persona con discapacidad *</label>
+                      <select value={form.tipoIdDependienteDiscap} onChange={e => set('tipoIdDependienteDiscap', e.target.value)}>
+                        <option value="">— Seleccionar —</option>
+                        {TIPOS_ID_DEPENDIENTE.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="th-form-group">
+                      <label>Identificación de la persona con discapacidad *</label>
+                      <input value={form.idDependienteDiscap} onChange={e => set('idDependienteDiscap', e.target.value)} placeholder="Cédula, pasaporte o ID tributaria" />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+            <div className="th-form-group">
+              <label>Residencia fiscal</label>
+              <select value={form.residenciaFiscal} onChange={e => set('residenciaFiscal', e.target.value)}>
+                <option value="LOCAL">Residente local</option>
+                <option value="EXTERIOR">Residente en el exterior</option>
+              </select>
+            </div>
+            {form.residenciaFiscal === 'EXTERIOR' && (
+              <>
+                <div className="th-form-group">
+                  <label>País de residencia *</label>
+                  <input value={form.paisResidencia} onChange={e => set('paisResidencia', e.target.value)} placeholder="Código de país (tabla SRI)" />
+                </div>
+                <div className="th-form-group">
+                  <label>Convenio doble imposición</label>
+                  <select value={form.aplicaConvenioDobleImposicion} onChange={e => set('aplicaConvenioDobleImposicion', e.target.value)}>
+                    <option value="NA">No aplica</option>
+                    <option value="CON_CONVENIO">Con convenio</option>
+                    <option value="SIN_CONVENIO">Sin convenio</option>
+                  </select>
+                </div>
+              </>
+            )}
+            <div style={{ display:'flex', flexDirection:'column', gap:'0.75rem', paddingTop:'1.4rem' }}>
+              <label style={{ display:'flex', gap:'0.5rem', alignItems:'center', cursor:'pointer', fontSize:'0.875rem' }}>
+                <input type="checkbox" checked={form.beneficiarioGalapagos} onChange={e => set('beneficiarioGalapagos', e.target.checked)} />
+                Beneficiario Galápagos
+              </label>
+              <label style={{ display:'flex', gap:'0.5rem', alignItems:'center', cursor:'pointer', fontSize:'0.875rem' }}>
+                <input type="checkbox" checked={form.enfermedadCatastrofica} onChange={e => set('enfermedadCatastrofica', e.target.checked)} />
+                Trabajador (o a cargo de alguien) con enfermedad catastrófica, rara o huérfana
               </label>
             </div>
           </div>

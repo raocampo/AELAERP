@@ -14,6 +14,38 @@ const {
   round2,
 } = require('../utils/contabilidad');
 const { aplicarTablaProgresivaRenta } = require('../utils/tablaRentaPN');
+const { calcularRebajaGastosPersonales } = require('../utils/rebajaGastosPersonales');
+
+// Trabajador (o carga a su cargo) con discapacidad o enfermedad
+// catastrófica/rara/huérfana — activa el tope especial de 100 canastas
+// en la rebaja de gastos personales (ver utils/rebajaGastosPersonales.js).
+function _tieneDiscapacidadOEnfermedad(emp) {
+  return (emp?.condicionDiscapacidad && emp.condicionDiscapacidad !== 'NO_APLICA') || !!emp?.enfermedadCatastrofica;
+}
+
+// Normaliza los campos del Anexo RDEP (ver docs/pendientes-2026-08-24-rdep.md)
+// desde el body de POST/PUT /empleados — usado por ambas rutas para no
+// duplicar la lógica de valores por defecto/condicionales.
+function _camposRdep(body) {
+  const residenciaFiscal = body.residenciaFiscal === 'EXTERIOR' ? 'EXTERIOR' : 'LOCAL';
+  const condicionDiscapacidad = ['TRABAJADOR_CON_DISCAPACIDAD', 'SUSTITUTO'].includes(body.condicionDiscapacidad)
+    ? body.condicionDiscapacidad
+    : 'NO_APLICA';
+  return {
+    beneficiarioGalapagos: !!body.beneficiarioGalapagos,
+    enfermedadCatastrofica: !!body.enfermedadCatastrofica,
+    condicionDiscapacidad,
+    porcentajeDiscapacidad: condicionDiscapacidad !== 'NO_APLICA' && body.porcentajeDiscapacidad !== undefined && body.porcentajeDiscapacidad !== ''
+      ? parseFloat(body.porcentajeDiscapacidad) : null,
+    tipoIdDependienteDiscap: condicionDiscapacidad === 'SUSTITUTO' ? (body.tipoIdDependienteDiscap || null) : null,
+    idDependienteDiscap: condicionDiscapacidad === 'SUSTITUTO' ? (body.idDependienteDiscap?.trim() || null) : null,
+    residenciaFiscal,
+    paisResidencia: residenciaFiscal === 'EXTERIOR' ? (body.paisResidencia || null) : null,
+    aplicaConvenioDobleImposicion: residenciaFiscal === 'EXTERIOR' ? (body.aplicaConvenioDobleImposicion || 'NA') : null,
+    gastosPersonalesProyectados: body.gastosPersonalesProyectados !== undefined
+      ? parseFloat(body.gastosPersonalesProyectados) || 0 : 0,
+  };
+}
 
 const verRRHH      = [proteger, autorizarPermiso('rrhh.ver')];
 const gestionarRRHH = [proteger, autorizarPermiso('rrhh.gestionar')];
@@ -30,11 +62,16 @@ const APORTE_PATRONAL_IESS = 0.1115;
  * Proyección anual:
  *   ingresos = (salario + horasExtrasMes + otrosIngresosMes) × 12
  *              + decimoTercero (anual) + decimoCuarto (SBU)
- * Deducciones:
- *   - aporte personal IESS proyectado anual
- *   - gastoPersonalesAnuales (0 por defecto, empleado puede presentar formulario)
- * Base imponible = ingresos - deducciones
- * Aplica tabla progresiva LORTI → IR anual → IR mensual = IR anual / 12
+ * Deducciones de la BASE: solo el aporte personal IESS proyectado anual.
+ * Base imponible = ingresos - aporteIESSAnual
+ * Aplica tabla progresiva LORTI → IR anual bruto.
+ * La rebaja de gastos personales (metodología vigente desde 2022, ver
+ * utils/rebajaGastosPersonales.js) es un CRÉDITO TRIBUTARIO — se resta del
+ * IR anual YA CALCULADO, no de la base imponible (esa era la metodología
+ * pre-2022, y es el bug que tenía este código hasta 2026-08-24: nadie le
+ * pasaba nunca un valor de gastos personales, así que el bug estaba
+ * dormido, pero la fórmula en sí era incorrecta).
+ * IR mensual = IR anual neto / 12.
  *
  * @param {object} params
  * @param {number} params.salarioMensual
@@ -42,9 +79,10 @@ const APORTE_PATRONAL_IESS = 0.1115;
  * @param {number} [params.horasExtraMes=0] - valor monetario de HE del mes
  * @param {number} [params.otrosIngresosMes=0]
  * @param {boolean} [params.afiliadoIESS=true]
- * @param {boolean} [params.fondosReserva=false]
- * @param {number} [params.gastosPersonalesAnuales=0] - deducción por gastos personales
- * @returns {{ irMensual: number, irAnual: number, baseImponible: number, ingresoGravadoAnual: number }}
+ * @param {number} [params.gastosPersonalesProyectados=0] - total anual proyectado por el empleado
+ * @param {number} [params.cargasFamiliares=0]
+ * @param {boolean} [params.tieneDiscapacidadOEnfermedadCatastrofica=false]
+ * @returns {{ irMensual: number, irAnual: number, baseImponible: number, ingresoGravadoAnual: number, rebajaGastosPersonales: number }}
  */
 function calcularImpuestoRentaMensual({
   salarioMensual,
@@ -52,7 +90,9 @@ function calcularImpuestoRentaMensual({
   horasExtraMes = 0,
   otrosIngresosMes = 0,
   afiliadoIESS = true,
-  gastosPersonalesAnuales = 0,
+  gastosPersonalesProyectados = 0,
+  cargasFamiliares = 0,
+  tieneDiscapacidadOEnfermedadCatastrofica = false,
 }) {
   const ingresosMensualesBase = salarioMensual + horasExtraMes + otrosIngresosMes;
 
@@ -62,13 +102,16 @@ function calcularImpuestoRentaMensual({
     salarioMensual +          // decimoTercero = salario anual / 12 × 12 ≈ salario mensual (simplificado)
     sbu;                      // decimoCuarto = SBU (anual por empleado)
 
-  // Deducciones
   const aporteIESSAnual = afiliadoIESS ? salarioMensual * 12 * APORTE_PERSONAL_IESS : 0;
-  const deducciones = aporteIESSAnual + gastosPersonalesAnuales;
+  const baseImponible = Math.max(0, ingresosAnuales - aporteIESSAnual);
 
-  const baseImponible = Math.max(0, ingresosAnuales - deducciones);
-
-  const irAnual = aplicarTablaProgresivaRenta(baseImponible);
+  const irAnualBruto = aplicarTablaProgresivaRenta(baseImponible);
+  const { rebaja: rebajaGastosPersonales } = calcularRebajaGastosPersonales({
+    gastosPersonalesProyectados,
+    cargasFamiliares,
+    tieneDiscapacidadOEnfermedadCatastrofica,
+  });
+  const irAnual = Math.max(0, +(irAnualBruto - rebajaGastosPersonales).toFixed(2));
   const irMensual = +(irAnual / 12).toFixed(2);
 
   return {
@@ -76,6 +119,7 @@ function calcularImpuestoRentaMensual({
     irAnual,
     baseImponible: +baseImponible.toFixed(2),
     ingresoGravadoAnual: +ingresosAnuales.toFixed(2),
+    rebajaGastosPersonales,
   };
 }
 
@@ -396,6 +440,7 @@ router.post('/empleados', ...gestionarRRHH, async (req, res) => {
         fondosReserva: fondosReserva !== undefined ? Boolean(fondosReserva) : false,
         cargasFamiliares: cargasFamiliares !== undefined ? parseInt(cargasFamiliares) || 0 : 0,
         observaciones: observaciones?.trim() || null,
+        ..._camposRdep(req.body),
       },
       include: {
         departamento: { select: { id: true, nombre: true } },
@@ -436,6 +481,19 @@ router.put('/empleados/:id', ...gestionarRRHH, async (req, res) => {
     if (req.body.fechaNacimiento !== undefined) data.fechaNacimiento = req.body.fechaNacimiento ? new Date(req.body.fechaNacimiento) : null;
     if (req.body.fechaIngreso !== undefined)    data.fechaIngreso    = new Date(req.body.fechaIngreso);
     if (req.body.fechaSalida !== undefined)     data.fechaSalida     = req.body.fechaSalida ? new Date(req.body.fechaSalida) : null;
+
+    // Campos del Anexo RDEP — solo se tocan si el request trae al menos uno
+    // (evita resetear a los valores por defecto en un PUT parcial que no
+    // toca discapacidad/residencia/gastos personales).
+    const CAMPOS_RDEP = [
+      'beneficiarioGalapagos', 'enfermedadCatastrofica', 'condicionDiscapacidad',
+      'porcentajeDiscapacidad', 'tipoIdDependienteDiscap', 'idDependienteDiscap',
+      'residenciaFiscal', 'paisResidencia', 'aplicaConvenioDobleImposicion',
+      'gastosPersonalesProyectados',
+    ];
+    if (CAMPOS_RDEP.some((c) => req.body[c] !== undefined)) {
+      Object.assign(data, _camposRdep({ ...emp, ...req.body }));
+    }
 
     const updated = await prisma.empleados.update({
       where: { id },
@@ -566,6 +624,9 @@ router.post('/nomina', ...nominaRRHH, async (req, res) => {
         salarioMensual: salario,
         sbu,
         afiliadoIESS: Boolean(emp.afiliadoIESS),
+        gastosPersonalesProyectados: parseFloat(emp.gastosPersonalesProyectados) || 0,
+        cargasFamiliares: emp.cargasFamiliares || 0,
+        tieneDiscapacidadOEnfermedadCatastrofica: _tieneDiscapacidadOEnfermedad(emp),
       });
 
       const totalDescuentos = +(aportePersonal + irMensual).toFixed(2);
@@ -669,6 +730,9 @@ router.put('/nomina/:nominaId/detalle/:empleadoId', ...nominaRRHH, async (req, r
         horasExtraMes: valHS + valHE,
         otrosIngresosMes: otrosIng,
         afiliadoIESS: Boolean(emp?.afiliadoIESS),
+        gastosPersonalesProyectados: parseFloat(emp?.gastosPersonalesProyectados) || 0,
+        cargasFamiliares: emp?.cargasFamiliares || 0,
+        tieneDiscapacidadOEnfermedadCatastrofica: _tieneDiscapacidadOEnfermedad(emp),
       });
       irFinal = irMensual;
     }
@@ -738,6 +802,9 @@ router.get('/nomina/calcular-ir/:empleadoId', ...nominaRRHH, async (req, res) =>
       horasExtraMes: parseFloat(horasExtraMes) || 0,
       otrosIngresosMes: parseFloat(otrosIngresosMes) || 0,
       afiliadoIESS: Boolean(emp.afiliadoIESS),
+      gastosPersonalesProyectados: parseFloat(emp.gastosPersonalesProyectados) || 0,
+      cargasFamiliares: emp.cargasFamiliares || 0,
+      tieneDiscapacidadOEnfermedadCatastrofica: _tieneDiscapacidadOEnfermedad(emp),
     });
 
     res.json({

@@ -749,6 +749,18 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "restaurante_llamadas_empresaId_estado_idx" ON "restaurante_llamadas"("empresaId", "estado")`,
   // Punto de equilibrio (módulo restaurante) — costos fijos mensuales
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "costosFijosMensuales" DECIMAL(12,2) NOT NULL DEFAULT 0`,
+  // Anexo RDEP (Relación de Dependencia) — campos del catálogo oficial
+  // SRI, Fase 1 (2026-08-24). Ver docs/pendientes-2026-08-24-rdep.md.
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "beneficiarioGalapagos" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "enfermedadCatastrofica" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "condicionDiscapacidad" VARCHAR(30) NOT NULL DEFAULT 'NO_APLICA'`,
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "porcentajeDiscapacidad" DECIMAL(5,2)`,
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "tipoIdDependienteDiscap" VARCHAR(20)`,
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "idDependienteDiscap" VARCHAR(20)`,
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "residenciaFiscal" VARCHAR(10) NOT NULL DEFAULT 'LOCAL'`,
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "paisResidencia" VARCHAR(3)`,
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "aplicaConvenioDobleImposicion" VARCHAR(15)`,
+  `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "gastosPersonalesProyectados" DECIMAL(10,2) NOT NULL DEFAULT 0`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

@@ -1937,6 +1937,37 @@ model empleados {
   // Se activa automaticamente despues del primer año
   cargasFamiliares Int      @default(0)
   // Número de cargas familiares — usado en el reparto del 5% de utilidades
+  // y en el tope de rebaja de gastos personales (ver utils/rebajaGastosPersonales.js)
+  // ── Anexo RDEP (Relación de Dependencia) — campos del catálogo oficial
+  // del SRI (Esquema RDEP), agregados 2026-08-24. Ver
+  // docs/pendientes-2026-08-24-rdep.md y memoria "anexo-rdep-fase1".
+  beneficiarioGalapagos    Boolean  @default(false)
+  // Campo "benGalpg" del RDEP — SI/NO, obligatorio.
+  enfermedadCatastrofica   Boolean  @default(false)
+  // Campo "enfcatastro" — trabajador o su carga con enfermedad
+  // catastrófica/rara/huérfana. Activa el tope especial de 100 canastas
+  // en la rebaja de gastos personales (no solo el de RDEP).
+  condicionDiscapacidad    String   @default("NO_APLICA") @db.VarChar(30)
+  // NO_APLICA | TRABAJADOR_CON_DISCAPACIDAD | SUSTITUTO — 3 opciones
+  // vigentes desde el período 2024 (campo "tipoTrabajDiscap" del RDEP).
+  porcentajeDiscapacidad   Decimal? @db.Decimal(5, 2)
+  // Obligatorio si condicionDiscapacidad != NO_APLICA.
+  tipoIdDependienteDiscap  String?  @db.VarChar(20)
+  // CEDULA | PASAPORTE | ID_TRIBUTARIA_EXTERIOR — del dependiente a
+  // quien el trabajador sustituye/representa (solo si SUSTITUTO).
+  idDependienteDiscap      String?  @db.VarChar(20)
+  residenciaFiscal         String   @default("LOCAL") @db.VarChar(10)
+  // LOCAL | EXTERIOR — campo "residenciaTrab" del RDEP.
+  paisResidencia           String?  @db.VarChar(3)
+  // Código de la tabla PAÍS del SRI — obligatorio si residenciaFiscal = EXTERIOR.
+  aplicaConvenioDobleImposicion String? @db.VarChar(15)
+  // CON_CONVENIO | SIN_CONVENIO | NA — obligatorio si residenciaFiscal = EXTERIOR.
+  gastosPersonalesProyectados Decimal @default(0) @db.Decimal(10, 2)
+  // Total anual proyectado por el empleado (formulario que entrega en
+  // febrero). Fase 1: un solo total agregado — el desglose por las 7
+  // categorías del SRI (vivienda/salud/educación/alimentación/
+  // vestimenta/arte y cultura/turismo) que exige el XML real del anexo
+  // RDEP queda para una fase posterior.
   // Estado
   activo          Boolean   @default(true)
   observaciones   String?   @db.Text
