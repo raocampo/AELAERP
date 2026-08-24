@@ -115,3 +115,73 @@ tildes, revisar aquí primero.
    final por pedido explícito del usuario.
 3. (Menor, no bloqueante) limitación de extracción de texto con
    ToUnicode descrita arriba.
+
+---
+
+# Cierre de sesión 2026-08-24 — resumen de los 3 pendientes resueltos hoy
+
+El usuario pidió continuar con los pendientes bloqueados de sesiones
+anteriores, dejando la verificación móvil explícitamente para el final.
+Se resolvieron los 3 en orden, cada uno con su propio documento
+detallado:
+
+| # | Pendiente | Doc | Commit |
+|---|---|---|---|
+| 1 | PDFKit rompe acentos en todos los PDFs | `pendientes-2026-08-24.md` (este archivo) | `5593957` |
+| 2 | Anticipo de Impuesto a la Renta (Art. 41 LRTI), Fase 1 | `pendientes-2026-08-24-anticipo-ir.md` | `c9f0cb4` |
+| 3 | Anexo RDEP, Fase 1 | `pendientes-2026-08-24-rdep.md` | `44af90d` |
+
+## Resumen de cada uno
+
+**1. PDFKit — acentos rotos**: se registró la fuente Noto Sans (OFL)
+sobre los nombres estándar de PDFKit en los 18 puntos donde el backend
+genera PDF (11 archivos). Verificado con 3 documentos reales del
+pipeline (RIDE de factura, F104, recibo POS térmico) sin ningún
+desborde de layout.
+
+**2. Anticipo de Impuesto a la Renta, Fase 1**: se leyó el texto oficial
+vigente de la LRTI (confirmó que la fórmula clásica 0.2%/0.4% ya no
+existe — es 50% voluntario del impuesto causado del año anterior).
+Implementado el caso simple (participación trabajadores 15% + tarifa
+según régimen), detectando y excluyendo RIMPE correctamente. Un primer
+intento tenía un bug real (leía el tipo de contribuyente del modelo
+equivocado) — encontrado y corregido al probar contra el tenant real
+antes de dar la feature por terminada.
+
+**3. Anexo RDEP, Fase 1**: se leyeron 3 fuentes oficiales del SRI (XSD
+del RDEP, Ficha Técnica 2024, Boletín NAC-COM-26-006) y se agregaron 10
+campos nuevos a `empleados` (discapacidad, Galápagos, enfermedad
+catastrófica, residencia fiscal, gastos personales proyectados). De
+paso se corrigió un bug real dormido: la rebaja de gastos personales
+usaba la metodología pre-2022 en vez de la vigente (crédito tributario
+18%, no deducción de la base).
+
+## Patrón común a los 3
+
+En los 3 casos se investigó contra la fuente oficial (ley/boletín/XSD
+del SRI, leídos directamente, no recordados de sesiones anteriores)
+antes de escribir código, y en los 3 casos se verificó el resultado
+contra el pipeline real (no solo tests unitarios con datos inventados)
+antes de dar la feature por terminada — en 2 de los 3 casos (Anticipo
+IR, Anexo RDEP) esa verificación contra datos reales encontró un bug
+real que los tests unitarios con datos inventados no habrían detectado.
+
+## 🔴 Único pendiente restante de toda la sesión larga (2026-08-17 al 2026-08-24)
+
+**Verificación humana en dispositivo/emulador móvil real** — no hay
+Android/iOS disponible en este entorno. El usuario decidió cerrar la
+sesión aquí y retomar esto cuando tenga un dispositivo/emulador a mano.
+
+Todo lo demás de la sesión larga (módulo restaurante completo web+
+móvil, PDFKit, Anticipo IR Fase 1, Anexo RDEP Fase 1) está
+**implementado, verificado y pusheado a `origin/main`** — sin código a
+medio terminar.
+
+## Al retomar
+
+`git fetch` + revisar este documento o la memoria
+`aela-erp-estado-actual-del-proyecto` (mismo contenido, siempre
+actualizado). Fases pendientes documentadas pero no pedidas (fuera de
+alcance, no bloqueantes): Anticipo IR Fase 2 (gastos no deducibles,
+pérdidas de años anteriores), Anexo RDEP Fase 2 (desglose de gastos
+personales por categoría) y Fase 3 (generador real del XML del anexo).
