@@ -8,6 +8,7 @@ const router  = express.Router();
 const path    = require('path');
 const prisma  = require('../config/prisma');
 const PDFDocument = require('pdfkit');
+const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
@@ -806,6 +807,7 @@ router.get('/exportar/pdf', async (req, res) => {
       margins: { top: 40, bottom: 40, left: 28, right: 28 },
       autoFirstPage: true,
     });
+    registrarFuentesPdf(doc);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="talonATS_${anio}${mesPad}.pdf"`);
     doc.pipe(res);

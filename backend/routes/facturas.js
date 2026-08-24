@@ -715,6 +715,7 @@ router.use(requiereModulo('facturacionHabilitada'));
 router.get('/exportar/pdf', permitirVerFacturacion, async (req, res) => {
   try {
     const PDFDocument = require('pdfkit');
+    const { registrarFuentesPdf } = require('../utils/pdfFonts');
     const { estado, fechaDesde, fechaHasta, busqueda } = req.query;
     const where = { empresaId: req.empresa.id };
 
@@ -756,6 +757,7 @@ router.get('/exportar/pdf', permitirVerFacturacion, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="ventas-${fecha}.pdf"`);
 
     const doc = new PDFDocument({ size: 'A4', margins: { top: 32, bottom: 32, left: 32, right: 32 }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     doc.pipe(res);
 
     const ML = 32, W = 531;
@@ -1676,6 +1678,7 @@ router.get('/notas-credito/exportar/xlsx', permitirVerFacturacion, async (req, r
 router.get('/notas-credito/exportar/pdf', permitirVerFacturacion, async (req, res) => {
   try {
     const PDFDocument = require('pdfkit');
+    const { registrarFuentesPdf } = require('../utils/pdfFonts');
     const [ncs, cfg] = await Promise.all([
       prisma.notas_credito.findMany({
         where: { empresaId: req.empresa.id },
@@ -1704,6 +1707,7 @@ router.get('/notas-credito/exportar/pdf', permitirVerFacturacion, async (req, re
     ];
 
     const doc = new PDFDocument({ size: 'A4', margins: { top: 32, bottom: 32, left: 32, right: 32 }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     doc.pipe(res);
 
     let y = 32;

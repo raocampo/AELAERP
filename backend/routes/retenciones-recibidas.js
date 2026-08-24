@@ -119,6 +119,7 @@ router.get('/exportar/pdf', async (req, res) => {
     const db = req.prisma || prisma;
     const empresaId = req.empresa?.id ?? req.usuario?.empresaId ?? 1;
     const PDFDocument = require('pdfkit');
+    const { registrarFuentesPdf } = require('../utils/pdfFonts');
 
     const [items, cfg] = await Promise.all([
       db.retenciones_recibidas.findMany({
@@ -153,6 +154,7 @@ router.get('/exportar/pdf', async (req, res) => {
     ];
 
     const doc = new PDFDocument({ size: 'A4', margins: { top: 32, bottom: 32, left: 32, right: 32 }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     doc.pipe(res);
 
     let y = 32;

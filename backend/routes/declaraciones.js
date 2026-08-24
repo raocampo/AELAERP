@@ -16,6 +16,7 @@ const router  = express.Router();
 const fs      = require('fs');
 const path    = require('path');
 const PDFDocument = require('pdfkit');
+const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
@@ -57,6 +58,7 @@ function crearDocumentoPdf(res, filename) {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   const doc = new PDFDocument({ size: 'A4', margin: 36 });
+  registrarFuentesPdf(doc);
   doc.pipe(res);
   return doc;
 }

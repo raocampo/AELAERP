@@ -1,6 +1,7 @@
 const express = require('express');
 const multer  = require('multer');
 const PDFDocument = require('pdfkit');
+const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const ExcelJS = require('exceljs');
 const fs   = require('fs');
 const path = require('path');
@@ -165,6 +166,7 @@ function crearDocumentoPdf(res, filename) {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   const doc = new PDFDocument({ size: 'A4', margin: 36 });
+  registrarFuentesPdf(doc);
   doc.pipe(res);
   return doc;
 }

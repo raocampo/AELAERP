@@ -10,6 +10,7 @@ const fs          = require('fs');
 const os          = require('os');
 const router      = express.Router();
 const PDFDocument = require('pdfkit');
+const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const bwipjs      = require('bwip-js');
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
@@ -41,6 +42,7 @@ async function getConfigSRI(empresaId) {
 async function generarRIDENotaVenta(nota, configSri, outputPath) {
   return new Promise((resolve, reject) => {
     const doc    = new PDFDocument({ size: 'A4', margins: { top: 20, bottom: 20, left: 28, right: 28 }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 
@@ -378,6 +380,7 @@ async function generarReciboNotaVenta(nota, configSri, outputPath) {
     const W     = POS_W - ML * 2;
 
     const doc    = new PDFDocument({ size: [POS_W, 900], margins: { top: 8, bottom: 8, left: ML, right: ML }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 

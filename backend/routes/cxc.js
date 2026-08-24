@@ -9,6 +9,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const prisma = require('../config/prisma');
@@ -45,6 +46,7 @@ function _generarReciboCobroPdf(cobro, saldoFactura, configSri, outputPath) {
   return new Promise((resolve, reject) => {
     const cfg = configSri || {};
     const doc = new PDFDocument({ size: 'A4', margins: { top: 40, bottom: 40, left: 48, right: 48 }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 

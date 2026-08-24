@@ -9,6 +9,7 @@ const fs          = require('fs');
 const os          = require('os');
 const nodePath    = require('path');
 const PDFDocument = require('pdfkit');
+const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const { proteger, permitir } = require('../middleware/auth');
 const { normalizarRol }      = require('../utils/roles');
 const prisma                 = require('../config/prisma');
@@ -41,6 +42,7 @@ function _generarPdfProforma(p, configSri, outputPath) {
     };
 
     const doc    = new PDFDocument({ size: 'A4', margins: { top: 24, bottom: 24, left: 32, right: 32 }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 

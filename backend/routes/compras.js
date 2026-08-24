@@ -323,6 +323,7 @@ router.get('/exportar/csv', async (req, res) => {
 router.get('/exportar/pdf', async (req, res) => {
   try {
     const PDFDocument = require('pdfkit');
+    const { registrarFuentesPdf } = require('../utils/pdfFonts');
     const { fechaDesde, fechaHasta, busqueda, proveedor, tipoGasto, origenRegistro } = req.query;
     const where = { empresaId: req.empresa.id };
 
@@ -369,6 +370,7 @@ router.get('/exportar/pdf', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="compras-${fecha}.pdf"`);
 
     const doc = new PDFDocument({ size: 'A4', margins: { top: 32, bottom: 32, left: 32, right: 32 }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     doc.pipe(res);
 
     const ML = 32, W = 531;

@@ -15,6 +15,7 @@ const forge      = require('node-forge');
 const QRCode     = require('qrcode');
 const https      = require('https');
 const PDFDocument = require('pdfkit');
+const { registrarFuentesPdf } = require('./pdfFonts');
 const fs         = require('fs');
 const path       = require('path');
 const bwipjs     = require('bwip-js');
@@ -1196,6 +1197,7 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
 
   return new Promise((resolve, reject) => {
     const doc    = new PDFDocument({ size: 'A4', margins: { top: 20, bottom: 20, left: 28, right: 28 }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 
@@ -1627,6 +1629,7 @@ async function generarRIDENotaCredito(nc, configSri, outputPath) {
 
   return new Promise((resolve, reject) => {
     const doc    = new PDFDocument({ size: 'A4', margin: 40 });
+    registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 
@@ -1697,6 +1700,7 @@ async function generarRIDENotaDebito(nd, configSri, outputPath) {
 
   return new Promise((resolve, reject) => {
     const doc    = new PDFDocument({ size: 'A4', margin: 40 });
+    registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 
@@ -1771,6 +1775,7 @@ async function generarReciboPOS(factura, configSri, outputPath) {
 
     // Altura generosa; la impresora corta al final del contenido
     const doc    = new PDFDocument({ size: [POS_W, 900], margins: { top: 8, bottom: 8, left: ML, right: ML }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 
@@ -2164,6 +2169,7 @@ async function generarRIDERetencion(retencion, configSri, outputPath) {
 
   return new Promise((resolve, reject) => {
     const doc    = new PDFDocument({ size: 'A4', margins: { top: 20, bottom: 20, left: 28, right: 28 }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 
@@ -2619,6 +2625,7 @@ async function generarRIDELiquidacionCompra(liq, configSri, outputPath) {
 
   return new Promise((resolve, reject) => {
     const doc    = new PDFDocument({ size: 'A4', margins: { top: 20, bottom: 20, left: 28, right: 28 }, autoFirstPage: true });
+    registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 
