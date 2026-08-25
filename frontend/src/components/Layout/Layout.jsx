@@ -12,6 +12,7 @@ import { obtenerRolLabel, tienePermiso } from '../../utils/roles';
 import {
   moduloDeshabilitadoPorConfiguracion,
   planBloqueadoPorRequisito,
+  ocultoPorNegocioPopular,
 } from '../../utils/sistema';
 import UpgradeModal from '../Upgrade/UpgradeModal';
 import CambiarPassword from '../Auth/CambiarPassword';
@@ -425,6 +426,7 @@ export default function Layout() {
           {ITEMS_SUELTOS.map((item) => {
             if (item.modulo && moduloDeshabilitadoPorConfiguracion(item, sistema)) return null;
             if (item.permiso && !tienePermiso(usuario?.rol, item.permiso, usuario?.permisosExtra)) return null;
+            if (ocultoPorNegocioPopular(item.to, sistema)) return null;
             return (
               <NavLink
                 key={item.to}
@@ -447,6 +449,7 @@ export default function Layout() {
             const itemsProcesados = grupo.items
               .filter((item) => {
                 if (item.soloMulti && !modoMulti) return false;
+                if (ocultoPorNegocioPopular(item.to, sistema)) return false;
                 return true;
               })
               .map((item) => {

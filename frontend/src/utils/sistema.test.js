@@ -11,6 +11,7 @@ import {
   planBloqueadoPorRequisito,
   moduloDeshabilitadoPorConfiguracion,
   resolverEstadoSistema,
+  ocultoPorNegocioPopular,
 } from './sistema';
 
 describe('sistema utils', () => {
@@ -85,5 +86,29 @@ describe('sistema utils', () => {
       { modulo: 'comprasHabilitadas' },
       { comprasHabilitadas: true }
     )).toBe(false);
+  });
+
+  it('oculta rutas de régimen general para Negocio Popular, sin tocar el resto', () => {
+    const sistemaPopular = { negocioPopular: true };
+    const sistemaGeneral = { negocioPopular: false };
+
+    // Restringidas: facturación electrónica, retenciones, ATS, declaraciones.
+    expect(ocultoPorNegocioPopular('/facturas', sistemaPopular)).toBe(true);
+    expect(ocultoPorNegocioPopular('/facturas/nueva', sistemaPopular)).toBe(true);
+    expect(ocultoPorNegocioPopular('/notas-debito', sistemaPopular)).toBe(true);
+    expect(ocultoPorNegocioPopular('/retenciones', sistemaPopular)).toBe(true);
+    expect(ocultoPorNegocioPopular('/ats', sistemaPopular)).toBe(true);
+    expect(ocultoPorNegocioPopular('/declaraciones', sistemaPopular)).toBe(true);
+
+    // No restringidas: nota de venta, compras, inventario, bancos (aunque
+    // el path tenga query string, ej. /bancos?tab=debito).
+    expect(ocultoPorNegocioPopular('/notas-venta', sistemaPopular)).toBe(false);
+    expect(ocultoPorNegocioPopular('/compras', sistemaPopular)).toBe(false);
+    expect(ocultoPorNegocioPopular('/liquidaciones', sistemaPopular)).toBe(false);
+    expect(ocultoPorNegocioPopular('/bancos?tab=debito', sistemaPopular)).toBe(false);
+
+    // Régimen general: nada se oculta por este motivo.
+    expect(ocultoPorNegocioPopular('/facturas', sistemaGeneral)).toBe(false);
+    expect(ocultoPorNegocioPopular('/facturas', null)).toBe(false);
   });
 });

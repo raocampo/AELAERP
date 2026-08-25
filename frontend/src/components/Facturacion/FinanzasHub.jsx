@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
 import { tienePermiso } from '../../utils/roles';
+import { ocultoPorNegocioPopular } from '../../utils/sistema';
 import './FinanzasHub.css';
 
 const modulos = [
@@ -120,6 +121,7 @@ const FinanzasHub = () => {
 
   const modulosVisibles = modulos.filter((m) => {
     if (!tienePermiso(rol, m.permiso, usuario?.permisosExtra)) return false;
+    if (ocultoPorNegocioPopular(m.ruta, sistema)) return false;
     if (!m.modulo) return true;
     return Boolean(sistema?.[m.modulo]);
   });
@@ -150,7 +152,7 @@ const FinanzasHub = () => {
             <p className="fhub-card-desc">{mod.descripcion}</p>
             <div className="fhub-card-acciones">
               {mod.acciones
-                .filter((ac) => !(sistema?.negocioPopular && ac.ruta === '/facturas/nueva'))
+                .filter((ac) => !ocultoPorNegocioPopular(ac.ruta, sistema))
                 .map((ac) => (
                 <button
                   key={ac.label}

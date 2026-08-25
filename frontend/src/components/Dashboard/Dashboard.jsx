@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import { tienePermiso } from '../../utils/roles';
+import { ocultoPorNegocioPopular } from '../../utils/sistema';
 import './Dashboard.css';
 
 const fmt = (n) =>
@@ -55,18 +56,21 @@ export default function Dashboard() {
     { to: '/retenciones', label: '📋 Retenciones',      show: sistema?.retencionesHabilitadas && tienePermiso(usuario?.rol, 'retenciones.gestionar', usuario?.permisosExtra) },
     { to: '/configuracion-sri',    label: '⚙️ Config SRI',     show: tienePermiso(usuario?.rol, 'sri.configurar') },
     { to: '/configuracion-sistema', label: '🛠️ Config Sistema', show: tienePermiso(usuario?.rol, 'sistema.configurar') },
-  ].filter((item) => item.show);
+  ].filter((item) => item.show && !ocultoPorNegocioPopular(item.to, sistema));
 
+  // Negocio Popular no usa retenciones ni ATS (régimen general) — se
+  // quitan de la lista en vez de solo mostrarse "apagados", para no
+  // insinuar que son módulos que se podrían activar para este régimen.
   const modulos = [
     { label: 'Caja Diaria',   activo: Boolean(sistema?.cajaDiariaHabilitada) },
     { label: 'POS',           activo: Boolean(sistema?.posHabilitado) },
     { label: 'Inventario',    activo: Boolean(sistema?.inventarioHabilitado) },
     { label: 'Compras',       activo: Boolean(sistema?.comprasHabilitadas) },
     { label: 'Contabilidad',  activo: Boolean(sistema?.contabilidadHabilitada) },
-    { label: 'Retenciones',   activo: Boolean(sistema?.retencionesHabilitadas) },
+    { label: 'Retenciones',   activo: Boolean(sistema?.retencionesHabilitadas), soloRegimenGeneral: true },
     { label: 'Liquidaciones', activo: Boolean(sistema?.liquidacionesHabilitadas) },
-    { label: 'ATS',           activo: Boolean(sistema?.atsHabilitado) },
-  ];
+    { label: 'ATS',           activo: Boolean(sistema?.atsHabilitado), soloRegimenGeneral: true },
+  ].filter((m) => !(m.soloRegimenGeneral && sistema?.negocioPopular));
 
   // Barra límite anual
   const limiteAnual = stats?.limiteAnual ?? null;
@@ -123,11 +127,18 @@ export default function Dashboard() {
             <small>{stats?.saldoCajaHoy != null ? 'Abierta' : 'Sin caja abierta'}</small>
           </div>
         )}
-        <div className="dash-metric">
-          <span>Facturas {ahora.getFullYear()}</span>
-          <strong>{cargando ? '…' : (stats?.facturas ?? 0)}</strong>
-          <small>Notas: {stats?.notasVenta ?? 0}</small>
-        </div>
+        {sistema?.negocioPopular ? (
+          <div className="dash-metric">
+            <span>Notas de Venta {ahora.getFullYear()}</span>
+            <strong>{cargando ? '…' : (stats?.notasVenta ?? 0)}</strong>
+          </div>
+        ) : (
+          <div className="dash-metric">
+            <span>Facturas {ahora.getFullYear()}</span>
+            <strong>{cargando ? '…' : (stats?.facturas ?? 0)}</strong>
+            <small>Notas: {stats?.notasVenta ?? 0}</small>
+          </div>
+        )}
         <div className="dash-metric">
           <span>Clientes activos</span>
           <strong>{cargando ? '…' : (stats?.clientes ?? 0)}</strong>

@@ -166,3 +166,28 @@ export function moduloDeshabilitadoPorConfiguracion(item, sistema) {
   if (!item?.modulo) return false;
   return !sistema?.[item.modulo];
 }
+
+// Rutas que no aplican a un contribuyente Negocio Popular (RIMPE): no
+// emite factura ni está sujeto a las obligaciones del régimen general
+// (agente/sujeto de retención, ATS, declaraciones de IVA/renta mensual).
+// Fuente única — usada por el sidebar (Layout.jsx) y por QuickBar para
+// que ningún atajo lleve a una pantalla que no le corresponde a este
+// régimen. Ver docs/pendientes-2026-08-25-negocio-popular.md.
+export const RUTAS_OCULTAS_NEGOCIO_POPULAR = [
+  '/facturas',
+  '/facturas/importar-historicas',
+  '/facturas/nueva',
+  '/notas-debito',
+  '/guias-remision',
+  '/retenciones',
+  '/retenciones-recibidas',
+  '/ats',
+  '/declaraciones',
+  '/reportes-tributarios',
+];
+
+export function ocultoPorNegocioPopular(ruta, sistema) {
+  if (!sistema?.negocioPopular || !ruta) return false;
+  const base = ruta.split('?')[0];
+  return RUTAS_OCULTAS_NEGOCIO_POPULAR.includes(base);
+}

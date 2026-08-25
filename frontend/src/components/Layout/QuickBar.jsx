@@ -5,6 +5,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
 import { tienePermiso } from '../../utils/roles';
+import { ocultoPorNegocioPopular } from '../../utils/sistema';
 import './QuickBar.css';
 
 // Cada entrada: { label, icon, to, permiso?, planMin?, modulo? }
@@ -101,8 +102,7 @@ export default function QuickBar() {
   const links = (QUICK_LINKS[baseKey] || []).filter((l) => {
     if (l.permiso && !tienePermiso(usuario?.rol, l.permiso, usuario?.permisosExtra)) return false;
     if (l.planMin && PLAN_PESO[l.planMin] > planPeso) return false;
-    // Negocio Popular no puede emitir facturas — solo nota de venta.
-    if (sistema?.negocioPopular && l.to === '/facturas/nueva') return false;
+    if (ocultoPorNegocioPopular(l.to, sistema)) return false;
     return true;
   });
 
