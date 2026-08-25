@@ -85,8 +85,11 @@ export default function PuntoVenta() {
   const dropRef = useRef(null);
 
   useEffect(() => {
-    setTipoDocumento(sistema?.documentoPosDefault || 'factura');
-  }, [sistema?.documentoPosDefault]);
+    // Negocio Popular no puede emitir factura bajo ninguna circunstancia,
+    // sin importar lo que diga documentoPosDefault (por si quedó mal
+    // configurado antes de marcar el régimen).
+    setTipoDocumento(sistema?.negocioPopular ? 'nota_venta' : (sistema?.documentoPosDefault || 'factura'));
+  }, [sistema?.documentoPosDefault, sistema?.negocioPopular]);
 
   // Al cambiar entre factura/nota de venta, la forma de pago por defecto
   // cambia de código SRI ('01') a texto libre ('Efectivo') — evita mandar
@@ -594,7 +597,7 @@ export default function PuntoVenta() {
         </div>
         <div className="pos-topbar-actions">
           <select value={tipoDocumento} onChange={(e) => setTipoDocumento(e.target.value)}>
-            <option value="factura">Factura</option>
+            {!sistema?.negocioPopular && <option value="factura">Factura</option>}
             <option value="nota_venta">Nota de venta</option>
           </select>
           <input

@@ -204,12 +204,23 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
   const tipoSistema = normalizarTipoSistema(config?.tipoSistema || empresa.plan || process.env.AELA_EDITION);
   const caps        = capacidadesModulos(empresa);
 
+  // Régimen tributario (configuracion_sri, no configuracion_sistema) — se
+  // expone aquí porque el frontend necesita saber en un solo lugar si el
+  // contribuyente es Negocio Popular para ocultar "Factura" y forzar el
+  // precio de producto con IVA incluido (ver routes/facturas.js PUT
+  // /configuracion, que además bloquea la creación de facturas en el
+  // backend — el frontend oculta la opción, el backend es quien de verdad
+  // lo impide).
+  const configSri = await tx.configuracion_sri.findFirst({ where: { empresaId: empresa.id } });
+
   // Fusión: lo que dice la BD, pero limitado por el techo (módulos contratados o plan)
   return {
     ...construirConfiguracionSistemaBase(empresa),
     ...config,
     empresaId:   empresa.id,
     tipoSistema,
+    negocioPopular:     Boolean(configSri?.negocioPopular),
+    contribuyenteRimpe: Boolean(configSri?.contribuyenteRimpe),
     modoOperacion: normalizarModoOperacion(config?.modoOperacion || await obtenerModoOperacionGlobal(tx)),
     impresionAutoReciboPos:  Boolean(config?.impresionAutoReciboPos ?? false),
     impresoraKiosko:         String(config?.impresoraKiosko || '').trim(),

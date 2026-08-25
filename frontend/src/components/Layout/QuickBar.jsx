@@ -87,7 +87,7 @@ const PLAN_PESO = { lite: 0, medium: 1, pro: 2 };
 export default function QuickBar() {
   const { pathname } = useLocation();
   const navigate    = useNavigate();
-  const { usuario, esLite, esMedium } = useAuth();
+  const { usuario, esLite, esMedium, sistema } = useAuth();
 
   // Buscar el prefijo más largo que coincida
   const baseKey = Object.keys(QUICK_LINKS)
@@ -101,6 +101,8 @@ export default function QuickBar() {
   const links = (QUICK_LINKS[baseKey] || []).filter((l) => {
     if (l.permiso && !tienePermiso(usuario?.rol, l.permiso, usuario?.permisosExtra)) return false;
     if (l.planMin && PLAN_PESO[l.planMin] > planPeso) return false;
+    // Negocio Popular no puede emitir facturas — solo nota de venta.
+    if (sistema?.negocioPopular && l.to === '/facturas/nueva') return false;
     return true;
   });
 

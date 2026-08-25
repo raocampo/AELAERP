@@ -149,7 +149,9 @@ const FinanzasHub = () => {
             </div>
             <p className="fhub-card-desc">{mod.descripcion}</p>
             <div className="fhub-card-acciones">
-              {mod.acciones.map((ac) => (
+              {mod.acciones
+                .filter((ac) => !(sistema?.negocioPopular && ac.ruta === '/facturas/nueva'))
+                .map((ac) => (
                 <button
                   key={ac.label}
                   className="fhub-btn"

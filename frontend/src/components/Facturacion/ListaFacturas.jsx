@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/useAuth';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaCorta } from '../../utils/fecha';
@@ -533,6 +534,7 @@ const TabNotasCredito = ({ navigate }) => {
 // ─── Componente principal ─────────────────────────────────────────────────────
 const ListaFacturas = () => {
   const navigate = useNavigate();
+  const { sistema } = useAuth();
   const [tab, setTab] = useState('facturas');
 
   return (
@@ -549,9 +551,11 @@ const ListaFacturas = () => {
           <button className="btn-secondary" onClick={() => navigate('/configuracion-sri')}>
             ⚙️ Configuración SRI
           </button>
-          <button className="btn-primary" onClick={() => navigate('/facturas/nueva')}>
-            + Nueva Factura
-          </button>
+          {!sistema?.negocioPopular && (
+            <button className="btn-primary" onClick={() => navigate('/facturas/nueva')}>
+              + Nueva Factura
+            </button>
+          )}
         </div>
       </div>
 

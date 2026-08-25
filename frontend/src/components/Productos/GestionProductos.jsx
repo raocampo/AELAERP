@@ -797,15 +797,18 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 <input value={form.nombre} onChange={(e) => setForm((prev) => ({ ...prev, nombre: e.target.value }))} required />
               </label>
               <label>
-                <span>Precio de venta</span>
+                <span>{sistema?.negocioPopular ? 'Precio de venta (incluye IVA)' : 'Precio de venta (sin IVA)'}</span>
                 <input type="number" min="0" step="0.0001" placeholder="0.0000" value={form.precioUnitario} onChange={(e) => setForm((prev) => ({ ...prev, precioUnitario: e.target.value }))} required />
+                {sistema?.negocioPopular && (
+                  <small>Negocio Popular no desglosa IVA — este es el precio final que paga el cliente.</small>
+                )}
               </label>
               <label>
                 <span>Costo unitario</span>
                 <input type="number" min="0" step="0.0001" placeholder="0.0000" value={form.costoUnitario} onChange={(e) => setForm((prev) => ({ ...prev, costoUnitario: e.target.value }))} />
               </label>
               <label>
-                <span>IVA</span>
+                <span>IVA{sistema?.negocioPopular ? ' (referencial)' : ''}</span>
                 <select value={form.tarifaIva} onChange={(e) => setForm((prev) => ({ ...prev, tarifaIva: Number(e.target.value) }))}>
                   <option value={0}>0% — Tarifa 0%</option>
                   <option value={5}>5%</option>
@@ -813,6 +816,9 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                   <option value={6}>No Objeto de IVA</option>
                   <option value={7}>Exento de IVA</option>
                 </select>
+                {sistema?.negocioPopular && (
+                  <small>No se cobra por separado — solo se usa si más adelante cambia de régimen.</small>
+                )}
               </label>
               <label>
                 <span>Unidad</span>

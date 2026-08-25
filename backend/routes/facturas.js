@@ -586,6 +586,34 @@ router.put('/configuracion', permitirConfigurarSri, async (req, res) => {
       }
     }
 
+    // Cambio de régimen (Negocio Popular ⇄ régimen general): el precio de
+    // catálogo cambia de significado — Negocio Popular lo usa como precio
+    // final (con IVA incluido, ver Nota de Venta) mientras que el régimen
+    // general lo usa como base imponible (sin IVA, la factura suma el IVA
+    // aparte). Al cruzar de un régimen a otro se recalcula todo el catálogo
+    // de la empresa en un solo UPDATE, para no obligar a editar producto
+    // por producto (hallazgo real: Deportivo Cat tenía 205 productos
+    // cargados con precio sin IVA pese a ser Negocio Popular).
+    const eraPopular   = !!existing?.negocioPopular;
+    const ahoraPopular = !!fields.negocioPopular;
+    if (eraPopular !== ahoraPopular) {
+      if (ahoraPopular) {
+        // Pasa A Negocio Popular: base sin IVA -> precio final con IVA.
+        await prisma.$executeRaw`
+          UPDATE productos_servicios
+          SET "precioUnitario" = ROUND("precioUnitario" * (1 + "tarifaIva"::numeric / 100), 2)
+          WHERE "empresaId" = ${req.empresa.id}
+        `;
+      } else {
+        // Sale de Negocio Popular: precio final con IVA -> base sin IVA.
+        await prisma.$executeRaw`
+          UPDATE productos_servicios
+          SET "precioUnitario" = ROUND("precioUnitario" / (1 + "tarifaIva"::numeric / 100), 2)
+          WHERE "empresaId" = ${req.empresa.id}
+        `;
+      }
+    }
+
     await registrarAuditoria({ usuarioId: req.usuario.id, accion: 'UPDATE', tabla: 'configuracion_sri', registroId: config.id, req });
     res.json({ ok: true, data: config });
   } catch (err) {
@@ -1034,6 +1062,16 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
     const config = await getConfigSRI(req.empresa.id);
     if (!config) {
       return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI (RUC, razón social, etc.)' });
+    }
+    // Negocio Popular no puede emitir facturas — solo nota de venta (ver
+    // caso Deportivo Cat, 2026-08-24/25). El frontend ya oculta la opción,
+    // pero el bloqueo real vive aquí — una opción oculta en la UI no evita
+    // una llamada directa a la API.
+    if (config.negocioPopular) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Este contribuyente es Negocio Popular (RIMPE) — no puede emitir facturas, use Nota de Venta.',
+      });
     }
 
     const {
