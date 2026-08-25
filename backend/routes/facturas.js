@@ -21,6 +21,7 @@ const {
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
 const { construirConfiguracionSriBase } = require('../utils/sriContribuyente');
+const { asegurarConfiguracionSistemaEmpresa } = require('../utils/configuracionSistema');
 const { siguienteSecuencial, siguienteSecuencialFacturaAtomico } = require('../utils/secuenciales');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
@@ -569,6 +570,21 @@ router.put('/configuracion', permitirConfigurarSri, async (req, res) => {
         telefono: telefono || null,
       },
     });
+
+    // Negocio Popular no puede emitir facturas normales (solo notas de
+    // venta) — al marcar este checkbox, el documento predeterminado del POS
+    // pasa a nota_venta automáticamente, para no depender de que el cajero
+    // recuerde cambiarlo a mano cada vez (causa raíz real de un caso de
+    // facturas mal emitidas corregido 2026-08-24, ver Deportivo Cat).
+    if (fields.negocioPopular) {
+      const configSistema = await asegurarConfiguracionSistemaEmpresa(req.empresa.id, prisma);
+      if (configSistema && configSistema.documentoPosDefault !== 'nota_venta') {
+        await prisma.configuracion_sistema.update({
+          where: { empresaId: req.empresa.id },
+          data: { documentoPosDefault: 'nota_venta' },
+        });
+      }
+    }
 
     await registrarAuditoria({ usuarioId: req.usuario.id, accion: 'UPDATE', tabla: 'configuracion_sri', registroId: config.id, req });
     res.json({ ok: true, data: config });

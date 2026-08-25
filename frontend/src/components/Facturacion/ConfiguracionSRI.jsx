@@ -244,15 +244,20 @@ const ConfiguracionSRI = () => {
       const res = await api.get(`/empresas/consultar-sri/${rucLimpio}`);
       if (res.data?.encontrado && res.data?.data) {
         const s = res.data.data;
+        // Solo sobreescribe un checkbox si la fuente realmente trae ese dato
+        // (campo presente en la respuesta) — algunos campos (ej. Negocio
+        // Popular) no son determinables desde el catastro local y antes se
+        // forzaban a "false" con Boolean(undefined), desmarcando por error
+        // lo que el usuario ya había marcado a mano.
         setForm(prev => ({
           ...prev,
           razonSocial:           s.razonSocial     || prev.razonSocial,
           nombreComercial:       s.nombreComercial || prev.nombreComercial,
           dirMatriz:             prev.dirMatriz    || s.direccion || prev.dirMatriz,
-          contribuyenteRimpe:    Boolean(s.contribuyenteRimpe),
-          contribuyenteEspecial: Boolean(s.contribuyenteEspecial),
-          negocioPopular:        Boolean(s.negocioPopular),
-          obligadoContabilidad:  Boolean(s.obligadoContabilidad),
+          contribuyenteRimpe:    s.contribuyenteRimpe    !== undefined ? Boolean(s.contribuyenteRimpe)    : prev.contribuyenteRimpe,
+          contribuyenteEspecial: s.contribuyenteEspecial !== undefined ? Boolean(s.contribuyenteEspecial) : prev.contribuyenteEspecial,
+          negocioPopular:        s.negocioPopular        !== undefined ? Boolean(s.negocioPopular)        : prev.negocioPopular,
+          obligadoContabilidad:  s.obligadoContabilidad  !== undefined ? Boolean(s.obligadoContabilidad)  : prev.obligadoContabilidad,
         }));
         const fuente = res.data.fuente === 'local' ? 'catastro local' : 'SRI en línea';
         toast.success(`Datos actualizados desde ${fuente}: ${s.razonSocial}`);

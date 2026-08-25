@@ -50,6 +50,40 @@ test('generarXMLFactura colapsa tabs y espacios múltiples sin perder el conteni
   assert.equal(resultado, 'PAPEL HIGIENICO X 6 ROLLOS');
 });
 
+function generarConCodigoPrincipal(codigoPrincipal) {
+  const { xml } = sri.generarXMLFactura({
+    fechaEmision: new Date('2026-08-12T12:00:00'),
+    tipoIdentificacionComprador: '07',
+    identificacionComprador: '9999999999999',
+    razonSocialComprador: 'CONSUMIDOR FINAL',
+    detalles: [{
+      codigoPrincipal,
+      descripcion: 'Producto de prueba',
+      cantidad: 1,
+      precioUnitario: 1,
+      descuento: 0,
+      ivaPorcentaje: 15,
+    }],
+    pagos: [{ formaPago: 'Efectivo', total: 1.15 }],
+  }, CONFIG_BASE);
+  return xml.match(/<codigoPrincipal>([\s\S]*?)<\/codigoPrincipal>/)[1];
+}
+
+test('generarXMLFactura limpia saltos de línea embebidos en codigoPrincipal (error SRI 35, caso real tenant sys 2026-08-24)', () => {
+  // Caso real: código de barras con un \r\n insertado en medio ("899900269
+  // \r\n6514", debía ser "8999002696514") — el SRI rechazó con el mismo
+  // error 35 que ya se había corregido para <descripcion>, pero
+  // codigoPrincipal nunca pasaba por el mismo saneo.
+  const resultado = generarConCodigoPrincipal('899900269\r\n6514');
+  assert.equal(resultado, '899900269 6514');
+  assert.doesNotMatch(resultado, /[\r\n]/);
+});
+
+test('generarXMLFactura no altera un codigoPrincipal ya limpio', () => {
+  const resultado = generarConCodigoPrincipal('7861018591712');
+  assert.equal(resultado, '7861018591712');
+});
+
 test('generarXMLFactura declara totalImpuesto para detalles No Objeto (6) y Exento (7) de IVA', () => {
   // Antes de este fix, un detalle con ivaPorcentaje 6/7 quedaba incluido en
   // totalSinImpuestos pero SIN su propio bloque <totalImpuesto> en la

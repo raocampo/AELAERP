@@ -469,7 +469,7 @@ function generarXMLFactura(data, config) {
   const detallesEle = root.ele('detalles');
   detallesXML.forEach(det => {
     const detEle = detallesEle.ele('detalle');
-    detEle.ele('codigoPrincipal').txt(det.codigoPrincipal);
+    detEle.ele('codigoPrincipal').txt(t(det.codigoPrincipal));
     if (config.sectorTransporte) {
       detEle.ele('codigoAuxiliar').txt(CODIGO_AUXILIAR_TRANSPORTE);
     }
@@ -2582,7 +2582,7 @@ function generarXMLLiquidacionCompra(data, config) {
   const detallesEle = root.ele('detalles');
   detallesXML.forEach(det => {
     const detEle = detallesEle.ele('detalle');
-    detEle.ele('codigoPrincipal').txt(det.codigoPrincipal);
+    detEle.ele('codigoPrincipal').txt(t(det.codigoPrincipal));
     detEle.ele('descripcion').txt(t(det.descripcion));
     detEle.ele('cantidad').txt(det.cantidad);
     detEle.ele('precioUnitario').txt(det.precioUnitario);

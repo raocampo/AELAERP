@@ -146,6 +146,17 @@ async function consultarCatastroLocal(identificacion) {
     });
 
     if (row) {
+      // El CSV del catastro SRI codifica la "clase de contribuyente" con
+      // abreviaturas (ej. "RMP" = RIMPE), no la palabra completa — antes esto
+      // comparaba contra 'rimpe' literal y nunca coincidía, dejando el
+      // checkbox sin marcar pese a que el dato sí estaba disponible
+      // (hallazgo 2026-08-24, caso Deportivo Cat/RUC 1103590533001).
+      // "Negocio Popular" específicamente NO tiene una señal propia en este
+      // catálogo (los valores observados son ACTIVO/GEN/PASIVO/PICHINCHA/
+      // RMP/SIM/SUSPENDIDO — ninguno distingue Negocio Popular de RIMPE
+      // general) — se omite en vez de forzar `false`, para no pisar un
+      // valor que el usuario ya haya marcado a mano.
+      const clase = (row.claseContribuyente || '').toLowerCase();
       return {
         tipoIdentificacion:    identificacion.length === 10 ? '05' : '04',
         identificacion,
@@ -155,8 +166,8 @@ async function consultarCatastroLocal(identificacion) {
         direccion:             null, // los CSVs del SRI no incluyen dirección detallada
         estado:                row.estado,
         contribuyenteEspecial: row.claseContribuyente === 'ESPECIAL' ? 'SI' : null,
-        contribuyenteRimpe:    (row.claseContribuyente || '').toLowerCase().includes('rimpe'),
-        negocioPopular:        (row.claseContribuyente || '').toLowerCase().includes('negocio popular'),
+        contribuyenteRimpe:    clase.includes('rimpe') || clase === 'rmp',
+        // negocioPopular: no determinable desde este catálogo — se omite.
         obligadoContabilidad:  row.obligadoContabilidad,
         agenteRetencion:       null,
         email:                 null,
