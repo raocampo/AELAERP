@@ -115,13 +115,60 @@ sesión).
   sintéticos en Node directamente (no contra datos reales, por falta de
   acceso a la BD de producción esta sesión).
 
+## Actualización — corrección aplicada en producción (mismo día)
+
+El usuario compartió el `.env.local` de la raíz del proyecto (tenía la
+cadena de conexión externa de Railway que no estaba en
+`backend/.env.local`). Con eso se pudo:
+
+- Confirmar el alcance real: **645,966 filas** de `contribuyentes_sri`
+  (catastro nacional, tabla compartida por toda la plataforma) tienen
+  el mismo patrón de corrupción — no solo "Ñ", cualquier vocal
+  acentuada. El daño real a datos de tenants fue mucho menor: 2
+  `clientes`, 3 `notas_venta`, 0 `facturas` — los mismos 2 RUCs
+  ("IÑIGUEZ TORRES PABLO VINICIO" y "IÑIGUEZ CHALAN IRMA RAQUEL",
+  empresaId=4) de las capturas.
+- Se corrigieron esos 7 registros (2 en `contribuyentes_sri`, la fuente
+  raíz, + 2 en `clientes` + 3 en `notas_venta`) más 3 más encontrados en
+  `directorio_global` (incluyendo "IÑIGUEZ GONZALEZ CLAUDIA DIANA", el
+  caso que se había dado por "resuelto/aislado" el 25 de agosto — nunca
+  se corrigió realmente ahí). Total: 10 registros, verificados a nivel
+  de bytes (`codepoint 209 = Ñ` en la posición correcta) antes y después
+  de escribir, no solo visualmente en la terminal.
+
+**Incidente durante la corrección (transparencia total)**: en el primer
+intento de reparar los 7 registros, escribí el texto corrupto
+"IÃIGUEZ..." como literal directamente en el comando de terminal en vez
+de leerlo de la base de datos — la herramienta/terminal no transmitió
+ese carácter acentuado tal cual, y el resultado real que se guardó fue
+un carácter de reemplazo inválido (◆ U+FFFD) en esos 7 registros por
+unos segundos, ANTES de la verificación posterior. Se detectó de
+inmediato al releer los bytes crudos de la BD (nunca confiando en cómo
+se ve el texto en la terminal), y se corrigió reconstruyendo el string
+exacto por código numérico de carácter (`String.fromCharCode`) en vez
+de tipearlo — confirmado exacto contra los ejemplos ya vistos del mismo
+patrón de corrupción en otras 8 filas del catastro. Se re-verificó
+2 veces más (incluida una búsqueda específica de U+FFFD en las 4 tablas
+afectadas) que no quedó ningún rastro del error. **Lección**: nunca
+volver a escribir un carácter acentuado literal en un comando para
+reparar datos — siempre leer el valor de la BD y operar sobre ESE valor
+exacto, o construirlo por código numérico si hace falta un valor de
+referencia.
+
+**No se tocó** la tabla `contribuyentes_sri` en su totalidad (645,966
+filas) — parchear fila por fila a esa escala sobre una conexión remota
+es lento y arriesgado; la recomendación es re-importar el catastro
+completo desde un CSV oficial del SRI con la codificación verificada
+(no asumida), usando `importarCatastroSRI.js --replace` — mucho más
+rápido y confiable que parchear 645K filas una por una. Mientras tanto,
+el impacto real a tenants existentes es mínimo (ya corregido); el
+patrón solo se repetiría para un cliente NUEVO con tilde/Ñ que aún no
+se haya consultado en ningún tenant.
+
 ## Pendiente para retomar
 
-- Correr `repararMojibakeContribuyentes.js` contra la BD de producción
-  real (dry-run primero) para ver el alcance total y decidir si aplicar.
-- Decidir si hace falta re-verificar/re-importar el catastro SRI con la
-  codificación correcta para evitar que seres nuevos con "Ñ"/tildes
-  sigan corrompiéndose al consultarlos por primera vez.
+- Decidir cuándo re-importar el catastro SRI completo con la
+  codificación correcta (evita que sigan apareciendo casos nuevos).
 - No se identificó la validación exacta que causó el 400 en la venta de
   las capturas — con el fix de errores silenciosos, la próxima vez que
   pase se verá el mensaje real en pantalla.
