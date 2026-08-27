@@ -28,11 +28,10 @@ const FORMAS_PAGO = [
   { uid: 'App Móvil',      label: 'Aplicación Móvil', icon: '📱' },
 ];
 
-// codigoPrincipal/codigoAuxiliar no tienen input propio en este formulario
-// (es de captura manual, sin catálogo) — se conservan igual en el objeto
-// para no perder el vínculo con el producto al EDITAR una nota que sí venía
-// del catálogo (ej. creada desde POS), donde importan para revertir/aplicar
-// el movimiento de inventario correcto.
+// codigoAuxiliar no tiene input propio (poco usado a mano) pero se conserva
+// en el objeto para no perder el vínculo con el producto al EDITAR una nota
+// que sí venía del catálogo (ej. creada desde POS), donde importa para
+// revertir/aplicar el movimiento de inventario correcto.
 const DETALLE_VACIO = {
   descripcion: '', cantidad: '1', precioUnitario: '', descuento: '0',
   codigoPrincipal: '', codigoAuxiliar: '',
@@ -427,6 +426,7 @@ export default function FormNotaVenta() {
             <table className="fnv-table">
               <thead>
                 <tr>
+                  <th style={{ width: 90 }}>Código</th>
                   <th>Descripción *</th>
                   <th className="center" style={{ width: 80 }}>Cant.</th>
                   <th className="right" style={{ width: 100 }}>P. Unit.</th>
@@ -440,6 +440,11 @@ export default function FormNotaVenta() {
                   const lineTotal = ((parseFloat(d.cantidad) || 0) * (parseFloat(d.precioUnitario) || 0)) - (parseFloat(d.descuento) || 0);
                   return (
                     <tr key={idx}>
+                      <td>
+                        <input type="text" value={d.codigoPrincipal} style={{ width: '100%' }}
+                          onChange={e => actualizarDetalle(idx, 'codigoPrincipal', e.target.value)}
+                          placeholder="SRV001" />
+                      </td>
                       <td>
                         <input type="text" value={d.descripcion} style={{ width: '100%' }}
                           onChange={e => actualizarDetalle(idx, 'descripcion', e.target.value)}
