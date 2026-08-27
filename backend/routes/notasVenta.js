@@ -665,8 +665,10 @@ router.get('/', async (req, res) => {
 // ─── GET /api/notas-venta/:id ─────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
+    const idNum = parseInt(req.params.id, 10);
+    if (Number.isNaN(idNum)) return res.status(404).json({ success: false, mensaje: 'Nota de venta no encontrada' });
     const nota = await prisma.notas_venta.findFirst({
-      where: { id: parseInt(req.params.id), empresaId: req.empresa.id },
+      where: { id: idNum, empresaId: req.empresa.id },
     });
     if (!nota) return res.status(404).json({ success: false, mensaje: 'Nota de venta no encontrada' });
     res.json({ success: true, data: nota });

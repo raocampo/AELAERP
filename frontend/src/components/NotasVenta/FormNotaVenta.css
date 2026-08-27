@@ -96,6 +96,96 @@
   color: #64748b;
 }
 
+/* ── Búsqueda de productos del catálogo ── */
+.fnv-busq-prod-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.fnv-busq-input-wrap {
+  flex: 1;
+  min-width: 200px;
+  position: relative;
+}
+
+.fnv-busq-input {
+  width: 100%;
+  padding: 9px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  font-family: inherit;
+}
+
+.fnv-busq-input:focus {
+  outline: none;
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
+}
+
+.fnv-prod-drop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+  z-index: 20;
+}
+
+.fnv-prod-item {
+  width: 100%;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  background: none;
+  text-align: left;
+  font-family: inherit;
+}
+
+.fnv-prod-item:last-child { border-bottom: none; }
+.fnv-prod-item:hover { background: #f5f3ff; }
+
+.fnv-prod-codigo {
+  font-family: monospace;
+  font-size: 11px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.fnv-prod-nombre {
+  flex: 1;
+  font-weight: 500;
+  color: #1e293b;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fnv-prod-precio {
+  font-weight: 700;
+  color: #7C3AED;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ── Tabla detalle ── */
 .fnv-table-wrap {
   overflow-x: auto;

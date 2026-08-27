@@ -536,6 +536,14 @@ export default function PuntoVenta() {
             ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
           },
         });
+        if (!resp.offline && !resp.ok) {
+          // apiOffline nunca lanza excepción por un error HTTP (solo por
+          // falla de red) — sin este chequeo, un 400/500 real del backend
+          // se mostraba como "Nota de Venta emitida" con N° "—", ocultando
+          // el motivo real del rechazo (hallazgo 2026-08-27).
+          toast.error(resp.data?.mensaje || 'No se pudo emitir la nota de venta');
+          return;
+        }
         setCarrito([]);
         if (resp.offline) {
           setDocEmitido({
@@ -586,6 +594,10 @@ export default function PuntoVenta() {
             ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
           },
         });
+        if (!resp.offline && !resp.ok) {
+          toast.error(resp.data?.error || resp.data?.mensaje || 'No se pudo emitir la factura');
+          return;
+        }
         setCarrito([]);
         if (resp.offline) {
           setDocEmitido({

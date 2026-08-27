@@ -4,7 +4,7 @@
 // frontend/src/components/NotasVenta/FormNotaVenta.jsx
 // ====================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import api from '../../services/api';
@@ -57,6 +57,10 @@ export default function FormNotaVenta() {
 
   // ── Detalle ──────────────────────────────────────────────────────────────
   const [detalles, setDetalles] = useState([{ ...DETALLE_VACIO }]);
+  const [busqProd,     setBusqProd]     = useState('');
+  const [prodResults,  setProdResults]  = useState([]);
+  const [prodDropOpen, setProdDropOpen] = useState(false);
+  const prodRef = useRef(null);
 
   // ── Otros ────────────────────────────────────────────────────────────────
   const [formaPago,    setFormaPago]    = useState('Efectivo');
@@ -191,6 +195,65 @@ export default function FormNotaVenta() {
       setBuscandoSRI(false);
     }
   };
+
+  // ── Autocomplete de productos del catálogo ────────────────────────────────
+  // Para Negocio Popular, precioUnitario del catálogo YA incluye IVA (ver
+  // nota en PuntoVenta.jsx) — se usa tal cual, sin sumar/restar nada.
+  const buscarProducto = async (q) => {
+    setBusqProd(q);
+    if (q.length < 1) { setProdDropOpen(false); setProdResults([]); return; }
+    try {
+      const res = await api.get('/productos/buscar', { params: { q } });
+      setProdResults(res.data.data || []);
+      setProdDropOpen((res.data.data || []).length > 0);
+    } catch { /* ignore */ }
+  };
+
+  const buscarPorScanner = async () => {
+    const codigo = busqProd.trim();
+    if (!codigo) return;
+    try {
+      const res = await api.get('/productos/buscar', { params: { q: codigo } });
+      const items = res.data?.data || [];
+      const exacto = items.find((p) =>
+        String(p.codigoPrincipal || '').trim().toUpperCase() === codigo.toUpperCase() ||
+        String(p.codigoAuxiliar || '').trim().toUpperCase() === codigo.toUpperCase()
+      );
+      if (exacto) { agregarDesdeProducto(exacto); return; }
+      if (items.length === 1) { agregarDesdeProducto(items[0]); return; }
+      setProdResults(items);
+      setProdDropOpen(items.length > 0);
+    } catch { /* ignore */ }
+  };
+
+  const agregarDesdeProducto = (prod) => {
+    setDetalles(prev => {
+      // Si la única línea existente está totalmente vacía (estado inicial),
+      // se reemplaza en vez de dejar una fila en blanco antes del producto.
+      const base = prev.length === 1 && !prev[0].descripcion && !prev[0].precioUnitario
+        ? []
+        : prev;
+      return [...base, {
+        descripcion:     prod.nombre,
+        cantidad:        '1',
+        precioUnitario:  String(prod.precioUnitario ?? ''),
+        descuento:       '0',
+        codigoPrincipal: prod.codigoPrincipal || '',
+        codigoAuxiliar:  prod.codigoAuxiliar  || '',
+      }];
+    });
+    setBusqProd('');
+    setProdDropOpen(false);
+    setProdResults([]);
+  };
+
+  useEffect(() => {
+    const cerrar = (e) => {
+      if (prodRef.current && !prodRef.current.contains(e.target)) setProdDropOpen(false);
+    };
+    document.addEventListener('mousedown', cerrar);
+    return () => document.removeEventListener('mousedown', cerrar);
+  }, []);
 
   // ── Detalle CRUD ──────────────────────────────────────────────────────────
   const actualizarDetalle = (idx, campo, valor) =>
@@ -335,6 +398,31 @@ export default function FormNotaVenta() {
         {/* ── Detalle ── */}
         <div className="fnv-section">
           <h2>📋 Detalle</h2>
+
+          <div className="fnv-busq-prod-bar" ref={prodRef}>
+            <div className="fnv-busq-input-wrap">
+              <input
+                type="text"
+                value={busqProd}
+                onChange={e => buscarProducto(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buscarPorScanner(); } }}
+                placeholder="Escanea o busca un producto del catálogo por código o nombre"
+                className="fnv-busq-input"
+              />
+              {prodDropOpen && prodResults.length > 0 && (
+                <div className="fnv-prod-drop">
+                  {prodResults.map(p => (
+                    <button key={p.id} type="button" className="fnv-prod-item" onClick={() => agregarDesdeProducto(p)}>
+                      <span className="fnv-prod-codigo">{p.codigoPrincipal}</span>
+                      <span className="fnv-prod-nombre">{p.nombre}</span>
+                      <span className="fnv-prod-precio">${parseFloat(p.precioUnitario || 0).toFixed(2)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="fnv-table-wrap">
             <table className="fnv-table">
               <thead>
