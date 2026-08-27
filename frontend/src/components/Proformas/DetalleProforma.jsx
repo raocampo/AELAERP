@@ -223,7 +223,7 @@ export default function DetalleProforma() {
 
     const cabecera = [
       `📋 *PROFORMA N° ${proforma.numero}*`,
-      `📅 Fecha: ${fmtFecha(proforma.createdAt || proforma.createdat)}`,
+      `📅 Fecha: ${fmtFecha(proforma.fechaEmision || proforma.fechaemision || proforma.createdAt || proforma.createdat)}`,
       proforma.vigenciaHasta ? `⏳ Válida hasta: *${fmtFecha(proforma.vigenciaHasta)}*` : '',
     ].filter(Boolean).join('\n');
 
@@ -363,7 +363,7 @@ export default function DetalleProforma() {
             <table className="prf-det-meta-tbl">
               <tbody>
                 <tr><td>Número</td>  <td><strong>{proforma.numero}</strong></td></tr>
-                <tr><td>Fecha</td>   <td>{fmtFecha(proforma.createdat || proforma.createdAt)}</td></tr>
+                <tr><td>Fecha</td>   <td>{fmtFecha(proforma.fechaemision || proforma.fechaEmision || proforma.createdat || proforma.createdAt)}</td></tr>
                 {proforma.vigenciaDesde && <tr><td>Válida desde</td><td>{fmtFecha(proforma.vigenciaDesde)}</td></tr>}
                 {proforma.vigenciaHasta && <tr><td>Válida hasta</td><td><strong>{fmtFecha(proforma.vigenciaHasta)}</strong></td></tr>}
                 <tr>

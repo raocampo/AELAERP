@@ -8,6 +8,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { fmtLinea } from '../../utils/formato';
+import { hoyLocal, toInputFecha } from '../../utils/fecha';
 import './FormProforma.css';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -117,6 +118,10 @@ export default function FormProforma() {
   };
 
   // ── Metadatos ─────────────────────────────────────────────────────────────
+  // La proforma no es un documento oficial validado por el SRI (a diferencia
+  // de factura/nota de venta) — la fecha de emisión es libre, sin la
+  // restricción de "máximo 3 días atrás" que sí aplica a esos documentos.
+  const [fechaEmision, setFechaEmision] = useState(hoyLocal());
   const [vigenciaDesde, setVigenciaDesde] = useState('');
   const [vigenciaHasta, setVigenciaHasta] = useState('');
   const [observaciones, setObservaciones] = useState('');
@@ -140,6 +145,8 @@ export default function FormProforma() {
         });
         const dets = typeof p.detalles === 'string' ? JSON.parse(p.detalles) : (p.detalles || []);
         setDetalles(dets.length ? dets : [{ ...DETALLE_VACIO }]);
+        const fechaExistente = p.fechaEmision || p.fechaemision || p.createdAt || p.createdat;
+        setFechaEmision(fechaExistente ? toInputFecha(fechaExistente) : hoyLocal());
         setVigenciaDesde(p.vigenciadesde ? p.vigenciadesde.substring(0, 10) : '');
         setVigenciaHasta(p.vigenciahasta ? p.vigenciahasta.substring(0, 10) : '');
         setObservaciones(p.observaciones || '');
@@ -232,6 +239,7 @@ export default function FormProforma() {
       const body = {
         ...cliente,
         detalles: lineasValidas,
+        fechaEmision:  fechaEmision  || null,
         vigenciaDesde: vigenciaDesde || null,
         vigenciaHasta: vigenciaHasta || null,
         observaciones: observaciones || null,
@@ -344,7 +352,7 @@ export default function FormProforma() {
           <div className="prf-section-head">
             <h2>📦 Detalle de productos / servicios</h2>
             <button type="button" className="btn-secondary prf-btn-add" onClick={agregarLinea}>
-              + Agregar línea
+              + Agregar línea manualmente
             </button>
           </div>
 
@@ -465,6 +473,11 @@ export default function FormProforma() {
         <div className="prf-section">
           <h2>📅 Vigencia y Condiciones</h2>
           <div className="prf-grid-2">
+            <div className="prf-field">
+              <label>Fecha de emisión</label>
+              <input type="date" value={fechaEmision} onChange={e => setFechaEmision(e.target.value)} />
+              <span className="prf-hint">La proforma no es un documento oficial del SRI — puedes usar cualquier fecha</span>
+            </div>
             <div className="prf-field">
               <label>Válida desde</label>
               <input type="date" value={vigenciaDesde} onChange={e => setVigenciaDesde(e.target.value)} />

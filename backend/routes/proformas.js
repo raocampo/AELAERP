@@ -129,7 +129,7 @@ function _generarPdfProforma(p, configSri, outputPath) {
     doc.rect(RP_X, yR, RP_W, BOX_H).lineWidth(0.7).stroke('#AAAAAA');
     const colW  = RP_W / 2 - 4;
     const datosRight = [
-      { l: 'FECHA DE EMISIÓN', v: fmtFecha(p.createdat || p.createdAt) },
+      { l: 'FECHA DE EMISIÓN', v: fmtFecha(p.fechaEmision || p.fechaemision || p.createdat || p.createdAt) },
       { l: 'VÁLIDA DESDE',     v: fmtFecha(p.vigenciadesde || p.vigenciaDesde) },
       { l: 'VÁLIDA HASTA',     v: fmtFecha(p.vigenciahasta || p.vigenciaHasta), bold: true },
       { l: 'ESTADO',           v: (p.estado || 'BORRADOR') },
@@ -423,17 +423,22 @@ router.get('/', async (req, res) => {
     const params = [empresaId];
     let i = 2;
 
+    // La fecha "de negocio" de una proforma es fechaEmision (editable, no es
+    // documento oficial SRI) — createdAt sigue siendo el timestamp de
+    // auditoría de cuándo se creó el registro. COALESCE cubre proformas
+    // creadas antes de que existiera esta columna.
+    const fechaOrden = `COALESCE(p."fechaEmision", p."createdAt")`;
     if (estado) { where += ` AND p.estado = $${i++}`; params.push(estado); }
     if (q)      { where += ` AND (p."razonSocial" ILIKE $${i} OR p.numero ILIKE $${i})`; params.push(`%${q}%`); i++; }
-    if (desde)  { where += ` AND p."createdAt" >= $${i++}`; params.push(desde); }
-    if (hasta)  { where += ` AND p."createdAt" <= $${i++}`; params.push(hasta); }
+    if (desde)  { where += ` AND ${fechaOrden} >= $${i++}`; params.push(desde); }
+    if (hasta)  { where += ` AND ${fechaOrden} <= $${i++}`; params.push(hasta); }
 
     const countSql = `SELECT COUNT(*) FROM proformas p ${where}`;
     const dataSql  = `
       SELECT p.id, p.numero, p."razonSocial", p."identificacion",
-             p."importeTotal", p.estado, p."vigenciaHasta", p."createdAt", p."facturaId"
+             p."importeTotal", p.estado, p."vigenciaHasta", p."createdAt", p."fechaEmision", p."facturaId"
       FROM proformas p ${where}
-      ORDER BY p."createdAt" DESC
+      ORDER BY ${fechaOrden} DESC
       LIMIT $${i} OFFSET $${i+1}
     `;
     params.push(parseInt(limit), offset);
@@ -468,6 +473,7 @@ router.post('/', async (req, res) => {
       observaciones,
       vigenciaDesde, vigenciaHasta,
       formaPago,
+      fechaEmision,
     } = req.body;
 
     if (!razonSocial?.trim()) return res.status(400).json({ ok: false, mensaje: 'Razón social requerida' });
@@ -487,10 +493,10 @@ router.post('/', async (req, res) => {
         "totalDescuento", "totalIva", "importeTotal",
         "detalles", "observaciones",
         "vigenciaDesde", "vigenciaHasta",
-        "estado", "creadoPor", "formaPago"
+        "estado", "creadoPor", "formaPago", "fechaEmision"
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-        $11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19::timestamp,$20::timestamp,$21,$22,$23
+        $11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19::timestamp,$20::timestamp,$21,$22,$23,$24::timestamp
       ) RETURNING *
     `,
       empresaId, numero, sec,
@@ -501,6 +507,7 @@ router.post('/', async (req, res) => {
       JSON.stringify(detalles), observaciones || null,
       vigenciaDesde || null, vigenciaHasta || null,
       'BORRADOR', req.usuario.id, formaPago || null,
+      fechaEmision ? new Date(fechaEmision) : new Date(),
     );
 
     res.status(201).json({ ok: true, data: row });
@@ -540,7 +547,7 @@ router.put('/:id', async (req, res) => {
       tipoIdentificacion, identificacion, razonSocial,
       direccion, email, telefono, clienteId,
       detalles = [], observaciones, vigenciaDesde, vigenciaHasta,
-      formaPago,
+      formaPago, fechaEmision,
     } = req.body;
 
     if (!razonSocial?.trim()) return res.status(400).json({ ok: false, mensaje: 'Razón social requerida' });
@@ -556,7 +563,8 @@ router.put('/:id', async (req, res) => {
         "totalDescuento" = $13, "totalIva" = $14, "importeTotal" = $15,
         "detalles" = $16::jsonb, "observaciones" = $17,
         "vigenciaDesde" = $18::timestamp, "vigenciaHasta" = $19::timestamp,
-        "formaPago" = $20, "updatedAt" = NOW()
+        "formaPago" = $20, "fechaEmision" = COALESCE($21::timestamp, "fechaEmision"),
+        "updatedAt" = NOW()
       WHERE id = $1 AND "empresaId" = $2
       RETURNING *
     `,
@@ -567,7 +575,7 @@ router.put('/:id', async (req, res) => {
       totales.totalDescuento, totales.totalIva, totales.importeTotal,
       JSON.stringify(detalles), observaciones || null,
       vigenciaDesde || null, vigenciaHasta || null,
-      formaPago || null,
+      formaPago || null, fechaEmision ? new Date(fechaEmision) : null,
     );
 
     res.json({ ok: true, data: row });

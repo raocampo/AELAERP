@@ -137,7 +137,7 @@ export default function ListaProformas() {
                     <td className="prf-monto">{fmtMonto(p.importetotal || p.importeTotal)}</td>
                     <td><BadgeEstado estado={p.estado} /></td>
                     <td>{fmtFecha(p.vigenciahasta || p.vigenciaHasta)}</td>
-                    <td>{fmtFecha(p.createdat || p.createdAt)}</td>
+                    <td>{fmtFecha(p.fechaemision || p.fechaEmision || p.createdat || p.createdAt)}</td>
                     <td onClick={e => e.stopPropagation()}>
                       <div className="prf-acciones">
                         <button className="prf-btn-ver" onClick={() => navigate(`/proformas/${p.id}`)}>
