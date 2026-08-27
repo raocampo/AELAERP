@@ -103,6 +103,19 @@ export function hoyLocal() {
 }
 
 /**
+ * A partir del día 7 del mes siguiente a la emisión, la anulación de una
+ * factura autorizada ya no ofrece la opción de "sin NC" — se fuerza la Nota
+ * de Crédito automática (mismo criterio que el backend, ver
+ * backend/utils/anulacionFactura.js — mantener ambos en sync).
+ */
+export function ventanaLibreAnulacionVencida(fechaEmision, fechaActual = new Date()) {
+  const fe = parseFechaLocal(fechaEmision);
+  if (Number.isNaN(fe.getTime())) return true;
+  const corte = new Date(fe.getFullYear(), fe.getMonth() + 1, 7);
+  return new Date(fechaActual) >= corte;
+}
+
+/**
  * Convierte cualquier valor de fecha a string YYYY-MM-DD (hora local).
  * Útil para inputs tipo "date".
  */

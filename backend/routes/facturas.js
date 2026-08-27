@@ -29,6 +29,7 @@ const { esErrorConectividad } = require('../utils/colaSRI');
 const { getCertBuffer, tieneCertificado, getCertInfo } = require('../utils/certUtils');
 const { enviarDocumentoFiscal } = require('../utils/email');
 const { condicionComprasDeducibles } = require('../utils/comprasFiscal');
+const { requiereNCAutomaticaPorVentana } = require('../utils/anulacionFactura');
 
 // Aplicar autenticación JWT a todas las rutas
 router.use(proteger);
@@ -1409,6 +1410,14 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
 
     const motivo = req.body.motivo || 'Anulada por el emisor';
     let ncCreada = null;
+    let config = null;
+    // A partir del día 7 del mes siguiente a la emisión ya no se ofrece la
+    // opción de anular sin NC — se fuerza el procedimiento histórico (NC
+    // automática), sin importar lo que envíe el cliente en `crearNC`. Dentro
+    // de la ventana libre, el emisor elige (modal en el frontend); fuera de
+    // ella, ni siquiera se le pregunta.
+    const ventanaLibreVencida = requiereNCAutomaticaPorVentana(factura.fechaEmision, new Date());
+    const crearNC = ventanaLibreVencida ? true : (req.body.crearNC !== false);
 
     // ── Para facturas AUTORIZADAS: emitir NC total como mecanismo SRI ───────
     if (factura.estadoSri === 'AUTORIZADO') {
@@ -1424,7 +1433,15 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
         });
       }
 
-      const config = await getConfigSRI(req.empresa.id);
+      if (!crearNC) {
+        // El emisor eligió anular sin NC (dentro de la ventana libre): el
+        // comprobante autorizado queda intacto en el SRI — debe anularlo
+        // manualmente en el portal del SRI. El sistema solo revierte sus
+        // propios efectos (inventario, caja, contabilidad) más abajo.
+        config = null;
+      } else {
+
+      config = await getConfigSRI(req.empresa.id);
       if (!config) {
         return res.status(400).json({ ok: false, error: 'Configure primero el SRI para emitir la Nota de Crédito de anulación' });
       }
@@ -1520,6 +1537,7 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
       } catch (contErr) {
         console.error('Error creando asiento de NC por anulación:', contErr.message);
       }
+      }
     }
 
     // ── Marcar factura como ANULADO y revertir inventario/caja ──────────────
@@ -1584,9 +1602,11 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
 
     const mensaje = ncCreada
       ? `Factura anulada. Se emitió la Nota de Crédito ${ncCreada.numeroNC} (enviando al SRI…).`
-      : 'Factura anulada correctamente (no estaba autorizada en el SRI).';
+      : (factura.estadoSri === 'AUTORIZADO'
+          ? 'Factura anulada localmente (sin Nota de Crédito). IMPORTANTE: debes ingresar al portal del SRI y anular manualmente este comprobante autorizado.'
+          : 'Factura anulada correctamente (no estaba autorizada en el SRI).');
 
-    res.json({ ok: true, data: updated, ncAnulacion: ncCreada, mensaje });
+    res.json({ ok: true, data: updated, ncAnulacion: ncCreada, ventanaLibreVencida, mensaje });
 
     // Firmar y enviar la NC al SRI de forma asíncrona (sin bloquear la respuesta)
     if (ncCreada && config) {

@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaCorta } from '../../utils/fecha';
-import { IcVer, IcPDF, IcAnular } from '../../utils/icons';
+import { IcVer, IcPDF, IcEditar, IcAnular } from '../../utils/icons';
 
 export default function ListaNotasVenta() {
   const navigate = useNavigate();
@@ -181,6 +181,12 @@ export default function ListaNotasVenta() {
                         onClick={() => verPDF(n.id)}>
                         <IcPDF/>
                       </button>
+                      {!n.anulada && (
+                        <button className="btn-icon ic-editar" title="Editar"
+                          onClick={() => navigate(`/notas-venta/${n.id}/editar`)}>
+                          <IcEditar/>
+                        </button>
+                      )}
                       {!n.anulada && (
                         <button className="btn-icon ic-anular" title="Anular"
                           onClick={() => anular(n.id)}>

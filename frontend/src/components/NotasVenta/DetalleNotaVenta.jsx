@@ -107,6 +107,11 @@ const DetalleNotaVenta = () => {
             🖨️ Recibo POS
           </button>
           {!nota.anulada && (
+            <button className="btn btn-secondary" onClick={() => navigate(`/notas-venta/${id}/editar`)}>
+              ✏️ Editar
+            </button>
+          )}
+          {!nota.anulada && (
             <button
               className="btn btn-danger"
               onClick={anular}

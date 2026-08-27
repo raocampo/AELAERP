@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
-import { formatFechaCorta } from '../../utils/fecha';
+import { formatFechaCorta, ventanaLibreAnulacionVencida } from '../../utils/fecha';
 import { IcVer, IcPDF, IcDescargar, IcReenviar, IcAnular } from '../../utils/icons';
 import { descargarExcel, descargarPdf, descargarXml, abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
 import './ListaFacturas.css';
@@ -38,6 +38,12 @@ const TabFacturas = ({ navigate, onIrNC }) => {
   const [fechaHasta, setFechaHasta] = useState('');
   const [modalAnular, setModalAnular]   = useState(null);
   const [motivoAnul,  setMotivoAnul]    = useState('');
+  // Elección del emisor cuando la factura autorizada todavía está dentro de
+  // la ventana libre (hasta el día 6 del mes siguiente a la emisión): crear
+  // NC (recomendado, sobre todo con productos inventariables) o anular sin
+  // NC avisando que debe anularla también en el portal del SRI. Fuera de esa
+  // ventana no se pregunta — se fuerza NC como hace el sistema desde siempre.
+  const [crearNCEleccion, setCrearNCEleccion] = useState(true);
   const [anulandoId,  setAnulandoId]    = useState(null);
   const [ncResultado, setNcResultado]   = useState(null);
   const [exportando,      setExportando]      = useState(false);
@@ -143,17 +149,23 @@ const TabFacturas = ({ navigate, onIrNC }) => {
     }
   };
 
+  const enVentanaLibreAnulacion = (factura) =>
+    factura?.estadoSri === 'AUTORIZADO' && !ventanaLibreAnulacionVencida(factura.fechaEmision);
+
   const confirmarAnular = async () => {
     if (!motivoAnul.trim()) return toast.error('Escribe el motivo de anulación');
     setAnulandoId(modalAnular.id);
     try {
-      const res = await api.post(`/facturas/${modalAnular.id}/anular`, { motivo: motivoAnul });
-      toast.success(res.data.mensaje || 'Factura anulada');
+      const body = { motivo: motivoAnul };
+      if (enVentanaLibreAnulacion(modalAnular)) body.crearNC = crearNCEleccion;
+      const res = await api.post(`/facturas/${modalAnular.id}/anular`, body);
+      toast.success(res.data.mensaje || 'Factura anulada', { duration: res.data.ncAnulacion ? 4000 : 7000 });
       if (res.data.ncAnulacion) {
         setNcResultado({ factura: modalAnular, nc: res.data.ncAnulacion });
       }
       setModalAnular(null);
       setMotivoAnul('');
+      setCrearNCEleccion(true);
       await cargar();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al anular');
@@ -282,7 +294,7 @@ const TabFacturas = ({ navigate, onIrNC }) => {
                       )}
                       {!f.anulada && f.estadoSri !== 'ANULADO' && !(f.tipoIdentificacionComprador === '07' && f.estadoSri === 'AUTORIZADO') && (
                         <button className="btn-icon ic-anular" title="Anular factura"
-                          onClick={() => setModalAnular(f)}>
+                          onClick={() => { setModalAnular(f); setCrearNCEleccion(true); }}>
                           <IcAnular/>
                         </button>
                       )}
@@ -310,14 +322,48 @@ const TabFacturas = ({ navigate, onIrNC }) => {
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3>🚫 Anular Factura {modalAnular.numeroFactura}</h3>
 
-            {modalAnular.estadoSri === 'AUTORIZADO' ? (
+            {modalAnular.estadoSri === 'AUTORIZADO' && enVentanaLibreAnulacion(modalAnular) ? (
+              <div className="anular-warning">
+                <p>⚠️ <strong>Esta factura ya fue autorizada por el SRI.</strong></p>
+                <p style={{ marginTop: 8, marginBottom: 10 }}>
+                  Todavía estás dentro del plazo para elegir cómo proceder
+                  (hasta el día 6 del mes siguiente a la emisión):
+                </p>
+
+                <label className="anular-opcion">
+                  <input type="radio" name="crearNC" checked={crearNCEleccion === true}
+                    onChange={() => setCrearNCEleccion(true)} />
+                  <span>
+                    <strong>Crear Nota de Crédito</strong> — recomendado, sobre todo si la
+                    factura incluye productos inventariables (repone el stock y queda
+                    formalmente compensada ante el SRI de forma automática).
+                  </span>
+                </label>
+                <label className="anular-opcion">
+                  <input type="radio" name="crearNC" checked={crearNCEleccion === false}
+                    onChange={() => setCrearNCEleccion(false)} />
+                  <span>
+                    <strong>Anular directamente sin NC</strong> — el sistema revierte
+                    inventario y caja igual, pero el comprobante queda intacto ante el SRI.
+                  </span>
+                </label>
+
+                {crearNCEleccion === false && (
+                  <p className="anular-aviso-sri">
+                    ⚠️ IMPORTANTE: además de esto, debes ingresar al
+                    <strong> portal del SRI</strong> y anular manualmente este comprobante
+                    autorizado — el sistema no puede hacerlo por ti.
+                  </p>
+                )}
+              </div>
+            ) : modalAnular.estadoSri === 'AUTORIZADO' ? (
               <div className="anular-warning">
                 <p>⚠️ <strong>Esta factura ya fue autorizada por el SRI.</strong></p>
                 <p style={{ marginTop: 8 }}>
-                  Según el procedimiento fiscal ecuatoriano, no es posible cancelar
-                  directamente un comprobante autorizado. El sistema emitirá
-                  automáticamente una <strong>Nota de Crédito al 100%</strong> con el
-                  motivo indicado, la cual será enviada al SRI para compensar la factura.
+                  Ya pasó el plazo para elegir (día 6 del mes siguiente a la emisión), así
+                  que el sistema emitirá automáticamente una{' '}
+                  <strong>Nota de Crédito al 100%</strong> con el motivo indicado, la cual
+                  será enviada al SRI para compensar la factura.
                 </p>
               </div>
             ) : (
@@ -339,7 +385,7 @@ const TabFacturas = ({ navigate, onIrNC }) => {
             />
 
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => { setModalAnular(null); setMotivoAnul(''); }}>
+              <button className="btn-secondary" onClick={() => { setModalAnular(null); setMotivoAnul(''); setCrearNCEleccion(true); }}>
                 Cancelar
               </button>
               <button
@@ -347,7 +393,13 @@ const TabFacturas = ({ navigate, onIrNC }) => {
                 onClick={confirmarAnular}
                 disabled={!!anulandoId || !motivoAnul.trim()}
               >
-                {anulandoId ? 'Anulando...' : (modalAnular.estadoSri === 'AUTORIZADO' ? '🚫 Anular + emitir NC' : '🚫 Anular factura')}
+                {anulandoId
+                  ? 'Anulando...'
+                  : modalAnular.estadoSri !== 'AUTORIZADO'
+                    ? '🚫 Anular factura'
+                    : (enVentanaLibreAnulacion(modalAnular) && crearNCEleccion === false)
+                      ? '🚫 Anular sin NC'
+                      : '🚫 Anular + emitir NC'}
               </button>
             </div>
           </div>

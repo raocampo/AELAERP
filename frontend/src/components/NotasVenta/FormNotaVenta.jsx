@@ -5,10 +5,11 @@
 // ====================================
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { parseFechaLocal } from '../../utils/fecha';
 import './FormNotaVenta.css';
 
 const TIPOS_ID = [
@@ -27,12 +28,22 @@ const FORMAS_PAGO = [
   { uid: 'App Móvil',      label: 'Aplicación Móvil', icon: '📱' },
 ];
 
+// codigoPrincipal/codigoAuxiliar no tienen input propio en este formulario
+// (es de captura manual, sin catálogo) — se conservan igual en el objeto
+// para no perder el vínculo con el producto al EDITAR una nota que sí venía
+// del catálogo (ej. creada desde POS), donde importan para revertir/aplicar
+// el movimiento de inventario correcto.
 const DETALLE_VACIO = {
   descripcion: '', cantidad: '1', precioUnitario: '', descuento: '0',
+  codigoPrincipal: '', codigoAuxiliar: '',
 };
 
 export default function FormNotaVenta() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const editando = Boolean(id);
+  const [cargandoNota, setCargandoNota] = useState(editando);
+  const [numeroNota, setNumeroNota] = useState('');
 
   // ── Cliente ──────────────────────────────────────────────────────────────
   const [tipoId,       setTipoId]       = useState('07');
@@ -75,6 +86,52 @@ export default function FormNotaVenta() {
     };
   };
   const totales = calcTotales();
+
+  // ── Cargar datos existentes (modo edición) ────────────────────────────────
+  useEffect(() => {
+    if (!editando) return;
+    (async () => {
+      try {
+        const res = await api.get(`/notas-venta/${id}`);
+        const n = res.data.data || res.data;
+        if (n.anulada) {
+          toast.error('No se puede editar una nota de venta anulada');
+          navigate(`/notas-venta/${id}`);
+          return;
+        }
+        setNumeroNota(n.numeroNota || '');
+        setTipoId(n.tipoIdentificacion || '07');
+        setIdentificacion(n.identificacion || '9999999999999');
+        setRazonSocial(n.razonSocial || 'CONSUMIDOR FINAL');
+        setDireccion(n.direccion || '');
+        setEmail(n.email || '');
+        setClienteId(n.clienteId || null);
+        const det = typeof n.detalles === 'string' ? JSON.parse(n.detalles) : (n.detalles || []);
+        setDetalles(det.length
+          ? det.map(d => ({
+              descripcion:     d.descripcion || '',
+              cantidad:        String(d.cantidad ?? 1),
+              precioUnitario:  String(d.precioUnitario ?? ''),
+              descuento:       String(d.descuento ?? 0),
+              codigoPrincipal: d.codigoPrincipal || '',
+              codigoAuxiliar:  d.codigoAuxiliar || '',
+            }))
+          : [{ ...DETALLE_VACIO }]);
+        // Pagos mixtos (ej. notas creadas desde POS con 2+ formas de pago) no
+        // tienen UI propia en este formulario — se conserva "Efectivo" como
+        // valor editable; si se guarda así, la nota pasa a tener una sola
+        // forma de pago. Para no tocar eso, corregir esos casos desde POS.
+        setFormaPago(n.formaPago && n.formaPago !== 'Mixto' ? n.formaPago : 'Efectivo');
+        setFecha(n.fechaEmision ? format(parseFechaLocal(n.fechaEmision), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
+        setObs(n.observaciones || '');
+      } catch {
+        toast.error('No se pudo cargar la nota de venta');
+        navigate('/notas-venta');
+      } finally {
+        setCargandoNota(false);
+      }
+    })();
+  }, [editando, id, navigate]);
 
   // ── Consumidor Final ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -157,7 +214,7 @@ export default function FormNotaVenta() {
 
     setSubmitting(true);
     try {
-      await api.post('/notas-venta', {
+      const payload = {
         tipoIdentificacion: tipoId,
         identificacion,
         razonSocial,
@@ -169,6 +226,8 @@ export default function FormNotaVenta() {
           cantidad:        parseFloat(d.cantidad)       || 1,
           precioUnitario:  parseFloat(d.precioUnitario) || 0,
           descuento:       parseFloat(d.descuento)      || 0,
+          codigoPrincipal: d.codigoPrincipal || undefined,
+          codigoAuxiliar:  d.codigoAuxiliar  || undefined,
         })),
         formaPago,
         formaPagoDetalles: formaPago === 'Cheque'
@@ -178,24 +237,45 @@ export default function FormNotaVenta() {
             : undefined,
         fechaEmision,
         observaciones: observaciones || undefined,
-      });
-      toast.success('Nota de venta emitida');
-      navigate('/notas-venta');
+      };
+
+      if (editando) {
+        await api.put(`/notas-venta/${id}`, payload);
+        toast.success('Nota de venta actualizada — ya puedes reimprimirla');
+        navigate(`/notas-venta/${id}`);
+      } else {
+        await api.post('/notas-venta', payload);
+        toast.success('Nota de venta emitida');
+        navigate('/notas-venta');
+      }
     } catch (err) {
-      toast.error(err.response?.data?.mensaje || 'Error al crear nota de venta');
+      toast.error(err.response?.data?.mensaje || `Error al ${editando ? 'guardar los cambios de' : 'crear'} la nota de venta`);
     } finally {
       setSubmitting(false);
     }
   };
 
+  if (cargandoNota) {
+    return (
+      <div style={{ textAlign: 'center', padding: 60, color: '#888' }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+        Cargando nota de venta...
+      </div>
+    );
+  }
+
   return (
     <div className="fnv-container">
       <div className="fnv-header">
         <div>
-          <h1>🗒️ Nueva Nota de Venta</h1>
-          <p>Documento para RIMPE Negocio Popular — autorizado SRI</p>
+          <h1>{editando ? `✏️ Editar Nota de Venta ${numeroNota}` : '🗒️ Nueva Nota de Venta'}</h1>
+          <p>
+            {editando
+              ? 'No es comprobante electrónico validado en línea por el SRI — se puede corregir y reimprimir.'
+              : 'Documento para RIMPE Negocio Popular — autorizado SRI'}
+          </p>
         </div>
-        <button className="btn btn-secondary" onClick={() => navigate('/notas-venta')}>← Volver</button>
+        <button className="btn btn-secondary" onClick={() => navigate(editando ? `/notas-venta/${id}` : '/notas-venta')}>← Volver</button>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -395,11 +475,13 @@ export default function FormNotaVenta() {
         </div>
 
         <div className="fnv-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => navigate('/notas-venta')}>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate(editando ? `/notas-venta/${id}` : '/notas-venta')}>
             Cancelar
           </button>
           <button type="submit" className="btn btn-primary" disabled={submitting}>
-            {submitting ? 'Emitiendo...' : '✓ Emitir Nota de Venta'}
+            {submitting
+              ? (editando ? 'Guardando...' : 'Emitiendo...')
+              : (editando ? '✓ Guardar cambios' : '✓ Emitir Nota de Venta')}
           </button>
         </div>
 

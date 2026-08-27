@@ -38,6 +38,86 @@ async function getConfigSRI(empresaId) {
   return await prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
 }
 
+// ─── Helpers de totales y pagos (compartidos entre crear y editar) ──────────
+function calcularTotalesDetalle(detalles) {
+  let subtotal = 0, totalDescuento = 0;
+  detalles.forEach(d => {
+    const cant   = parseFloat(d.cantidad)       || 1;
+    const precio = parseFloat(d.precioUnitario) || 0;
+    const desc   = parseFloat(d.descuento)      || 0;
+    subtotal       += cant * precio;
+    totalDescuento += desc;
+  });
+  const total = parseFloat((subtotal - totalDescuento).toFixed(2));
+  return {
+    subtotal: parseFloat(subtotal.toFixed(2)),
+    totalDescuento: parseFloat(totalDescuento.toFixed(2)),
+    total,
+  };
+}
+
+// Pagos mixtos: con 2+ líneas, formaPago pasa a ser un resumen ("Mixto") y el
+// detalle real vive en `pagos`. La suma debe cuadrar con el total.
+function resolverPagos(pagos, formaPago, total) {
+  let pagosFinales = null;
+  let formaPagoFinal = formaPago || 'Efectivo';
+  if (Array.isArray(pagos) && pagos.length > 1) {
+    const totalPagos = pagos.reduce((acc, p) => acc + (parseFloat(p.total) || 0), 0);
+    if (Math.abs(total - totalPagos) > 0.02) {
+      const err = new Error(`La suma de las formas de pago ($${totalPagos.toFixed(2)}) no coincide con el total de la nota de venta ($${total.toFixed(2)})`);
+      err.esValidacion = true;
+      throw err;
+    }
+    pagosFinales = pagos.map((p) => ({ formaPago: String(p.formaPago || 'Efectivo'), total: parseFloat(p.total) || 0 }));
+    formaPagoFinal = 'Mixto';
+  }
+  return { pagosFinales, formaPagoFinal };
+}
+
+// Valida los datos comunes del destinatario/detalle — usado por crear y editar.
+function validarDatosNota({ tipoIdentificacion, identificacion, razonSocial, detalles }) {
+  if (!tipoIdentificacion || !identificacion || !razonSocial) {
+    return 'Faltan datos del destinatario';
+  }
+  if (tipoIdentificacion === '05' && !/^\d{10}$/.test(identificacion)) {
+    return `La cédula del destinatario debe tener 10 dígitos (tiene ${identificacion.length}). Si es un RUC, selecciona "RUC" como tipo de identificación.`;
+  }
+  if (tipoIdentificacion === '04' && !/^\d{13}$/.test(identificacion)) {
+    return `El RUC del destinatario debe tener 13 dígitos (tiene ${identificacion.length}). Si es una cédula, selecciona "Cédula" como tipo de identificación.`;
+  }
+  if (!detalles || detalles.length === 0) {
+    return 'Debe incluir al menos un detalle';
+  }
+  return null;
+}
+
+// Elimina los asientos automáticos (venta + costo de venta) de una nota de
+// venta, respetando períodos cerrados/bloqueados — mismo patrón que
+// POST /facturas/:id/regenerar-asiento. Se usa antes de regenerarlos al
+// editar una nota ya contabilizada.
+async function eliminarAsientosNotaVenta({ notaVentaId, empresaId, db }) {
+  const asientos = await db.asientos_contables.findMany({
+    where: {
+      empresaId,
+      tipo: { in: ['NOTA_VENTA', 'COSTO_VENTA'] },
+      referencia: { in: [`NV-${notaVentaId}`, `NV-COSTO-${notaVentaId}`] },
+    },
+    select: { id: true, cerrado: true, bloqueado: true },
+  });
+  const bloqueado = asientos.find(a => a.cerrado || a.bloqueado);
+  if (bloqueado) {
+    const err = new Error('El asiento contable de esta nota está en un período cerrado o bloqueado y no puede modificarse');
+    err.esValidacion = true;
+    throw err;
+  }
+  await db.$transaction(async (tx) => {
+    for (const a of asientos) {
+      await tx.asientos_contables_detalle.deleteMany({ where: { asientoId: a.id } });
+      await tx.asientos_contables.delete({ where: { id: a.id } });
+    }
+  });
+}
+
 // ─── Helper: RIDE A4 de Nota de Venta (formato SRI RIMPE) ────────────────────
 async function generarRIDENotaVenta(nota, configSri, outputPath) {
   return new Promise((resolve, reject) => {
@@ -595,6 +675,139 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// ─── PUT /api/notas-venta/:id  (editar) ──────────────────────────────────────
+// A diferencia de una factura, la nota de venta NO es un comprobante
+// electrónico validado en línea por el SRI (RIMPE Negocio Popular) — por eso
+// sí se puede corregir en el mismo registro (mismo numeroNota/secuencial,
+// sin anular + reemitir) ante cualquier equivocación, y reimprimirse. Se
+// revierte el efecto de inventario/caja/contabilidad de los datos ANTERIORES
+// y se aplica el de los NUEVOS.
+router.put('/:id', async (req, res) => {
+  try {
+    const nota = await prisma.notas_venta.findFirst({
+      where: { id: parseInt(req.params.id, 10), empresaId: req.empresa.id },
+    });
+    if (!nota) return res.status(404).json({ success: false, mensaje: 'Nota de venta no encontrada' });
+    if (nota.anulada) return res.status(400).json({ success: false, mensaje: 'No se puede editar una nota de venta anulada' });
+
+    const {
+      tipoIdentificacion, identificacion, razonSocial, direccion, email, telefono,
+      detalles, formaPago, pagos, fechaEmision, observaciones, clienteId,
+    } = req.body;
+
+    const errorValidacion = validarDatosNota({ tipoIdentificacion, identificacion, razonSocial, detalles });
+    if (errorValidacion) {
+      return res.status(400).json({ success: false, mensaje: errorValidacion });
+    }
+
+    const { subtotal, totalDescuento, total } = calcularTotalesDetalle(detalles);
+
+    let pagosFinales, formaPagoFinal;
+    try {
+      ({ pagosFinales, formaPagoFinal } = resolverPagos(pagos, formaPago, total));
+    } catch (errPagos) {
+      return res.status(400).json({ success: false, mensaje: errPagos.message });
+    }
+
+    // No renumera ni cambia establecimiento/puntoEmision: sigue siendo el
+    // MISMO documento, solo corregido.
+    const fechaDoc = fechaEmision ? new Date(fechaEmision) : nota.fechaEmision;
+    const datosAnteriores = {
+      identificacion: nota.identificacion, razonSocial: nota.razonSocial,
+      total: Number(nota.total), detalles: nota.detalles,
+    };
+
+    // Si el asiento contable ya está en un período cerrado/bloqueado, no se
+    // puede editar (misma regla que regenerar-asiento en facturas.js) —
+    // se valida ANTES de tocar inventario/caja para no dejar la corrección
+    // a medias.
+    try {
+      await eliminarAsientosNotaVenta({ notaVentaId: nota.id, empresaId: req.empresa.id, db: prisma });
+    } catch (errAsiento) {
+      if (errAsiento.esValidacion) {
+        return res.status(400).json({ success: false, mensaje: errAsiento.message });
+      }
+      throw errAsiento;
+    }
+
+    const actualizada = await prisma.$transaction(async (tx) => {
+      // Revertir efecto de inventario/caja de los datos ANTERIORES
+      await aplicarMovimientosVentaDesdeDetalles({
+        tx, empresaId: req.empresa.id, usuarioId: req.usuario.id,
+        detalles: nota.detalles || [], tipoDocumento: 'NOTA_VENTA',
+        referencia: nota.numeroNota, metadata: { notaVentaId: nota.id, edicion: true },
+        revertir: true,
+      });
+      if (Number(nota.total) > 0) {
+        await registrarMovimientoCaja({
+          tx, empresaId: req.empresa.id, usuarioId: req.usuario.id, fecha: new Date(),
+          tipo: 'ANULACION_NOTA', monto: Number(nota.total),
+          descripcion: `Ajuste por edición de nota ${nota.numeroNota} (reversa monto anterior)`,
+          referencia: nota.numeroNota, origenId: nota.id, metadata: { notaVentaId: nota.id, edicion: true },
+        });
+      }
+
+      // Aplicar efecto de inventario/caja de los datos NUEVOS
+      await aplicarMovimientosVentaDesdeDetalles({
+        tx, empresaId: req.empresa.id, usuarioId: req.usuario.id,
+        detalles, tipoDocumento: 'NOTA_VENTA',
+        referencia: nota.numeroNota, metadata: { notaVentaId: nota.id, edicion: true },
+      });
+      if (total > 0) {
+        await registrarMovimientoCaja({
+          tx, empresaId: req.empresa.id, usuarioId: req.usuario.id, fecha: new Date(),
+          tipo: 'VENTA_NOTA', monto: total,
+          descripcion: `Ajuste por edición de nota ${nota.numeroNota} (nuevo monto)`,
+          referencia: nota.numeroNota, origenId: nota.id, categoria: formaPagoFinal,
+          metadata: { notaVentaId: nota.id, edicion: true },
+        });
+      }
+
+      return tx.notas_venta.update({
+        where: { id: nota.id },
+        data: {
+          tipoIdentificacion,
+          identificacion: identificacion.trim(),
+          razonSocial: razonSocial.trim().toUpperCase(),
+          direccion: direccion?.trim() || null,
+          email: email?.trim().toLowerCase() || null,
+          telefono: telefono?.trim() || null,
+          clienteId: clienteId ? parseInt(clienteId, 10) : null,
+          subtotal, totalDescuento, total,
+          detalles,
+          formaPago: formaPagoFinal,
+          pagos: pagosFinales,
+          fechaEmision: fechaDoc,
+          observaciones: observaciones || null,
+        },
+      });
+    });
+
+    await registrarAuditoria({
+      usuarioId: req.usuario.id, accion: 'UPDATE',
+      tabla: 'notas_venta', registroId: nota.id,
+      datosAnteriores,
+      datosNuevos: { identificacion: actualizada.identificacion, razonSocial: actualizada.razonSocial, total: Number(actualizada.total), detalles: actualizada.detalles },
+      req,
+    });
+
+    try {
+      await crearAsientoVentaNotaVenta({ notaVentaId: nota.id, usuarioId: req.usuario.id, fecha: fechaDoc, db: req.prisma });
+      await crearAsientoCostoVentaNotaVenta({ notaVentaId: nota.id, usuarioId: req.usuario.id, fecha: fechaDoc, db: req.prisma });
+    } catch (contErr) {
+      console.error('Error regenerando asiento automático tras editar nota de venta:', contErr.message);
+    }
+
+    res.json({ success: true, data: actualizada, mensaje: 'Nota de venta actualizada correctamente' });
+  } catch (err) {
+    console.error('Error editar nota de venta:', err);
+    if (/Stock insuficiente|Producto no encontrado/.test(err.message || '')) {
+      return res.status(400).json({ success: false, mensaje: err.message });
+    }
+    res.status(500).json({ success: false, mensaje: err.message });
+  }
+});
+
 // ─── POST /api/notas-venta ────────────────────────────────────────────────────
 router.post('/', checkLimiteNotasVenta, async (req, res) => {
   try {
@@ -630,48 +843,18 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
     const establecimiento = String(establecimientoBody || config.establecimiento || '001').padStart(3, '0');
     const puntoEmision = String(puntoEmisionBody || config.puntoEmision || '001').padStart(3, '0');
 
-    if (!tipoIdentificacion || !identificacion || !razonSocial) {
-      return res.status(400).json({ success: false, mensaje: 'Faltan datos del destinatario' });
-    }
-    // Mismo chequeo que en facturas.js: el SRI rechaza el comprobante si el
-    // tipo de identificación no coincide con la longitud real del número.
-    if (tipoIdentificacion === '05' && !/^\d{10}$/.test(identificacion)) {
-      return res.status(400).json({ success: false, mensaje: `La cédula del destinatario debe tener 10 dígitos (tiene ${identificacion.length}). Si es un RUC, selecciona "RUC" como tipo de identificación.` });
-    }
-    if (tipoIdentificacion === '04' && !/^\d{13}$/.test(identificacion)) {
-      return res.status(400).json({ success: false, mensaje: `El RUC del destinatario debe tener 13 dígitos (tiene ${identificacion.length}). Si es una cédula, selecciona "Cédula" como tipo de identificación.` });
-    }
-    if (!detalles || detalles.length === 0) {
-      return res.status(400).json({ success: false, mensaje: 'Debe incluir al menos un detalle' });
+    const errorValidacion = validarDatosNota({ tipoIdentificacion, identificacion, razonSocial, detalles });
+    if (errorValidacion) {
+      return res.status(400).json({ success: false, mensaje: errorValidacion });
     }
 
-    // Calcular totales
-    let subtotal = 0, totalDescuento = 0;
-    detalles.forEach(d => {
-      const cant  = parseFloat(d.cantidad)       || 1;
-      const precio = parseFloat(d.precioUnitario) || 0;
-      const desc   = parseFloat(d.descuento)      || 0;
-      subtotal       += cant * precio;
-      totalDescuento += desc;
-    });
-    const total = parseFloat((subtotal - totalDescuento).toFixed(2));
-    subtotal = parseFloat(subtotal.toFixed(2));
-    totalDescuento = parseFloat(totalDescuento.toFixed(2));
+    const { subtotal, totalDescuento, total } = calcularTotalesDetalle(detalles);
 
-    // Pagos mixtos: con 2+ líneas, formaPago pasa a ser un resumen ("Mixto")
-    // y el detalle real vive en `pagos`. La suma debe cuadrar con el total.
-    let pagosFinales = null;
-    let formaPagoFinal = formaPago || 'Efectivo';
-    if (Array.isArray(pagos) && pagos.length > 1) {
-      const totalPagos = pagos.reduce((acc, p) => acc + (parseFloat(p.total) || 0), 0);
-      if (Math.abs(total - totalPagos) > 0.02) {
-        return res.status(400).json({
-          success: false,
-          mensaje: `La suma de las formas de pago ($${totalPagos.toFixed(2)}) no coincide con el total de la nota de venta ($${total.toFixed(2)})`,
-        });
-      }
-      pagosFinales = pagos.map((p) => ({ formaPago: String(p.formaPago || 'Efectivo'), total: parseFloat(p.total) || 0 }));
-      formaPagoFinal = 'Mixto';
+    let pagosFinales, formaPagoFinal;
+    try {
+      ({ pagosFinales, formaPagoFinal } = resolverPagos(pagos, formaPago, total));
+    } catch (errPagos) {
+      return res.status(400).json({ success: false, mensaje: errPagos.message });
     }
 
     // Siguiente secuencial para esta empresa (respeta secuencial inicial configurado)

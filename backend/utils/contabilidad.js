@@ -746,12 +746,18 @@ async function crearAsientoCostoVentaNotaVenta({ notaVentaId, usuarioId, fecha =
   });
   if (existente) return { asiento: existente, creado: false };
 
+  // Neteado VENTA_NOTA - ANULACION_NOTA (no solo VENTA_NOTA): al EDITAR una
+  // nota de venta (ver PUT /notas-venta/:id) se revierten los movimientos
+  // anteriores con tipo ANULACION_NOTA y se aplican los nuevos con tipo
+  // VENTA_NOTA bajo la MISMA referencia — sin este neteo, regenerar este
+  // asiento tras una edición sumaría también el costo de la venta anterior.
   const movimientos = await db.movimientos_inventario.findMany({
-    where: { empresaId: nota.empresaId, referencia: nota.numeroNota, tipo: 'VENTA_NOTA' },
+    where: { empresaId: nota.empresaId, referencia: nota.numeroNota, tipo: { in: ['VENTA_NOTA', 'ANULACION_NOTA'] } },
   });
-  const costoTotal = round2(movimientos.reduce(
-    (acc, m) => acc + (Number(m.cantidad) * Number(m.costoUnitario || 0)), 0,
-  ));
+  const costoTotal = round2(movimientos.reduce((acc, m) => {
+    const signo = m.tipo === 'ANULACION_NOTA' ? -1 : 1;
+    return acc + signo * (Number(m.cantidad) * Number(m.costoUnitario || 0));
+  }, 0));
   if (costoTotal <= 0) return { asiento: null, creado: false };
 
   const config = await obtenerConfiguracionContable(nota.empresaId, db);

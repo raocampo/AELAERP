@@ -28,6 +28,15 @@ const FORMAS_FACTURA = [
 
 const FORMAS_NOTA = ['Efectivo', 'Transferencia', 'Tarjeta débito', 'Tarjeta crédito', 'Cheque', 'Aplicaciones (Ahorita/De Una)'];
 
+const IVA_OPCIONES = [
+  { valor: 0,  label: '0%' },
+  { valor: 5,  label: '5%' },
+  { valor: 12, label: '12%' },
+  { valor: 15, label: '15%' },
+  { valor: 6,  label: 'No Objeto IVA' },
+  { valor: 7,  label: 'Exento IVA' },
+];
+
 export default function PuntoVenta() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -64,8 +73,14 @@ export default function PuntoVenta() {
   const [codigoBarras, setCodigoBarras] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState([]);
+  // uid identifica cada línea del carrito de forma estable, independiente de
+  // codigoPrincipal (que puede repetirse o venir vacío en líneas manuales) —
+  // así actualizarLinea/quitarLinea nunca chocan entre dos líneas distintas.
+  const uidSeq = useRef(0);
+  const nuevoUid = () => `L${Date.now()}-${uidSeq.current++}`;
   const [carrito, setCarrito] = useState(() => (
     location.state?.comandaParaCobrar?.items?.map((it) => ({
+      uid: `L0-${uidSeq.current++}`,
       codigoPrincipal: it.codigoPrincipal,
       descripcion: it.descripcion,
       cantidad: Number(it.cantidad || 1),
@@ -284,6 +299,7 @@ export default function PuntoVenta() {
       return [
         ...prev,
         {
+          uid: nuevoUid(),
           codigoPrincipal: producto.codigoPrincipal,
           descripcion: producto.nombre,
           cantidad: 1,
@@ -295,6 +311,15 @@ export default function PuntoVenta() {
 
     setBusqueda('');
     setResultados([]);
+  };
+
+  // Línea sin producto de catálogo — igual que "+ Agregar línea manualmente"
+  // en Factura/Nota de Venta, para cobrar algo que no está en el inventario.
+  const agregarLineaManual = () => {
+    setCarrito((prev) => [
+      ...prev,
+      { uid: nuevoUid(), codigoPrincipal: '', descripcion: '', cantidad: 1, precioUnitario: 0, ivaPorcentaje: 15 },
+    ]);
   };
 
   const agregarProductoPorCodigo = async () => {
@@ -336,14 +361,14 @@ export default function PuntoVenta() {
     }
   };
 
-  const actualizarLinea = (codigoPrincipal, campo, valor) => {
+  const actualizarLinea = (uid, campo, valor) => {
     setCarrito((prev) => prev.map((item) => (
-      item.codigoPrincipal === codigoPrincipal ? { ...item, [campo]: valor } : item
+      item.uid === uid ? { ...item, [campo]: valor } : item
     )));
   };
 
-  const quitarLinea = (codigoPrincipal) => {
-    setCarrito((prev) => prev.filter((item) => item.codigoPrincipal !== codigoPrincipal));
+  const quitarLinea = (uid) => {
+    setCarrito((prev) => prev.filter((item) => item.uid !== uid));
   };
 
   const abrirReciboEmitido = async (id, tipo) => {
@@ -420,6 +445,10 @@ export default function PuntoVenta() {
   const emitirDocumento = async () => {
     if (carrito.length === 0) {
       toast.error('Agrega al menos un producto al carrito');
+      return;
+    }
+    if (carrito.some((item) => !String(item.descripcion || '').trim())) {
+      toast.error('Todas las líneas del carrito necesitan una descripción (revisa las líneas manuales)');
       return;
     }
     if (pagos.some((p) => !(parseFloat(p.monto) > 0))) {
@@ -772,38 +801,54 @@ export default function PuntoVenta() {
             <table className="pos-table">
               <thead>
                 <tr>
-                  <th>Producto</th>
+                  <th>Código</th>
+                  <th>Descripción</th>
                   <th>Cantidad</th>
                   <th>Precio</th>
+                  {tipoDocumento === 'factura' && <th>IVA</th>}
                   <th>Total</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {carrito.map((item) => (
-                  <tr key={item.codigoPrincipal}>
+                  <tr key={item.uid}>
                     <td>
-                      <div className="pos-product">
-                        <strong>{item.codigoPrincipal}</strong>
-                        <span>{item.descripcion}</span>
-                      </div>
+                      <input value={item.codigoPrincipal}
+                        onChange={(e) => actualizarLinea(item.uid, 'codigoPrincipal', e.target.value)}
+                        placeholder="SRV001" style={{ width: 80 }} />
                     </td>
                     <td>
-                      <input type="number" min="1" step="1" value={item.cantidad} onChange={(e) => actualizarLinea(item.codigoPrincipal, 'cantidad', Number(e.target.value))} />
+                      <input value={item.descripcion}
+                        onChange={(e) => actualizarLinea(item.uid, 'descripcion', e.target.value)}
+                        placeholder="Descripción" style={{ width: '100%', minWidth: 140 }} />
                     </td>
                     <td>
-                      <input type="number" min="0" step="0.0001" value={item.precioUnitario} onChange={(e) => actualizarLinea(item.codigoPrincipal, 'precioUnitario', Number(e.target.value))} />
+                      <input type="number" min="1" step="1" value={item.cantidad} onChange={(e) => actualizarLinea(item.uid, 'cantidad', Number(e.target.value))} />
                     </td>
+                    <td>
+                      <input type="number" min="0" step="0.0001" value={item.precioUnitario} onChange={(e) => actualizarLinea(item.uid, 'precioUnitario', Number(e.target.value))} />
+                    </td>
+                    {tipoDocumento === 'factura' && (
+                      <td>
+                        <select value={item.ivaPorcentaje} onChange={(e) => actualizarLinea(item.uid, 'ivaPorcentaje', Number(e.target.value))}>
+                          {IVA_OPCIONES.map((o) => <option key={o.valor} value={o.valor}>{o.label}</option>)}
+                        </select>
+                      </td>
+                    )}
                     <td>${(Number(item.cantidad || 0) * Number(item.precioUnitario || 0)).toFixed(2)}</td>
-                    <td><button type="button" className="btn-link danger" onClick={() => quitarLinea(item.codigoPrincipal)}>Quitar</button></td>
+                    <td><button type="button" className="btn-link danger" onClick={() => quitarLinea(item.uid)}>Quitar</button></td>
                   </tr>
                 ))}
                 {carrito.length === 0 && (
-                  <tr><td colSpan="5" className="pos-empty">Agrega productos para comenzar una venta.</td></tr>
+                  <tr><td colSpan={tipoDocumento === 'factura' ? 7 : 6} className="pos-empty">Agrega productos para comenzar una venta.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
+          <button type="button" className="btn-secondary" style={{ marginTop: 8 }} onClick={agregarLineaManual}>
+            + Agregar línea manualmente
+          </button>
 
           <div className="pos-footer">
             <div className="pos-total">

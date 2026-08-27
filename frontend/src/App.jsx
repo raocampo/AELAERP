@@ -256,6 +256,7 @@ function App() {
                 <Route path="notas-venta"         element={<ModuleRoute moduleKey="facturacion"><PermissionRoute permission="notasVenta.gestionar"><ListaNotasVenta /></PermissionRoute></ModuleRoute>} />
                 <Route path="notas-venta/nueva"   element={<ModuleRoute moduleKey="facturacion"><PermissionRoute permission="notasVenta.gestionar"><FormNotaVenta /></PermissionRoute></ModuleRoute>} />
                 <Route path="notas-venta/:id"     element={<ModuleRoute moduleKey="facturacion"><PermissionRoute permission="notasVenta.gestionar"><DetalleNotaVenta /></PermissionRoute></ModuleRoute>} />
+                <Route path="notas-venta/:id/editar" element={<ModuleRoute moduleKey="facturacion"><PermissionRoute permission="notasVenta.gestionar"><FormNotaVenta /></PermissionRoute></ModuleRoute>} />
 
                 {/* Retenciones — solo Pro */}
                 <Route path="retenciones"       element={<ProRoute><ModuleRoute moduleKey="retenciones"><PermissionRoute permission="retenciones.gestionar"><ListaRetenciones /></PermissionRoute></ModuleRoute></ProRoute>} />
