@@ -44,7 +44,7 @@ describe('sistema utils', () => {
       tipoSistema: 'lite',
       modoOperacion: 'multiempresa',
       documentoPosDefault: 'nota_venta',
-      comprasHabilitadas: false,
+      comprasHabilitadas: true,
       retencionesHabilitadas: false,
     });
   });
