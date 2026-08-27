@@ -155,20 +155,50 @@ reparar datos — siempre leer el valor de la BD y operar sobre ESE valor
 exacto, o construirlo por código numérico si hace falta un valor de
 referencia.
 
-**No se tocó** la tabla `contribuyentes_sri` en su totalidad (645,966
-filas) — parchear fila por fila a esa escala sobre una conexión remota
-es lento y arriesgado; la recomendación es re-importar el catastro
-completo desde un CSV oficial del SRI con la codificación verificada
-(no asumida), usando `importarCatastroSRI.js --replace` — mucho más
-rápido y confiable que parchear 645K filas una por una. Mientras tanto,
-el impacto real a tenants existentes es mínimo (ya corregido); el
-patrón solo se repetiría para un cliente NUEVO con tilde/Ñ que aún no
-se haya consultado en ningún tenant.
+## Actualización 2 — catastro completo reparado (mismo día)
+
+El usuario pidió explícitamente un script que "busque en el catastro
+las inconsistencias de caracteres y los vaya recomponiendo" — se
+construyó `backend/scripts/repararEncodingCatastroSRI.js`, que hace TODO
+el trabajo del lado de Postgres (una función PL/pgSQL temporal) en vez
+de traer cada fila a Node vía Prisma — esto evita el crash de "Failed to
+convert rust String into napi string" que había impedido escanear la
+tabla completa antes, y de paso es mucho más rápido (toda la tabla se
+escanea en ~5 segundos porque nunca viaja texto por la red hasta el
+paso final de escribir).
+
+Los caracteres sospechosos se generan con `chr(195)`/`chr(194)` dentro
+del propio SQL (nunca como literal en el script ni en la terminal —
+ver [[feedback-no-retipear-caracteres-acentuados-bd]]), y cada fila se
+repara dentro de un bloque `BEGIN...EXCEPTION WHEN OTHERS` que la deja
+intacta si el round-trip UTF-8↔Latin-1 no da un resultado limpio (evita
+tocar nombres extranjeros genuinos como "GUSMÃO"/"JOÃO" — apellidos
+portugueses con "ã" real, que coinciden por casualidad con el patrón de
+búsqueda pero no son corrupción).
+
+**Validado en 3 escalas antes de aplicar** (dry-run): 29 filas (id≤400,
+2.8s), 83,062 filas (id≤1M, 3.6s), tabla completa 6.8M filas → 662,485
+candidatas, 662,476 reparables, 9 omitidas por seguridad (5.4s). Se
+aplicó con `--aplicar`: **662,476 filas corregidas en 200.6s**.
+Verificado después: 0 candidatas nuevas, muestra aleatoria de 15
+nombres con "Ñ" real (`WHERE razonSocial LIKE '%'||chr(209)||'%'`) sin
+ningún residuo sospechoso. Las 9 omitidas se revisaron manualmente: son
+nombres/marcas extranjeros genuinos (portugués "ã", como "GUSMÃO
+SERRA ANDREA", "JOÃO MARCOS") o casos ambiguos sin una reparación limpia
+posible — correctamente dejados sin tocar.
+
+**Catastro nacional SRI ya limpio.** No hace falta re-importar — la
+corrección ya cubrió las 662K filas afectadas.
 
 ## Pendiente para retomar
 
-- Decidir cuándo re-importar el catastro SRI completo con la
-  codificación correcta (evita que sigan apareciendo casos nuevos).
+- Ninguno relacionado a mojibake — quedó resuelto de raíz (catastro +
+  clientes + notas_venta + directorio_global, todo verificado).
 - No se identificó la validación exacta que causó el 400 en la venta de
   las capturas — con el fix de errores silenciosos, la próxima vez que
   pase se verá el mensaje real en pantalla.
+- Se renombró el botón "+ Agregar línea" a "+ Agregar línea
+  manualmente" en `FormNotaVenta.jsx` — el usuario no lo reconocía como
+  la función de agregar producto manual porque ya existía desde antes
+  (sin ese texto) y ahora convive con la barra de búsqueda del catálogo
+  agregada en la Actualización 1.

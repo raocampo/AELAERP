@@ -475,7 +475,7 @@ export default function FormNotaVenta() {
             </table>
           </div>
           <button type="button" className="btn btn-secondary" style={{ fontSize: 13 }} onClick={agregarLinea}>
-            + Agregar línea
+            + Agregar línea manualmente
           </button>
         </div>
 
