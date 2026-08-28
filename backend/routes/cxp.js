@@ -16,6 +16,7 @@ const {
   round2,
 } = require('../utils/contabilidad');
 const { parsearNotaCreditoRecibidaXml } = require('../utils/sri');
+const { calcularSaldoCajaChica } = require('../utils/cajaChicaSaldo');
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ function parseIntSafe(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-const METODOS_VALIDOS = ['efectivo', 'transferencia', 'cheque', 'tarjeta'];
+const METODOS_VALIDOS = ['efectivo', 'transferencia', 'cheque', 'tarjeta', 'caja_chica'];
 
 async function obtenerPagadoPorCompra(db, empresaId, compraIds) {
   if (compraIds.length === 0) return new Map();
@@ -214,7 +215,7 @@ router.post('/pagos', autorizarPermiso('cxp.gestionar'), async (req, res) => {
   try {
     const db = req.prisma;
     const empresaId = obtenerEmpresaId(req);
-    const { compraId, monto, metodoPago, fecha, bancoId, chequeId, referencia, observaciones } = req.body || {};
+    const { compraId, monto, metodoPago, fecha, bancoId, chequeId, cajaChicaId, referencia, observaciones } = req.body || {};
 
     const compraIdNum = parseIntSafe(compraId);
     if (!compraIdNum) return res.status(400).json({ success: false, mensaje: 'Compra requerida' });
@@ -224,6 +225,11 @@ router.post('/pagos', autorizarPermiso('cxp.gestionar'), async (req, res) => {
 
     if (!METODOS_VALIDOS.includes(String(metodoPago))) {
       return res.status(400).json({ success: false, mensaje: `metodoPago debe ser uno de: ${METODOS_VALIDOS.join(', ')}` });
+    }
+
+    const cajaChicaIdNum = metodoPago === 'caja_chica' ? parseIntSafe(cajaChicaId) : null;
+    if (metodoPago === 'caja_chica' && !cajaChicaIdNum) {
+      return res.status(400).json({ success: false, mensaje: 'Selecciona el fondo de caja chica' });
     }
 
     const pago = await db.$transaction(async (tx) => {
@@ -245,6 +251,23 @@ router.post('/pagos', autorizarPermiso('cxp.gestionar'), async (req, res) => {
         throw Object.assign(new Error(`El monto excede el saldo pendiente (${saldoPendiente.toFixed(2)})`), { status: 409 });
       }
 
+      // Pago con caja chica: el fondo debe estar activo y tener saldo — se
+      // descuenta como cualquier otro egreso (ver movimientos_caja_chica
+      // tipo COMPRA, creado abajo).
+      let fondo = null;
+      if (cajaChicaIdNum) {
+        fondo = await tx.cajas_chicas.findFirst({
+          where: { id: cajaChicaIdNum, empresaId },
+          include: { movimientos: { where: { anulado: false } } },
+        });
+        if (!fondo) throw Object.assign(new Error('Fondo de caja chica no encontrado'), { status: 404 });
+        if (fondo.estado !== 'ACTIVO') throw Object.assign(new Error('El fondo de caja chica está cerrado'), { status: 409 });
+        const saldoFondo = calcularSaldoCajaChica(fondo.movimientos);
+        if (montoNum > saldoFondo + 0.009) {
+          throw Object.assign(new Error(`El monto ($${montoNum}) supera el saldo disponible del fondo ($${saldoFondo})`), { status: 409 });
+        }
+      }
+
       const numero = await siguienteNumeroGenerico({ modelo: 'pagos_proveedor', prefijo: 'OP', empresaId, fecha: fecha || new Date(), tx });
 
       const nuevo = await tx.pagos_proveedor.create({
@@ -253,12 +276,32 @@ router.post('/pagos', autorizarPermiso('cxp.gestionar'), async (req, res) => {
           numero, fecha: fecha ? new Date(fecha) : new Date(), monto: montoNum, metodoPago,
           bancoId: bancoId ? parseIntSafe(bancoId) : null,
           chequeId: chequeId ? parseIntSafe(chequeId) : null,
+          cajaChicaId: cajaChicaIdNum,
           referencia: referencia || null, observaciones: observaciones || null,
           usuarioId: req.usuario?.id || null,
         },
       });
 
       await crearAsientoPagoProveedor({ pagoId: nuevo.id, usuarioId: req.usuario?.id, fecha: nuevo.fecha, db: tx });
+
+      if (fondo) {
+        const numeroMov = await siguienteNumeroGenerico({ modelo: 'movimientos_caja_chica', prefijo: 'COM', empresaId, fecha: nuevo.fecha, tx });
+        await tx.movimientos_caja_chica.create({
+          data: {
+            cajaChicaId: fondo.id, empresaId,
+            numero: numeroMov, tipo: 'COMPRA',
+            fecha: nuevo.fecha,
+            concepto: `Compra ${compra.numeroFactura} — ${compra.razonSocialProveedor}`,
+            monto: montoNum,
+            nroComprobante: compra.numeroFactura,
+            proveedor: compra.razonSocialProveedor,
+            facturaCompraId: compra.id,
+            pagoProveedorId: nuevo.id,
+            usuarioId: req.usuario?.id,
+          },
+        });
+      }
+
       return nuevo;
     });
 
@@ -551,6 +594,15 @@ router.patch('/pagos/:id/anular', autorizarPermiso('cxp.gestionar'), async (req,
           usuarioAnulacionId: req.usuario?.id || null,
         },
       });
+
+      // Si se pagó con caja chica, anular también el movimiento del fondo
+      // (tipo COMPRA) para que el saldo disponible se revierta.
+      if (pago.cajaChicaId) {
+        await tx.movimientos_caja_chica.updateMany({
+          where: { pagoProveedorId: id, anulado: false },
+          data: { anulado: true, motivoAnulacion: `Pago anulado: ${req.body?.motivo || 'sin motivo'}` },
+        });
+      }
     });
 
     res.json({ success: true });

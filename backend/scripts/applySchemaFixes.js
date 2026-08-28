@@ -239,6 +239,31 @@ const FIXES = [
   `CREATE INDEX IF NOT EXISTS "movimientos_caja_chica_cajaChicaId_idx" ON "movimientos_caja_chica"("cajaChicaId")`,
   `CREATE INDEX IF NOT EXISTS "movimientos_caja_chica_empresaId_idx" ON "movimientos_caja_chica"("empresaId")`,
   `CREATE INDEX IF NOT EXISTS "movimientos_caja_chica_fecha_idx" ON "movimientos_caja_chica"("fecha")`,
+  // Compras pagadas con Caja Chica (2026-08-28) — 'caja_chica' como 5to
+  // método de pago en Cuentas por Pagar; el pago genera un movimiento de
+  // caja chica tipo COMPRA que sí cuenta en ATS/F104 (a diferencia del vale
+  // simple GASTO, que no tiene documento fiscal detrás).
+  `ALTER TABLE "pagos_proveedor" ADD COLUMN IF NOT EXISTS "cajaChicaId" INTEGER`,
+  `CREATE INDEX IF NOT EXISTS "pagos_proveedor_cajaChicaId_idx" ON "pagos_proveedor"("cajaChicaId")`,
+  `ALTER TABLE "movimientos_caja_chica" ADD COLUMN IF NOT EXISTS "facturaCompraId" INTEGER`,
+  `ALTER TABLE "movimientos_caja_chica" ADD COLUMN IF NOT EXISTS "pagoProveedorId" INTEGER`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "movimientos_caja_chica_pagoProveedorId_key" ON "movimientos_caja_chica"("pagoProveedorId")`,
+  `CREATE INDEX IF NOT EXISTS "movimientos_caja_chica_facturaCompraId_idx" ON "movimientos_caja_chica"("facturaCompraId")`,
+  // Vales de caja mejorados: catálogo de tipo de gasto + número preimpreso (2026-08-28)
+  `CREATE TABLE IF NOT EXISTS "tipo_gasto_caja_chica" (
+    "id"          SERIAL PRIMARY KEY,
+    "empresaId"   INTEGER NOT NULL,
+    "codigo"      VARCHAR(20) NOT NULL,
+    "nombre"      VARCHAR(150) NOT NULL,
+    "descripcion" VARCHAR(300),
+    "activo"      BOOLEAN NOT NULL DEFAULT true,
+    "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "tipo_gasto_caja_chica_empresaId_codigo_key" ON "tipo_gasto_caja_chica"("empresaId", "codigo")`,
+  `CREATE INDEX IF NOT EXISTS "tipo_gasto_caja_chica_empresaId_idx" ON "tipo_gasto_caja_chica"("empresaId")`,
+  `ALTER TABLE "movimientos_caja_chica" ADD COLUMN IF NOT EXISTS "tipoGastoCajaChicaId" INTEGER`,
+  `ALTER TABLE "movimientos_caja_chica" ADD COLUMN IF NOT EXISTS "numeroPreimpreso" VARCHAR(30)`,
   // Cuenta contable específica por factura de compra — anula el default global (2026-07-08)
   `ALTER TABLE "facturas_compra" ADD COLUMN IF NOT EXISTS "cuentaGastoId" INTEGER`,
   // Comprobantes Bancarios: Ingreso, Pago, Crédito, Débito (2026-07-08)

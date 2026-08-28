@@ -342,6 +342,19 @@
 
 .cc-sin-asiento { color: #9ca3af; font-size: 0.8rem; }
 
+.cc-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #7c3aed;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  text-align: left;
+}
+.cc-link:hover { color: #5b21b6; }
+
 .cc-btn-anular {
   font-size: 0.75rem;
   padding: 0.2rem 0.5rem;

@@ -3,7 +3,11 @@ import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import '../Bancos/Bancos.css';
 
-const METODOS_PAGO = ['efectivo', 'transferencia', 'cheque', 'tarjeta'];
+const METODOS_PAGO = ['efectivo', 'transferencia', 'cheque', 'tarjeta', 'caja_chica'];
+const METODO_PAGO_LABEL = {
+  efectivo: 'Efectivo', transferencia: 'Transferencia', cheque: 'Cheque',
+  tarjeta: 'Tarjeta', caja_chica: 'Caja Chica',
+};
 
 function formatMoney(v) {
   return parseFloat(v || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -17,15 +21,24 @@ function useBancos() {
   return bancos;
 }
 
+function useFondosCajaChica() {
+  const [fondos, setFondos] = useState([]);
+  useEffect(() => {
+    api.get('/caja-chica', { params: { estado: 'ACTIVO' } }).then((r) => setFondos(r.data?.data || [])).catch(() => {});
+  }, []);
+  return fondos;
+}
+
 // ─── Modal Registrar Pago ─────────────────────────────────────
 function ModalPago({ compra, onClose, onSaved }) {
   const [form, setForm] = useState({
     monto: String(compra.saldoPendiente),
     metodoPago: 'efectivo',
     fecha: new Date().toISOString().slice(0, 10),
-    bancoId: '', chequeId: '', referencia: '', observaciones: '',
+    bancoId: '', chequeId: '', cajaChicaId: '', referencia: '', observaciones: '',
   });
   const bancos = useBancos();
+  const fondosCajaChica = useFondosCajaChica();
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
@@ -66,10 +79,20 @@ function ModalPago({ compra, onClose, onSaved }) {
             <div className="form-group">
               <label>Método de pago *</label>
               <select name="metodoPago" value={form.metodoPago} onChange={handleChange}>
-                {METODOS_PAGO.map((m) => <option key={m} value={m}>{m}</option>)}
+                {METODOS_PAGO.map((m) => <option key={m} value={m}>{METODO_PAGO_LABEL[m] || m}</option>)}
               </select>
             </div>
-            {form.metodoPago !== 'efectivo' && (
+            {form.metodoPago === 'caja_chica' ? (
+              <div className="form-group">
+                <label>Fondo de caja chica *</label>
+                <select name="cajaChicaId" value={form.cajaChicaId} onChange={handleChange} required>
+                  <option value="">— Seleccione —</option>
+                  {fondosCajaChica.map((f) => (
+                    <option key={f.id} value={f.id}>{f.codigo} — {f.nombre} (disp. ${formatMoney(f.saldoDisponible)})</option>
+                  ))}
+                </select>
+              </div>
+            ) : form.metodoPago !== 'efectivo' && (
               <div className="form-group">
                 <label>Banco</label>
                 <select name="bancoId" value={form.bancoId} onChange={handleChange}>

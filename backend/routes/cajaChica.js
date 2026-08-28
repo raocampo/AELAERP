@@ -18,6 +18,7 @@ const {
   siguienteNumeroGenerico,
   round2,
 } = require('../utils/contabilidad');
+const { calcularSaldoCajaChica, gastosPendientesReponerCajaChica } = require('../utils/cajaChicaSaldo');
 
 const router = express.Router();
 router.use(proteger);
@@ -36,30 +37,125 @@ function parseIntSafe(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-// Calcula el saldo disponible de un fondo sumando los movimientos no anulados.
-// APERTURA + REPOSICION + INCREMENTO → positivos
-// GASTO + DISMINUCION → negativos
-// CIERRE no se descuenta (ya cierra el fondo)
-function calcularSaldo(movimientos) {
-  return round2(
-    movimientos.reduce((acc, m) => {
-      if (m.anulado) return acc;
-      if (['APERTURA', 'REPOSICION', 'INCREMENTO'].includes(m.tipo)) return acc + Number(m.monto);
-      if (['GASTO', 'DISMINUCION'].includes(m.tipo)) return acc - Number(m.monto);
-      return acc;
-    }, 0),
-  );
-}
+// Saldo disponible / pendientes de reponer — lógica compartida con
+// routes/cxp.js (pagar una compra con caja chica también respeta el saldo
+// del fondo), ver utils/cajaChicaSaldo.js.
+const calcularSaldo = calcularSaldoCajaChica;
+const gastosPendientesReponer = gastosPendientesReponerCajaChica;
 
-// Gastos pendientes de reponer (desde la última REPOSICION o desde APERTURA)
-function gastosPendientesReponer(movimientos) {
-  const movOrdenados = [...movimientos].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-  const ultimaRepo = movOrdenados.filter((m) => !m.anulado && m.tipo === 'REPOSICION').at(-1);
-  const desde = ultimaRepo ? new Date(ultimaRepo.fecha) : null;
-  return movOrdenados.filter(
-    (m) => !m.anulado && m.tipo === 'GASTO' && (!desde || new Date(m.fecha) > desde),
-  );
-}
+// ─── Tipo de gasto de caja chica — catálogo simple (mismo shape que
+// centros_costo en contabilidad.js) — declarado ANTES de GET/:id para que
+// Express no confunda "/tipos-gasto" con un :id. ────────────────────────
+const TIPOS_GASTO_DEFAULT = [
+  { codigo: 'ALIMENTACION', nombre: 'Alimentación' },
+  { codigo: 'TRANSPORTE', nombre: 'Transporte' },
+  { codigo: 'LIMPIEZA', nombre: 'Limpieza' },
+  { codigo: 'PAPELERIA', nombre: 'Papelería' },
+  { codigo: 'MANTENIMIENTO', nombre: 'Mantenimiento' },
+  { codigo: 'OTROS', nombre: 'Otros' },
+];
+
+router.get('/tipos-gasto', autorizarPermiso('cajaChica.ver'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const { activo = 'true' } = req.query;
+
+    // Primera vez que la empresa usa el catálogo: sembrar las categorías
+    // comunes para no arrancar de una lista vacía — el usuario las puede
+    // editar/desactivar/agregar más después vía el CRUD normal.
+    const total = await db.tipo_gasto_caja_chica.count({ where: { empresaId } });
+    if (total === 0) {
+      await db.tipo_gasto_caja_chica.createMany({
+        data: TIPOS_GASTO_DEFAULT.map((t) => ({ ...t, empresaId })),
+        skipDuplicates: true,
+      });
+    }
+
+    const where = { empresaId };
+    if (activo !== 'todos') where.activo = String(activo) === 'true';
+
+    const tipos = await db.tipo_gasto_caja_chica.findMany({ where, orderBy: { codigo: 'asc' } });
+    res.json({ success: true, data: tipos });
+  } catch (error) {
+    console.error('GET /caja-chica/tipos-gasto:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al listar tipos de gasto' });
+  }
+});
+
+router.post('/tipos-gasto', autorizarPermiso('cajaChica.gestionar'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const { codigo, nombre, descripcion = null, activo = true } = req.body || {};
+    if (!codigo?.trim() || !nombre?.trim()) {
+      return res.status(400).json({ success: false, mensaje: 'codigo y nombre son requeridos' });
+    }
+
+    const tipo = await db.tipo_gasto_caja_chica.create({
+      data: { empresaId, codigo: codigo.trim().toUpperCase(), nombre: nombre.trim(), descripcion: descripcion || null, activo: Boolean(activo) },
+    });
+    res.status(201).json({ success: true, data: tipo });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, mensaje: `El código ${req.body?.codigo} ya existe` });
+    }
+    console.error('POST /caja-chica/tipos-gasto:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al crear el tipo de gasto' });
+  }
+});
+
+router.put('/tipos-gasto/:id', autorizarPermiso('cajaChica.gestionar'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const actual = await db.tipo_gasto_caja_chica.findFirst({ where: { id, empresaId } });
+    if (!actual) return res.status(404).json({ success: false, mensaje: 'Tipo de gasto no encontrado' });
+
+    const codigo = req.body?.codigo || actual.codigo;
+    const nombre = req.body?.nombre || actual.nombre;
+    const descripcion = req.body?.descripcion === undefined ? actual.descripcion : (req.body.descripcion || null);
+    const activo = req.body?.activo === undefined ? actual.activo : Boolean(req.body.activo);
+
+    const tipo = await db.tipo_gasto_caja_chica.update({
+      where: { id },
+      data: { codigo: String(codigo).trim().toUpperCase(), nombre: String(nombre).trim(), descripcion, activo },
+    });
+    res.json({ success: true, data: tipo });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, mensaje: `El código ${req.body?.codigo} ya existe` });
+    }
+    console.error('PUT /caja-chica/tipos-gasto/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al actualizar el tipo de gasto' });
+  }
+});
+
+router.delete('/tipos-gasto/:id', autorizarPermiso('cajaChica.gestionar'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const tipo = await db.tipo_gasto_caja_chica.findFirst({ where: { id, empresaId } });
+    if (!tipo) return res.status(404).json({ success: false, mensaje: 'Tipo de gasto no encontrado' });
+
+    const enUso = await db.movimientos_caja_chica.count({ where: { tipoGastoCajaChicaId: id } });
+    if (enUso > 0) {
+      return res.status(400).json({ success: false, mensaje: 'Hay vales con este tipo de gasto — desactívalo en su lugar' });
+    }
+
+    await db.tipo_gasto_caja_chica.delete({ where: { id } });
+    res.json({ success: true, mensaje: 'Tipo de gasto eliminado' });
+  } catch (error) {
+    console.error('DELETE /caja-chica/tipos-gasto/:id:', error);
+    res.status(500).json({ success: false, mensaje: 'Error al eliminar el tipo de gasto' });
+  }
+});
 
 // GET /api/caja-chica — lista de fondos de la empresa
 router.get('/', autorizarPermiso('cajaChica.ver'), async (req, res) => {
@@ -105,6 +201,7 @@ router.get('/:id', autorizarPermiso('cajaChica.ver'), async (req, res) => {
         movimientos: {
           include: {
             centroCosto: { select: { id: true, nombre: true } },
+            tipoGasto: { select: { id: true, codigo: true, nombre: true } },
             asiento: { select: { id: true, numero: true, tipo: true } },
             usuario: { select: { id: true, nombre: true } },
           },
@@ -205,7 +302,7 @@ router.post('/:id/gastos', autorizarPermiso('cajaChica.gestionar'), async (req, 
     if (!fondo) return res.status(404).json({ success: false, mensaje: 'Fondo no encontrado' });
     if (fondo.estado !== 'ACTIVO') return res.status(409).json({ success: false, mensaje: 'El fondo está cerrado' });
 
-    const { monto, concepto, nroComprobante, proveedor, cuentaGastoId, centroCostoId, fecha } = req.body;
+    const { monto, concepto, nroComprobante, proveedor, cuentaGastoId, centroCostoId, fecha, tipoGastoCajaChicaId, numeroPreimpreso } = req.body;
 
     if (!monto || Number(monto) <= 0) return res.status(400).json({ success: false, mensaje: 'Monto debe ser mayor a 0' });
     if (!concepto?.trim()) return res.status(400).json({ success: false, mensaje: 'Concepto requerido' });
@@ -235,6 +332,8 @@ router.post('/:id/gastos', autorizarPermiso('cajaChica.gestionar'), async (req, 
         proveedor: proveedor?.trim() || null,
         cuentaGastoId: parseIntSafe(cuentaGastoId) || null,
         centroCostoId: parseIntSafe(centroCostoId) || null,
+        tipoGastoCajaChicaId: parseIntSafe(tipoGastoCajaChicaId) || null,
+        numeroPreimpreso: numeroPreimpreso?.trim() || null,
         usuarioId,
       },
     });

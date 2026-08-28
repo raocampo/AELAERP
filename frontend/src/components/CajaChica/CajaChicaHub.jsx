@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import './CajaChica.css';
 
@@ -14,6 +15,7 @@ function formatFecha(d) {
 const TIPO_LABEL = {
   APERTURA: 'Apertura',
   GASTO: 'Gasto / Vale',
+  COMPRA: 'Compra (factura)',
   REPOSICION: 'Reposición',
   INCREMENTO: 'Incremento',
   DISMINUCION: 'Disminución',
@@ -22,7 +24,7 @@ const TIPO_LABEL = {
 
 const TIPO_SIGNO = {
   APERTURA: '+', REPOSICION: '+', INCREMENTO: '+',
-  GASTO: '-', DISMINUCION: '-', CIERRE: '',
+  GASTO: '-', COMPRA: '-', DISMINUCION: '-', CIERRE: '',
 };
 
 function useCuentasContables() {
@@ -41,6 +43,14 @@ function useUsuarios() {
     api.get('/usuarios').then((r) => setUsuarios(r.data?.data || [])).catch(() => {});
   }, []);
   return usuarios;
+}
+
+function useTiposGastoCajaChica() {
+  const [tipos, setTipos] = useState([]);
+  useEffect(() => {
+    api.get('/caja-chica/tipos-gasto').then((r) => setTipos(r.data?.data || [])).catch(() => {});
+  }, []);
+  return tipos;
 }
 
 // ─── Modal Nuevo Fondo ───────────────────────────────────────────────────────
@@ -141,9 +151,24 @@ function ModalNuevoFondo({ onClose, onSaved }) {
 // ─── Modal Registrar Gasto ───────────────────────────────────────────────────
 function ModalGasto({ cajaChicaId, saldoDisponible, onClose, onSaved }) {
   const cuentas = useCuentasContables();
-  const [form, setForm] = useState({ monto: '', concepto: '', nroComprobante: '', proveedor: '', cuentaGastoId: '', centroCostoId: '', fecha: '' });
+  const tiposGasto = useTiposGastoCajaChica();
+  const [form, setForm] = useState({
+    monto: '', concepto: '', nroComprobante: '', proveedor: '', cuentaGastoId: '', centroCostoId: '', fecha: '',
+    tipoGastoCajaChicaId: '', numeroPreimpreso: '',
+  });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+
+  // Un vale de caja chica normalmente no tiene una factura real detrás, así
+  // que por defecto se sugiere una cuenta "No Deducibles" — el usuario puede
+  // cambiarla igual, no se bloquea (a diferencia de "Factura de caja chica",
+  // que sí es una compra real y usa su propia clasificación tributaria).
+  useEffect(() => {
+    if (form.cuentaGastoId || cuentas.length === 0) return;
+    const noDeducible = cuentas.find((c) => /no\s*deducible/i.test(c.nombre || ''));
+    if (noDeducible) setForm((f) => (f.cuentaGastoId ? f : { ...f, cuentaGastoId: String(noDeducible.id) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cuentas]);
 
   const handle = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -156,6 +181,7 @@ function ModalGasto({ cajaChicaId, saldoDisponible, onClose, onSaved }) {
         ...form,
         monto: parseFloat(form.monto),
         cuentaGastoId: form.cuentaGastoId || null,
+        tipoGastoCajaChicaId: form.tipoGastoCajaChicaId || null,
         fecha: form.fecha || undefined,
       });
       onSaved();
@@ -197,6 +223,19 @@ function ModalGasto({ cajaChicaId, saldoDisponible, onClose, onSaved }) {
             <label>
               Proveedor
               <input name="proveedor" value={form.proveedor} onChange={handle} placeholder="Nombre del proveedor" maxLength={200} />
+            </label>
+          </div>
+          <div className="cc-form-row">
+            <label>
+              Tipo de gasto
+              <select name="tipoGastoCajaChicaId" value={form.tipoGastoCajaChicaId} onChange={handle}>
+                <option value="">— Sin clasificar —</option>
+                {tiposGasto.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+              </select>
+            </label>
+            <label>
+              N° preimpreso
+              <input name="numeroPreimpreso" value={form.numeroPreimpreso} onChange={handle} placeholder="Del talonario físico (opcional)" maxLength={30} />
             </label>
           </div>
           <label>
@@ -292,6 +331,7 @@ function ModalAccion({ titulo, accion, cajaChicaId, totalPendiente, saldoDisponi
 
 // ─── Vista detalle de un fondo ────────────────────────────────────────────────
 function FondoDetalle({ fondoId, empresaId, onVolver, onRefreshLista }) {
+  const navigate = useNavigate();
   const [fondo, setFondo] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [modal, setModal] = useState(null); // 'gasto' | 'reponer' | 'incrementar' | 'disminuir'
@@ -393,6 +433,13 @@ function FondoDetalle({ fondoId, empresaId, onVolver, onRefreshLista }) {
         <div className="cc-acciones">
           <button className="cc-btn cc-btn-primary" onClick={() => setModal('gasto')}>+ Registrar gasto</button>
           <button
+            className="cc-btn cc-btn-secondary"
+            onClick={() => navigate('/compras/nueva')}
+            title="Registra la compra en Compras y luego regístrala pagada desde Cuentas por Pagar, eligiendo Caja Chica como método"
+          >
+            + Registrar compra
+          </button>
+          <button
             className="cc-btn cc-btn-success"
             disabled={fondo.totalPendienteReponer <= 0}
             onClick={() => setModal('reponer')}
@@ -437,7 +484,11 @@ function FondoDetalle({ fondoId, empresaId, onVolver, onRefreshLista }) {
                       {TIPO_LABEL[m.tipo] || m.tipo}
                     </span>
                   </td>
-                  <td>{m.concepto}</td>
+                  <td>
+                    {m.facturaCompraId
+                      ? <button type="button" className="cc-link" onClick={() => navigate(`/compras/${m.facturaCompraId}`)}>{m.concepto}</button>
+                      : m.concepto}
+                  </td>
                   <td className="cc-mono">{m.nroComprobante || '—'}</td>
                   <td>{m.proveedor || '—'}</td>
                   <td className={`cc-monto ${TIPO_SIGNO[m.tipo] === '+' ? 'cc-positivo' : TIPO_SIGNO[m.tipo] === '-' ? 'cc-negativo' : ''}`}>

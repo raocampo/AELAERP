@@ -998,7 +998,10 @@ async function crearAsientoCobroCliente({ cobroId, usuarioId, fecha = new Date()
 }
 
 async function crearAsientoPagoProveedor({ pagoId, usuarioId, fecha = new Date(), db = prisma }) {
-  const pago = await db.pagos_proveedor.findUnique({ where: { id: toInt(pagoId) }, include: { compra: true } });
+  const pago = await db.pagos_proveedor.findUnique({
+    where: { id: toInt(pagoId) },
+    include: { compra: true, cajaChica: true },
+  });
   if (!pago) throw new Error('Pago no encontrado');
 
   const referencia = `PAGO-${pago.id}`;
@@ -1015,9 +1018,24 @@ async function crearAsientoPagoProveedor({ pagoId, usuarioId, fecha = new Date()
     codigoDefault: '2.1.04.001', nombreDefault: 'Cuentas por Pagar Proveedores', tipoDefault: 'PASIVO', naturalezaDefault: 'CREDITO',
     tx: db,
   });
-  const cuentaPago = (pago.metodoPago || '').toLowerCase() === 'efectivo'
-    ? await ensureCuentaMovimiento({ empresaId: pago.empresaId, tx: db, codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO' })
-    : await ensureCuentaMovimiento({ empresaId: pago.empresaId, tx: db, codigo: '1.1.02.001', nombre: 'Bancos', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+  const metodoPagoLower = (pago.metodoPago || '').toLowerCase();
+  let cuentaPago;
+  if (metodoPagoLower === 'caja_chica') {
+    // Se acredita la cuenta DEL FONDO específico (no una genérica) — mismo
+    // criterio que ya usa crearAsientoAperturaCajaChica con
+    // cuentaContrapartidaId/cuentaFondoId, con el mismo fallback.
+    const codigoFondo = pago.cajaChica?.cuentaFondoId ? null : '1.1.01.002';
+    cuentaPago = pago.cajaChica?.cuentaFondoId
+      ? await db.plan_cuentas.findUnique({ where: { id: pago.cajaChica.cuentaFondoId } })
+      : null;
+    if (!cuentaPago) {
+      cuentaPago = await ensureCuentaMovimiento({ empresaId: pago.empresaId, tx: db, codigo: codigoFondo || '1.1.01.002', nombre: 'Caja Chica', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+    }
+  } else if (metodoPagoLower === 'efectivo') {
+    cuentaPago = await ensureCuentaMovimiento({ empresaId: pago.empresaId, tx: db, codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+  } else {
+    cuentaPago = await ensureCuentaMovimiento({ empresaId: pago.empresaId, tx: db, codigo: '1.1.02.001', nombre: 'Bancos', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+  }
 
   const asiento = await crearAsientoContable({
     empresaId: pago.empresaId,
