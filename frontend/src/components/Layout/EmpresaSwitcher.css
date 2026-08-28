@@ -1,7 +1,7 @@
 /* ── EmpresaSwitcher ─────────────────────────────────────────── */
 .emp-switcher {
   position: relative;
-  margin: 0 12px 6px;
+  margin: 10px 12px 6px;
 }
 
 .emp-switcher-trigger {
