@@ -87,8 +87,8 @@ function ModalNuevoFondo({ onClose, onSaved }) {
   };
 
   return (
-    <div className="cc-modal-overlay" onClick={onClose}>
-      <div className="cc-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="cc-modal-overlay">
+      <div className="cc-modal">
         <div className="cc-modal-header">
           <h3>Nuevo Fondo de Caja Chica</h3>
           <button className="cc-modal-close" onClick={onClose}>✕</button>
@@ -193,8 +193,8 @@ function ModalGasto({ cajaChicaId, saldoDisponible, onClose, onSaved }) {
   };
 
   return (
-    <div className="cc-modal-overlay" onClick={onClose}>
-      <div className="cc-modal cc-modal-sm" onClick={(e) => e.stopPropagation()}>
+    <div className="cc-modal-overlay">
+      <div className="cc-modal cc-modal-sm">
         <div className="cc-modal-header">
           <h3>Registrar Gasto / Vale</h3>
           <button className="cc-modal-close" onClick={onClose}>✕</button>
@@ -287,8 +287,8 @@ function ModalAccion({ titulo, accion, cajaChicaId, totalPendiente, saldoDisponi
   };
 
   return (
-    <div className="cc-modal-overlay" onClick={onClose}>
-      <div className="cc-modal cc-modal-sm" onClick={(e) => e.stopPropagation()}>
+    <div className="cc-modal-overlay">
+      <div className="cc-modal cc-modal-sm">
         <div className="cc-modal-header">
           <h3>{titulo}</h3>
           <button className="cc-modal-close" onClick={onClose}>✕</button>

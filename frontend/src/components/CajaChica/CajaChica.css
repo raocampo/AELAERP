@@ -454,17 +454,21 @@
   font-size: 0.85rem;
   font-weight: 500;
   color: #374151;
+  min-width: 0;
 }
 
 .cc-form input,
 .cc-form select,
 .cc-form textarea {
+  width: 100%;
+  min-width: 0;
   padding: 0.45rem 0.7rem;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   font-size: 0.88rem;
   color: #111827;
   background: #fff;
+  box-sizing: border-box;
 }
 
 .cc-form input:focus,
@@ -548,44 +552,10 @@
   font-size: 0.9rem;
 }
 
-/* ─── Dark mode ──────────────────────────────────────────────── */
-@media (prefers-color-scheme: dark) {
-  .cc-hub-title { color: #a78bfa; }
-  .cc-fondo-card, .cc-modal, .cc-stat-card {
-    background: #1e293b;
-    border-color: #334155;
-  }
-  .cc-fondo-nombre, .cc-stat-value, .cc-detalle-titulo h2, .cc-modal-header h3 {
-    color: #f1f5f9;
-  }
-  .cc-table th { color: #94a3b8; border-color: #334155; }
-  .cc-table td { border-color: #1e293b; color: #e2e8f0; }
-  .cc-form input, .cc-form select, .cc-form textarea {
-    background: #0f172a;
-    border-color: #334155;
-    color: #f1f5f9;
-  }
-  .cc-btn-secondary { background: #1e293b; color: #e2e8f0; border-color: #334155; }
-  .cc-btn-volver { background: #1e293b; color: #e2e8f0; border-color: #334155; }
-  .cc-tabs { border-color: #334155; }
-  .cc-tab { color: #94a3b8; }
-  .cc-tab.active { color: #a78bfa; border-color: #a78bfa; }
-  .cc-tab-count { background: #334155; color: #94a3b8; }
-  .cc-tab.active .cc-tab-count { background: #4c1d95; color: #c4b5fd; }
-  .cc-hub-subtitle, .cc-fondo-responsable, .cc-fondo-label, .cc-stat-label, .cc-fondo-pct { color: #64748b; }
-  .cc-progress-bar { background: #334155; }
-}
-
-:root[data-theme="dark"] .cc-fondo-card,
-:root[data-theme="dark"] .cc-modal,
-:root[data-theme="dark"] .cc-stat-card { background: #1e293b; border-color: #334155; }
-:root[data-theme="dark"] .cc-fondo-nombre,
-:root[data-theme="dark"] .cc-stat-value,
-:root[data-theme="dark"] .cc-detalle-titulo h2,
-:root[data-theme="dark"] .cc-modal-header h3 { color: #f1f5f9; }
-:root[data-theme="dark"] .cc-form input,
-:root[data-theme="dark"] .cc-form select,
-:root[data-theme="dark"] .cc-form textarea { background: #0f172a; border-color: #334155; color: #f1f5f9; }
-:root[data-theme="light"] .cc-fondo-card,
-:root[data-theme="light"] .cc-modal,
-:root[data-theme="light"] .cc-stat-card { background: #fff; border-color: #e5e7eb; }
+/* Sin modo oscuro a propósito — el resto de formularios de AELA (Compras,
+   Cuentas por Pagar, Facturación, etc.) son de un solo tema claro fijo,
+   sin importar el modo del sistema operativo/navegador. Este módulo tenía
+   su propio bloque de dark mode que ningún otro formulario replica, lo que
+   producía un modal oscuro flotando sobre una página clara cuando el
+   sistema del usuario estaba en modo oscuro — se quitó para que se vea
+   igual que el resto del sistema. */
