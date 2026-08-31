@@ -31,6 +31,14 @@ con el equipo de AVALAB para hacer esa primera prueba.
   ese momento. Compártela con AVALAB por un canal privado (no por email
   plano ni chat público).
 - Formato de la key: `aela_` + 48 caracteres hexadecimales.
+- **Alcance de la key**: la key identifica al tenant (Laboratorio San José)
+  completo, no a una empresa específica dentro de él. Como el tenant del
+  laboratorio está configurado como **monoempresa** (una sola razón
+  social/RUC), esto no representa ningún problema hoy — toda la
+  integración opera siempre sobre esa única empresa. Si en el futuro este
+  tenant pasara a manejar más de una empresa (multiempresa), la API
+  tendría que actualizarse primero para poder elegir con cuál trabajar;
+  avisar a AELA antes de hacer ese cambio de configuración.
 
 ## 2. Flujo recomendado
 
@@ -156,6 +164,14 @@ Respuesta `201`: `{ "success": true, "data": { "id": 789, "numero": "REC-202607-
 
 Se puede llamar varias veces sobre la misma factura para cobros parciales —
 rechaza (`400`) si la suma excede el total de la factura.
+
+⚠️ A diferencia de `/facturas`, **este endpoint no es idempotente** — no
+tiene una llave de deduplicación. Si AVALAB reintenta un `POST /pagos` tras
+un timeout de red sin haber confirmado si el primer intento sí llegó,
+puede registrarse el cobro dos veces (mientras la suma no exceda el total
+de la factura, AELA no tiene forma de saber que es un duplicado). Antes de
+reintentar, conviene que AVALAB llame `GET /facturas/:id` para revisar el
+saldo, o que lleve su propio control de qué cobros ya envió con éxito.
 
 ---
 
