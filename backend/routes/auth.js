@@ -365,6 +365,7 @@ router.post('/login', async (req, res) => {
         username: usuario.username,
         email: usuario.email,
         rol: normalizarRol(usuario.rol),
+        permisosExtra: Array.isArray(usuario.permisosExtra) ? usuario.permisosExtra : [],
       },
     });
   } catch (error) {
@@ -378,11 +379,15 @@ router.get('/perfil', proteger, async (req, res) => {
   try {
     const usuario = await req.prisma.usuarios.findUnique({
       where: { id: req.usuario.id },
-      select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, createdAt: true },
+      select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, createdAt: true, permisosExtra: true },
     });
     res.json({
       success: true,
-      data: usuario ? { ...usuario, rol: normalizarRol(usuario.rol) } : null,
+      data: usuario ? {
+        ...usuario,
+        rol: normalizarRol(usuario.rol),
+        permisosExtra: Array.isArray(usuario.permisosExtra) ? usuario.permisosExtra : [],
+      } : null,
     });
   } catch (error) {
     res.status(500).json({ success: false, mensaje: 'Error al obtener perfil' });

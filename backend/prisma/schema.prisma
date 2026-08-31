@@ -129,6 +129,10 @@ model usuarios {
   rol       String   @default("operador") @db.VarChar(50)
   // roles: admin | supervisor | contador | facturador | operador
   activo    Boolean  @default(true)
+  // Permisos individuales que se suman a los del rol (OR) — ej. un
+  // facturador con acceso puntual a compras sin subirlo a supervisor.
+  // Array de claves de PERMISSIONS (utils/roles.js), ej. ["compras.gestionar"].
+  permisosExtra Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

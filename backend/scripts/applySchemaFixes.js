@@ -790,6 +790,9 @@ const FIXES = [
   `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "paisResidencia" VARCHAR(3)`,
   `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "aplicaConvenioDobleImposicion" VARCHAR(15)`,
   `ALTER TABLE "empleados" ADD COLUMN IF NOT EXISTS "gastosPersonalesProyectados" DECIMAL(10,2) NOT NULL DEFAULT 0`,
+  // Permisos adicionales por usuario (2026-08-31) — array de claves de
+  // PERMISSIONS que se suman a las del rol (OR). Ver utils/roles.js.
+  `ALTER TABLE "usuarios" ADD COLUMN IF NOT EXISTS "permisosExtra" JSONB`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

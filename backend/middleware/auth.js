@@ -36,7 +36,7 @@ const proteger = async (req, res, next) => {
     const db = req.prisma || prisma;
     const usuario = await db.usuarios.findUnique({
       where: { id: decoded.id },
-      select: { id: true, nombre: true, username: true, email: true, rol: true, empresaId: true, activo: true },
+      select: { id: true, nombre: true, username: true, email: true, rol: true, empresaId: true, activo: true, permisosExtra: true },
     });
 
     if (!usuario || !usuario.activo) {
@@ -48,6 +48,7 @@ const proteger = async (req, res, next) => {
     req.usuario = {
       ...usuario,
       rol: normalizarRol(decoded.rol ?? usuario.rol),
+      permisosExtra: Array.isArray(usuario.permisosExtra) ? usuario.permisosExtra : [],
     };
 
     // ── Inyectar empresa ─────────────────────────────────────────────────────
@@ -142,7 +143,7 @@ const autorizarPermiso = (permiso) => (req, res, next) => {
     return res.status(401).json({ success: false, mensaje: 'No autenticado' });
   }
   const permisos = Array.isArray(permiso) ? permiso : [permiso];
-  if (!permisos.some((p) => tienePermiso(req.usuario.rol, p))) {
+  if (!permisos.some((p) => tienePermiso(req.usuario.rol, p, req.usuario.permisosExtra))) {
     return res.status(403).json({
       success: false,
       mensaje: 'Acceso denegado — tu rol no tiene permiso para esta acción',

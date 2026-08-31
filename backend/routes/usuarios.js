@@ -21,9 +21,19 @@ const {
   esRolValido,
   listarRolesComoTexto,
   normalizarRol,
+  PERMISSIONS,
 } = require('../utils/roles');
 
 const obtenerEmpresaActual = (req) => req.empresa?.id || req.usuario?.empresaId || 1;
+
+// Solo se persisten claves reconocidas — evita que un payload manipulado
+// guarde permisos inexistentes o mal escritos (ver PERMISOS_POR_MODULO en
+// frontend/src/utils/roles.js para las claves que ofrece la UI).
+const CLAVES_PERMISOS_VALIDAS = new Set(Object.keys(PERMISSIONS));
+const normalizarPermisosExtra = (value) => {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((p) => CLAVES_PERMISOS_VALIDAS.has(p)))];
+};
 
 const obtenerUsuarioEmpresa = async (id, empresaId) => prisma.usuarios.findFirst({
   where: { id, empresaId },
@@ -32,6 +42,7 @@ const obtenerUsuarioEmpresa = async (id, empresaId) => prisma.usuarios.findFirst
 const normalizarUsuarioSalida = (usuario) => ({
   ...usuario,
   rol: normalizarRol(usuario.rol),
+  permisosExtra: Array.isArray(usuario.permisosExtra) ? usuario.permisosExtra : [],
 });
 
 // GET /api/usuarios
@@ -51,6 +62,7 @@ router.get('/', proteger, soloAdmin, async (req, res) => {
         rol: true,
         activo: true,
         createdAt: true,
+        permisosExtra: true,
       },
       orderBy: [
         { rol: 'asc' },
@@ -71,7 +83,7 @@ router.post('/', proteger, soloAdmin, checkLimiteUsuarios, async (req, res) => {
   // anidados), así que antes esa comparación tiraba un ReferenceError silencioso
   // (atrapado por el catch interno) y siempre caía al mensaje genérico, dejando
   // muerto el flujo de "reasignar usuario existente a esta empresa".
-  const { nombre, username, email, password, rol, empresaId: empresaIdBody } = req.body;
+  const { nombre, username, email, password, rol, empresaId: empresaIdBody, permisosExtra } = req.body;
   const empresaId = empresaIdBody ? parseInt(empresaIdBody, 10) : obtenerEmpresaActual(req);
 
   try {
@@ -115,8 +127,9 @@ router.post('/', proteger, soloAdmin, checkLimiteUsuarios, async (req, res) => {
         email: emailLimpio,
         password: hash,
         rol: rolNormalizado,
+        permisosExtra: normalizarPermisosExtra(permisosExtra),
       },
-      select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true },
+      select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, permisosExtra: true },
     });
     res.status(201).json({ success: true, data: normalizarUsuarioSalida(usuario) });
   } catch (error) {
@@ -171,7 +184,7 @@ router.put('/:id', proteger, soloAdmin, async (req, res) => {
       return res.status(404).json({ success: false, mensaje: 'Usuario no encontrado' });
     }
 
-    const { nombre, username, email, rol, activo, password } = req.body;
+    const { nombre, username, email, rol, activo, password, permisosExtra } = req.body;
     const data = {};
 
     if (nombre !== undefined) {
@@ -225,10 +238,14 @@ router.put('/:id', proteger, soloAdmin, async (req, res) => {
       data.password = await bcrypt.hash(password, 10);
     }
 
+    if (permisosExtra !== undefined) {
+      data.permisosExtra = normalizarPermisosExtra(permisosExtra);
+    }
+
     const usuario = await prisma.usuarios.update({
       where: { id },
       data,
-      select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true },
+      select: { id: true, nombre: true, username: true, email: true, rol: true, activo: true, permisosExtra: true },
     });
     res.json({ success: true, data: normalizarUsuarioSalida(usuario) });
   } catch (error) {

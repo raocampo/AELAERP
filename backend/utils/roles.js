@@ -147,9 +147,13 @@ const listarClavesRoles = () => Object.keys(ROLE_DEFINITIONS);
 
 const listarRolesComoTexto = () => listarRoles().map((rol) => rol.label).join(', ');
 
-const tienePermiso = (rol, permiso) => {
+// `permisosExtra` — permisos individuales concedidos al usuario además de
+// los de su rol (ver campo usuarios.permisosExtra). Mismo patrón que el
+// espejo en frontend/src/utils/roles.js.
+const tienePermiso = (rol, permiso, permisosExtra = []) => {
   const rolNormalizado = normalizarRol(rol);
-  return (PERMISSIONS[permiso] || []).includes(rolNormalizado);
+  if ((PERMISSIONS[permiso] || []).includes(rolNormalizado)) return true;
+  return Array.isArray(permisosExtra) && permisosExtra.includes(permiso);
 };
 
 module.exports = {
