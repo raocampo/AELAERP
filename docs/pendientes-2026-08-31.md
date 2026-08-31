@@ -102,9 +102,26 @@ anteriores que no se tocaron hoy.
    consistente con el alcance actual del módulo.
 4. **Hilos sin cerrar de sesiones anteriores** (no tocados hoy):
    verificación en dispositivo móvil real vía Expo (`mobile_app_estado.md`),
-   `FormNotaVenta.jsx` sin UI para pagos mixtos al editar, y si el
-   campo "Código" del carrito de POS ya se ve bien tras un refresco
-   forzado del navegador.
+   y si el campo "Código" del carrito de POS ya se ve bien tras un
+   refresco forzado del navegador. Ambos requieren que el usuario
+   pruebe algo, no hay más código que escribir de mi lado sin esa
+   confirmación.
+
+### Actualización — mismo día, tramo 2
+
+**Commit `34ab98e`**: se resolvió el ítem de arriba sobre
+`FormNotaVenta.jsx` sin UI para pagos mixtos — editar una nota creada
+desde POS con 2+ formas de pago ya no las colapsa a "Efectivo" al
+guardar. El backend ya lo soportaba (`resolverPagos()` en
+`notasVenta.js`, igual en POST y PUT); era un hueco 100% de frontend,
+resuelto reutilizando el mismo patrón de líneas de pago ya construido
+en `PuntoVenta.jsx` en vez de inventar uno nuevo.
+
+Con esto, **de los 4 hilos sin cerrar listados arriba, solo quedan 2
+genuinamente pendientes** (verificación móvil, confirmación del campo
+Código en POS) y ambos requieren que el usuario compruebe algo — no
+hay trabajo de código adicional que se pueda hacer sin esa
+confirmación.
 
 ## Al retomar
 
