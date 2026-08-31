@@ -19,6 +19,51 @@ con el equipo de AVALAB para hacer esa primera prueba.
 
 ---
 
+## 0. Cómo llega la información (mecánica, no un archivo)
+
+No hay una bandeja donde AVALAB deja un archivo, ni un JSON que le manda por
+correo a alguien en AELA para que lo cargue a mano. La integración es
+directa entre los dos sistemas: **el software de AVALAB hace la llamada.**
+Cada vez que autorizan una factura (o registran un cobro), su propio sistema
+envía esos datos, en el momento, directo al servidor de AELA por HTTP —
+sin que nadie de ningún lado intervenga a mano:
+
+1. El sistema de AVALAB arma el JSON con los datos de la factura recién
+   autorizada.
+2. Lo envía por `POST` HTTP directo al servidor de AELA (`X-API-Key` en el
+   header, JSON en el body — una petición normal, no distinta de la que
+   hace cualquier app al usar internet).
+3. AELA responde al instante: si los datos están correctos, la factura ya
+   quedó guardada y contabilizada antes de que termine esa misma petición.
+
+En la práctica esto requiere que alguien del equipo de desarrollo de AVALAB
+agregue una llamada HTTP más en el punto donde ya autorizan la factura ante
+el SRI — no hace falta ninguna herramienta especial, cualquier lenguaje
+moderno (PHP, Java, .NET, Python, Node, etc.) hace peticiones HTTP con
+cuerpo JSON de forma nativa o con una librería estándar. Ejemplo mínimo
+(solo para ilustrar la forma de la llamada — en el sistema real esto lo
+hace su código, no una terminal):
+
+```bash
+curl -X POST https://aelaerp-production.up.railway.app/api/ext/v1/facturas \
+  -H "X-API-Key: aela_<clave>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "claveAcceso": "2707202601099999999000110010010000000011234567891",
+    "numeroFactura": "001-001-000012345",
+    "fechaEmision": "2026-07-27",
+    "clienteIdentificacion": "0102030405",
+    "clienteRazonSocial": "JUAN PEREZ",
+    "items": [{ "descripcion": "Examen de sangre", "cantidad": 1, "precioUnitario": 25.00, "ivaPorcentaje": 15 }]
+  }'
+```
+
+Una vez conectada esa llamada al flujo de facturación de AVALAB, cada
+factura nueva llega sola, en tiempo real, el mismo momento en que se
+autoriza — no hay paso manual de ningún lado.
+
+---
+
 ## 1. Acceso
 
 - **URL base**: `https://aelaerp-production.up.railway.app/api/ext/v1`
