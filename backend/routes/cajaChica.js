@@ -16,6 +16,7 @@ const {
   crearAsientoDisminucionCajaChica,
   crearAsientoCierreCajaChica,
   siguienteNumeroGenerico,
+  registrarMovimientoBancarioLigado,
   round2,
 } = require('../utils/contabilidad');
 const { calcularSaldoCajaChica, gastosPendientesReponerCajaChica } = require('../utils/cajaChicaSaldo');
@@ -35,6 +36,51 @@ function obtenerEmpresaId(req) {
 function parseIntSafe(v) {
   const n = Number.parseInt(v, 10);
   return Number.isFinite(n) ? n : null;
+}
+
+// ─── Pago con banco para apertura/incremento/reposición (Fase 3) ─────────────
+const METODOS_PAGO_FONDO = ['efectivo', 'transferencia', 'cheque'];
+
+// Valida metodoPago y, si no es efectivo, resuelve el banco elegido — la
+// cuenta contable de contrapartida pasa a ser la del banco (si tiene una
+// vinculada), no la genérica que ya tenía el fondo, para que el asiento
+// acredite la cuenta correcta y el movimiento se pueda ligar a Libro de
+// Bancos después de crear el asiento.
+async function resolverPagoFondo(tx, { metodoPago, bancoId, chequeId, cuentaContrapartidaFondo, empresaId }) {
+  const metodo = metodoPago ? String(metodoPago).toLowerCase() : 'efectivo';
+  if (!METODOS_PAGO_FONDO.includes(metodo)) {
+    throw Object.assign(new Error(`metodoPago debe ser uno de: ${METODOS_PAGO_FONDO.join(', ')}`), { status: 400 });
+  }
+  if (metodo === 'efectivo') {
+    return { metodoPago: 'efectivo', bancoId: null, chequeId: null, cuentaContrapartidaId: cuentaContrapartidaFondo };
+  }
+  const bancoIdNum = parseIntSafe(bancoId);
+  if (!bancoIdNum) throw Object.assign(new Error('Selecciona el banco'), { status: 400 });
+  const banco = await tx.bancos.findFirst({ where: { id: bancoIdNum, empresaId } });
+  if (!banco) throw Object.assign(new Error('Banco no encontrado'), { status: 404 });
+  return {
+    metodoPago: metodo,
+    bancoId: bancoIdNum,
+    chequeId: parseIntSafe(chequeId) || null,
+    cuentaContrapartidaId: banco.cuentaContableId || cuentaContrapartidaFondo,
+  };
+}
+
+// Crea la fila en Libro de Bancos ligada al asiento que ya generó la
+// operación (apertura/incremento/reposición) — el dinero SALE del banco
+// hacia el fondo, por eso siempre es egreso (TRANSFERENCIA_OUT/CHEQUE).
+async function ligarMovimientoBancarioFondo(tx, { pago, empresaId, fecha, monto, concepto, referencia, asientoId }) {
+  if (!pago.bancoId) return null;
+  const mov = await registrarMovimientoBancarioLigado({
+    bancoId: pago.bancoId,
+    empresaId, fecha,
+    tipo: pago.metodoPago === 'cheque' ? 'CHEQUE' : 'TRANSFERENCIA_OUT',
+    concepto, referencia,
+    monto, esIngreso: false,
+    asientoId, chequeId: pago.chequeId,
+    db: tx,
+  });
+  return mov.id;
 }
 
 // Saldo disponible / pendientes de reponer — lógica compartida con
@@ -215,8 +261,15 @@ router.get('/:id', autorizarPermiso('cajaChica.ver'), async (req, res) => {
     const saldoDisponible = calcularSaldo(fondo.movimientos);
     const pendientes = gastosPendientesReponer(fondo.movimientos);
     const totalPendienteReponer = round2(pendientes.reduce((a, m) => a + Number(m.monto), 0));
+    // Para el checklist de selección manual de reposición (Fase 3) — mismos
+    // objetos que ya calcula gastosPendientesReponer, sin duplicar el cálculo
+    // del lado frontend.
+    const pendientesReponer = pendientes.map((p) => ({
+      id: p.id, tipo: p.tipo, fecha: p.fecha, concepto: p.concepto,
+      monto: p.monto, nroComprobante: p.nroComprobante, proveedor: p.proveedor,
+    }));
 
-    res.json({ success: true, data: { ...fondo, saldoDisponible, totalPendienteReponer } });
+    res.json({ success: true, data: { ...fondo, saldoDisponible, totalPendienteReponer, pendientesReponer } });
   } catch (error) {
     console.error('GET /caja-chica/:id:', error);
     res.status(500).json({ success: false, mensaje: 'Error al obtener el fondo' });
@@ -230,7 +283,10 @@ router.post('/', autorizarPermiso('cajaChica.gestionar'), async (req, res) => {
     const empresaId = obtenerEmpresaId(req);
     const usuarioId = req.usuario?.id;
 
-    const { codigo, nombre, responsableId, montoFondo, cuentaFondoId, cuentaContrapartidaId, observaciones } = req.body;
+    const {
+      codigo, nombre, responsableId, montoFondo, cuentaFondoId, cuentaContrapartidaId, observaciones,
+      metodoPago, bancoId, chequeId, referenciaPago,
+    } = req.body;
 
     if (!codigo?.trim()) return res.status(400).json({ success: false, mensaje: 'Código requerido' });
     if (!nombre?.trim()) return res.status(400).json({ success: false, mensaje: 'Nombre requerido' });
@@ -254,14 +310,25 @@ router.post('/', autorizarPermiso('cajaChica.gestionar'), async (req, res) => {
         },
       });
 
+      const pago = await resolverPagoFondo(tx, {
+        metodoPago, bancoId, chequeId, empresaId,
+        cuentaContrapartidaFondo: parseIntSafe(cuentaContrapartidaId) || null,
+      });
+
       const asiento = await crearAsientoAperturaCajaChica(tx, {
         empresaId, cajaChicaId: nuevo.id,
         monto: montoFondo,
         cuentaFondoId: parseIntSafe(cuentaFondoId) || null,
-        cuentaContrapartidaId: parseIntSafe(cuentaContrapartidaId) || null,
+        cuentaContrapartidaId: pago.cuentaContrapartidaId,
         descripcion: `Apertura fondo ${nuevo.codigo} — ${nuevo.nombre}`,
         fecha: new Date(),
         usuarioId,
+      });
+
+      const concepto = `Apertura del fondo ${nuevo.codigo}`;
+      const movimientoBancarioId = await ligarMovimientoBancarioFondo(tx, {
+        pago, empresaId, fecha: new Date(), monto: round2(montoFondo),
+        concepto, referencia: referenciaPago?.trim() || nuevo.codigo, asientoId: asiento.id,
       });
 
       await tx.movimientos_caja_chica.create({
@@ -269,9 +336,13 @@ router.post('/', autorizarPermiso('cajaChica.gestionar'), async (req, res) => {
           cajaChicaId: nuevo.id, empresaId,
           tipo: 'APERTURA',
           fecha: new Date(),
-          concepto: `Apertura del fondo ${nuevo.codigo}`,
+          concepto,
           monto: round2(montoFondo),
           asientoId: asiento.id,
+          metodoPago: pago.metodoPago,
+          bancoId: pago.bancoId,
+          chequeId: pago.chequeId,
+          movimientoBancarioId,
           usuarioId,
         },
       });
@@ -282,7 +353,7 @@ router.post('/', autorizarPermiso('cajaChica.gestionar'), async (req, res) => {
     res.status(201).json({ success: true, data: fondo, mensaje: 'Fondo creado y apertura registrada' });
   } catch (error) {
     console.error('POST /caja-chica:', error);
-    res.status(500).json({ success: false, mensaje: 'Error al crear el fondo' });
+    res.status(error.status || 500).json({ success: false, mensaje: error.message || 'Error al crear el fondo' });
   }
 });
 
@@ -393,27 +464,49 @@ router.post('/:id/reponer', autorizarPermiso('cajaChica.gestionar'), async (req,
     if (!fondo) return res.status(404).json({ success: false, mensaje: 'Fondo no encontrado' });
     if (fondo.estado !== 'ACTIVO') return res.status(409).json({ success: false, mensaje: 'El fondo está cerrado' });
 
-    const pendientes = gastosPendientesReponer(fondo.movimientos);
-    if (pendientes.length === 0) {
+    const todosPendientes = gastosPendientesReponer(fondo.movimientos);
+    if (todosPendientes.length === 0) {
       return res.status(409).json({ success: false, mensaje: 'No hay gastos pendientes de reponer' });
     }
 
+    const { descripcion, fecha, metodoPago, bancoId, chequeId, referenciaPago, movimientoIds } = req.body;
+
+    // Selección manual (Fase 3): si viene movimientoIds, reponer solo esos —
+    // deben existir entre los pendientes reales del fondo (evita reponer algo
+    // ya repuesto, anulado, o de otro fondo). Sin movimientoIds, se mantiene
+    // el comportamiento de siempre: repone todos los pendientes.
+    let pendientes = todosPendientes;
+    if (Array.isArray(movimientoIds) && movimientoIds.length > 0) {
+      const idsSolicitados = new Set(movimientoIds.map((id) => parseIntSafe(id)).filter(Boolean));
+      pendientes = todosPendientes.filter((p) => idsSolicitados.has(p.id));
+      if (pendientes.length !== idsSolicitados.size) {
+        return res.status(400).json({ success: false, mensaje: 'Uno o más movimientos seleccionados no están pendientes de reponer en este fondo' });
+      }
+    }
+
     const total = round2(pendientes.reduce((a, m) => a + Number(m.monto), 0));
-    const { descripcion, fecha } = req.body;
 
     const movimientoReposicion = await db.$transaction(async (tx) => {
+      const pago = await resolverPagoFondo(tx, {
+        metodoPago, bancoId, chequeId, empresaId,
+        cuentaContrapartidaFondo: fondo.cuentaContrapartidaId,
+      });
+
+      const fechaMov = fecha ? new Date(fecha) : new Date();
+      const concepto = descripcion?.trim() || `Reposición de ${pendientes.length} vale(s)`;
       const numero = await siguienteNumeroGenerico({
         modelo: 'movimientos_caja_chica', prefijo: 'REP', empresaId,
-        fecha: fecha ? new Date(fecha) : new Date(), tx,
+        fecha: fechaMov, tx,
       });
 
       const movRep = await tx.movimientos_caja_chica.create({
         data: {
           cajaChicaId, empresaId,
           numero, tipo: 'REPOSICION',
-          fecha: fecha ? new Date(fecha) : new Date(),
-          concepto: descripcion?.trim() || `Reposición de ${pendientes.length} vale(s)`,
+          fecha: fechaMov,
+          concepto,
           monto: total,
+          metodoPago: pago.metodoPago, bancoId: pago.bancoId, chequeId: pago.chequeId,
           usuarioId,
         },
       });
@@ -434,15 +527,20 @@ router.post('/:id/reponer', autorizarPermiso('cajaChica.gestionar'), async (req,
       const asiento = await crearAsientoReposicionCajaChica(tx, {
         empresaId, reposicionId: movRep.id,
         gastos: gastoParaAsiento,
-        cuentaContrapartidaId: fondo.cuentaContrapartidaId,
+        cuentaContrapartidaId: pago.cuentaContrapartidaId,
         descripcion: movRep.concepto,
         fecha: movRep.fecha,
         usuarioId,
       });
 
+      const movimientoBancarioId = await ligarMovimientoBancarioFondo(tx, {
+        pago, empresaId, fecha: fechaMov, monto: total,
+        concepto, referencia: referenciaPago?.trim() || movRep.numero, asientoId: asiento.id,
+      });
+
       await tx.movimientos_caja_chica.update({
         where: { id: movRep.id },
-        data: { asientoId: asiento.id },
+        data: { asientoId: asiento.id, movimientoBancarioId },
       });
 
       return movRep;
@@ -454,7 +552,7 @@ router.post('/:id/reponer', autorizarPermiso('cajaChica.gestionar'), async (req,
     });
   } catch (error) {
     console.error('POST /caja-chica/:id/reponer:', error);
-    res.status(500).json({ success: false, mensaje: 'Error al registrar la reposición' });
+    res.status(error.status || 500).json({ success: false, mensaje: error.message || 'Error al registrar la reposición' });
   }
 });
 
@@ -467,7 +565,7 @@ router.post('/:id/incrementar', autorizarPermiso('cajaChica.gestionar'), async (
     const cajaChicaId = parseIntSafe(req.params.id);
     if (!cajaChicaId) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
 
-    const { monto, descripcion, fecha } = req.body;
+    const { monto, descripcion, fecha, metodoPago, bancoId, chequeId, referenciaPago } = req.body;
     if (!monto || Number(monto) <= 0) return res.status(400).json({ success: false, mensaje: 'Monto debe ser mayor a 0' });
 
     const fondo = await db.cajas_chicas.findFirst({ where: { id: cajaChicaId, empresaId } });
@@ -475,12 +573,21 @@ router.post('/:id/incrementar', autorizarPermiso('cajaChica.gestionar'), async (
     if (fondo.estado !== 'ACTIVO') return res.status(409).json({ success: false, mensaje: 'El fondo está cerrado' });
 
     const resultado = await db.$transaction(async (tx) => {
+      const pago = await resolverPagoFondo(tx, {
+        metodoPago, bancoId, chequeId, empresaId,
+        cuentaContrapartidaFondo: fondo.cuentaContrapartidaId,
+      });
+
+      const concepto = descripcion?.trim() || `Incremento del fondo`;
+      const fechaMov = fecha ? new Date(fecha) : new Date();
       const movInc = await tx.movimientos_caja_chica.create({
         data: {
           cajaChicaId, empresaId, tipo: 'INCREMENTO',
-          fecha: fecha ? new Date(fecha) : new Date(),
-          concepto: descripcion?.trim() || `Incremento del fondo`,
-          monto: round2(monto), usuarioId,
+          fecha: fechaMov,
+          concepto,
+          monto: round2(monto),
+          metodoPago: pago.metodoPago, bancoId: pago.bancoId, chequeId: pago.chequeId,
+          usuarioId,
         },
       });
 
@@ -488,13 +595,21 @@ router.post('/:id/incrementar', autorizarPermiso('cajaChica.gestionar'), async (
         empresaId, movimientoId: movInc.id,
         monto,
         cuentaFondoId: fondo.cuentaFondoId,
-        cuentaContrapartidaId: fondo.cuentaContrapartidaId,
+        cuentaContrapartidaId: pago.cuentaContrapartidaId,
         descripcion: movInc.concepto,
         fecha: movInc.fecha,
         usuarioId,
       });
 
-      await tx.movimientos_caja_chica.update({ where: { id: movInc.id }, data: { asientoId: asiento.id } });
+      const movimientoBancarioId = await ligarMovimientoBancarioFondo(tx, {
+        pago, empresaId, fecha: fechaMov, monto: round2(monto),
+        concepto, referencia: referenciaPago?.trim() || fondo.codigo, asientoId: asiento.id,
+      });
+
+      await tx.movimientos_caja_chica.update({
+        where: { id: movInc.id },
+        data: { asientoId: asiento.id, movimientoBancarioId },
+      });
 
       const nuevoMonto = round2(Number(fondo.montoFondo) + Number(monto));
       await tx.cajas_chicas.update({ where: { id: cajaChicaId }, data: { montoFondo: nuevoMonto } });
@@ -508,7 +623,7 @@ router.post('/:id/incrementar', autorizarPermiso('cajaChica.gestionar'), async (
     });
   } catch (error) {
     console.error('POST /caja-chica/:id/incrementar:', error);
-    res.status(500).json({ success: false, mensaje: 'Error al incrementar el fondo' });
+    res.status(error.status || 500).json({ success: false, mensaje: error.message || 'Error al incrementar el fondo' });
   }
 });
 

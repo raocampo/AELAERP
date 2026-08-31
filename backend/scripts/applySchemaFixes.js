@@ -793,6 +793,15 @@ const FIXES = [
   // Permisos adicionales por usuario (2026-08-31) — array de claves de
   // PERMISSIONS que se suman a las del rol (OR). Ver utils/roles.js.
   `ALTER TABLE "usuarios" ADD COLUMN IF NOT EXISTS "permisosExtra" JSONB`,
+  // Caja Chica Fase 3 (2026-08-31) — apertura/incremento/reposición pagados
+  // con banco, con conciliación real en Libro de Bancos (movimientos_bancarios).
+  `ALTER TABLE "pagos_proveedor" ADD COLUMN IF NOT EXISTS "movimientoBancarioId" INTEGER`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "pagos_proveedor_movimientoBancarioId_key" ON "pagos_proveedor"("movimientoBancarioId")`,
+  `ALTER TABLE "movimientos_caja_chica" ADD COLUMN IF NOT EXISTS "metodoPago" VARCHAR(20)`,
+  `ALTER TABLE "movimientos_caja_chica" ADD COLUMN IF NOT EXISTS "bancoId" INTEGER`,
+  `ALTER TABLE "movimientos_caja_chica" ADD COLUMN IF NOT EXISTS "chequeId" INTEGER`,
+  `ALTER TABLE "movimientos_caja_chica" ADD COLUMN IF NOT EXISTS "movimientoBancarioId" INTEGER`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "movimientos_caja_chica_movimientoBancarioId_key" ON "movimientos_caja_chica"("movimientoBancarioId")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

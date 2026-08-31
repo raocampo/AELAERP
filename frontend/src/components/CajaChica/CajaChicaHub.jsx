@@ -53,6 +53,55 @@ function useTiposGastoCajaChica() {
   return tipos;
 }
 
+function useBancos() {
+  const [bancos, setBancos] = useState([]);
+  useEffect(() => {
+    api.get('/bancos').then((r) => setBancos((r.data?.data || []).filter((b) => b.activo))).catch(() => {});
+  }, []);
+  return bancos;
+}
+
+const METODOS_PAGO_FONDO = [
+  { value: 'efectivo', label: 'Efectivo' },
+  { value: 'transferencia', label: 'Transferencia' },
+  { value: 'cheque', label: 'Cheque' },
+];
+
+// ─── Campos de pago (método/banco/referencia) — apertura/incremento/
+// reposición de un fondo con dinero real (Fase 3). Efectivo: sin campos
+// extra. Transferencia/Cheque: exige elegir el banco para que el asiento
+// acredite su cuenta específica y el movimiento aparezca en Libro de Bancos.
+function CamposPagoBanco({ form, onChange }) {
+  const bancos = useBancos();
+  return (
+    <>
+      <div className="cc-form-row">
+        <label>
+          Método de pago
+          <select name="metodoPago" value={form.metodoPago} onChange={onChange}>
+            {METODOS_PAGO_FONDO.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+        </label>
+        {form.metodoPago !== 'efectivo' && (
+          <label>
+            Banco *
+            <select name="bancoId" value={form.bancoId} onChange={onChange} required>
+              <option value="">— Seleccione —</option>
+              {bancos.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+      {form.metodoPago !== 'efectivo' && (
+        <label>
+          Referencia
+          <input name="referenciaPago" value={form.referenciaPago} onChange={onChange} placeholder="# transferencia / cheque" maxLength={100} />
+        </label>
+      )}
+    </>
+  );
+}
+
 // ─── Modal Nuevo Fondo ───────────────────────────────────────────────────────
 function ModalNuevoFondo({ onClose, onSaved }) {
   const cuentas = useCuentasContables();
@@ -60,6 +109,7 @@ function ModalNuevoFondo({ onClose, onSaved }) {
   const [form, setForm] = useState({
     codigo: '', nombre: '', montoFondo: '', responsableId: '',
     cuentaFondoId: '', cuentaContrapartidaId: '', observaciones: '',
+    metodoPago: 'efectivo', bancoId: '', referenciaPago: '',
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -77,6 +127,7 @@ function ModalNuevoFondo({ onClose, onSaved }) {
         responsableId: form.responsableId || null,
         cuentaFondoId: form.cuentaFondoId || null,
         cuentaContrapartidaId: form.cuentaContrapartidaId || null,
+        bancoId: form.bancoId || null,
       });
       onSaved();
     } catch (err) {
@@ -135,6 +186,7 @@ function ModalNuevoFondo({ onClose, onSaved }) {
             Observaciones
             <textarea name="observaciones" value={form.observaciones} onChange={handle} rows={2} />
           </label>
+          <CamposPagoBanco form={form} onChange={handle} />
           {error && <p className="cc-error">{error}</p>}
           <div className="cc-form-actions">
             <button type="button" className="cc-btn cc-btn-secondary" onClick={onClose}>Cancelar</button>
@@ -261,23 +313,56 @@ function ModalGasto({ cajaChicaId, saldoDisponible, onClose, onSaved }) {
 }
 
 // ─── Modal Acción simple (Reponer / Incrementar / Disminuir) ─────────────────
-function ModalAccion({ titulo, accion, cajaChicaId, totalPendiente, saldoDisponible, onClose, onSaved }) {
-  const [form, setForm] = useState({ monto: totalPendiente ? String(totalPendiente) : '', descripcion: '', fecha: '' });
+// Reponer (Fase 3): selección manual por checkboxes en vez de "todos los
+// pendientes automático" — recibe pendientesReponer (ya calculado por el
+// backend, ver GET /caja-chica/:id) y arranca con todos marcados (mismo
+// comportamiento que antes si no se toca nada).
+function ModalAccion({ titulo, accion, cajaChicaId, totalPendiente, saldoDisponible, pendientesReponer, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    monto: totalPendiente ? String(totalPendiente) : '', descripcion: '', fecha: '',
+    metodoPago: 'efectivo', bancoId: '', referenciaPago: '',
+  });
+  const [seleccionados, setSeleccionados] = useState(() => new Set((pendientesReponer || []).map((p) => p.id)));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
   const handle = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
+  const toggleSeleccionado = (id) => setSeleccionados((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const esReponer = accion === 'reponer';
+  const listaPendientes = pendientesReponer || [];
+  const todosSeleccionados = listaPendientes.length > 0 && seleccionados.size === listaPendientes.length;
+  const toggleTodos = () => setSeleccionados(todosSeleccionados ? new Set() : new Set(listaPendientes.map((p) => p.id)));
+  const totalSeleccionado = listaPendientes
+    .filter((p) => seleccionados.has(p.id))
+    .reduce((a, p) => a + Number(p.monto), 0);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (esReponer && seleccionados.size === 0) {
+      setError('Selecciona al menos un movimiento pendiente');
+      return;
+    }
     setGuardando(true);
     try {
-      await api.post(`/caja-chica/${cajaChicaId}/${accion}`, {
-        monto: parseFloat(form.monto),
+      const payload = {
         descripcion: form.descripcion || undefined,
         fecha: form.fecha || undefined,
-      });
+      };
+      if (!esReponer) payload.monto = parseFloat(form.monto);
+      if (esReponer) payload.movimientoIds = Array.from(seleccionados);
+      if (accion === 'incrementar' || esReponer) {
+        payload.metodoPago = form.metodoPago;
+        payload.bancoId = form.bancoId || null;
+        payload.referenciaPago = form.referenciaPago || undefined;
+      }
+      await api.post(`/caja-chica/${cajaChicaId}/${accion}`, payload);
       onSaved();
     } catch (err) {
       setError(err.response?.data?.mensaje || 'Error al procesar la operación');
@@ -293,19 +378,47 @@ function ModalAccion({ titulo, accion, cajaChicaId, totalPendiente, saldoDisponi
           <h3>{titulo}</h3>
           <button className="cc-modal-close" onClick={onClose}>✕</button>
         </div>
-        {accion === 'reponer' && totalPendiente > 0 && (
-          <p className="cc-saldo-hint">Total de gastos pendientes: <strong>${formatMoney(totalPendiente)}</strong></p>
-        )}
         {accion === 'disminuir' && (
           <p className="cc-saldo-hint">Saldo disponible: <strong>${formatMoney(saldoDisponible)}</strong></p>
         )}
         <form onSubmit={handleSubmit} className="cc-form">
-          {accion !== 'reponer' && (
+          {!esReponer && (
             <label>
               Monto *
               <input name="monto" type="number" step="0.01" min="0.01" value={form.monto} onChange={handle} placeholder="0.00" required />
             </label>
           )}
+
+          {esReponer && (
+            <div className="cc-movimientos">
+              <label className="cc-check-inline" style={{ marginBottom: '.4rem' }}>
+                <input type="checkbox" checked={todosSeleccionados} onChange={toggleTodos} />
+                Seleccionar todos ({listaPendientes.length})
+              </label>
+              <table className="cc-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Fecha</th>
+                    <th>Concepto</th>
+                    <th>Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {listaPendientes.map((p) => (
+                    <tr key={p.id}>
+                      <td><input type="checkbox" checked={seleccionados.has(p.id)} onChange={() => toggleSeleccionado(p.id)} /></td>
+                      <td>{formatFecha(p.fecha)}</td>
+                      <td>{p.concepto}</td>
+                      <td className="cc-mono">${formatMoney(p.monto)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="cc-saldo-hint">Total seleccionado: <strong>${formatMoney(totalSeleccionado)}</strong></p>
+            </div>
+          )}
+
           <div className="cc-form-row">
             <label>
               Descripción
@@ -316,6 +429,9 @@ function ModalAccion({ titulo, accion, cajaChicaId, totalPendiente, saldoDisponi
               <input name="fecha" type="date" value={form.fecha} onChange={handle} />
             </label>
           </div>
+          {(accion === 'incrementar' || esReponer) && (
+            <CamposPagoBanco form={form} onChange={handle} />
+          )}
           {error && <p className="cc-error">{error}</p>}
           <div className="cc-form-actions">
             <button type="button" className="cc-btn cc-btn-secondary" onClick={onClose}>Cancelar</button>
@@ -492,6 +608,7 @@ function FondoDetalle({ fondoId, empresaId, onVolver, onRefreshLista }) {
   const [modal, setModal] = useState(null); // 'gasto' | 'reponer' | 'incrementar' | 'disminuir'
   const [cerrando, setCerrando] = useState(false);
   const [toast, setToast] = useState('');
+  const [asientosManuales, setAsientosManuales] = useState([]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -506,6 +623,18 @@ function FondoDetalle({ fondoId, empresaId, onVolver, onRefreshLista }) {
   }, [fondoId]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // Asientos registrados a mano desde este fondo (botón "Asiento manual",
+  // referencia CC-MANUAL-{fondoId}) — no vienen en el historial de
+  // movimientos de arriba porque no generan movimientos_caja_chica.
+  useEffect(() => {
+    const referenciaExacta = `CC-MANUAL-${fondoId}`;
+    api.get('/contabilidad/asientos', { params: { q: referenciaExacta } })
+      // El filtro del backend es "contains", no exacto — CC-MANUAL-3 también
+      // traería CC-MANUAL-30/33/etc. Se filtra acá al valor exacto.
+      .then((r) => setAsientosManuales((r.data?.data || []).filter((a) => a.referencia === referenciaExacta)))
+      .catch(() => {});
+  }, [fondoId]);
 
   const onAccionFin = (msg) => {
     setModal(null);
@@ -603,6 +732,13 @@ function FondoDetalle({ fondoId, empresaId, onVolver, onRefreshLista }) {
           </button>
           <button className="cc-btn cc-btn-secondary" onClick={() => setModal('incrementar')}>↑ Incrementar</button>
           <button className="cc-btn cc-btn-secondary" onClick={() => setModal('disminuir')}>↓ Disminuir</button>
+          <button
+            className="cc-btn cc-btn-secondary"
+            onClick={() => navigate(`/contabilidad?tab=diario&nuevoAsientoReferencia=CC-MANUAL-${fondoId}`)}
+            title="Registrar un movimiento contable del fondo que no encaja en las operaciones de arriba"
+          >
+            🧾 Asiento manual
+          </button>
           <button className="cc-btn cc-btn-danger" onClick={handleCerrar} disabled={cerrando}>
             {cerrando ? 'Cerrando...' : '✕ Cerrar fondo'}
           </button>
@@ -651,7 +787,7 @@ function FondoDetalle({ fondoId, empresaId, onVolver, onRefreshLista }) {
                   </td>
                   <td>
                     {m.asiento
-                      ? <span className="cc-asiento-link" title={m.asiento.numero}>✓ {m.asiento.numero}</span>
+                      ? <button type="button" className="cc-link" onClick={() => navigate(`/contabilidad?tab=diario&verAsiento=${m.asiento.id}`)}>✓ {m.asiento.numero}</button>
                       : <span className="cc-sin-asiento">—</span>}
                   </td>
                   <td>
@@ -673,6 +809,34 @@ function FondoDetalle({ fondoId, empresaId, onVolver, onRefreshLista }) {
         )}
       </div>
 
+      {asientosManuales.length > 0 && (
+        <div className="cc-movimientos">
+          <h3>Asientos manuales del fondo</h3>
+          <table className="cc-table">
+            <thead>
+              <tr>
+                <th>N°</th>
+                <th>Fecha</th>
+                <th>Descripción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {asientosManuales.map((a) => (
+                <tr key={a.id}>
+                  <td>
+                    <button type="button" className="cc-link" onClick={() => navigate(`/contabilidad?tab=diario&verAsiento=${a.id}`)}>
+                      {a.numero}
+                    </button>
+                  </td>
+                  <td>{formatFecha(a.fecha)}</td>
+                  <td>{a.descripcion}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {modal === 'gasto' && (
         <ModalGasto
           cajaChicaId={fondoId}
@@ -688,6 +852,7 @@ function FondoDetalle({ fondoId, empresaId, onVolver, onRefreshLista }) {
           cajaChicaId={fondoId}
           totalPendiente={fondo.totalPendienteReponer}
           saldoDisponible={fondo.saldoDisponible}
+          pendientesReponer={fondo.pendientesReponer}
           onClose={() => setModal(null)}
           onSaved={() => onAccionFin('Reposición registrada con asiento contable')}
         />

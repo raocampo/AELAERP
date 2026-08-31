@@ -1108,6 +1108,22 @@ const ContabilidadHub = () => {
   const editarAsiento = (id) => cargarAsientoEnFormulario(id, false);
   const verAsiento = (id) => cargarAsientoEnFormulario(id, true);
 
+  // Caja Chica → "Asiento manual" / link a un asiento ya creado: llega acá
+  // con ?nuevoAsientoReferencia=CC-MANUAL-{fondoId} o ?verAsiento={id} en la
+  // URL en vez de pasar el estado del modal por props/contexto. Una sola vez
+  // al montar.
+  useEffect(() => {
+    const refParam = searchParams.get('nuevoAsientoReferencia');
+    const verParam = searchParams.get('verAsiento');
+    if (refParam) {
+      abrirNuevoAsiento();
+      setAsientoForm((prev) => ({ ...prev, referencia: refParam }));
+    } else if (verParam) {
+      verAsiento(parseInt(verParam, 10));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const imprimirAsiento = async (id) => {
     try {
       const res = await api.get(`/contabilidad/asientos/${id}/pdf`, { responseType: 'blob' });

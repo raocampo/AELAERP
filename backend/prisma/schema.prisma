@@ -919,6 +919,10 @@ model pagos_proveedor {
   referencia         String?   @db.VarChar(100)
   observaciones      String?
   asientoId          Int?
+  // Fila en Libro de Bancos creada cuando este pago se hizo con
+  // transferencia/cheque y el banco tiene cuenta contable vinculada — permite
+  // reversarla si se anula el pago (ver crearAsientoReversoPagoProveedor).
+  movimientoBancarioId Int?      @unique
   anulado            Boolean   @default(false)
   motivoAnulacion    String?   @db.VarChar(500)
   fechaAnulacion     DateTime?
@@ -934,6 +938,7 @@ model pagos_proveedor {
   cheque              cheques?                @relation(fields: [chequeId], references: [id])
   cajaChica           cajas_chicas?           @relation(fields: [cajaChicaId], references: [id])
   asiento             asientos_contables?     @relation(fields: [asientoId], references: [id])
+  movimientoBancario  movimientos_bancarios?  @relation(fields: [movimientoBancarioId], references: [id])
   movimientoCajaChica movimientos_caja_chica?
 
   @@unique([empresaId, numero])
@@ -1792,20 +1797,29 @@ model movimientos_caja_chica {
   // movimiento — permite navegar de vuelta y anular ambos juntos.
   facturaCompraId      Int?
   pagoProveedorId      Int?     @unique
+  // Solo para APERTURA/INCREMENTO/REPOSICION pagados con banco (en vez de
+  // efectivo) — mismo patrón que pagos_proveedor.bancoId/chequeId.
+  metodoPago           String?  @db.VarChar(20)
+  bancoId              Int?
+  chequeId             Int?
+  movimientoBancarioId Int?     @unique
   anulado              Boolean  @default(false)
   motivoAnulacion      String?  @db.VarChar(300)
   usuarioId            Int
 
   createdAt DateTime @default(now())
 
-  cajaChica     cajas_chicas           @relation(fields: [cajaChicaId], references: [id])
-  empresa       empresas               @relation(fields: [empresaId], references: [id])
-  centroCosto   centros_costo?         @relation(fields: [centroCostoId], references: [id])
-  tipoGasto     tipo_gasto_caja_chica? @relation(fields: [tipoGastoCajaChicaId], references: [id])
-  asiento       asientos_contables?    @relation(fields: [asientoId], references: [id])
-  usuario       usuarios               @relation("MovCajaChicaUsuario", fields: [usuarioId], references: [id])
-  facturaCompra facturas_compra?       @relation(fields: [facturaCompraId], references: [id])
-  pagoProveedor pagos_proveedor?       @relation(fields: [pagoProveedorId], references: [id])
+  cajaChica          cajas_chicas            @relation(fields: [cajaChicaId], references: [id])
+  empresa            empresas                @relation(fields: [empresaId], references: [id])
+  centroCosto        centros_costo?          @relation(fields: [centroCostoId], references: [id])
+  tipoGasto          tipo_gasto_caja_chica?  @relation(fields: [tipoGastoCajaChicaId], references: [id])
+  asiento            asientos_contables?     @relation(fields: [asientoId], references: [id])
+  usuario            usuarios                @relation("MovCajaChicaUsuario", fields: [usuarioId], references: [id])
+  facturaCompra      facturas_compra?        @relation(fields: [facturaCompraId], references: [id])
+  pagoProveedor      pagos_proveedor?        @relation(fields: [pagoProveedorId], references: [id])
+  banco              bancos?                 @relation(fields: [bancoId], references: [id])
+  cheque             cheques?                @relation(fields: [chequeId], references: [id])
+  movimientoBancario movimientos_bancarios?  @relation(fields: [movimientoBancarioId], references: [id])
 
   @@index([cajaChicaId])
   @@index([empresaId])
@@ -1836,12 +1850,13 @@ model bancos {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  empresa        empresas                @relation(fields: [empresaId], references: [id])
-  cuentaContable plan_cuentas?           @relation(fields: [cuentaContableId], references: [id])
-  movimientos    movimientos_bancarios[]
-  cheques        cheques[]
-  cobrosCliente  cobros_cliente[]
-  pagosProveedor pagos_proveedor[]
+  empresa             empresas                 @relation(fields: [empresaId], references: [id])
+  cuentaContable      plan_cuentas?            @relation(fields: [cuentaContableId], references: [id])
+  movimientos         movimientos_bancarios[]
+  cheques             cheques[]
+  cobrosCliente       cobros_cliente[]
+  pagosProveedor      pagos_proveedor[]
+  movimientosCajaChica movimientos_caja_chica[]
 
   @@unique([empresaId, numeroCuenta])
   @@index([empresaId])
@@ -1872,9 +1887,11 @@ model movimientos_bancarios {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  banco   bancos              @relation(fields: [bancoId], references: [id])
-  asiento asientos_contables? @relation(fields: [asientoId], references: [id])
-  cheque  cheques?            @relation(fields: [chequeId], references: [id])
+  banco              bancos                  @relation(fields: [bancoId], references: [id])
+  asiento            asientos_contables?     @relation(fields: [asientoId], references: [id])
+  cheque             cheques?                @relation(fields: [chequeId], references: [id])
+  pagoProveedor      pagos_proveedor?
+  movimientoCajaChica movimientos_caja_chica?
 
   @@index([bancoId])
   @@index([empresaId])
@@ -1899,13 +1916,14 @@ model cheques {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  banco          bancos                  @relation(fields: [bancoId], references: [id])
-  empresa        empresas                @relation(fields: [empresaId], references: [id])
-  proveedor      proveedores?            @relation(fields: [proveedorId], references: [id])
-  usuario        usuarios?               @relation(fields: [usuarioId], references: [id])
-  movimientos    movimientos_bancarios[]
-  cobrosCliente  cobros_cliente[]
-  pagosProveedor pagos_proveedor[]
+  banco                bancos                  @relation(fields: [bancoId], references: [id])
+  empresa              empresas                @relation(fields: [empresaId], references: [id])
+  proveedor            proveedores?            @relation(fields: [proveedorId], references: [id])
+  usuario              usuarios?               @relation(fields: [usuarioId], references: [id])
+  movimientos          movimientos_bancarios[]
+  cobrosCliente        cobros_cliente[]
+  pagosProveedor       pagos_proveedor[]
+  movimientosCajaChica movimientos_caja_chica[]
 
   @@unique([bancoId, numero])
   @@index([bancoId])

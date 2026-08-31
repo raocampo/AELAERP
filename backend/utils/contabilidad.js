@@ -895,6 +895,55 @@ async function crearAsientoMovimientoBancario({ movimientoId, cuentaContrapartid
   return { asiento, creado: true };
 }
 
+// Prefijo de comprobante por categoría — mismo criterio que
+// routes/bancos.js:PREFIJO_COMPROBANTE (duplicado a propósito: ese es local
+// a las rutas de Bancos, y utils/ no debe depender de routes/).
+const PREFIJO_MOVBANCO = {
+  DEPOSITO: 'ING', TRANSFERENCIA_IN: 'ING',
+  RETIRO: 'EGR', TRANSFERENCIA_OUT: 'EGR', CHEQUE: 'EGR',
+  NOTA_CREDITO: 'NC', NOTA_DEBITO: 'ND', AJUSTE: 'AJU',
+};
+
+// ─── Movimiento bancario ligado a un asiento YA creado por otra operación ──
+// A diferencia de crearAsientoMovimientoBancario (arriba, que crea el asiento
+// de un movimiento manual ya existente), esta función es para operaciones que
+// YA generaron su propio asiento correcto (pago a proveedor, apertura/
+// incremento/reposición de caja chica) y solo necesitan que ese pago/egreso
+// también aparezca en Libro de Bancos para poder conciliarlo — no crea un
+// asiento nuevo, solo enlaza el mismo `asientoId` a la fila del movimiento.
+async function registrarMovimientoBancarioLigado({
+  bancoId, empresaId, fecha = new Date(), tipo, concepto, referencia = null,
+  monto, esIngreso = false, asientoId = null, chequeId = null, db = prisma,
+}) {
+  const bancoIdNum = toInt(bancoId);
+  if (!bancoIdNum) throw new Error('bancoId es requerido para registrar el movimiento bancario');
+  const montoRedondeado = round2(monto);
+  if (!(montoRedondeado > 0)) throw new Error('El monto del movimiento bancario debe ser mayor a cero');
+
+  const tipoNorm = String(tipo || '').toUpperCase();
+  const numero = await siguienteNumeroGenerico({
+    modelo: 'movimientos_bancarios',
+    prefijo: PREFIJO_MOVBANCO[tipoNorm] || 'MOV',
+    empresaId, fecha, tx: db,
+  });
+
+  return db.movimientos_bancarios.create({
+    data: {
+      bancoId: bancoIdNum,
+      empresaId: toInt(empresaId),
+      fecha,
+      tipo: tipoNorm,
+      numero,
+      concepto,
+      referencia,
+      debe: esIngreso ? montoRedondeado : 0,
+      haber: esIngreso ? 0 : montoRedondeado,
+      asientoId: asientoId ? toInt(asientoId) : null,
+      chequeId: chequeId ? toInt(chequeId) : null,
+    },
+  });
+}
+
 async function crearAsientoCobroFactura({ facturaId, metodoPago = 'efectivo', usuarioId, fecha = new Date(), cajaId = null }) {
   const facturaIdNum = toInt(facturaId);
   const factura = await prisma.facturas.findUnique({ where: { id: facturaIdNum } });
@@ -997,10 +1046,18 @@ async function crearAsientoCobroCliente({ cobroId, usuarioId, fecha = new Date()
   return { asiento, creado: true };
 }
 
+// metodoPago -> tipo de movimientos_bancarios cuando el pago se liga a un
+// banco específico (ver registrarMovimientoBancarioLigado más abajo).
+const TIPO_MOVBANCO_POR_METODO_PAGO = {
+  transferencia: 'TRANSFERENCIA_OUT',
+  cheque: 'CHEQUE',
+  tarjeta: 'TRANSFERENCIA_OUT',
+};
+
 async function crearAsientoPagoProveedor({ pagoId, usuarioId, fecha = new Date(), db = prisma }) {
   const pago = await db.pagos_proveedor.findUnique({
     where: { id: toInt(pagoId) },
-    include: { compra: true, cajaChica: true },
+    include: { compra: true, cajaChica: true, banco: true },
   });
   if (!pago) throw new Error('Pago no encontrado');
 
@@ -1033,7 +1090,14 @@ async function crearAsientoPagoProveedor({ pagoId, usuarioId, fecha = new Date()
     }
   } else if (metodoPagoLower === 'efectivo') {
     cuentaPago = await ensureCuentaMovimiento({ empresaId: pago.empresaId, tx: db, codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
-  } else {
+  } else if (pago.banco?.cuentaContableId) {
+    // Se acredita la cuenta contable DEL BANCO específico elegido — antes
+    // siempre se usaba una cuenta "Bancos" genérica sin importar qué banco
+    // se hubiera seleccionado, lo que impedía que el pago conciliara contra
+    // el banco correcto en Libro de Bancos.
+    cuentaPago = await db.plan_cuentas.findUnique({ where: { id: pago.banco.cuentaContableId } });
+  }
+  if (!cuentaPago) {
     cuentaPago = await ensureCuentaMovimiento({ empresaId: pago.empresaId, tx: db, codigo: '1.1.02.001', nombre: 'Bancos', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
   }
 
@@ -1051,7 +1115,29 @@ async function crearAsientoPagoProveedor({ pagoId, usuarioId, fecha = new Date()
     ],
   });
 
-  await db.pagos_proveedor.update({ where: { id: pago.id }, data: { asientoId: asiento.id } });
+  const dataActualizacion = { asientoId: asiento.id };
+
+  // Si el pago se ligó a un banco específico, deja también un movimiento en
+  // Libro de Bancos (enlazado al mismo asiento, no crea uno nuevo) para que
+  // el pago aparezca ahí y se pueda conciliar.
+  if (pago.bancoId) {
+    const movBancario = await registrarMovimientoBancarioLigado({
+      bancoId: pago.bancoId,
+      empresaId: pago.empresaId,
+      fecha,
+      tipo: TIPO_MOVBANCO_POR_METODO_PAGO[metodoPagoLower] || 'TRANSFERENCIA_OUT',
+      concepto: `Pago ${pago.numero} compra ${pago.compra.numeroFactura}`,
+      referencia: pago.referencia || pago.numero,
+      monto,
+      esIngreso: false,
+      asientoId: asiento.id,
+      chequeId: pago.chequeId || null,
+      db,
+    });
+    dataActualizacion.movimientoBancarioId = movBancario.id;
+  }
+
+  await db.pagos_proveedor.update({ where: { id: pago.id }, data: dataActualizacion });
   return { asiento, creado: true };
 }
 
@@ -1121,6 +1207,28 @@ async function crearAsientoReversoPagoProveedor({ pagoId, usuarioId, fecha = new
     tx: db,
     detalles,
   });
+
+  // Si el pago original dejó un movimiento en Libro de Bancos, revertirlo
+  // con un movimiento de signo contrario ligado al asiento de reverso —
+  // nunca se edita/borra el movimiento original (mismo criterio que el
+  // asiento: reverso vía nueva fila, no edición).
+  if (pago.movimientoBancarioId) {
+    const original = await db.movimientos_bancarios.findUnique({ where: { id: pago.movimientoBancarioId } });
+    if (original) {
+      await registrarMovimientoBancarioLigado({
+        bancoId: original.bancoId,
+        empresaId: pago.empresaId,
+        fecha,
+        tipo: round2(original.debe) > 0 ? 'RETIRO' : 'TRANSFERENCIA_IN',
+        concepto: `Reverso pago ${pago.numero}`,
+        referencia: `PAGO-ANUL-${pago.id}`,
+        monto: round2(original.debe) > 0 ? round2(original.debe) : round2(original.haber),
+        esIngreso: round2(original.debe) === 0,
+        asientoId: asiento.id,
+        db,
+      });
+    }
+  }
 
   return { asiento, creado: true };
 }
@@ -2440,6 +2548,7 @@ module.exports = {
   crearAsientoCostoVentaNotaVenta,
   crearAsientoReversoNotaVentaAnulada,
   crearAsientoMovimientoBancario,
+  registrarMovimientoBancarioLigado,
   crearAsientoCobroFactura,
   crearAsientoCompraFarmacia,
   crearAsientoFacturaCompraRegistrada,
