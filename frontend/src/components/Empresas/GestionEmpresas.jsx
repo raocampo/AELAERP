@@ -19,6 +19,27 @@ const FORM_VACIO = {
   contadoraNombre: '', contadoraCedula: '', contadoraEmail: '', contadoraTelefono: '',
 };
 
+// Catálogo de módulos — espejo de MODULOS_TODOS en backend/utils/configuracionSistema.js
+const MODULOS_CATALOGO = [
+  { key: 'facturacionHabilitada',    label: 'Facturación (Facturas, Notas Venta/Débito, Guías Remisión)' },
+  { key: 'cajaDiariaHabilitada',     label: 'Caja Diaria' },
+  { key: 'posHabilitado',            label: 'POS' },
+  { key: 'inventarioHabilitado',     label: 'Inventario' },
+  { key: 'comprasHabilitadas',       label: 'Compras' },
+  { key: 'buzonSriHabilitado',       label: 'Buzón SRI' },
+  { key: 'contabilidadHabilitada',   label: 'Contabilidad (+ CxC/CxP/Caja Chica)' },
+  { key: 'retencionesHabilitadas',   label: 'Retenciones emitidas' },
+  { key: 'liquidacionesHabilitadas', label: 'Liquidaciones de compra' },
+  { key: 'atsHabilitado',            label: 'ATS' },
+  { key: 'tributarioHabilitado',     label: 'Tributario' },
+  { key: 'bancosHabilitado',         label: 'Bancos' },
+  { key: 'talentoHumanoHabilitado',  label: 'Talento Humano' },
+];
+
+// Por defecto, una empresa nueva arranca con todo activo (mismo comportamiento
+// que hoy si no se toca esta sección) — el admin desmarca lo que no necesita.
+const MODULOS_TODOS_ACTIVOS = Object.fromEntries(MODULOS_CATALOGO.map((m) => [m.key, true]));
+
 export default function GestionEmpresas() {
   const { usuario } = useAuth();
   const [empresas,        setEmpresas]        = useState([]);
@@ -29,6 +50,7 @@ export default function GestionEmpresas() {
   const [guardando,       setGuardando]       = useState(false);
   const [consultandoSri,  setConsultandoSri]  = useState(false);
   const [mensajeSri,      setMensajeSri]      = useState('');
+  const [modulosHabilitados, setModulosHabilitados] = useState(MODULOS_TODOS_ACTIVOS);
   // Panel de usuarios por empresa
   const [empresaUsuarios, setEmpresaUsuarios] = useState(null);  // id empresa expandida
   const [usuariosEmpresa, setUsuariosEmpresa] = useState([]);
@@ -110,6 +132,7 @@ export default function GestionEmpresas() {
     setForm(FORM_VACIO);
     setEditando(null);
     setMensajeSri('');
+    setModulosHabilitados(MODULOS_TODOS_ACTIVOS);
     setMostrarForm(true);
   };
 
@@ -137,6 +160,7 @@ export default function GestionEmpresas() {
     });
     setEditando(e.id);
     setMensajeSri('');
+    setModulosHabilitados({ ...MODULOS_TODOS_ACTIVOS, ...(e.modulosHabilitados || {}) });
     setMostrarForm(true);
   };
 
@@ -144,6 +168,8 @@ export default function GestionEmpresas() {
     const { name, value, type, checked } = e.target;
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
+
+  const toggleModulo = (key) => setModulosHabilitados(prev => ({ ...prev, [key]: !prev[key] }));
 
   const consultarSri = async (rucIngresado = form.ruc) => {
     const rucLimpio = String(rucIngresado || '').replace(/\D/g, '');
@@ -187,6 +213,7 @@ export default function GestionEmpresas() {
       const payload = {
         ...form,
         parentEmpresaId: form.parentEmpresaId ? parseInt(form.parentEmpresaId, 10) : null,
+        modulosHabilitados,
       };
       if (editando) {
         await api.put(`/empresas/${editando}`, payload);
@@ -520,6 +547,33 @@ export default function GestionEmpresas() {
                       <option value="JURIDICA">Persona Jurídica (Sociedad)</option>
                       <option value="NATURAL">Persona Natural</option>
                     </select>
+                  </div>
+
+                  {/* Módulos habilitados */}
+                  <div className="ge-field ge-col-full">
+                    <div className="ge-section-title">🧩 Módulos habilitados</div>
+                    <small>
+                      Desmarca lo que esta empresa no necesita — por ejemplo, una empresa que solo
+                      factura no necesita Contabilidad, Retenciones ni Talento Humano. Se puede cambiar
+                      después desde Configuración del Sistema, con esta empresa activa en el selector.
+                    </small>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                      gap: '.4rem .75rem',
+                      marginTop: '.6rem',
+                    }}>
+                      {MODULOS_CATALOGO.map(m => (
+                        <label key={m.key} className="ge-checkbox-field" style={{ alignItems: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(modulosHabilitados[m.key])}
+                            onChange={() => toggleModulo(m.key)}
+                          />
+                          <span className="ge-checkbox-label" style={{ fontWeight: 400 }}>{m.label}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Empresa matriz (si es filial) */}

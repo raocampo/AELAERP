@@ -17,6 +17,8 @@ const {
 } = require('../utils/sriContribuyente');
 const {
   asegurarConfiguracionSistemaEmpresa,
+  construirPayloadConfiguracionSistema,
+  MODULOS_TODOS,
 } = require('../utils/configuracionSistema');
 const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
 const { normalizarRol, tienePermiso } = require('../utils/roles');
@@ -38,6 +40,21 @@ async function rolEnEmpresa(prisma, usuarioId, baseEmpresaId, baseRol, empresaId
   return acceso ? normalizarRol(acceso.rol) : null;
 }
 
+// Extrae un objeto plano { facturacionHabilitada: true, ... } (solo las claves
+// de MODULOS_TODOS) desde el registro configuracion_sistema de la empresa —
+// usado por el frontend para pre-poblar los checkboxes de módulos al editar.
+// Si la empresa no tiene configuracion_sistema todavía (no debería pasar,
+// asegurarConfiguracionSistemaEmpresa la crea al crear la empresa), se omite
+// y el frontend cae a sus propios valores por defecto.
+function conModulosHabilitados(e) {
+  const { configuracionSistema, ...resto } = e;
+  if (!configuracionSistema) return resto;
+  const modulosHabilitados = Object.fromEntries(
+    MODULOS_TODOS.map((k) => [k, Boolean(configuracionSistema[k])])
+  );
+  return { ...resto, modulosHabilitados };
+}
+
 // GET /api/empresas — empresas a las que el usuario tiene acceso
 router.get('/', proteger, soloAdmin, async (req, res) => {
   try {
@@ -53,9 +70,9 @@ router.get('/', proteger, soloAdmin, async (req, res) => {
       const empresas = await req.prisma.empresas.findMany({
         where: { activo: true },
         orderBy: { razonSocial: 'asc' },
-        include: { _count: { select: { usuarios: true, facturas: true } } },
+        include: { _count: { select: { usuarios: true, facturas: true } }, configuracionSistema: true },
       });
-      return res.json({ success: true, data: empresas.map(e => ({ ...e, rolUsuario: 'admin' })) });
+      return res.json({ success: true, data: empresas.map(e => ({ ...conModulosHabilitados(e), rolUsuario: 'admin' })) });
     }
 
     // No admin macro: solo empresas con acceso explícito
@@ -79,12 +96,12 @@ router.get('/', proteger, soloAdmin, async (req, res) => {
     const empresas = await req.prisma.empresas.findMany({
       where: { id: { in: [...rolPorEmpresa.keys()] }, activo: true },
       orderBy: { razonSocial: 'asc' },
-      include: { _count: { select: { usuarios: true, facturas: true } } },
+      include: { _count: { select: { usuarios: true, facturas: true } }, configuracionSistema: true },
     });
 
     res.json({
       success: true,
-      data: empresas.map(e => ({ ...e, rolUsuario: rolPorEmpresa.get(e.id) || 'operador' })),
+      data: empresas.map(e => ({ ...conModulosHabilitados(e), rolUsuario: rolPorEmpresa.get(e.id) || 'operador' })),
     });
   } catch (err) {
     res.status(500).json({ success: false, mensaje: 'Error al listar empresas' });
@@ -377,7 +394,8 @@ router.post('/', proteger, soloAdmin, async (req, res) => {
     const { ruc, razonSocial, nombreComercial, direccion, email, telefono, plan, crearConfiguracionSri,
             esMatriz, parentEmpresaId, tipoContribuyente,
             repLegalNombre, repLegalCedula, repLegalCargo, repLegalEmail,
-            contadoraNombre, contadoraCedula, contadoraEmail, contadoraTelefono } = req.body;
+            contadoraNombre, contadoraCedula, contadoraEmail, contadoraTelefono,
+            modulosHabilitados } = req.body;
     if (!ruc || !razonSocial) {
       return res.status(400).json({ success: false, mensaje: 'RUC y razón social son requeridos' });
     }
@@ -433,8 +451,18 @@ router.post('/', proteger, soloAdmin, async (req, res) => {
       if (crearConfiguracionSri !== false) {
         await asegurarConfiguracionSriEmpresa(tx, creada, empresaSri);
       }
-      await asegurarConfiguracionSistemaEmpresa(creada, tx);
+      const configBase = await asegurarConfiguracionSistemaEmpresa(creada, tx);
       await sembrarPlanCuentasBase(tx, creada.id);
+
+      // Módulos habilitados elegidos al crear la empresa — mismo mecanismo
+      // que Configuración del Sistema (PUT /configuracion-sistema), pero
+      // aplicado en el momento de la creación en vez de requerir un paso
+      // aparte. Sin esto, toda empresa nueva arranca con el techo completo
+      // del plan activado.
+      if (modulosHabilitados && typeof modulosHabilitados === 'object') {
+        const payload = construirPayloadConfiguracionSistema({ ...creada, ...configBase }, modulosHabilitados);
+        await tx.configuracion_sistema.update({ where: { empresaId: creada.id }, data: payload });
+      }
 
       return creada;
     });
@@ -454,7 +482,8 @@ router.put('/:id', proteger, soloAdmin, async (req, res) => {
     const { razonSocial, nombreComercial, direccion, email, telefono, plan, activo,
             esMatriz, parentEmpresaId, tipoContribuyente,
             repLegalNombre, repLegalCedula, repLegalCargo, repLegalEmail,
-            contadoraNombre, contadoraCedula, contadoraEmail, contadoraTelefono } = req.body;
+            contadoraNombre, contadoraCedula, contadoraEmail, contadoraTelefono,
+            modulosHabilitados } = req.body;
     const data = {};
     if (razonSocial !== undefined)     data.razonSocial     = razonSocial;
     if (nombreComercial !== undefined) data.nombreComercial = nombreComercial;
@@ -495,6 +524,17 @@ router.put('/:id', proteger, soloAdmin, async (req, res) => {
           data: dataConfig,
         });
       }
+
+      // Módulos habilitados editados desde el modal de empresa — se aplican
+      // después del bloque de plan de arriba para que, si ambos vienen en el
+      // mismo request, la selección explícita de módulos gane sobre el
+      // recorte automático que hace el cambio de plan.
+      if (modulosHabilitados && typeof modulosHabilitados === 'object') {
+        const actualConfig = await tx.configuracion_sistema.findUnique({ where: { empresaId: actualizada.id } });
+        const payload = construirPayloadConfiguracionSistema({ ...actualizada, ...actualConfig }, modulosHabilitados);
+        await tx.configuracion_sistema.update({ where: { empresaId: actualizada.id }, data: payload });
+      }
+
       return actualizada;
     });
     res.json({ success: true, data: empresa });
