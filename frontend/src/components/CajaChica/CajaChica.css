@@ -15,6 +15,12 @@
   flex-wrap: wrap;
 }
 
+.cc-hub-header-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 .cc-hub-title {
   font-size: 1.6rem;
   font-weight: 700;
@@ -491,6 +497,13 @@
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
+
+.cc-check-inline {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem !important;
+}
+.cc-check-inline input[type="checkbox"] { width: auto; }
 
 .cc-saldo-hint {
   font-size: 0.85rem;

@@ -329,6 +329,161 @@ function ModalAccion({ titulo, accion, cajaChicaId, totalPendiente, saldoDisponi
   );
 }
 
+// ─── Modal Tipos de gasto (catálogo) ─────────────────────────────────────────
+const TIPO_GASTO_VACIO = { id: null, codigo: '', nombre: '', descripcion: '', activo: true };
+
+function ModalTiposGasto({ onClose }) {
+  const [tipos, setTipos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [form, setForm] = useState(TIPO_GASTO_VACIO);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    try {
+      const r = await api.get('/caja-chica/tipos-gasto', { params: { activo: 'todos' } });
+      setTipos(r.data?.data || []);
+    } catch {
+      // silencioso
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const limpiar = () => { setForm(TIPO_GASTO_VACIO); setError(''); };
+
+  const editar = (t) => setForm({ id: t.id, codigo: t.codigo, nombre: t.nombre, descripcion: t.descripcion || '', activo: t.activo });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setGuardando(true);
+    try {
+      const payload = { codigo: form.codigo, nombre: form.nombre, descripcion: form.descripcion || null, activo: form.activo };
+      if (form.id) {
+        await api.put(`/caja-chica/tipos-gasto/${form.id}`, payload);
+      } else {
+        await api.post('/caja-chica/tipos-gasto', payload);
+      }
+      limpiar();
+      await cargar();
+    } catch (err) {
+      setError(err.response?.data?.mensaje || 'Error al guardar el tipo de gasto');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const eliminar = async (t) => {
+    if (!window.confirm(`¿Eliminar el tipo de gasto "${t.nombre}"?`)) return;
+    try {
+      await api.delete(`/caja-chica/tipos-gasto/${t.id}`);
+      await cargar();
+    } catch (err) {
+      alert(err.response?.data?.mensaje || 'Error al eliminar');
+    }
+  };
+
+  return (
+    <div className="cc-modal-overlay">
+      <div className="cc-modal">
+        <div className="cc-modal-header">
+          <h3>Tipos de gasto de Caja Chica</h3>
+          <button className="cc-modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="cc-form">
+          <div className="cc-form-row">
+            <label>
+              Código *
+              <input
+                value={form.codigo}
+                onChange={(e) => setForm((f) => ({ ...f, codigo: e.target.value }))}
+                placeholder="TRANSPORTE" required maxLength={30}
+              />
+            </label>
+            <label>
+              Nombre *
+              <input
+                value={form.nombre}
+                onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
+                placeholder="Transporte" required maxLength={100}
+              />
+            </label>
+          </div>
+          <label>
+            Descripción
+            <input
+              value={form.descripcion}
+              onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))}
+              maxLength={200}
+            />
+          </label>
+          <label className="cc-check-inline">
+            <input
+              type="checkbox"
+              checked={form.activo}
+              onChange={(e) => setForm((f) => ({ ...f, activo: e.target.checked }))}
+            />
+            Activo
+          </label>
+          {error && <p className="cc-error">{error}</p>}
+          <div className="cc-form-actions">
+            {form.id && (
+              <button type="button" className="cc-btn cc-btn-secondary" onClick={limpiar}>Cancelar edición</button>
+            )}
+            <button type="submit" className="cc-btn cc-btn-primary" disabled={guardando}>
+              {guardando ? 'Guardando...' : form.id ? '✓ Actualizar' : '+ Agregar tipo de gasto'}
+            </button>
+          </div>
+        </form>
+
+        <div className="cc-movimientos">
+          {cargando ? (
+            <div className="cc-loading">Cargando...</div>
+          ) : tipos.length === 0 ? (
+            <p className="cc-vacio">Sin tipos de gasto todavía.</p>
+          ) : (
+            <table className="cc-table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Estado</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {tipos.map((t) => (
+                  <tr key={t.id} className={!t.activo ? 'cc-row-anulado' : ''}>
+                    <td className="cc-mono">{t.codigo}</td>
+                    <td>{t.nombre}</td>
+                    <td>{t.descripcion || '—'}</td>
+                    <td>
+                      {t.activo
+                        ? <span className="cc-badge cc-badge-ok">Activo</span>
+                        : <span className="cc-badge cc-badge-anulado">Inactivo</span>}
+                    </td>
+                    <td>
+                      <button className="cc-btn-anular" onClick={() => editar(t)}>Editar</button>
+                      {' '}
+                      <button className="cc-btn-anular" onClick={() => eliminar(t)}>Eliminar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Vista detalle de un fondo ────────────────────────────────────────────────
 function FondoDetalle({ fondoId, empresaId, onVolver, onRefreshLista }) {
   const navigate = useNavigate();
@@ -567,6 +722,7 @@ export default function CajaChicaHub() {
   const [fondos, setFondos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [showNuevo, setShowNuevo] = useState(false);
+  const [showTiposGasto, setShowTiposGasto] = useState(false);
   const [fondoSeleccionado, setFondoSeleccionado] = useState(null);
   const [toast, setToast] = useState('');
 
@@ -607,9 +763,14 @@ export default function CajaChicaHub() {
           <h1 className="cc-hub-title">Caja Chica</h1>
           <p className="cc-hub-subtitle">Fondos fijos de efectivo para gastos menores</p>
         </div>
-        <button className="cc-btn cc-btn-primary" onClick={() => setShowNuevo(true)}>
-          + Nuevo fondo
-        </button>
+        <div className="cc-hub-header-actions">
+          <button className="cc-btn cc-btn-secondary" onClick={() => setShowTiposGasto(true)}>
+            ⚙ Tipos de gasto
+          </button>
+          <button className="cc-btn cc-btn-primary" onClick={() => setShowNuevo(true)}>
+            + Nuevo fondo
+          </button>
+        </div>
       </div>
 
       <div className="cc-tabs">
@@ -668,6 +829,10 @@ export default function CajaChicaHub() {
             );
           })}
         </div>
+      )}
+
+      {showTiposGasto && (
+        <ModalTiposGasto onClose={() => setShowTiposGasto(false)} />
       )}
 
       {showNuevo && (
