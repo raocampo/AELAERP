@@ -265,6 +265,49 @@
   gap: 14px;
 }
 
+/* ── Formas de pago (mixto) ── */
+.fnv-pagos-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fnv-pago-linea {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.fnv-pago-linea select {
+  flex: 1;
+}
+
+.fnv-pago-monto {
+  width: 100px;
+}
+
+.fnv-pago-quitar {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #e53e3e;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.fnv-pagos-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fnv-pago-restante {
+  font-size: 12px;
+  font-weight: 700;
+  color: #dc2626;
+}
+
 /* ── Caja totales ── */
 .fnv-totales-box {
   background: rgba(124,58,237,0.08);

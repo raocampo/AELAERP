@@ -28,6 +28,15 @@ const FORMAS_PAGO = [
   { uid: 'App Móvil',      label: 'Aplicación Móvil', icon: '📱' },
 ];
 
+// POS (PuntoVenta.jsx) usa su propia lista de nombres para notas de venta
+// (FORMAS_NOTA) que en un caso no coincide textualmente con FORMAS_PAGO de
+// arriba — "Aplicaciones (Ahorita/De Una)" vs "App Móvil", mismo concepto.
+// Se normaliza al cargar una nota para editar para que el <select> no quede
+// en un valor que no existe entre sus opciones.
+const normalizarFormaPago = (fp) => (fp === 'Aplicaciones (Ahorita/De Una)' ? 'App Móvil' : fp);
+
+const PAGO_VACIO = { formaPago: 'Efectivo', monto: '' };
+
 // codigoAuxiliar no tiene input propio (poco usado a mano) pero se conserva
 // en el objeto para no perder el vínculo con el producto al EDITAR una nota
 // que sí venía del catálogo (ej. creada desde POS), donde importa para
@@ -62,7 +71,12 @@ export default function FormNotaVenta() {
   const prodRef = useRef(null);
 
   // ── Otros ────────────────────────────────────────────────────────────────
-  const [formaPago,    setFormaPago]    = useState('Efectivo');
+  // Pagos mixtos (mismo patrón que PuntoVenta.jsx): 1+ líneas {formaPago,
+  // monto}. Con 1 sola línea se comporta igual que antes (el monto se
+  // autocompleta con el total, sin mostrarse como algo que el usuario deba
+  // tocar); con 2+ se reparte el total a mano — necesario para no perder el
+  // desglose real al editar una nota creada desde POS con 2+ formas de pago.
+  const [pagos, setPagos] = useState([{ ...PAGO_VACIO }]);
   const [numeroCheque, setNumeroCheque] = useState('');
   const [bancoEmisor,  setBancoEmisor]  = useState('');
   const [appNombre,    setAppNombre]    = useState('Ahorita');
@@ -89,6 +103,30 @@ export default function FormNotaVenta() {
     };
   };
   const totales = calcTotales();
+
+  // Con una sola línea de pago, el monto sigue el total automáticamente —
+  // mismo comportamiento de siempre (el usuario nunca lo ve/toca). Con 2+
+  // líneas no se toca nada: el usuario está repartiendo el total a mano.
+  useEffect(() => {
+    if (pagos.length === 1) {
+      setPagos((prev) => [{ ...prev[0], monto: totales.total > 0 ? totales.total.toFixed(2) : '' }]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totales.total]);
+
+  const totalPagos = pagos.reduce((acc, p) => acc + (parseFloat(p.monto) || 0), 0);
+  const restantePago = Number((totales.total - totalPagos).toFixed(2));
+  const pagosCuadran = Math.abs(restantePago) < 0.01;
+
+  const agregarLineaPago = () => {
+    setPagos((prev) => [...prev, { formaPago: 'Efectivo', monto: restantePago > 0 ? restantePago.toFixed(2) : '' }]);
+  };
+  const quitarLineaPago = (index) => {
+    setPagos((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+  };
+  const actualizarLineaPago = (index, campo, valor) => {
+    setPagos((prev) => prev.map((p, i) => (i === index ? { ...p, [campo]: valor } : p)));
+  };
 
   // ── Cargar datos existentes (modo edición) ────────────────────────────────
   useEffect(() => {
@@ -120,11 +158,14 @@ export default function FormNotaVenta() {
               codigoAuxiliar:  d.codigoAuxiliar || '',
             }))
           : [{ ...DETALLE_VACIO }]);
-        // Pagos mixtos (ej. notas creadas desde POS con 2+ formas de pago) no
-        // tienen UI propia en este formulario — se conserva "Efectivo" como
-        // valor editable; si se guarda así, la nota pasa a tener una sola
-        // forma de pago. Para no tocar eso, corregir esos casos desde POS.
-        setFormaPago(n.formaPago && n.formaPago !== 'Mixto' ? n.formaPago : 'Efectivo');
+        // Pagos mixtos (ej. notas creadas desde POS con 2+ formas de pago):
+        // se carga el desglose real desde n.pagos en vez de colapsarlo a una
+        // sola forma de pago. El monto de la línea única (caso normal) se
+        // recalcula solo via el efecto de arriba una vez que totales.total
+        // esté listo con los detalles ya cargados.
+        setPagos(Array.isArray(n.pagos) && n.pagos.length > 0
+          ? n.pagos.map((p) => ({ formaPago: normalizarFormaPago(p.formaPago) || 'Efectivo', monto: String(p.total ?? '') }))
+          : [{ formaPago: normalizarFormaPago(n.formaPago) || 'Efectivo', monto: '' }]);
         setFecha(n.fechaEmision ? format(parseFechaLocal(n.fechaEmision), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
         setObs(n.observaciones || '');
       } catch {
@@ -273,6 +314,11 @@ export default function FormNotaVenta() {
       return toast.error('Completa descripción y precio en todos los ítems');
     }
     if (totales.total <= 0) return toast.error('El total debe ser mayor a 0');
+    if (pagos.length > 1 && !pagosCuadran) {
+      return toast.error(restantePago > 0
+        ? `Falta $${restantePago.toFixed(2)} por repartir entre las formas de pago`
+        : `Las formas de pago suman $${Math.abs(restantePago).toFixed(2)} de más`);
+    }
 
     setSubmitting(true);
     try {
@@ -291,10 +337,13 @@ export default function FormNotaVenta() {
           codigoPrincipal: d.codigoPrincipal || undefined,
           codigoAuxiliar:  d.codigoAuxiliar  || undefined,
         })),
-        formaPago,
-        formaPagoDetalles: formaPago === 'Cheque'
+        formaPago: pagos.length === 1 ? pagos[0].formaPago : 'Mixto',
+        pagos: pagos.length > 1
+          ? pagos.map((p) => ({ formaPago: p.formaPago, total: parseFloat(p.monto) || 0 }))
+          : undefined,
+        formaPagoDetalles: pagos.length === 1 && pagos[0].formaPago === 'Cheque'
           ? { numeroCheque, bancoEmisor }
-          : formaPago === 'App Móvil'
+          : pagos.length === 1 && pagos[0].formaPago === 'App Móvil'
             ? { appNombre: appNombre === 'Otra' ? appOtra : appNombre, codigoTransaccion }
             : undefined,
         fechaEmision,
@@ -489,21 +538,47 @@ export default function FormNotaVenta() {
           <div className="fnv-bottom-row">
             <div className="fnv-opciones">
               <div className="fnv-field">
-                <label>Forma de pago</label>
-                <select value={formaPago} onChange={e => setFormaPago(e.target.value)}>
-                  {FORMAS_PAGO.map(f => <option key={f.uid} value={f.uid}>{f.icon} {f.label}</option>)}
-                </select>
+                <label>Forma(s) de pago</label>
+                <div className="fnv-pagos-lista">
+                  {pagos.map((pago, index) => (
+                    <div className="fnv-pago-linea" key={index}>
+                      <select value={pago.formaPago} onChange={e => actualizarLineaPago(index, 'formaPago', e.target.value)}>
+                        {FORMAS_PAGO.map(f => <option key={f.uid} value={f.uid}>{f.icon} {f.label}</option>)}
+                      </select>
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={pago.monto}
+                        onChange={e => actualizarLineaPago(index, 'monto', e.target.value)}
+                        placeholder="Monto"
+                        className="fnv-pago-monto"
+                      />
+                      {pagos.length > 1 && (
+                        <button type="button" className="fnv-pago-quitar" onClick={() => quitarLineaPago(index)} title="Quitar esta forma de pago">✕</button>
+                      )}
+                    </div>
+                  ))}
+                  <div className="fnv-pagos-footer">
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={agregarLineaPago}>
+                      + Agregar forma de pago
+                    </button>
+                    {pagos.length > 1 && !pagosCuadran && (
+                      <span className="fnv-pago-restante">
+                        {restantePago > 0 ? `Falta $${restantePago.toFixed(2)}` : `Sobran $${Math.abs(restantePago).toFixed(2)}`}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Cheque fields */}
-              {formaPago === 'Cheque' && (
+              {/* Cheque fields — solo con una única forma de pago */}
+              {pagos.length === 1 && pagos[0].formaPago === 'Cheque' && (
                 <div className="fnv-field">
                   <label>Número de cheque</label>
                   <input value={numeroCheque} onChange={e => setNumeroCheque(e.target.value)}
                     placeholder="Ej: 001234" />
                 </div>
               )}
-              {formaPago === 'Cheque' && (
+              {pagos.length === 1 && pagos[0].formaPago === 'Cheque' && (
                 <div className="fnv-field">
                   <label>Banco emisor</label>
                   <input value={bancoEmisor} onChange={e => setBancoEmisor(e.target.value)}
@@ -511,8 +586,8 @@ export default function FormNotaVenta() {
                 </div>
               )}
 
-              {/* App fields */}
-              {formaPago === 'App Móvil' && (
+              {/* App fields — solo con una única forma de pago */}
+              {pagos.length === 1 && pagos[0].formaPago === 'App Móvil' && (
                 <div className="fnv-field">
                   <label>Aplicación</label>
                   <select value={appNombre} onChange={e => setAppNombre(e.target.value)}>
@@ -522,14 +597,14 @@ export default function FormNotaVenta() {
                   </select>
                 </div>
               )}
-              {formaPago === 'App Móvil' && appNombre === 'Otra' && (
+              {pagos.length === 1 && pagos[0].formaPago === 'App Móvil' && appNombre === 'Otra' && (
                 <div className="fnv-field">
                   <label>Nombre de la app</label>
                   <input value={appOtra} onChange={e => setAppOtra(e.target.value)}
                     placeholder="Nombre de la aplicación" />
                 </div>
               )}
-              {formaPago === 'App Móvil' && (
+              {pagos.length === 1 && pagos[0].formaPago === 'App Móvil' && (
                 <div className="fnv-field">
                   <label>Código de transacción</label>
                   <input value={codigoTransaccion} onChange={e => setCodTx(e.target.value)}
@@ -571,7 +646,7 @@ export default function FormNotaVenta() {
           <button type="button" className="btn btn-secondary" onClick={() => navigate(editando ? `/notas-venta/${id}` : '/notas-venta')}>
             Cancelar
           </button>
-          <button type="submit" className="btn btn-primary" disabled={submitting}>
+          <button type="submit" className="btn btn-primary" disabled={submitting || (pagos.length > 1 && !pagosCuadran)}>
             {submitting
               ? (editando ? 'Guardando...' : 'Emitiendo...')
               : (editando ? '✓ Guardar cambios' : '✓ Emitir Nota de Venta')}
