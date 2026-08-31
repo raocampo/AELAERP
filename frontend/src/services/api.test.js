@@ -68,4 +68,18 @@ describe('api service helpers', () => {
     expect(storage.removeItem).not.toHaveBeenCalled();
     expect(location.assign).not.toHaveBeenCalled();
   });
+
+  it('un 401 de POST /auth/login (credenciales inválidas) no limpia sesión ni redirige', async () => {
+    // Antes, un usuario/contraseña incorrectos en el login (401, sin sesión
+    // previa) disparaba el mismo limpiarSesion()+redirigirALogin() que un
+    // token expirado — la recarga de página se comía el toast de error y el
+    // formulario solo parecía "reiniciarse" sin mostrar ningún mensaje.
+    const storage = crearStorageMock({});
+    const location = { assign: vi.fn() };
+    const error = { response: { status: 401, data: { mensaje: 'Credenciales inválidas' } }, config: { url: '/auth/login' } };
+
+    await expect(manejarErrorApi(error, { storage, location })).rejects.toBe(error);
+    expect(storage.removeItem).not.toHaveBeenCalled();
+    expect(location.assign).not.toHaveBeenCalled();
+  });
 });

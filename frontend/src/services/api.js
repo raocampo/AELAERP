@@ -83,8 +83,18 @@ export function manejarErrorApi(err, {
   location = globalThis.window?.location,
 } = {}) {
   if (err.response?.status === 401) {
-    limpiarSesion(storage);
-    redirigirALogin(location, storage); // slug aún está (no se limpia)
+    // POST /auth/login devuelve 401 con contraseña/usuario incorrectos — eso
+    // significa "credenciales inválidas", nunca "tu sesión expiró" (no hay
+    // sesión que expirar en un intento de login). Antes esto disparaba
+    // limpiarSesion()+redirigirALogin() para CUALQUIER 401, incluyendo ese
+    // caso: la recarga de página (location.assign) interrumpía el formulario
+    // antes de que el toast de error llegara a mostrarse, y el usuario solo
+    // veía la pantalla de login "reiniciarse" sin ningún mensaje visible.
+    const esIntentoDeLogin = String(err.config?.url || '').includes('/auth/login');
+    if (!esIntentoDeLogin) {
+      limpiarSesion(storage);
+      redirigirALogin(location, storage); // slug aún está (no se limpia)
+    }
   }
   if (err.response?.status === 402) {
     const codigo = err.response?.data?.codigo;
