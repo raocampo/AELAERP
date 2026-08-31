@@ -18,17 +18,11 @@ const {
   normalizarLogin,
   normalizarUsername,
   normalizarEmail,
-  esUsernameValido,
-  esEmailValido,
   mensajeDuplicidadUsuario,
 } = require('../utils/identidadUsuario');
 const { normalizarRol } = require('../utils/roles');
-const {
-  asegurarConfiguracionSriEmpresa,
-  obtenerEmpresaSri,
-} = require('../utils/sriContribuyente');
-const { asegurarConfiguracionSistemaEmpresa } = require('../utils/configuracionSistema');
-const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
+const { obtenerEmpresaSri } = require('../utils/sriContribuyente');
+const { crearEmpresaYAdminInicial } = require('../utils/bootstrapEmpresa');
 
 const emitirToken = (usuario, opts = {}) => jwt.sign(
   {
@@ -156,135 +150,10 @@ router.get('/empresa-sri/:ruc', async (req, res) => {
 // POST /api/auth/bootstrap
 router.post('/bootstrap', async (req, res) => {
   try {
-    const {
-      nombre,
-      username,
-      email,
-      password,
-      ruc,
-      razonSocial,
-      nombreComercial,
-      direccion,
-      telefono,
-      emailEmpresa,
-    } = req.body;
-
-    const totalUsuarios = await req.prisma.usuarios.count();
-    if (totalUsuarios > 0) {
-      return res.status(409).json({
-        success: false,
-        mensaje: 'La configuración inicial ya fue realizada. Inicia sesión con tu usuario.',
-      });
-    }
-
-    const nombreLimpio = String(nombre || '').trim();
-    const usernameLimpio = normalizarUsername(username);
-    const emailLimpio = normalizarEmail(email);
-    const rucLimpio = String(ruc || '').replace(/\D/g, '');
-    const razonSocialLimpia = String(razonSocial || '').trim();
-
-    if (!nombreLimpio || !usernameLimpio || !password || !rucLimpio || !razonSocialLimpia) {
-      return res.status(400).json({
-        success: false,
-        mensaje: 'Nombre, usuario, contraseña, RUC y razón social son requeridos',
-      });
-    }
-
-    if (!esUsernameValido(usernameLimpio)) {
-      return res.status(400).json({
-        success: false,
-        mensaje: 'El usuario debe tener entre 3 y 40 caracteres y solo usar letras, números, punto, guion o guion bajo',
-      });
-    }
-
-    if (!esEmailValido(emailLimpio)) {
-      return res.status(400).json({ success: false, mensaje: 'Correo electrónico inválido' });
-    }
-
-    if (!/^\d{13}$/.test(rucLimpio)) {
-      return res.status(400).json({ success: false, mensaje: 'El RUC debe tener exactamente 13 dígitos' });
-    }
-
-    if (String(password).length < 8) {
-      return res.status(400).json({ success: false, mensaje: 'La contraseña debe tener al menos 8 caracteres' });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
     const planEmpresa = obtenerPlanEmpresa();
-    const empresaSri = await obtenerEmpresaSri(rucLimpio);
-
-    const { empresa, usuario } = await req.prisma.$transaction(async (tx) => {
-      const empresaBase = await tx.empresas.findFirst({ orderBy: { id: 'asc' } });
-
-      const empresaData = {
-        ruc: rucLimpio,
-        razonSocial: empresaSri?.razonSocial || razonSocialLimpia,
-        nombreComercial: empresaSri?.nombreComercial || String(nombreComercial || '').trim() || null,
-        direccion: empresaSri?.direccion || String(direccion || '').trim() || null,
-        email: String(emailEmpresa || '').trim().toLowerCase() || null,
-        telefono: String(telefono || '').trim() || empresaSri?.telefono || null,
-        activo: true,
-        ...planEmpresa,
-      };
-
-      const empresa = empresaBase
-        ? await tx.empresas.update({
-            where: { id: empresaBase.id },
-            data: empresaData,
-            select: {
-              id: true,
-              ruc: true,
-              razonSocial: true,
-              nombreComercial: true,
-              direccion: true,
-              email: true,
-              telefono: true,
-              plan: true,
-              factAnualesMax: true,
-              activo: true,
-            },
-          })
-        : await tx.empresas.create({
-            data: empresaData,
-            select: {
-              id: true,
-              ruc: true,
-              razonSocial: true,
-              nombreComercial: true,
-              direccion: true,
-              email: true,
-              telefono: true,
-              plan: true,
-              factAnualesMax: true,
-              activo: true,
-            },
-          });
-
-      await asegurarConfiguracionSriEmpresa(tx, empresa, empresaSri);
-      await asegurarConfiguracionSistemaEmpresa(empresa, tx);
-      await sembrarPlanCuentasBase(tx, empresa.id);
-
-      const usuario = await tx.usuarios.create({
-        data: {
-          empresaId: empresa.id,
-          nombre: nombreLimpio,
-          username: usernameLimpio,
-          email: emailLimpio,
-          password: passwordHash,
-          rol: 'admin',
-          activo: true,
-        },
-        select: {
-          id: true,
-          nombre: true,
-          username: true,
-          email: true,
-          rol: true,
-          empresaId: true,
-        },
-      });
-
-      return { empresa, usuario };
+    const { empresa, usuario } = await crearEmpresaYAdminInicial(req.prisma, {
+      ...req.body,
+      plan: planEmpresa.plan,
     });
 
     const tenantSlug = req.tenant?.slug || null;
@@ -305,6 +174,9 @@ router.post('/bootstrap', async (req, res) => {
       empresa,
     });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ success: false, mensaje: error.message });
+    }
     console.error('Error bootstrap:', error);
     if (error.code === 'P2002') {
       return res.status(409).json({

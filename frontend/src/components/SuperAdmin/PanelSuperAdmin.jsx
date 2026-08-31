@@ -291,7 +291,7 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
 // ─── Modal crear cliente ──────────────────────────────────────────────────────
 // Equivalente autenticado del formulario público de /registro — para cuando el
 // operador da de alta un cliente él mismo en vez de mandarlo a la web.
-function ModalCrearTenant({ onCrear, onCerrar }) {
+function ModalCrearTenant({ api, onCrear, onCerrar }) {
   const [form, setForm] = useState({
     nombreEmpresa: '', nombreContacto: '', emailContacto: '', telefonoContacto: '',
     plan: 'lite', slugForzado: '', esTrial: false,
@@ -299,10 +299,49 @@ function ModalCrearTenant({ onCrear, onCerrar }) {
   const [modulosPersonalizados, setModulosPersonalizados] = useState(false);
   const [modulosContratados, setModulosContratados] = useState([]);
 
+  // Crear empresa + usuario admin en el mismo paso — por defecto activado: el
+  // flujo normal del operador es entregar usuario/contraseña ya listos, sin
+  // que el cliente tenga que pasar por la pantalla de configuración inicial.
+  const [crearAdminAhora, setCrearAdminAhora] = useState(true);
+  const [empresaForm, setEmpresaForm] = useState({
+    ruc: '', razonSocial: '', nombreComercial: '', direccion: '', telefono: '', emailEmpresa: '',
+  });
+  const [adminForm, setAdminForm] = useState({ nombre: '', username: '', email: '', password: '' });
+  const [consultandoSri, setConsultandoSri] = useState(false);
+  const [mensajeSri, setMensajeSri] = useState('');
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setEmp = (k, v) => setEmpresaForm(f => ({ ...f, [k]: v }));
+  const setAdm = (k, v) => setAdminForm(f => ({ ...f, [k]: v }));
   const toggleModulo = (key) => setModulosContratados((m) =>
     m.includes(key) ? m.filter((x) => x !== key) : [...m, key]
   );
+
+  const consultarSri = async (rucIngresado) => {
+    const rucLimpio = String(rucIngresado || '').replace(/\D/g, '');
+    if (!/^\d{13}$/.test(rucLimpio)) { setMensajeSri(''); return; }
+    setConsultandoSri(true);
+    setMensajeSri('');
+    try {
+      const s = await api.get(`/consultar-sri/${rucLimpio}`);
+      if (s?.encontrado) {
+        setEmpresaForm(f => ({
+          ...f,
+          ruc: s.ruc || f.ruc,
+          razonSocial: s.razonSocial || f.razonSocial,
+          nombreComercial: s.nombreComercial || f.nombreComercial,
+          direccion: s.direccion || f.direccion,
+        }));
+        setMensajeSri(`✓ Encontrada (${s.fuente === 'local' ? 'catastro local' : 'SRI en línea'}): ${s.razonSocial}`);
+        return;
+      }
+      setMensajeSri('No se encontró en el catastro ni en el SRI — completa los datos a mano.');
+    } catch (err) {
+      setMensajeSri(err.message || 'No se pudo consultar el SRI.');
+    } finally {
+      setConsultandoSri(false);
+    }
+  };
 
   return (
     <div className="sa-modal-overlay" onClick={onCerrar}>
@@ -402,11 +441,99 @@ function ModalCrearTenant({ onCrear, onCerrar }) {
             </label>
           </div>
 
+          <div className="sa-form-row">
+            <label className="sa-check">
+              <input type="checkbox" checked={crearAdminAhora}
+                onChange={e => setCrearAdminAhora(e.target.checked)} />
+              Crear empresa y usuario administrador ahora
+            </label>
+            <small className="sa-hint-block">
+              Marcado (recomendado): entregas usuario y contraseña ya listos — el cliente nunca ve la
+              pantalla de configuración inicial. Desmarcado: el tenant queda creado pero vacío, como en
+              el registro público — alguien debe entrar a la URL de acceso y completarlo a mano.
+            </small>
+          </div>
+
+          {crearAdminAhora && (
+            <>
+              <div className="sa-form-row sa-form-row--checks" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '.75rem', marginTop: '.25rem' }}>
+                <strong style={{ fontSize: '.85rem' }}>Datos de la empresa</strong>
+              </div>
+
+              <div className="sa-form-row">
+                <label>RUC <span className="sa-hint">*</span></label>
+                <input type="text" value={empresaForm.ruc} maxLength={13}
+                  onChange={e => setEmp('ruc', e.target.value)}
+                  onBlur={e => consultarSri(e.target.value)}
+                  placeholder="1791234567001" />
+                {consultandoSri && <span className="sa-hint">⏳ Consultando SRI…</span>}
+                {mensajeSri && !consultandoSri && <small className="sa-hint-block">{mensajeSri}</small>}
+              </div>
+
+              <div className="sa-form-row">
+                <label>Razón social <span className="sa-hint">*</span></label>
+                <input type="text" value={empresaForm.razonSocial}
+                  onChange={e => setEmp('razonSocial', e.target.value)} />
+              </div>
+
+              <div className="sa-form-row">
+                <label>Nombre comercial</label>
+                <input type="text" value={empresaForm.nombreComercial}
+                  onChange={e => setEmp('nombreComercial', e.target.value)} />
+              </div>
+
+              <div className="sa-form-row">
+                <label>Dirección</label>
+                <input type="text" value={empresaForm.direccion}
+                  onChange={e => setEmp('direccion', e.target.value)} />
+              </div>
+
+              <div className="sa-form-row">
+                <label>Teléfono empresa</label>
+                <input type="text" value={empresaForm.telefono}
+                  onChange={e => setEmp('telefono', e.target.value)} />
+              </div>
+
+              <div className="sa-form-row">
+                <label>Email empresa</label>
+                <input type="email" value={empresaForm.emailEmpresa}
+                  onChange={e => setEmp('emailEmpresa', e.target.value)} />
+              </div>
+
+              <div className="sa-form-row sa-form-row--checks" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '.75rem', marginTop: '.25rem' }}>
+                <strong style={{ fontSize: '.85rem' }}>Usuario administrador</strong>
+              </div>
+
+              <div className="sa-form-row">
+                <label>Nombre completo <span className="sa-hint">*</span></label>
+                <input type="text" value={adminForm.nombre}
+                  onChange={e => setAdm('nombre', e.target.value)} />
+              </div>
+
+              <div className="sa-form-row">
+                <label>Usuario <span className="sa-hint">*</span></label>
+                <input type="text" value={adminForm.username}
+                  onChange={e => setAdm('username', e.target.value)}
+                  placeholder="ej: admin.cobijando" />
+              </div>
+
+              <div className="sa-form-row">
+                <label>Email admin</label>
+                <input type="email" value={adminForm.email}
+                  onChange={e => setAdm('email', e.target.value)} />
+              </div>
+
+              <div className="sa-form-row">
+                <label>Contraseña <span className="sa-hint">* (mín. 8 caracteres — se le entrega al cliente)</span></label>
+                <input type="text" value={adminForm.password}
+                  onChange={e => setAdm('password', e.target.value)}
+                  style={{ fontFamily: 'monospace' }} />
+              </div>
+            </>
+          )}
+
           <small className="sa-hint-block">
             Esto crea la base de datos del cliente y lo deja activo de inmediato (tarda unos segundos).
-            Al terminar se muestra la URL de acceso — el cliente (o tú en su nombre) debe entrar ahí y
-            completar la configuración inicial (RUC, usuario admin) la primera vez, igual que con el
-            registro público.
           </small>
         </div>
 
@@ -415,6 +542,9 @@ function ModalCrearTenant({ onCrear, onCerrar }) {
           <button className="btn-primary" onClick={() => onCrear({
             ...form,
             modulosContratados: modulosPersonalizados ? modulosContratados : undefined,
+            admin: crearAdminAhora ? adminForm : undefined,
+            empresa: crearAdminAhora ? empresaForm : undefined,
+            adminPasswordParaMostrar: crearAdminAhora ? adminForm.password : undefined,
           })}>Crear cliente</button>
         </div>
       </div>
@@ -605,11 +735,15 @@ export default function PanelSuperAdmin() {
       alert('El nombre de la empresa es requerido');
       return;
     }
+    // El backend nunca devuelve la contraseña — se retiene acá localmente
+    // (nunca se envía al servidor) solo para poder mostrarla una vez más
+    // junto al usuario en el modal de resultado, igual que la API key.
+    const { adminPasswordParaMostrar, ...payload } = form;
     setGuardando(true);
     try {
-      const data = await api.post('/tenants', form);
+      const data = await api.post('/tenants', payload);
       setModalCrear(false);
-      setModalCreado(data);
+      setModalCreado({ ...data, adminPassword: adminPasswordParaMostrar });
       flash('Cliente creado');
       cargarDatos();
     } catch (err) {
@@ -950,6 +1084,7 @@ export default function PanelSuperAdmin() {
       {/* Modales */}
       {modalCrear && (
         <ModalCrearTenant
+          api={api}
           onCrear={handleCrearTenant}
           onCerrar={() => setModalCrear(false)}
         />
@@ -1009,18 +1144,47 @@ export default function PanelSuperAdmin() {
               <button className="sa-modal-close" onClick={() => setModalCreado(null)}>✕</button>
             </div>
             <div className="sa-modal-body">
-              <p style={{ marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-                La base de datos del cliente ya está lista. Comparte esta URL para que complete la
-                configuración inicial (RUC, usuario admin) — es el mismo paso que haría alguien que se
-                registra desde la web.
-              </p>
-              <div className="sa-apikey-display">
-                <code style={{ wordBreak: 'break-all', fontSize: 13 }}>{modalCreado.urlAcceso}</code>
-              </div>
+              {modalCreado.usuarioCreado ? (
+                <>
+                  <p style={{ marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Empresa y usuario admin ya creados. Entrega esto al cliente — no se vuelve a mostrar
+                    la contraseña después de cerrar esta ventana.
+                  </p>
+                  <div className="sa-apikey-display" style={{ marginBottom: 8 }}>
+                    <code style={{ wordBreak: 'break-all', fontSize: 13 }}>{modalCreado.urlAcceso}</code>
+                  </div>
+                  <div className="sa-apikey-display" style={{ marginBottom: 8 }}>
+                    <code style={{ fontSize: 13 }}>Usuario: {modalCreado.usuarioCreado.username}</code>
+                  </div>
+                  <div className="sa-apikey-display">
+                    <code style={{ fontSize: 13 }}>Contraseña: {modalCreado.adminPassword}</code>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    La base de datos del cliente ya está lista. Comparte esta URL para que complete la
+                    configuración inicial (RUC, usuario admin) — es el mismo paso que haría alguien que se
+                    registra desde la web.
+                  </p>
+                  <div className="sa-apikey-display">
+                    <code style={{ wordBreak: 'break-all', fontSize: 13 }}>{modalCreado.urlAcceso}</code>
+                  </div>
+                </>
+              )}
+              {modalCreado.bootstrapError && (
+                <p style={{ marginTop: 10, fontSize: 12.5, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '.5rem .65rem' }}>
+                  ⚠️ El tenant se creó, pero no se pudo crear la empresa/usuario admin automáticamente:
+                  {' '}{modalCreado.bootstrapError} Completa el primer acceso manualmente entrando a la URL de acceso.
+                </p>
+              )}
             </div>
             <div className="sa-modal-footer">
               <button className="btn-primary" onClick={() => {
-                navigator.clipboard?.writeText(modalCreado.urlAcceso);
+                const texto = modalCreado.usuarioCreado
+                  ? `${modalCreado.urlAcceso}\nUsuario: ${modalCreado.usuarioCreado.username}\nContraseña: ${modalCreado.adminPassword}`
+                  : modalCreado.urlAcceso;
+                navigator.clipboard?.writeText(texto);
                 flash('Copiado al portapapeles');
               }}>📋 Copiar</button>
               <button className="btn-secondary" onClick={() => setModalCreado(null)}>Cerrar</button>

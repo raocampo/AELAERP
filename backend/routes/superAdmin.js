@@ -8,8 +8,11 @@
 const express = require('express');
 const router  = express.Router();
 const { getPrismaMaster } = require('../config/prismaMaster');
+const { getTenantPrisma } = require('../config/prismaTenant');
 const { provisionarTenant, actualizarModulosContratadosTenant, actualizarLimitesTenant } = require('../utils/provisionarTenant');
 const { MODULOS_TODOS } = require('../utils/configuracionSistema');
+const { crearEmpresaYAdminInicial } = require('../utils/bootstrapEmpresa');
+const { obtenerEmpresaSri } = require('../utils/sriContribuyente');
 
 // ─── Middleware: verificar clave de super-admin ───────────────────────────────
 function verificarSuperAdmin(req, res, next) {
@@ -92,14 +95,39 @@ router.get('/tenants', verificarSuperAdmin, async (req, res) => {
   }
 });
 
+// ─── Consultar RUC en el SRI (para precargar el formulario de "Crear cliente") ─
+// GET /api/super-admin/consultar-sri/:ruc
+router.get('/consultar-sri/:ruc', verificarSuperAdmin, async (req, res) => {
+  try {
+    const ruc = String(req.params.ruc || '').replace(/\D/g, '');
+    if (!/^\d{13}$/.test(ruc)) {
+      return res.status(400).json({ success: false, mensaje: 'El RUC debe tener 13 dígitos' });
+    }
+    const empresaSri = await obtenerEmpresaSri(ruc);
+    if (!empresaSri) {
+      return res.json({ success: true, data: { encontrado: false, mensaje: 'No se encontró información en el SRI para ese RUC' } });
+    }
+    res.json({
+      success: true,
+      data: { encontrado: true, fuente: empresaSri.fuenteLocal ? 'local' : 'sri', ...empresaSri },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, mensaje: 'Error al consultar el SRI' });
+  }
+});
+
 // ─── Crear tenant (cliente) manualmente ──────────────────────────────────────
 // POST /api/super-admin/tenants — equivalente autenticado de POST /api/registro
 // (registro público de la landing page), para cuando el operador da de alta un
 // cliente directamente en vez de que el cliente use el formulario de la web.
-// Reusa el mismo provisionarTenant() — crea la BD del tenant y lo deja listo;
-// la empresa y el usuario admin dentro de esa BD se crean recién al completar
-// el bootstrap inicial (la primera vez que alguien entra a la URL de acceso),
-// igual que en el flujo público.
+// Reusa el mismo provisionarTenant() — crea la BD del tenant y lo deja listo.
+//
+// Opcionalmente, si se envían `admin` (nombre/username/email/password) y
+// `empresa` (ruc + datos), se completa también el bootstrap inicial (empresa +
+// usuario admin) en el momento — el operador entrega usuario/contraseña ya
+// listos y el cliente nunca pasa por la pantalla de configuración inicial.
+// Si no se envían, el tenant queda igual que en el registro público: listo
+// para que alguien complete ese primer paso entrando a la URL de acceso.
 router.post('/tenants', verificarSuperAdmin, async (req, res) => {
   const master = getMaster(res);
   if (!master) return;
@@ -107,6 +135,7 @@ router.post('/tenants', verificarSuperAdmin, async (req, res) => {
     const {
       nombreEmpresa, emailContacto, telefonoContacto, nombreContacto,
       plan = 'lite', slugForzado, esTrial, modulosContratados,
+      admin, empresa: empresaDatos,
     } = req.body;
 
     if (!nombreEmpresa?.trim()) {
@@ -160,11 +189,28 @@ router.post('/tenants', verificarSuperAdmin, async (req, res) => {
       tenantFinal = await actualizarModulosContratadosTenant(tenant.slug, modulos);
     }
 
-    const appBase = process.env.APP_BASE_URL || 'https://aela.corpsimtelec.com';
-    res.status(201).json({
-      success: true,
-      data: { ...sinDbPass(tenantFinal), urlAcceso: `${appBase}/${tenantFinal.slug}` },
-    });
+    const appBase  = process.env.APP_BASE_URL || 'https://aela.corpsimtelec.com';
+    const data = { ...sinDbPass(tenantFinal), urlAcceso: `${appBase}/${tenantFinal.slug}` };
+
+    if (admin?.username && admin?.password && empresaDatos?.ruc) {
+      try {
+        const prismaT = await getTenantPrisma(tenantFinal);
+        const { empresa, usuario } = await crearEmpresaYAdminInicial(prismaT, {
+          ...admin,
+          ...empresaDatos,
+          plan,
+        });
+        data.empresaCreada = empresa;
+        data.usuarioCreado = { id: usuario.id, nombre: usuario.nombre, username: usuario.username, email: usuario.email };
+      } catch (errBootstrap) {
+        // El tenant YA existe y quedó activo — solo falló el paso de crear la
+        // empresa/admin. No se revierte el provisioning; el operador puede
+        // completar ese paso manualmente entrando a la URL de acceso.
+        data.bootstrapError = errBootstrap.message || 'No se pudo crear la empresa/usuario admin automáticamente.';
+      }
+    }
+
+    res.status(201).json({ success: true, data });
   } catch (err) {
     console.error('superAdmin crear tenant:', err);
     res.status(500).json({ success: false, mensaje: err.message || 'Error al crear el tenant' });
