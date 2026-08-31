@@ -288,6 +288,140 @@ function ModalEditar({ tenant, onGuardar, onCerrar }) {
   );
 }
 
+// ─── Modal crear cliente ──────────────────────────────────────────────────────
+// Equivalente autenticado del formulario público de /registro — para cuando el
+// operador da de alta un cliente él mismo en vez de mandarlo a la web.
+function ModalCrearTenant({ onCrear, onCerrar }) {
+  const [form, setForm] = useState({
+    nombreEmpresa: '', nombreContacto: '', emailContacto: '', telefonoContacto: '',
+    plan: 'lite', slugForzado: '', esTrial: false,
+  });
+  const [modulosPersonalizados, setModulosPersonalizados] = useState(false);
+  const [modulosContratados, setModulosContratados] = useState([]);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const toggleModulo = (key) => setModulosContratados((m) =>
+    m.includes(key) ? m.filter((x) => x !== key) : [...m, key]
+  );
+
+  return (
+    <div className="sa-modal-overlay" onClick={onCerrar}>
+      <div className="sa-modal" onClick={e => e.stopPropagation()}>
+        <div className="sa-modal-header">
+          <h3>Crear cliente</h3>
+          <button className="sa-modal-close" onClick={onCerrar}>✕</button>
+        </div>
+
+        <div className="sa-modal-body">
+          <div className="sa-form-row">
+            <label>Nombre de la empresa <span className="sa-hint">*</span></label>
+            <input type="text" value={form.nombreEmpresa}
+              onChange={e => set('nombreEmpresa', e.target.value)}
+              placeholder="Razón social o nombre comercial" autoFocus />
+          </div>
+
+          <div className="sa-form-row">
+            <label>URL de acceso <span className="sa-hint">(opcional — se genera del nombre si se deja vacío)</span></label>
+            <input type="text" value={form.slugForzado}
+              onChange={e => set('slugForzado', e.target.value)}
+              placeholder="ej: cobijando-tus-suenos" />
+          </div>
+
+          <div className="sa-form-row">
+            <label>Plan</label>
+            <select value={form.plan} onChange={e => set('plan', e.target.value)}>
+              <option value="lite">Lite</option>
+              <option value="medium">Medium</option>
+              <option value="pro">Pro</option>
+            </select>
+          </div>
+
+          <div className="sa-form-row">
+            <label>Módulos contratados</label>
+            <label className="sa-check">
+              <input type="checkbox" checked={modulosPersonalizados}
+                onChange={e => {
+                  const activo = e.target.checked;
+                  setModulosPersonalizados(activo);
+                  if (activo && modulosContratados.length === 0) {
+                    setModulosContratados(PRESETS_PLAN[form.plan] || []);
+                  }
+                }} />
+              Techo personalizado (independiente del plan)
+            </label>
+            <small className="sa-hint-block">
+              Desmarcado: el cliente ve los módulos del plan elegido arriba (comportamiento normal).
+              Marcado: elige exactamente qué módulos ve este cliente desde el inicio.
+            </small>
+
+            {modulosPersonalizados && (
+              <div className="sa-modulos-grid">
+                <div className="sa-modulos-presets">
+                  <span className="sa-hint">Aplicar preset:</span>
+                  {['lite', 'medium', 'pro'].map((p) => (
+                    <button key={p} type="button" className="btn-secondary sa-btn-xs"
+                      onClick={() => setModulosContratados(PRESETS_PLAN[p])}>
+                      {PLAN_LABELS[p]}
+                    </button>
+                  ))}
+                </div>
+                {MODULOS_CATALOGO.map((m) => (
+                  <label key={m.key} className="sa-check sa-check--modulo">
+                    <input type="checkbox" checked={modulosContratados.includes(m.key)}
+                      onChange={() => toggleModulo(m.key)} />
+                    {m.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="sa-form-row">
+            <label>Nombre contacto</label>
+            <input type="text" value={form.nombreContacto}
+              onChange={e => set('nombreContacto', e.target.value)} />
+          </div>
+
+          <div className="sa-form-row">
+            <label>Email contacto</label>
+            <input type="email" value={form.emailContacto}
+              onChange={e => set('emailContacto', e.target.value)} />
+          </div>
+
+          <div className="sa-form-row">
+            <label>Teléfono</label>
+            <input type="text" value={form.telefonoContacto}
+              onChange={e => set('telefonoContacto', e.target.value)} />
+          </div>
+
+          <div className="sa-form-row sa-form-row--checks">
+            <label className="sa-check">
+              <input type="checkbox" checked={form.esTrial}
+                onChange={e => set('esTrial', e.target.checked)} />
+              Es trial (15 días)
+            </label>
+          </div>
+
+          <small className="sa-hint-block">
+            Esto crea la base de datos del cliente y lo deja activo de inmediato (tarda unos segundos).
+            Al terminar se muestra la URL de acceso — el cliente (o tú en su nombre) debe entrar ahí y
+            completar la configuración inicial (RUC, usuario admin) la primera vez, igual que con el
+            registro público.
+          </small>
+        </div>
+
+        <div className="sa-modal-footer">
+          <button className="btn-secondary" onClick={onCerrar}>Cancelar</button>
+          <button className="btn-primary" onClick={() => onCrear({
+            ...form,
+            modulosContratados: modulosPersonalizados ? modulosContratados : undefined,
+          })}>Crear cliente</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal nueva suscripción ──────────────────────────────────────────────────
 function ModalSuscripcion({ tenant, onGuardar, onCerrar }) {
   const [form, setForm] = useState({
@@ -384,6 +518,8 @@ export default function PanelSuperAdmin() {
   const [modalEditar, setModalEditar]   = useState(null);
   const [modalSus, setModalSus]         = useState(null);
   const [modalApiKey, setModalApiKey]   = useState(null); // { tenant, key }
+  const [modalCrear, setModalCrear]     = useState(false);
+  const [modalCreado, setModalCreado]   = useState(null); // { slug, urlAcceso }
   const [guardando, setGuardando]       = useState(false);
   const [msg, setMsg]                   = useState('');
 
@@ -456,6 +592,25 @@ export default function PanelSuperAdmin() {
       await api.put(`/tenants/${modalEditar.id}`, form);
       flash('Tenant actualizado');
       setModalEditar(null);
+      cargarDatos();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleCrearTenant = async (form) => {
+    if (!form.nombreEmpresa?.trim()) {
+      alert('El nombre de la empresa es requerido');
+      return;
+    }
+    setGuardando(true);
+    try {
+      const data = await api.post('/tenants', form);
+      setModalCrear(false);
+      setModalCreado(data);
+      flash('Cliente creado');
       cargarDatos();
     } catch (err) {
       alert(err.message);
@@ -595,6 +750,9 @@ export default function PanelSuperAdmin() {
         </div>
         <div className="sa-header-actions">
           {msg && <span className="sa-flash">{msg}</span>}
+          <button className="btn-primary sa-btn-sm" onClick={() => setModalCrear(true)}>
+            + Crear cliente
+          </button>
           <button className="btn-secondary sa-btn-sm" onClick={cargarDatos} disabled={cargando}>
             {cargando ? 'Actualizando…' : '↻ Actualizar'}
           </button>
@@ -790,6 +948,12 @@ export default function PanelSuperAdmin() {
       </main>
 
       {/* Modales */}
+      {modalCrear && (
+        <ModalCrearTenant
+          onCrear={handleCrearTenant}
+          onCerrar={() => setModalCrear(false)}
+        />
+      )}
       {modalEditar && (
         <ModalEditar
           tenant={modalEditar}
@@ -831,6 +995,35 @@ export default function PanelSuperAdmin() {
                 flash('Copiado al portapapeles');
               }}>📋 Copiar</button>
               <button className="btn-secondary" onClick={() => setModalApiKey(null)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal cliente creado */}
+      {modalCreado && (
+        <div className="sa-modal-overlay" onClick={() => setModalCreado(null)}>
+          <div className="sa-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="sa-modal-header">
+              <h3>Cliente creado — <strong>{modalCreado.slug}</strong></h3>
+              <button className="sa-modal-close" onClick={() => setModalCreado(null)}>✕</button>
+            </div>
+            <div className="sa-modal-body">
+              <p style={{ marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                La base de datos del cliente ya está lista. Comparte esta URL para que complete la
+                configuración inicial (RUC, usuario admin) — es el mismo paso que haría alguien que se
+                registra desde la web.
+              </p>
+              <div className="sa-apikey-display">
+                <code style={{ wordBreak: 'break-all', fontSize: 13 }}>{modalCreado.urlAcceso}</code>
+              </div>
+            </div>
+            <div className="sa-modal-footer">
+              <button className="btn-primary" onClick={() => {
+                navigator.clipboard?.writeText(modalCreado.urlAcceso);
+                flash('Copiado al portapapeles');
+              }}>📋 Copiar</button>
+              <button className="btn-secondary" onClick={() => setModalCreado(null)}>Cerrar</button>
             </div>
           </div>
         </div>

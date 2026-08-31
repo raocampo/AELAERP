@@ -8,7 +8,7 @@
 const express = require('express');
 const router  = express.Router();
 const { getPrismaMaster } = require('../config/prismaMaster');
-const { actualizarModulosContratadosTenant, actualizarLimitesTenant } = require('../utils/provisionarTenant');
+const { provisionarTenant, actualizarModulosContratadosTenant, actualizarLimitesTenant } = require('../utils/provisionarTenant');
 const { MODULOS_TODOS } = require('../utils/configuracionSistema');
 
 // ─── Middleware: verificar clave de super-admin ───────────────────────────────
@@ -89,6 +89,85 @@ router.get('/tenants', verificarSuperAdmin, async (req, res) => {
   } catch (err) {
     console.error('superAdmin tenants list:', err);
     res.status(500).json({ success: false, mensaje: 'Error al listar tenants' });
+  }
+});
+
+// ─── Crear tenant (cliente) manualmente ──────────────────────────────────────
+// POST /api/super-admin/tenants — equivalente autenticado de POST /api/registro
+// (registro público de la landing page), para cuando el operador da de alta un
+// cliente directamente en vez de que el cliente use el formulario de la web.
+// Reusa el mismo provisionarTenant() — crea la BD del tenant y lo deja listo;
+// la empresa y el usuario admin dentro de esa BD se crean recién al completar
+// el bootstrap inicial (la primera vez que alguien entra a la URL de acceso),
+// igual que en el flujo público.
+router.post('/tenants', verificarSuperAdmin, async (req, res) => {
+  const master = getMaster(res);
+  if (!master) return;
+  try {
+    const {
+      nombreEmpresa, emailContacto, telefonoContacto, nombreContacto,
+      plan = 'lite', slugForzado, esTrial, modulosContratados,
+    } = req.body;
+
+    if (!nombreEmpresa?.trim()) {
+      return res.status(400).json({ success: false, mensaje: 'El nombre de la empresa es requerido' });
+    }
+    const planesValidos = ['lite', 'medium', 'pro'];
+    if (!planesValidos.includes(plan)) {
+      return res.status(400).json({ success: false, mensaje: 'Plan inválido' });
+    }
+
+    let slugLimpio = null;
+    if (slugForzado?.trim()) {
+      slugLimpio = slugForzado.trim().toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      if (!/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(slugLimpio)) {
+        return res.status(400).json({
+          success: false,
+          mensaje: 'La URL de acceso debe tener entre 3 y 30 caracteres, usar solo letras, números y guiones, y no empezar ni terminar con guion.',
+        });
+      }
+      const existeSlug = await master.tenants.findUnique({ where: { slug: slugLimpio } });
+      if (existeSlug) {
+        return res.status(409).json({ success: false, mensaje: `Ya existe un tenant con la URL "${slugLimpio}".` });
+      }
+    }
+
+    // A diferencia del registro público (donde plan!=lite implica trial
+    // automático de 15 días), acá el operador decide explícitamente — un
+    // cliente dado de alta a mano suele ser ya un acuerdo cerrado, no un
+    // funnel de autoservicio.
+    const esTrialFinal   = Boolean(esTrial);
+    const trialExpiresAt = esTrialFinal ? new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) : null;
+
+    const tenant = await provisionarTenant({
+      nombreEmpresa:    nombreEmpresa.trim(),
+      plan,
+      esTrial:          esTrialFinal,
+      trialExpiresAt,
+      emailContacto:    emailContacto?.trim().toLowerCase() || null,
+      telefonoContacto: telefonoContacto?.trim() || null,
+      nombreContacto:   nombreContacto?.trim() || nombreEmpresa.trim(),
+      slugForzado:      slugLimpio,
+    });
+
+    let tenantFinal = tenant;
+    if (Array.isArray(modulosContratados)) {
+      const modulos = modulosContratados.filter((m) => MODULOS_TODOS.includes(m));
+      tenantFinal = await actualizarModulosContratadosTenant(tenant.slug, modulos);
+    }
+
+    const appBase = process.env.APP_BASE_URL || 'https://aela.corpsimtelec.com';
+    res.status(201).json({
+      success: true,
+      data: { ...sinDbPass(tenantFinal), urlAcceso: `${appBase}/${tenantFinal.slug}` },
+    });
+  } catch (err) {
+    console.error('superAdmin crear tenant:', err);
+    res.status(500).json({ success: false, mensaje: err.message || 'Error al crear el tenant' });
   }
 });
 
