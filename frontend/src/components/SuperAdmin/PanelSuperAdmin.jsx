@@ -81,7 +81,7 @@ function useSaApi(clave) {
     get:    (path)       => call('GET',    path),
     put:    (path, body) => call('PUT',    path, body),
     post:   (path, body) => call('POST',   path, body),
-    delete: (path)       => call('DELETE', path),
+    delete: (path, body) => call('DELETE', path, body),
   }), [call]);
 }
 
@@ -629,6 +629,60 @@ function ModalSuscripcion({ tenant, onGuardar, onCerrar }) {
   );
 }
 
+// ─── Modal eliminar tenant ────────────────────────────────────────────────────
+// Solo para tenants vacíos (creados por error, duplicados, pruebas) — el
+// backend igual vuelve a verificar que no tenga usuarios/empresas antes de
+// borrar nada, esto es una segunda barrera para evitar un clic accidental:
+// hay que escribir el slug exacto, mismo patrón que borrar un repo de GitHub.
+function ModalEliminarTenant({ tenant, onConfirmar, onCerrar }) {
+  const [slugEscrito, setSlugEscrito] = useState('');
+  const [eliminando, setEliminando] = useState(false);
+  const [error, setError] = useState('');
+  const coincide = slugEscrito.trim() === tenant.slug;
+
+  const confirmar = async () => {
+    setError('');
+    setEliminando(true);
+    try {
+      await onConfirmar(slugEscrito.trim());
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEliminando(false);
+    }
+  };
+
+  return (
+    <div className="sa-modal-overlay" onClick={onCerrar}>
+      <div className="sa-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="sa-modal-header">
+          <h3>Eliminar tenant — <strong>{tenant.slug}</strong></h3>
+          <button className="sa-modal-close" onClick={onCerrar}>✕</button>
+        </div>
+        <div className="sa-modal-body">
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            Esto borra la base de datos <code>{tenant.dbName}</code> por completo — no se puede deshacer.
+            Solo funciona si el tenant sigue vacío (sin usuarios ni empresas registradas); si ya se usó,
+            el servidor lo rechaza y toca usar "Suspender" en su lugar.
+          </p>
+          <div className="sa-form-row">
+            <label>Escribe <strong>{tenant.slug}</strong> para confirmar</label>
+            <input type="text" value={slugEscrito} onChange={e => setSlugEscrito(e.target.value)}
+              placeholder={tenant.slug} autoFocus />
+          </div>
+          {error && <p style={{ color: '#dc2626', fontSize: 13, marginTop: 6 }}>{error}</p>}
+        </div>
+        <div className="sa-modal-footer">
+          <button className="btn-secondary" onClick={onCerrar}>Cancelar</button>
+          <button className="btn-danger" disabled={!coincide || eliminando} onClick={confirmar}>
+            {eliminando ? 'Eliminando...' : '🗑️ Eliminar definitivamente'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Panel principal ──────────────────────────────────────────────────────────
 export default function PanelSuperAdmin() {
   const [clave, setClave]         = useState(() => sessionStorage.getItem(SESSION_KEY) || '');
@@ -650,6 +704,7 @@ export default function PanelSuperAdmin() {
   const [modalApiKey, setModalApiKey]   = useState(null); // { tenant, key }
   const [modalCrear, setModalCrear]     = useState(false);
   const [modalCreado, setModalCreado]   = useState(null); // { slug, urlAcceso }
+  const [modalEliminar, setModalEliminar] = useState(null); // tenant
   const [guardando, setGuardando]       = useState(false);
   const [msg, setMsg]                   = useState('');
 
@@ -809,6 +864,13 @@ export default function PanelSuperAdmin() {
     } catch (err) {
       alert(err.message);
     }
+  };
+
+  const handleEliminarTenant = async (confirmarSlug) => {
+    await api.delete(`/tenants/${modalEliminar.id}`, { confirmarSlug });
+    setModalEliminar(null);
+    flash('Tenant eliminado');
+    cargarDatos();
   };
 
   const cerrarSesion = () => {
@@ -1071,6 +1133,11 @@ export default function PanelSuperAdmin() {
                             title="Generar API key para WebService"
                           >🔑 Generar key</button>
                         )}
+                        <button
+                          className="btn-danger sa-btn-xs"
+                          onClick={() => setModalEliminar(t)}
+                          title="Eliminar tenant (solo si está vacío)"
+                        >🗑️ Eliminar</button>
                       </div>
                     </td>
                   </tr>
@@ -1101,6 +1168,13 @@ export default function PanelSuperAdmin() {
           tenant={modalSus}
           onGuardar={handleGuardarSuscripcion}
           onCerrar={() => setModalSus(null)}
+        />
+      )}
+      {modalEliminar && (
+        <ModalEliminarTenant
+          tenant={modalEliminar}
+          onConfirmar={handleEliminarTenant}
+          onCerrar={() => setModalEliminar(null)}
         />
       )}
 

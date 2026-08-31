@@ -92,6 +92,35 @@ async function crearBaseDatos(dbName) {
   return { dbName: safeDb };
 }
 
+// ─── Elimina físicamente la BD PostgreSQL de un tenant (irreversible) ────────
+// Solo se llama para tenants que nunca llegaron a tener datos reales (ver
+// eliminarTenant() en routes/superAdmin.js, que verifica eso antes de
+// invocar esta función) — creados por error, duplicados, pruebas, etc.
+async function eliminarBaseDatosTenant(dbName) {
+  const adminUrl = process.env.DATABASE_ADMIN_URL
+    || process.env.DATABASE_MASTER_URL
+    || process.env.DATABASE_URL;
+  if (!adminUrl) throw new Error('No hay URL de admin de BD configurada (DATABASE_ADMIN_URL / DATABASE_URL)');
+
+  const safeDb = String(dbName || '').replace(/[^a-z0-9_]/gi, '_');
+  if (!safeDb) throw new Error('Nombre de base de datos inválido');
+
+  const client = new Client({ connectionString: adminUrl });
+  try {
+    await client.connect();
+    // Postgres no permite DROP DATABASE si hay sesiones abiertas — el pool
+    // de getTenantPrisma puede tener una conexión activa a esta BD.
+    await client.query(
+      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
+      [safeDb]
+    );
+    // DROP DATABASE no puede ejecutarse dentro de una transacción.
+    await client.query(`DROP DATABASE IF EXISTS "${safeDb}"`);
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
 // ─── Aplica el schema Prisma sobre la BD del tenant con db push ───────────────
 // Usamos "db push" y NO "migrate deploy" porque este proyecto no tiene archivos
 // de migración en prisma/migrations/ — usa db push en el startup script.
@@ -389,6 +418,7 @@ async function actualizarLimitesTenant(slug, { maxSucursales, maxCajas } = {}) {
 
 module.exports = {
   provisionarTenant,
+  eliminarBaseDatosTenant,
   actualizarPlanTenant,
   actualizarModulosContratadosTenant,
   actualizarLimitesTenant,

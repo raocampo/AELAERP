@@ -8,8 +8,11 @@
 const express = require('express');
 const router  = express.Router();
 const { getPrismaMaster } = require('../config/prismaMaster');
-const { getTenantPrisma } = require('../config/prismaTenant');
-const { provisionarTenant, actualizarModulosContratadosTenant, actualizarLimitesTenant } = require('../utils/provisionarTenant');
+const { getTenantPrisma, removeTenantFromPool } = require('../config/prismaTenant');
+const {
+  provisionarTenant, eliminarBaseDatosTenant,
+  actualizarModulosContratadosTenant, actualizarLimitesTenant,
+} = require('../utils/provisionarTenant');
 const { MODULOS_TODOS } = require('../utils/configuracionSistema');
 const { crearEmpresaYAdminInicial } = require('../utils/bootstrapEmpresa');
 const { obtenerEmpresaSri } = require('../utils/sriContribuyente');
@@ -316,6 +319,60 @@ router.put('/tenants/:id', verificarSuperAdmin, async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ success: false, mensaje: 'Tenant no encontrado' });
     res.status(500).json({ success: false, mensaje: 'Error al actualizar tenant' });
+  }
+});
+
+// ─── Eliminar tenant (irreversible) ───────────────────────────────────────────
+// DELETE /api/super-admin/tenants/:id
+// Solo para tenants creados por error/duplicados/pruebas que NUNCA llegaron a
+// tener datos reales — se verifica siempre en el servidor (nunca solo se
+// confía en que el operador "sabe" que está vacío) contando usuarios y
+// empresas en la BD del tenant antes de borrar nada. Si tiene datos, se
+// rechaza y se sugiere "Suspender" en su lugar. Además exige que el body
+// traiga el slug exacto como confirmación explícita (mismo patrón que borrar
+// un repositorio en GitHub) — esto SÍ borra la base de datos física del
+// tenant, no hay forma de deshacerlo.
+router.delete('/tenants/:id', verificarSuperAdmin, async (req, res) => {
+  const master = getMaster(res);
+  if (!master) return;
+  try {
+    const tenantId = parseInt(req.params.id, 10);
+    const tenant = await master.tenants.findUnique({ where: { id: tenantId } });
+    if (!tenant) return res.status(404).json({ success: false, mensaje: 'Tenant no encontrado' });
+
+    if (req.body?.confirmarSlug !== tenant.slug) {
+      return res.status(400).json({ success: false, mensaje: 'Escribe el slug exacto del tenant para confirmar' });
+    }
+
+    let vacio = true;
+    try {
+      const prismaT = await getTenantPrisma(tenant);
+      const [usuarios, empresas] = await Promise.all([
+        prismaT.usuarios.count(),
+        prismaT.empresas.count(),
+      ]);
+      vacio = usuarios === 0 && empresas === 0;
+    } catch {
+      // No se pudo conectar a la BD del tenant (nunca se provisionó bien, o
+      // quedó en estado de error) — no hay datos reales que perder.
+      vacio = true;
+    }
+
+    if (!vacio) {
+      return res.status(409).json({
+        success: false,
+        mensaje: `El tenant "${tenant.slug}" ya tiene usuarios o empresas registradas — no se puede eliminar. Usa "Suspender" en su lugar.`,
+      });
+    }
+
+    await removeTenantFromPool(tenant.slug);
+    await eliminarBaseDatosTenant(tenant.dbName);
+    await master.tenants.delete({ where: { id: tenantId } });
+
+    res.json({ success: true, mensaje: `Tenant "${tenant.slug}" eliminado` });
+  } catch (err) {
+    console.error('superAdmin eliminar tenant:', err);
+    res.status(500).json({ success: false, mensaje: err.message || 'Error al eliminar el tenant' });
   }
 });
 
