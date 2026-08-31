@@ -235,6 +235,40 @@
   color: #1e293b;
 }
 
+.pos-table td select {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+/* Botones de sola acción sin fondo (Quitar / + Agregar forma de pago) — el
+   mismo patrón "btn-link" ya usado en Contabilidad, definido acá también
+   porque esta página no importa ese CSS y quedaban sin ningún estilo
+   (botón gris por defecto del navegador). */
+.btn-link {
+  border: none;
+  background: transparent;
+  color: #22C55E;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.btn-link:hover { color: #16A34A; }
+
+.btn-link.danger { color: #EF4444; }
+.btn-link.danger:hover { color: #DC2626; }
+
+@media (prefers-color-scheme: dark) {
+  .btn-link { color: #4ADE80; }
+  .btn-link:hover { color: #86EFAC; }
+  .btn-link.danger { color: #F87171; }
+  .btn-link.danger:hover { color: #FCA5A5; }
+}
+
 .pos-product {
   display: flex;
   flex-direction: column;
