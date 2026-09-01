@@ -22,7 +22,7 @@ const {
 } = require('../utils/configuracionSistema');
 const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
 const { normalizarRol, tienePermiso } = require('../utils/roles');
-const { rangoDiaSoloFecha, rangoMesSoloFecha, rangoAnioSoloFecha } = require('../utils/fechas');
+const { rangoDiaSoloFecha, rangoMesSoloFecha, rangoAnioSoloFecha, diaCalendarioEC } = require('../utils/fechas');
 
 // Estados de factura que representan una venta real ya consumada — autorizada
 // por el SRI, o histórica importada sin envío al SRI (numeroAutorizacion nulo,
@@ -221,6 +221,7 @@ router.get('/estadisticas', proteger, async (req, res) => {
     const { gte: inicioAño, lt: finAño } = rangoAnioSoloFecha();
     const { gte: inicioMes, lt: finMes } = rangoMesSoloFecha();
     const { gte: hoyInicio, lt: hoyFin } = rangoDiaSoloFecha();
+    const [añoEC, mesEC] = diaCalendarioEC().split('-').map(Number);
     const eId        = req.empresa.id;
 
     const [
@@ -337,24 +338,24 @@ router.get('/estadisticas', proteger, async (req, res) => {
     if (configSriRimpe?.negocioPopular) {
       const LIMITE = 20000;
       if (ingresosAnio > LIMITE) {
-        alertaRimpe = { nivel: 'error', mensaje: `Tus ingresos de ${ahora.getFullYear()} ($${ingresosAnio.toFixed(2)}) superaron el tope de RIMPE Negocio Popular ($${LIMITE.toLocaleString()}) — deberías recategorizarte a RIMPE Emprendedor. Consulta a tu contador.` };
+        alertaRimpe = { nivel: 'error', mensaje: `Tus ingresos de ${añoEC} ($${ingresosAnio.toFixed(2)}) superaron el tope de RIMPE Negocio Popular ($${LIMITE.toLocaleString()}) — deberías recategorizarte a RIMPE Emprendedor. Consulta a tu contador.` };
       } else if (ingresosAnio > LIMITE * 0.8) {
-        alertaRimpe = { nivel: 'warn', mensaje: `Tus ingresos de ${ahora.getFullYear()} ($${ingresosAnio.toFixed(2)}) están cerca del tope de RIMPE Negocio Popular ($${LIMITE.toLocaleString()}).` };
+        alertaRimpe = { nivel: 'warn', mensaje: `Tus ingresos de ${añoEC} ($${ingresosAnio.toFixed(2)}) están cerca del tope de RIMPE Negocio Popular ($${LIMITE.toLocaleString()}).` };
       }
     } else if (configSriRimpe?.contribuyenteRimpe) {
       const LIMITE = 300000;
       if (ingresosAnio > LIMITE) {
-        alertaRimpe = { nivel: 'error', mensaje: `Tus ingresos de ${ahora.getFullYear()} ($${ingresosAnio.toFixed(2)}) superaron el tope de RIMPE ($${LIMITE.toLocaleString()}) — deberías recategorizarte a Régimen General. Consulta a tu contador.` };
+        alertaRimpe = { nivel: 'error', mensaje: `Tus ingresos de ${añoEC} ($${ingresosAnio.toFixed(2)}) superaron el tope de RIMPE ($${LIMITE.toLocaleString()}) — deberías recategorizarte a Régimen General. Consulta a tu contador.` };
       } else if (ingresosAnio > LIMITE * 0.8) {
-        alertaRimpe = { nivel: 'warn', mensaje: `Tus ingresos de ${ahora.getFullYear()} ($${ingresosAnio.toFixed(2)}) están cerca del tope de RIMPE ($${LIMITE.toLocaleString()}).` };
+        alertaRimpe = { nivel: 'warn', mensaje: `Tus ingresos de ${añoEC} ($${ingresosAnio.toFixed(2)}) están cerca del tope de RIMPE ($${LIMITE.toLocaleString()}).` };
       }
     }
 
     res.json({
       success: true,
       data: {
-        año: ahora.getFullYear(),
-        mes: ahora.getMonth() + 1,
+        año: añoEC,
+        mes: mesEC,
 
         // Anual
         facturas: facturasAño,
