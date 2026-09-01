@@ -1,6 +1,7 @@
 const prisma = require('../config/prisma');
 const { CONCEPTOS_NOMINA } = require('./catalogosCuentasReferencia');
 const { parsearNotaCreditoRecibidaXml } = require('./sri');
+const { diaCalendarioEC } = require('./fechas');
 
 const round2 = (n) => Number((Number(n || 0)).toFixed(2));
 
@@ -24,7 +25,7 @@ function extractSequence(numero) {
   return match ? Number.parseInt(match[1], 10) : 0;
 }
 
-async function siguienteNumeroAsiento({ empresaId, fecha = new Date(), tx = prisma }) {
+async function siguienteNumeroAsiento({ empresaId, fecha = diaCalendarioEC(), tx = prisma }) {
   const empresaIdNum = toInt(empresaId);
   if (!empresaIdNum) throw new Error('empresaId es requerido para numerar el asiento');
 
@@ -49,7 +50,7 @@ async function siguienteNumeroAsiento({ empresaId, fecha = new Date(), tx = pris
 // (cobros, pagos a proveedor, comprobantes bancarios) — mismo criterio que
 // siguienteNumeroAsiento (busca el máximo del mes vía regex, sin tabla de
 // secuencias separada), parametrizado por modelo Prisma y prefijo.
-async function siguienteNumeroGenerico({ modelo, prefijo, empresaId, fecha = new Date(), tx = prisma }) {
+async function siguienteNumeroGenerico({ modelo, prefijo, empresaId, fecha = diaCalendarioEC(), tx = prisma }) {
   const empresaIdNum = toInt(empresaId);
   if (!empresaIdNum) throw new Error('empresaId es requerido para numerar el documento');
 

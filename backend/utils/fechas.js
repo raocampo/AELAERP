@@ -145,8 +145,20 @@ const rangoAnioSoloFecha = (valor = new Date()) => {
   };
 };
 
+/**
+ * { anio, mes } (mes 1-12) del día calendario Ecuador actual — para
+ * defaults de reportes/numeración mensual (F104, ATS, asientos, etc.)
+ * que hoy usan new Date().getFullYear()/getMonth()+1 cuando no viene
+ * mes/año explícito por query. Evita que, cerca de medianoche hora
+ * Ecuador, el servidor (Railway, UTC) calcule el mes/año siguiente.
+ */
+const mesAnioActualEC = () => {
+  const [anio, mes] = diaCalendarioEC().split('-').map(Number);
+  return { anio, mes };
+};
+
 module.exports = {
   TZ_EC, formatFechaHora, fechaHoyEC, fechaECOffset, diaCalendarioEC,
   inicioDiaEC, finDiaEC, inicioMesEC, finMesEC, inicioAnioEC, finAnioEC,
-  rangoDiaSoloFecha, rangoMesSoloFecha, rangoAnioSoloFecha,
+  rangoDiaSoloFecha, rangoMesSoloFecha, rangoAnioSoloFecha, mesAnioActualEC,
 };

@@ -11,7 +11,7 @@ const fs      = require('fs');
 const prisma  = require('../config/prisma');
 const sri     = require('../utils/sri');
 const { registrarAuditoria } = require('../utils/auditoria');
-const { fechaHoyEC, fechaECOffset, diaCalendarioEC } = require('../utils/fechas');
+const { fechaHoyEC, fechaECOffset, diaCalendarioEC, mesAnioActualEC } = require('../utils/fechas');
 const {
   crearAsientoFacturaAutorizada,
   crearAsientoCostoVentaFactura,
@@ -2033,8 +2033,8 @@ router.post('/notas-credito/:id/reenviar', permitirEmitirFacturacion, async (req
 router.get('/reportes/tributario', permitirReportesTributarios, async (req, res) => {
   try {
     const db = req.prisma || prisma;
-    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const mes  = parseInt(req.query.mes)  || mesAnioActualEC().mes;
+    const anio = parseInt(req.query.anio) || mesAnioActualEC().anio;
     const empresaId = req.empresa.id;
 
     const desde = new Date(anio, mes - 1, 1);

@@ -13,6 +13,7 @@ const PDFDocument = require('pdfkit');
 const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const bwipjs      = require('bwip-js');
 const prisma  = require('../config/prisma');
+const { rangoAnioSoloFecha } = require('../utils/fechas');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { checkLimiteNotasVenta } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
@@ -646,8 +647,12 @@ router.get('/', async (req, res) => {
       prisma.notas_venta.count({ where }),
     ]);
 
-    // Estadísticas del año para mostrar en UI
-    const inicioAño = new Date(new Date().getFullYear(), 0, 1);
+    // Estadísticas del año para mostrar en UI — año calendario Ecuador, no
+    // el del proceso (Railway/UTC): con new Date().getFullYear() puro, la
+    // noche del 31 de diciembre (hora Ecuador) el servidor ya cuenta como
+    // año nuevo en UTC y este conteo quedaba en 0 pese a haber notas de
+    // venta reales ese mismo día.
+    const { gte: inicioAño } = rangoAnioSoloFecha();
     const usadasAño = await prisma.notas_venta.count({
       where: { empresaId: req.empresa.id, anulada: false, fechaEmision: { gte: inicioAño } },
     });

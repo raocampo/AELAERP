@@ -18,6 +18,7 @@ const path    = require('path');
 const PDFDocument = require('pdfkit');
 const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const prisma  = require('../config/prisma');
+const { mesAnioActualEC } = require('../utils/fechas');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
 const { condicionComprasDeducibles, CUTOFF_APROBACION_CEDULA } = require('../utils/comprasFiscal');
@@ -585,8 +586,8 @@ function casillerosF104(f104) {
 // Query: ?anio=2025&mes=3
 router.get('/f104', async (req, res) => {
   try {
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
-    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
+    const anio = parseInt(req.query.anio) || mesAnioActualEC().anio;
+    const mes  = parseInt(req.query.mes)  || mesAnioActualEC().mes;
     const empresaId = req.empresa.id;
     const db = req.prisma || prisma;
 
@@ -620,8 +621,8 @@ const NOMBRES_MES = [
 // Query: ?anio=2025&mes=3
 router.get('/f104/pdf', async (req, res) => {
   try {
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
-    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
+    const anio = parseInt(req.query.anio) || mesAnioActualEC().anio;
+    const mes  = parseInt(req.query.mes)  || mesAnioActualEC().mes;
     const empresaId = req.empresa.id;
     const db = req.prisma || prisma;
 
@@ -858,8 +859,8 @@ async function calcularF103(db, empresaId, anio, mes) {
 // Query: ?anio=2025&mes=3
 router.get('/f103', async (req, res) => {
   try {
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
-    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
+    const anio = parseInt(req.query.anio) || mesAnioActualEC().anio;
+    const mes  = parseInt(req.query.mes)  || mesAnioActualEC().mes;
     const empresaId = req.empresa.id;
     const db = req.prisma || prisma;
 
@@ -1005,8 +1006,8 @@ function casillerosF103(f103) {
 // CASILLEROS_F103 de arriba. Query: ?anio=2025&mes=3
 router.get('/f103/pdf', async (req, res) => {
   try {
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
-    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
+    const anio = parseInt(req.query.anio) || mesAnioActualEC().anio;
+    const mes  = parseInt(req.query.mes)  || mesAnioActualEC().mes;
     const empresaId = req.empresa.id;
     const db = req.prisma || prisma;
 
@@ -1220,7 +1221,7 @@ function casillerosF101(f101) {
 
 router.get('/f101', async (req, res) => {
   try {
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const anio = parseInt(req.query.anio) || mesAnioActualEC().anio;
     const empresaId = req.empresa.id;
     const db = req.prisma || prisma;
 
@@ -1242,7 +1243,7 @@ router.get('/f101', async (req, res) => {
 // final, igual que en F103/F104.
 router.get('/f101/pdf', async (req, res) => {
   try {
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const anio = parseInt(req.query.anio) || mesAnioActualEC().anio;
     const empresaId = req.empresa.id;
     const db = req.prisma || prisma;
 

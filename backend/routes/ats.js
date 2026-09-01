@@ -7,6 +7,7 @@ const express = require('express');
 const router  = express.Router();
 const path    = require('path');
 const prisma  = require('../config/prisma');
+const { mesAnioActualEC } = require('../utils/fechas');
 const PDFDocument = require('pdfkit');
 const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
@@ -132,8 +133,8 @@ function mapRetIva(impuestosJson) {
 // ─── GET /preview ─────────────────────────────────────────────────────────────
 router.get('/preview', async (req, res) => {
   try {
-    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const mes  = parseInt(req.query.mes)  || mesAnioActualEC().mes;
+    const anio = parseInt(req.query.anio) || mesAnioActualEC().anio;
     const excluirCedulaNoAprobada = req.query.excluirCedulaNoAprobada === 'true';
     const { desde, hasta } = rangoPeriodo(mes, anio);
     const empresaId = req.empresa.id;
@@ -306,8 +307,8 @@ router.get('/preview', async (req, res) => {
 // ─── GET /exportar — XML ATS ──────────────────────────────────────────────────
 router.get('/exportar', async (req, res) => {
   try {
-    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const mes  = parseInt(req.query.mes)  || mesAnioActualEC().mes;
+    const anio = parseInt(req.query.anio) || mesAnioActualEC().anio;
     const excluirCedulaNoAprobada = req.query.excluirCedulaNoAprobada === 'true';
     const { desde, hasta } = rangoPeriodo(mes, anio);
     const empresaId = req.empresa.id;
@@ -627,8 +628,8 @@ router.get('/exportar', async (req, res) => {
 // ─── GET /exportar/pdf — Talón Resumen ATS (PDFKit) ──────────────────────────
 router.get('/exportar/pdf', async (req, res) => {
   try {
-    const mes  = parseInt(req.query.mes)  || new Date().getMonth() + 1;
-    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    const mes  = parseInt(req.query.mes)  || mesAnioActualEC().mes;
+    const anio = parseInt(req.query.anio) || mesAnioActualEC().anio;
     const excluirCedulaNoAprobada = req.query.excluirCedulaNoAprobada === 'true';
     const { desde, hasta } = rangoPeriodo(mes, anio);
     const empresaId = req.empresa.id;
