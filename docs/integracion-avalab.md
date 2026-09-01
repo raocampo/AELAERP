@@ -62,6 +62,38 @@ Una vez conectada esa llamada al flujo de facturación de AVALAB, cada
 factura nueva llega sola, en tiempo real, el mismo momento en que se
 autoriza — no hay paso manual de ningún lado.
 
+### ¿Y si el sistema de AVALAB es de escritorio (ej. PowerBuilder)?
+
+No cambia nada de lo de arriba. Que el sistema corra como aplicación de
+escritorio sobre un servidor local del laboratorio, en vez de ser un
+sistema web, es irrelevante para esta integración — lo único que importa
+es que ese servidor tenga salida a internet y que su lenguaje pueda armar
+una petición HTTP con un cuerpo JSON, algo que prácticamente cualquier
+plataforma sabe hacer hoy en día.
+
+Si el sistema está hecho en **PowerBuilder** (frecuente en software de
+laboratorios/clínicas de la región):
+
+- **PowerBuilder 12.5 en adelante** (incluyendo las versiones de Appeon
+  2017+) trae un objeto no visual `httpclient` nativo — con métodos para
+  setear headers, mandar el body y leer la respuesta, sin instalar nada
+  adicional.
+- **Versiones más antiguas** no traen ese objeto, pero pueden llegar al
+  mismo resultado envolviendo el componente de Windows
+  `WinHttp.WinHttpRequest.5.1` vía OLE Automation (`OLEObject`) — es el
+  camino que se usa desde hace años en apps PowerBuilder para hablar con
+  servicios web, y viene incluido en Windows sin instalar nada extra.
+
+⚠️ **Lo único que vale la pena confirmar de antemano:** que el servidor
+donde corre el sistema de AVALAB permita salida HTTPS hacia internet (sin
+un proxy/firewall que la bloquee), y que soporte TLS 1.2 o superior. En
+servidores Windows viejos que llevan mucho tiempo sin actualizar, a veces
+el componente HTTP del sistema operativo solo negocia versiones de TLS ya
+retiradas — si la primera llamada falla por un error de conexión/handshake
+antes de siquiera llegar a AELA, ese suele ser el motivo, y se resuelve
+actualizando Windows o el componente WinHTTP, no cambiando nada del lado
+de AELA.
+
 ---
 
 ## 1. Acceso
