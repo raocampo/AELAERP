@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
-import { formatFechaCorta } from '../../utils/fecha';
+import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import { abrirBlobEnNuevaPestana, descargarExcel } from '../../utils/exportCsv';
 import '../Bancos/Bancos.css';
 
@@ -32,7 +32,7 @@ function ModalCobro({ factura, onClose, onSaved }) {
   const [form, setForm] = useState({
     monto: String(factura.saldoPendiente),
     metodoPago: 'efectivo',
-    fecha: new Date().toISOString().slice(0, 10),
+    fecha: hoyLocal(),
     bancoId: '', chequeId: '', referencia: '', observaciones: '',
   });
   const bancos = useBancos();
@@ -434,8 +434,8 @@ const ESTADO_COLOR = {
 
 function ModalCheque({ onClose, onSaved }) {
   const [form, setForm] = useState({
-    numero: '', banco: '', monto: '', fecha: new Date().toISOString().slice(0, 10),
-    fechaRecepcion: new Date().toISOString().slice(0, 10), fechaDeposito: '',
+    numero: '', banco: '', monto: '', fecha: hoyLocal(),
+    fechaRecepcion: hoyLocal(), fechaDeposito: '',
     clienteNombre: '', observaciones: '',
   });
   const [guardando, setGuardando] = useState(false);
@@ -539,7 +539,7 @@ function TabChequesRecibidos() {
     if (!window.confirm(confirmMsg)) return;
     setActualizando(cheque.id);
     try {
-      const extra = nuevoEstado === 'DEPOSITADO' ? { fechaDeposito: new Date().toISOString().slice(0, 10) } : {};
+      const extra = nuevoEstado === 'DEPOSITADO' ? { fechaDeposito: hoyLocal() } : {};
       await api.patch(`/cxc/cheques/${cheque.id}/estado`, { estado: nuevoEstado, ...extra });
       await cargar();
     } catch (err) {
@@ -882,7 +882,7 @@ function TabReportesCxC() {
 // ─── Tab Anticipos de Clientes ───────────────────────────────────
 function ModalAnticipo({ onClose, onSaved }) {
   const [form, setForm] = useState({
-    nombreCliente: '', monto: '', fecha: new Date().toISOString().slice(0, 10),
+    nombreCliente: '', monto: '', fecha: hoyLocal(),
     metodoPago: 'efectivo', referencia: '', observaciones: '',
   });
   const [guardando, setGuardando] = useState(false);

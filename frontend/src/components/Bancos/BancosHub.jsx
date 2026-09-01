@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import ComprobantesView from './ComprobantesView';
 import LibroBancos from './LibroBancos';
-import { formatFechaCorta } from '../../utils/fecha';
+import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import './Bancos.css';
 
 const TIPOS_CUENTA = ['CORRIENTE', 'AHORROS'];
@@ -143,7 +143,7 @@ function ModalCuenta({ cuenta, onClose, onSaved }) {
 // ─── Modal Movimiento ────────────────────────────────────────
 function ModalMovimiento({ bancoId, onClose, onSaved }) {
   const [form, setForm] = useState({
-    fecha: new Date().toISOString().slice(0, 10),
+    fecha: hoyLocal(),
     tipo: 'DEPOSITO', concepto: '', referencia: '', debe: '', haber: '', observaciones: '', cuentaContrapartidaId: '',
   });
   const cuentasContables = useCuentasContables();
@@ -233,7 +233,7 @@ function ModalMovimiento({ bancoId, onClose, onSaved }) {
 // ─── Modal Cheque ────────────────────────────────────────────
 function ModalCheque({ bancoId, onClose, onSaved }) {
   const [form, setForm] = useState({
-    numero: '', beneficiario: '', fecha: new Date().toISOString().slice(0, 10),
+    numero: '', beneficiario: '', fecha: hoyLocal(),
     fechaVencimiento: '', monto: '', concepto: '', proveedorId: '', cuentaContrapartidaId: '',
   });
   const [proveedores, setProveedores] = useState([]);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
-import { formatFechaCorta } from '../../utils/fecha';
+import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import '../Bancos/Bancos.css';
 
 const METODOS_PAGO = ['efectivo', 'transferencia', 'cheque', 'tarjeta', 'caja_chica'];
@@ -34,7 +34,7 @@ function ModalPago({ compra, onClose, onSaved }) {
   const [form, setForm] = useState({
     monto: String(compra.saldoPendiente),
     metodoPago: 'efectivo',
-    fecha: new Date().toISOString().slice(0, 10),
+    fecha: hoyLocal(),
     bancoId: '', chequeId: '', cajaChicaId: '', referencia: '', observaciones: '',
   });
   const bancos = useBancos();
@@ -333,7 +333,7 @@ function ModalNuevaTarjeta({ onClose, onSaved }) {
 
 function ModalMovimiento({ tarjeta, onClose, onSaved }) {
   const [form, setForm] = useState({
-    fecha: new Date().toISOString().slice(0, 10), concepto: '', monto: '', tipo: 'CARGO', referencia: '', observaciones: '',
+    fecha: hoyLocal(), concepto: '', monto: '', tipo: 'CARGO', referencia: '', observaciones: '',
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -862,7 +862,7 @@ function TabReportesCxP() {
 // ─── Tab Anticipos a Proveedores ─────────────────────────────────
 function ModalAnticipoProveedor({ onClose, onSaved }) {
   const [form, setForm] = useState({
-    nombreProveedor: '', monto: '', fecha: new Date().toISOString().slice(0, 10),
+    nombreProveedor: '', monto: '', fecha: hoyLocal(),
     metodoPago: 'efectivo', referencia: '', observaciones: '',
   });
   const [guardando, setGuardando] = useState(false);

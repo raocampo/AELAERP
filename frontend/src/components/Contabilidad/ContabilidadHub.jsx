@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { normalizarPeriodoMMYYYY } from '../../utils/periodo';
-import { formatFechaCorta } from '../../utils/fecha';
+import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import { IcVer, IcEditar, IcPDF, IcDuplicar, IcCandado, IcCandadoAbierto, IcActivar, IcAnular } from '../../utils/icons';
 import ConfiguracionCuentasReferencia from './ConfiguracionCuentasReferencia';
 import './ContabilidadHub.css';
@@ -228,7 +228,7 @@ const ContabilidadHub = () => {
   const [asientoCorreccionId, setAsientoCorreccionId] = useState('');
   const [asientoForm, setAsientoForm] = useState({
     id: null,
-    fecha: new Date().toISOString().slice(0, 10),
+    fecha: hoyLocal(),
     descripcion: '',
     tipo: 'MANUAL',
     referencia: '',
@@ -258,7 +258,7 @@ const ContabilidadHub = () => {
   const [estadosFiltros, setEstadosFiltros] = useState({ periodo: '', desde: '', hasta: '', fechaBalance: '' });
   const [asientoInicialForm, setAsientoInicialForm] = useState({
     periodo: '',
-    fecha: new Date().toISOString().slice(0, 10),
+    fecha: hoyLocal(),
     descripcion: '',
     detalles: [crearDetalleVacio(), crearDetalleVacio()],
   });
@@ -981,7 +981,7 @@ const ContabilidadHub = () => {
   const limpiarAsientoForm = () => {
     setAsientoForm({
       id: null,
-      fecha: new Date().toISOString().slice(0, 10),
+      fecha: hoyLocal(),
       descripcion: '',
       tipo: 'MANUAL',
       referencia: '',
@@ -995,7 +995,7 @@ const ContabilidadHub = () => {
   const abrirNuevoAsiento = () => {
     setAsientoForm({
       id: null,
-      fecha: new Date().toISOString().slice(0, 10),
+      fecha: hoyLocal(),
       descripcion: '',
       tipo: 'MANUAL',
       referencia: '',
@@ -1153,7 +1153,7 @@ const ContabilidadHub = () => {
 
       setAsientoForm({
         id: null,
-        fecha: new Date().toISOString().slice(0, 10),
+        fecha: hoyLocal(),
         descripcion: asiento.descripcion || '',
         tipo: TIPOS_ASIENTO_AUTOMATICOS.includes(asiento.tipo) ? asiento.tipo : 'MANUAL',
         referencia: asiento.referencia || '',
@@ -1210,7 +1210,7 @@ const ContabilidadHub = () => {
   const anularAsiento = async (id) => {
     if (!window.confirm('¿Deseas anular este asiento? Se creará un reverso automático.')) return;
     try {
-      await api.post(`/contabilidad/asientos/${id}/anular`, { fecha: new Date().toISOString().slice(0, 10) });
+      await api.post(`/contabilidad/asientos/${id}/anular`, { fecha: hoyLocal() });
       toast.success('Asiento anulado');
       await cargarDiario();
       await cargar();
@@ -1266,7 +1266,7 @@ const ContabilidadHub = () => {
       toast.success('Asiento inicial registrado');
       setAsientoInicialForm({
         periodo: '',
-        fecha: new Date().toISOString().slice(0, 10),
+        fecha: hoyLocal(),
         descripcion: '',
         detalles: [crearDetalleVacio(), crearDetalleVacio()],
       });

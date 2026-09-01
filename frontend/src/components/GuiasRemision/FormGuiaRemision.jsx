@@ -8,16 +8,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
 import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
+import { hoyLocal, fechaLocalOffset } from '../../utils/fecha';
 import './GuiasRemision.css';
 
 const DETALLE_VACIO = { codigoInterno: '', descripcion: '', cantidad: 1 };
 
 function hoy() {
-  return new Date().toISOString().split('T')[0];
+  return hoyLocal();
 }
 function manana() {
-  const d = new Date(); d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
+  return fechaLocalOffset(1);
 }
 
 export default function FormGuiaRemision() {

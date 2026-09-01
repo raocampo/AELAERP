@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
-import { formatFechaCorta } from '../../utils/fecha';
+import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 
 const TIPOS_META = {
   INGRESO: {
@@ -100,7 +100,7 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
   const cuentasBancarias = useCuentasBancarias();
 
   const [form, setForm] = useState({
-    fecha: new Date().toISOString().slice(0, 10),
+    fecha: hoyLocal(),
     notas: '',
     cuentaBancariaId: '',
     proveedorId: '',

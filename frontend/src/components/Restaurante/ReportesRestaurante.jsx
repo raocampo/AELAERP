@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
+import { hoyLocal } from '../../utils/fecha';
 import './Restaurante.css';
 
 function primerDiaMes() {
@@ -8,7 +9,7 @@ function primerDiaMes() {
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 }
 function hoy() {
-  return new Date().toISOString().slice(0, 10);
+  return hoyLocal();
 }
 
 export default function ReportesRestaurante() {

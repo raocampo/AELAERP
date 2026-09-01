@@ -4,7 +4,6 @@ const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { asegurarConfiguracionSistemaEmpresa } = require('../utils/configuracionSistema');
 const {
-  normalizarFechaOperacion,
   obtenerOCrearCajaDelDia,
   registrarMovimientoCaja,
   obtenerCajaConResumen,
@@ -34,7 +33,12 @@ async function validarCajaHabilitada(req, res, next) {
 
 router.get('/resumen', permitirVerCaja, validarCajaHabilitada, async (req, res) => {
   try {
-    const fecha = req.query.fecha ? new Date(req.query.fecha) : new Date();
+    // No convertir a Date acá — un string "YYYY-MM-DD" ya listo (como el que
+    // manda el date picker del frontend) debe llegar tal cual a
+    // normalizarFechaOperacion/diaCalendarioEC; envolverlo en new Date()
+    // primero lo reinterpreta como medianoche UTC y, al pasar por zona
+    // horaria Ecuador más abajo, puede mover el día al anterior.
+    const fecha = req.query.fecha || new Date();
     const data = await obtenerCajaConResumen({ empresaId: req.empresa.id, fecha });
     res.json({ success: true, data });
   } catch (error) {
@@ -64,14 +68,18 @@ router.get('/historial', permitirVerCaja, validarCajaHabilitada, async (req, res
 
 router.post('/apertura', permitirGestionarCaja, validarCajaHabilitada, async (req, res) => {
   try {
-    const fecha = req.body?.fecha ? new Date(req.body.fecha) : new Date();
-    const fechaOperacion = normalizarFechaOperacion(fecha);
+    const fecha = req.body?.fecha || new Date();
     const montoApertura = Number(req.body?.montoApertura || 0);
     const observacionesApertura = req.body?.observacionesApertura || null;
 
+    // obtenerOCrearCajaDelDia ya normaliza fecha internamente — pasarla ya
+    // normalizada acá (como antes) la haría pasar dos veces por
+    // normalizarFechaOperacion, y la segunda pasada reinterpretaría una
+    // medianoche UTC ya calculada como si fuera un timestamp real en hora
+    // Ecuador, moviendo el día uno hacia atrás.
     const caja = await obtenerOCrearCajaDelDia({
       empresaId: req.empresa.id,
-      fecha: fechaOperacion,
+      fecha,
       nombreCaja: req.configuracionSistema.cajaNombre,
     });
 
@@ -153,7 +161,7 @@ router.post('/movimientos', permitirGestionarCaja, validarCajaHabilitada, async 
 
 router.post('/cierre', permitirGestionarCaja, validarCajaHabilitada, async (req, res) => {
   try {
-    const fecha = req.body?.fecha ? new Date(req.body.fecha) : new Date();
+    const fecha = req.body?.fecha || new Date();
     const dataCaja = await obtenerCajaConResumen({ empresaId: req.empresa.id, fecha });
 
     if (!dataCaja?.caja) {

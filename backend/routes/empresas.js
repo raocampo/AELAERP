@@ -22,6 +22,7 @@ const {
 } = require('../utils/configuracionSistema');
 const { sembrarPlanCuentasBase } = require('../utils/planCuentasBase');
 const { normalizarRol, tienePermiso } = require('../utils/roles');
+const { rangoDiaSoloFecha, rangoMesSoloFecha, rangoAnioSoloFecha } = require('../utils/fechas');
 
 // Estados de factura que representan una venta real ya consumada — autorizada
 // por el SRI, o histórica importada sin envío al SRI (numeroAutorizacion nulo,
@@ -210,12 +211,16 @@ router.get('/consultar-sri/:ruc', proteger, adminOContador, async (req, res) => 
 // GET /api/empresas/estadisticas — indicadores del dashboard
 router.get('/estadisticas', proteger, async (req, res) => {
   try {
-    const ahora      = new Date();
-    const inicioAño  = new Date(ahora.getFullYear(), 0, 1);
-    const finAño     = new Date(ahora.getFullYear(), 11, 31, 23, 59, 59);
-    const inicioMes  = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
-    const finMes     = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59);
-    const hoyInicio  = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    // "Hoy"/"este mes" en hora Ecuador, no en la del proceso (Railway corre
+    // en UTC) — con new Date() puro, después de ~19:00 hora EC el servidor
+    // ya está en el día/mes siguiente en UTC, y estas consultas quedaban
+    // vacías pese a haber ventas/caja real ese mismo día. fechaEmision/
+    // fechaOperacion son campos "solo-fecha" (medianoche UTC exacta, ver
+    // utils/fechas.js) — se usa el helper para ese caso, no inicioDiaEC/
+    // inicioMesEC (esos son para columnas de timestamp real).
+    const { gte: inicioAño, lt: finAño } = rangoAnioSoloFecha();
+    const { gte: inicioMes, lt: finMes } = rangoMesSoloFecha();
+    const { gte: hoyInicio, lt: hoyFin } = rangoDiaSoloFecha();
     const eId        = req.empresa.id;
 
     const [
@@ -232,27 +237,27 @@ router.get('/estadisticas', proteger, async (req, res) => {
       // por el SRI, o histórica sin envío al SRI). Excluye rechazadas, en
       // proceso de firma/envío, con error, etc.
       req.prisma.facturas.count({
-        where: { empresaId: eId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS }, fechaEmision: { gte: inicioAño, lte: finAño } },
+        where: { empresaId: eId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS }, fechaEmision: { gte: inicioAño, lt: finAño } },
       }),
       req.prisma.notas_venta.count({
-        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lte: finAño } },
+        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lt: finAño } },
       }),
 
       // Ventas del mes (suma importeTotal / total)
       req.prisma.facturas.aggregate({
-        where: { empresaId: eId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS }, fechaEmision: { gte: inicioMes, lte: finMes } },
+        where: { empresaId: eId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS }, fechaEmision: { gte: inicioMes, lt: finMes } },
         _sum: { importeTotal: true },
         _count: { id: true },
       }),
       req.prisma.notas_venta.aggregate({
-        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioMes, lte: finMes } },
+        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioMes, lt: finMes } },
         _sum: { total: true },
         _count: { id: true },
       }),
 
       // Compras del mes
       req.prisma.facturas_compra.aggregate({
-        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioMes, lte: finMes } },
+        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioMes, lt: finMes } },
         _sum: { importeTotal: true },
         _count: { id: true },
       }),
@@ -267,7 +272,7 @@ router.get('/estadisticas', proteger, async (req, res) => {
 
       // Caja abierta hoy
       req.prisma.cajas_diarias.findFirst({
-        where: { empresaId: eId, fechaOperacion: { gte: hoyInicio }, estado: 'ABIERTA' },
+        where: { empresaId: eId, fechaOperacion: { gte: hoyInicio, lt: hoyFin }, estado: 'ABIERTA' },
         include: {
           movimientos: { select: { tipo: true, monto: true } },
         },
@@ -275,11 +280,11 @@ router.get('/estadisticas', proteger, async (req, res) => {
 
       // Ingresos acumulados del año (para validar tope de régimen RIMPE)
       req.prisma.facturas.aggregate({
-        where: { empresaId: eId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS }, fechaEmision: { gte: inicioAño, lte: finAño } },
+        where: { empresaId: eId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS }, fechaEmision: { gte: inicioAño, lt: finAño } },
         _sum: { importeTotal: true },
       }),
       req.prisma.notas_venta.aggregate({
-        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lte: finAño } },
+        where: { empresaId: eId, anulada: false, fechaEmision: { gte: inicioAño, lt: finAño } },
         _sum: { total: true },
       }),
       req.prisma.configuracion_sri.findFirst({

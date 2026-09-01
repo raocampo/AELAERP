@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
-import { formatFechaCorta } from '../../utils/fecha';
+import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import { IcEditar } from '../../utils/icons';
 import './TalentoHumano.css';
 
@@ -164,7 +164,7 @@ const ListaEmpleados = () => {
 };
 
 const LiquidarModal = ({ empleado, onClose, onLiquidado }) => {
-  const [fechaSalida, setFechaSalida] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaSalida, setFechaSalida] = useState(hoyLocal());
   const [motivoSalida, setMotivoSalida] = useState('renuncia');
   const [guardando, setGuardando] = useState(false);
 

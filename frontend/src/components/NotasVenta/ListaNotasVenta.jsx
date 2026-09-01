@@ -19,17 +19,25 @@ export default function ListaNotasVenta() {
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
   const [limiteInfo, setLimiteInfo] = useState(null);
+  const [page,       setPage]       = useState(1);
+  const [total,      setTotal]      = useState(0);
+  const [pages,      setPages]      = useState(1);
 
-  const cargar = useCallback(async ({ termino = '', desde = '', hasta = '' } = {}) => {
+  // Mismo patrón de paginación "Anterior/Siguiente" que ya usa ListaCompras —
+  // antes esta lista no mandaba page/limit (el backend ya los soportaba) y se
+  // truncaba en silencio a las primeras 50 notas, sin forma de ver el resto.
+  const cargar = useCallback(async ({ termino = '', desde = '', hasta = '', pagina = 1 } = {}) => {
     setCargando(true);
     try {
-      const params = {};
+      const params = { page: pagina };
       if (termino) params.busqueda = termino;
       if (desde) params.fechaDesde = desde;
       if (hasta) params.fechaHasta = hasta;
 
       const res = await api.get('/notas-venta', { params });
       setNotas(res.data.data || []);
+      setTotal(res.data.total || 0);
+      setPages(res.data.pages || 1);
       if (res.data.limiteAnual) {
         setLimiteInfo({ limite: res.data.limiteAnual, usadas: res.data.usadasAño });
       }
@@ -41,8 +49,14 @@ export default function ListaNotasVenta() {
   }, []);
 
   useEffect(() => {
-    cargar();
-  }, [cargar]);
+    cargar({ termino: busqueda, desde: fechaDesde, hasta: fechaHasta, pagina: page });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  const buscar = () => {
+    setPage(1);
+    cargar({ termino: busqueda, desde: fechaDesde, hasta: fechaHasta, pagina: 1 });
+  };
 
   const verPDF = async (id) => {
     try {
@@ -60,7 +74,7 @@ export default function ListaNotasVenta() {
     try {
       await api.put(`/notas-venta/${id}/anular`, { motivo });
       toast.success('Nota de venta anulada');
-      await cargar({ termino: busqueda, desde: fechaDesde, hasta: fechaHasta });
+      await cargar({ termino: busqueda, desde: fechaDesde, hasta: fechaHasta, pagina: page });
     } catch (err) {
       toast.error(err.response?.data?.mensaje || 'Error al anular');
     }
@@ -115,13 +129,13 @@ export default function ListaNotasVenta() {
           style={{ flex: 1, minWidth: 200, padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6, fontSize: 14 }}
           placeholder="Buscar por número, nombre o identificación..."
           value={busqueda} onChange={e => setBusqueda(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && cargar({ termino: busqueda, desde: fechaDesde, hasta: fechaHasta })}
+          onKeyDown={e => e.key === 'Enter' && buscar()}
         />
         <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
           style={{ padding: '8px 10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 14 }} />
         <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
           style={{ padding: '8px 10px', border: '1px solid #ddd', borderRadius: 6, fontSize: 14 }} />
-        <button className="btn btn-secondary" onClick={() => cargar({ termino: busqueda, desde: fechaDesde, hasta: fechaHasta })}>Buscar</button>
+        <button className="btn btn-secondary" onClick={buscar}>Buscar</button>
       </div>
 
       {/* Tabla */}
@@ -199,6 +213,20 @@ export default function ListaNotasVenta() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!cargando && pages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 16 }}>
+          <button className="btn btn-secondary" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+            ← Anterior
+          </button>
+          <span style={{ fontSize: 13, color: '#555' }}>
+            Página <strong>{page}</strong> de <strong>{pages}</strong> — mostrando {notas.length} de {total} registros
+          </span>
+          <button className="btn btn-secondary" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>
+            Siguiente →
+          </button>
         </div>
       )}
     </div>

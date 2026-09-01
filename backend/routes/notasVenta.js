@@ -654,6 +654,7 @@ router.get('/', async (req, res) => {
 
     res.json({
       success: true, data: notas, total,
+      pages: Math.max(1, Math.ceil(total / parseInt(limit))),
       limiteAnual: req.empresa.factAnualesMax,
       usadasAño,
     });

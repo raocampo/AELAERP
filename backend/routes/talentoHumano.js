@@ -13,6 +13,7 @@ const {
   crearAsientoPagoVacaciones, crearAsientoPagoEspecialNomina,
   round2,
 } = require('../utils/contabilidad');
+const { diaCalendarioEC } = require('../utils/fechas');
 const { aplicarTablaProgresivaRenta } = require('../utils/tablaRentaPN');
 const { calcularRebajaGastosPersonales } = require('../utils/rebajaGastosPersonales');
 
@@ -1301,15 +1302,14 @@ router.delete('/ausencias/:id', ...gestionarRRHH, async (req, res) => {
 router.get('/dashboard', ...verRRHH, async (req, res) => {
   try {
     const empresaId = req.empresa.id;
-    const hoy = new Date();
-    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const [anioEC, mesEC] = diaCalendarioEC().split('-').map(Number);
 
     const [totalEmpleados, empleadosActivos, pendientesAprobar, nominaMes] = await Promise.all([
       prisma.empleados.count({ where: { empresaId } }),
       prisma.empleados.count({ where: { empresaId, activo: true } }),
       prisma.ausencias.count({ where: { empresaId, aprobado: false } }),
       prisma.nominas.findFirst({
-        where: { empresaId, mes: hoy.getMonth() + 1, anio: hoy.getFullYear() },
+        where: { empresaId, mes: mesEC, anio: anioEC },
         select: { id: true, estado: true, totalNeto: true },
       }),
     ]);

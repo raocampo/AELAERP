@@ -1,13 +1,34 @@
 const prisma = require('../config/prisma');
 const { asegurarConfiguracionSistemaEmpresa } = require('./configuracionSistema');
+const { diaCalendarioEC } = require('./fechas');
 
 const TIPOS_INGRESO = new Set(['APERTURA', 'INGRESO', 'VENTA_FACTURA', 'VENTA_NOTA']);
 const TIPOS_EGRESO = new Set(['EGRESO', 'ANULACION_FACTURA', 'ANULACION_NOTA']);
 
+// Antes usaba fecha.setHours(0,0,0,0), que redondea a medianoche en la zona
+// horaria del PROCESO (Railway corre en UTC) — cuando el llamador no pasa
+// una fecha explícita (el caso normal: "la caja de ahora mismo"), después de
+// ~19:00 hora Ecuador el servidor ya está en el día siguiente en UTC, y se
+// abría/buscaba la caja de mañana en vez de la de hoy.
+//
+// fechaOperacion es un campo "solo-fecha" (igual que fechaEmision en otras
+// tablas): se guarda como medianoche UTC EXACTA representando el día
+// calendario, sin componente de hora real — así están todas las filas ya
+// existentes. Por eso acá se corrige SOLO a qué día calendario corresponde
+// (con diaCalendarioEC, que sí resuelve bien la hora Ecuador), pero se sigue
+// guardando en el mismo formato medianoche-UTC de siempre — usar
+// inicioDiaEC() en vez de esto rompería la comparación con filas viejas
+// (quedarían 5 horas desalineadas).
+//
+// Idempotente a propósito: si `valor` ya es una medianoche UTC exacta (ya
+// pasó por esta misma función antes), se devuelve tal cual en vez de
+// reinterpretarla en hora Ecuador — aplicar diaCalendarioEC() dos veces
+// sobre el mismo Date movería el día uno hacia atrás.
 function normalizarFechaOperacion(valor = new Date()) {
-  const fecha = new Date(valor);
-  fecha.setHours(0, 0, 0, 0);
-  return fecha;
+  if (valor instanceof Date && valor.getTime() === new Date(valor).setUTCHours(0, 0, 0, 0)) {
+    return valor;
+  }
+  return new Date(`${diaCalendarioEC(valor)}T00:00:00.000Z`);
 }
 
 async function obtenerOCrearCajaDelDia({ tx = prisma, empresaId, fecha = new Date(), nombreCaja = null }) {

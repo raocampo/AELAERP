@@ -10,6 +10,7 @@ const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { crearAsientoContable, crearAsientoNominaPeriodo, round2 } = require('../utils/contabilidad');
+const { diaCalendarioEC } = require('../utils/fechas');
 const { CATEGORIAS: CATEGORIAS_CONFIG_REFERENCIA, obtenerCatalogoReferencias } = require('../utils/catalogosCuentasReferencia');
 const { sembrarPlanCuentasBase, PLAN_CUENTAS_BASE } = require('../utils/planCuentasBase');
 const { sembrarPlanSupercias }  = require('../utils/planCuentasSupercias');
@@ -644,8 +645,8 @@ async function obtenerEstadoResultados(empresaId, filtros = {}) {
   };
 }
 
-async function obtenerBalanceGeneral(empresaId, fechaCorte = new Date()) {
-  const fecha = endOfDay(fechaCorte) || endOfDay(new Date());
+async function obtenerBalanceGeneral(empresaId, fechaCorte = diaCalendarioEC()) {
+  const fecha = endOfDay(fechaCorte) || endOfDay(diaCalendarioEC());
   const filtrosFecha = { hasta: fecha instanceof Date ? fecha.toISOString() : fecha };
 
   // Jerarquías por sección
@@ -721,8 +722,8 @@ function _buscarGrupoContable(filas, tipo, { corriente, noCorriente, patron } = 
 }
 
 async function obtenerFlujoEfectivo(empresaId, fechaDesde, fechaHasta) {
-  const inicio = fechaDesde ? new Date(fechaDesde) : new Date(new Date().getFullYear(), 0, 1);
-  const fin = endOfDay(fechaHasta) || endOfDay(new Date());
+  const inicio = fechaDesde ? new Date(fechaDesde) : new Date(`${diaCalendarioEC().slice(0, 4)}-01-01T00:00:00.000Z`);
+  const fin = endOfDay(fechaHasta) || endOfDay(diaCalendarioEC());
   const finAnterior = endOfDay(new Date(inicio.getTime() - 24 * 60 * 60 * 1000));
 
   const [balInicial, balFinal, resultadosPeriodo] = await Promise.all([
@@ -800,8 +801,8 @@ async function obtenerFlujoEfectivo(empresaId, fechaDesde, fechaHasta) {
 // (aceptaMovimiento=true), con su saldo al inicio y fin del período. Es el
 // mismo nivel de detalle que cualquier plan de cuentas expone de por sí.
 async function obtenerCambiosPatrimonio(empresaId, fechaDesde, fechaHasta) {
-  const inicio = fechaDesde ? new Date(fechaDesde) : new Date(new Date().getFullYear(), 0, 1);
-  const fin = endOfDay(fechaHasta) || endOfDay(new Date());
+  const inicio = fechaDesde ? new Date(fechaDesde) : new Date(`${diaCalendarioEC().slice(0, 4)}-01-01T00:00:00.000Z`);
+  const fin = endOfDay(fechaHasta) || endOfDay(diaCalendarioEC());
   const finAnterior = endOfDay(new Date(inicio.getTime() - 24 * 60 * 60 * 1000));
 
   const [patInicial, patFinal, resultadosPeriodo] = await Promise.all([
@@ -3003,7 +3004,7 @@ router.get('/reportes/estados', async (req, res) => {
       obtenerEstadoResultados(empresaId, filtros),
       obtenerConsultasResumen(empresaId, filtros),
     ]);
-    const balanceGeneral = await obtenerBalanceGeneral(empresaId, req.query.fechaBalance || req.query.hasta || new Date());
+    const balanceGeneral = await obtenerBalanceGeneral(empresaId, req.query.fechaBalance || req.query.hasta || diaCalendarioEC());
 
     if (formato === 'csv') {
       const rows = [
@@ -3109,7 +3110,7 @@ router.get('/estado-resultados', async (req, res) => {
 router.get('/balance-general', async (req, res) => {
   try {
     const empresaId = obtenerEmpresaId(req);
-    const data = await obtenerBalanceGeneral(empresaId, req.query.fecha || new Date());
+    const data = await obtenerBalanceGeneral(empresaId, req.query.fecha || diaCalendarioEC());
     res.json({ success: true, data });
   } catch (error) {
     console.error('GET /contabilidad/balance-general:', error);
@@ -3129,7 +3130,7 @@ router.get('/reportes/balance-general', async (req, res) => {
       return res.status(400).json({ success: false, mensaje: 'Formato inválido. Use csv o pdf' });
     }
 
-    const data = await obtenerBalanceGeneral(empresaId, req.query.fecha || new Date());
+    const data = await obtenerBalanceGeneral(empresaId, req.query.fecha || diaCalendarioEC());
     const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
     if (formato === 'csv') {

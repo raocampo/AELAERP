@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
-import { formatFechaCorta } from '../../utils/fecha';
+import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import './CajaDiaria.css';
 
 const MOVIMIENTO_INICIAL = {
@@ -13,7 +13,11 @@ const MOVIMIENTO_INICIAL = {
 };
 
 export default function CajaDiaria() {
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  // new Date().toISOString() siempre serializa en UTC, sin importar la zona
+  // del navegador — a partir de ~19:00 hora Ecuador ya cae en el día
+  // siguiente. hoyLocal() usa los componentes locales del navegador (que si
+  // el usuario está en Ecuador, ya son la hora correcta) en vez de UTC.
+  const [fecha, setFecha] = useState(hoyLocal());
   const [tab, setTab] = useState('apertura');
   const [resumen, setResumen] = useState(null);
   const [historial, setHistorial] = useState([]);
