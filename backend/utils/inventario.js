@@ -66,6 +66,69 @@ async function aplicarMovimientoInventario({
   return { producto: productoActualizado, movimiento };
 }
 
+// Máximo de ítems en catálogo para el plan Lite — mismo tope que
+// checkLimiteProductos (middleware/edition.js), duplicado acá porque ese
+// middleware depende de `req` y esto corre dentro de una transacción sin
+// acceso a la request.
+const LIMITE_PRODUCTOS_LITE = 200;
+
+// Crea en el catálogo, ANTES de aplicar los movimientos de venta, los
+// productos nuevos que el usuario pidió explícitamente agregar desde una
+// línea manual de POS/Factura/Nota de Venta (checkbox "Añadir al
+// catálogo" — ver PuntoVenta.jsx). Idempotente: si el código ya existe
+// (fue creado por otra línea de la misma venta, o ya estaba en el
+// catálogo) no hace nada con él. Solo llamar en el sentido "aplicar"
+// (nunca al revertir/anular — ver aplicarMovimientosVentaDesdeDetalles).
+async function _asegurarProductosDesdeDetalles({ tx, empresaId, detalles }) {
+  const porCodigo = new Map();
+  for (const d of detalles) {
+    if (!d?.crearEnCatalogo) continue;
+    const codigo = String(d.codigoPrincipal || '').trim().toUpperCase();
+    if (!codigo || porCodigo.has(codigo)) continue;
+    porCodigo.set(codigo, d);
+  }
+  if (porCodigo.size === 0) return;
+
+  const codigos = [...porCodigo.keys()];
+  const existentes = await tx.productos_servicios.findMany({
+    where: { empresaId, codigoPrincipal: { in: codigos } },
+    select: { codigoPrincipal: true },
+  });
+  const yaExisten = new Set(existentes.map((p) => p.codigoPrincipal));
+  const faltantes = codigos.filter((c) => !yaExisten.has(c));
+  if (faltantes.length === 0) return;
+
+  const empresa = await tx.empresas.findUnique({ where: { id: empresaId }, select: { plan: true } });
+  const plan = empresa?.plan === 'full' ? 'pro' : (empresa?.plan || 'pro');
+  if (plan === 'lite') {
+    const total = await tx.productos_servicios.count({ where: { empresaId } });
+    if (total + faltantes.length > LIMITE_PRODUCTOS_LITE) {
+      throw new Error(`El plan AELA Lite permite un máximo de ${LIMITE_PRODUCTOS_LITE} productos en el catálogo. Desmarca "Añadir al catálogo" en la línea manual, o actualiza de plan.`);
+    }
+  }
+
+  for (const codigo of faltantes) {
+    const d = porCodigo.get(codigo);
+    try {
+      await tx.productos_servicios.create({
+        data: {
+          empresaId,
+          codigoPrincipal: codigo,
+          nombre: String(d.descripcion || codigo).trim().slice(0, 300) || codigo,
+          precioUnitario: Number(d.precioUnitario || 0),
+          tarifaIva: Number(d.ivaPorcentaje ?? d.tarifaIva ?? 15),
+          inventariable: true,
+          unidadMedida: 'UND',
+        },
+      });
+    } catch (err) {
+      // P2002 = ya lo creó otra línea de la misma venta con el mismo
+      // código (carrera dentro de la propia transacción) — no es un error.
+      if (err.code !== 'P2002') throw err;
+    }
+  }
+}
+
 async function aplicarMovimientosVentaDesdeDetalles({
   tx = prisma,
   empresaId,
@@ -78,6 +141,10 @@ async function aplicarMovimientosVentaDesdeDetalles({
 }) {
   const config = await asegurarConfiguracionSistemaEmpresa(empresaId, tx);
   if (!config?.inventarioHabilitado) return [];
+
+  if (!revertir) {
+    await _asegurarProductosDesdeDetalles({ tx, empresaId, detalles });
+  }
 
   const agregados = new Map();
   detalles.forEach((detalle) => {

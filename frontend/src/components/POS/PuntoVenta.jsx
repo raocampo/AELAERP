@@ -315,10 +315,16 @@ export default function PuntoVenta() {
 
   // Línea sin producto de catálogo — igual que "+ Agregar línea manualmente"
   // en Factura/Nota de Venta, para cobrar algo que no está en el inventario.
+  // `manual: true` solo sirve para decidir si esta fila muestra el checkbox
+  // "Añadir al catálogo" (no tiene sentido en una línea ya tomada del
+  // catálogo, que agregarProducto() no marca). Si se marca el checkbox, al
+  // cobrar el backend crea el producto (código/descripción/precio/IVA de
+  // esta misma línea) y registra su movimiento de inventario — ver
+  // utils/inventario.js#aplicarMovimientosVentaDesdeDetalles.
   const agregarLineaManual = () => {
     setCarrito((prev) => [
       ...prev,
-      { uid: nuevoUid(), codigoPrincipal: '', descripcion: '', cantidad: 1, precioUnitario: 0, ivaPorcentaje: 15 },
+      { uid: nuevoUid(), codigoPrincipal: '', descripcion: '', cantidad: 1, precioUnitario: 0, ivaPorcentaje: 15, manual: true, crearEnCatalogo: false },
     ]);
   };
 
@@ -451,6 +457,10 @@ export default function PuntoVenta() {
       toast.error('Todas las líneas del carrito necesitan una descripción (revisa las líneas manuales)');
       return;
     }
+    if (carrito.some((item) => item.crearEnCatalogo && !String(item.codigoPrincipal || '').trim())) {
+      toast.error('Para añadir una línea manual al catálogo necesita un código (revisa las líneas marcadas)');
+      return;
+    }
     if (pagos.some((p) => !(parseFloat(p.monto) > 0))) {
       toast.error('Cada forma de pago necesita un monto mayor a cero');
       return;
@@ -532,6 +542,7 @@ export default function PuntoVenta() {
               cantidad: Number(item.cantidad || 1),
               precioUnitario: Number(item.precioUnitario || 0),
               descuento: 0,
+              ...(item.crearEnCatalogo && { crearEnCatalogo: true }),
             })),
             ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
           },
@@ -583,6 +594,7 @@ export default function PuntoVenta() {
               precioUnitario: Number(item.precioUnitario || 0),
               descuento: 0,
               ivaPorcentaje: Number(item.ivaPorcentaje || 0),
+              ...(item.crearEnCatalogo && { crearEnCatalogo: true }),
             })),
             pagos: pagos.map((p) => ({
               formaPago: FORMAS_FACTURA.find(f => f.value === p.formaPago)?.sriCodigo || p.formaPago,
@@ -829,6 +841,13 @@ export default function PuntoVenta() {
                       <input value={item.codigoPrincipal}
                         onChange={(e) => actualizarLinea(item.uid, 'codigoPrincipal', e.target.value)}
                         placeholder="SRV001" style={{ width: 80 }} />
+                      {item.manual && (
+                        <label className="pos-check-catalogo" title="Crear este código como producto nuevo en Gestión de Productos, con seguimiento de inventario">
+                          <input type="checkbox" checked={!!item.crearEnCatalogo}
+                            onChange={(e) => actualizarLinea(item.uid, 'crearEnCatalogo', e.target.checked)} />
+                          Añadir al catálogo
+                        </label>
+                      )}
                     </td>
                     <td>
                       <input value={item.descripcion}
