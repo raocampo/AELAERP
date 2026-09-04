@@ -572,32 +572,38 @@ router.put('/configuracion', permitirConfigurarSri, async (req, res) => {
       },
     });
 
-    // Negocio Popular no puede emitir facturas normales (solo notas de
-    // venta) — al marcar este checkbox, el documento predeterminado del POS
-    // pasa a nota_venta automáticamente, para no depender de que el cajero
-    // recuerde cambiarlo a mano cada vez (causa raíz real de un caso de
-    // facturas mal emitidas corregido 2026-08-24, ver Deportivo Cat).
-    if (fields.negocioPopular) {
-      const configSistema = await asegurarConfiguracionSistemaEmpresa(req.empresa.id, prisma);
-      if (configSistema && configSistema.documentoPosDefault !== 'nota_venta') {
-        await prisma.configuracion_sistema.update({
-          where: { empresaId: req.empresa.id },
-          data: { documentoPosDefault: 'nota_venta' },
-        });
-      }
-    }
-
-    // Cambio de régimen (Negocio Popular ⇄ régimen general): el precio de
-    // catálogo cambia de significado — Negocio Popular lo usa como precio
-    // final (con IVA incluido, ver Nota de Venta) mientras que el régimen
-    // general lo usa como base imponible (sin IVA, la factura suma el IVA
-    // aparte). Al cruzar de un régimen a otro se recalcula todo el catálogo
-    // de la empresa en un solo UPDATE, para no obligar a editar producto
-    // por producto (hallazgo real: Deportivo Cat tenía 205 productos
-    // cargados con precio sin IVA pese a ser Negocio Popular).
+    // Cambio de régimen (Negocio Popular ⇄ régimen general) — dos efectos,
+    // en AMBAS direcciones, no solo al entrar:
+    //
+    // 1. Documento predeterminado del POS: Negocio Popular no puede emitir
+    //    facturas normales (solo notas de venta), así que al ENTRAR el
+    //    default pasa a nota_venta automáticamente, para no depender de que
+    //    el cajero recuerde cambiarlo a mano (causa raíz real de un caso de
+    //    facturas mal emitidas, corregido 2026-08-24, ver Deportivo Cat).
+    //    Bug real corregido 2026-09-01 (mismo caso, dirección inversa): al
+    //    SALIR de Negocio Popular esto nunca se revertía a factura — el
+    //    default quedaba "pegado" en nota_venta indefinidamente, aunque el
+    //    régimen ya no lo exigiera (Deportivo Cat, RUC 1103590533001).
+    //
+    // 2. Precio de catálogo: cambia de significado — Negocio Popular lo usa
+    //    como precio final (con IVA incluido, ver Nota de Venta) mientras
+    //    que el régimen general lo usa como base imponible (sin IVA, la
+    //    factura suma el IVA aparte). Se recalcula todo el catálogo de la
+    //    empresa en un solo UPDATE, para no obligar a editar producto por
+    //    producto (hallazgo real: Deportivo Cat tenía 205 productos
+    //    cargados con precio sin IVA pese a ser Negocio Popular).
     const eraPopular   = !!existing?.negocioPopular;
     const ahoraPopular = !!fields.negocioPopular;
     if (eraPopular !== ahoraPopular) {
+      const nuevoDefaultPos = ahoraPopular ? 'nota_venta' : 'factura';
+      const configSistema = await asegurarConfiguracionSistemaEmpresa(req.empresa.id, prisma);
+      if (configSistema && configSistema.documentoPosDefault !== nuevoDefaultPos) {
+        await prisma.configuracion_sistema.update({
+          where: { empresaId: req.empresa.id },
+          data: { documentoPosDefault: nuevoDefaultPos },
+        });
+      }
+
       if (ahoraPopular) {
         // Pasa A Negocio Popular: base sin IVA -> precio final con IVA.
         await prisma.$executeRaw`

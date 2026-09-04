@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { fmtLinea } from '../../utils/formato';
+import { distribuirDescuentoGeneral, subtotalBase } from '../../utils/descuentoGeneral';
 import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
 import './FormFactura.css';
 
@@ -273,6 +274,11 @@ const FormFactura = () => {
 
   // ── Detalles ─────────────────────────────────────────────────────────────
   const [detalles, setDetalles] = useState([]);
+  // Descuento sobre el total de la factura (no por ítem) — a veces se pacta
+  // sobre la compra completa. El SRI no tiene un campo de "descuento
+  // general" en el XML, así que se reparte a prorrata entre los ítems antes
+  // de enviar — ver utils/descuentoGeneral.js.
+  const [descuentoGeneral, setDescuentoGeneral] = useState('');
 
   // Autocomplete global de productos (para la barra de búsqueda superior)
   const [busqProd,     setBusqProd]     = useState('');
@@ -303,7 +309,14 @@ const FormFactura = () => {
       .catch(() => {});
   }, []);
 
-  const totales = calcularTotales(detalles);
+  // Subtotal ANTES del descuento general (para mostrarlo y validar que el
+  // descuento general no sea mayor a lo que hay para descontar) y el
+  // arreglo de detalles "efectivo" (con el descuento general ya repartido
+  // a prorrata) que alimenta tanto la vista previa de totales como lo que
+  // realmente se envía al backend al emitir.
+  const subtotalAntesDescGeneral = subtotalBase(detalles);
+  const detallesConDescGeneral = distribuirDescuentoGeneral(detalles, descuentoGeneral);
+  const totales = calcularTotales(detallesConDescGeneral);
 
   // ── Pre-llenado desde Proforma (location.state.proforma) ────────────────
   useEffect(() => {
@@ -555,6 +568,9 @@ const FormFactura = () => {
     if (sectorTransporte && !placaVehiculo.trim()) {
       return toast.error('La placa del vehículo es obligatoria (sector transporte comercial)');
     }
+    if (Number(descuentoGeneral || 0) > subtotalAntesDescGeneral) {
+      return toast.error(`El descuento general ($${Number(descuentoGeneral).toFixed(2)}) no puede ser mayor al subtotal ($${subtotalAntesDescGeneral.toFixed(2)})`);
+    }
 
     setSubmitting(true);
     try {
@@ -565,7 +581,7 @@ const FormFactura = () => {
         direccionComprador:          direccion    || undefined,
         emailComprador:              email        || undefined,
         telefonoComprador:           telefono     || undefined,
-        detalles: detalles.map(d => ({
+        detalles: detallesConDescGeneral.map(d => ({
           codigoPrincipal: d.codigoPrincipal || 'SRV001',
           descripcion:     d.descripcion,
           cantidad:        parseFloat(d.cantidad)       || 1,
@@ -772,7 +788,7 @@ const FormFactura = () => {
             <div className="fact-det-header">
               <span style={{ flex: '0 0 66px' }}>Cód. Princ.</span>
               <span style={{ flex: '0 0 44px' }}>Aux.</span>
-              <span style={{ flex: '0 0 34px', textAlign: 'center' }}>Cant.</span>
+              <span style={{ flex: '0 0 50px', textAlign: 'center' }}>Cant.</span>
               <span style={{ flex: 1, minWidth: 100 }}>Descripción *</span>
               <span style={{ flex: '0 0 62px', textAlign: 'right' }}>P. Unit.</span>
               <span style={{ flex: '0 0 46px', textAlign: 'center' }}>IVA</span>
@@ -800,7 +816,7 @@ const FormFactura = () => {
                       onChange={e => actualizarDetalle(idx, 'codigoAuxiliar', e.target.value)}
                       placeholder="-" />
                     <input type="number" min="0.01" step="0.01"
-                      style={{ flex: '0 0 34px', textAlign: 'center' }}
+                      style={{ flex: '0 0 50px', textAlign: 'center' }}
                       value={det.cantidad}
                       onChange={e => actualizarDetalle(idx, 'cantidad', e.target.value)} />
                     <input style={{ flex: 1, minWidth: 100 }}
@@ -918,6 +934,14 @@ const FormFactura = () => {
               <div className="total-fila"><span>Subtotal 15%:</span><span>${totales.sub15.toFixed(2)}</span></div>
             )}
             <div className="total-fila"><span>Subtotal 0%:</span><span>${totales.sub0.toFixed(2)}</span></div>
+            <div className="total-fila total-fila-dcto-general">
+              <label htmlFor="fact-dcto-general">Dcto. general (sobre el total):</label>
+              <input id="fact-dcto-general" type="number" min="0" step="0.01"
+                value={descuentoGeneral}
+                onChange={e => setDescuentoGeneral(e.target.value)}
+                placeholder="0.00"
+                title="Se reparte a prorrata entre los ítems al emitir (el SRI no tiene un campo de descuento general)" />
+            </div>
             <div className="total-fila"><span>Total descuento:</span><span>-${totales.totalDesc.toFixed(2)}</span></div>
             {totales.iva5 > 0 && (
               <div className="total-fila"><span>IVA 5%:</span><span>${totales.iva5.toFixed(2)}</span></div>

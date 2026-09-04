@@ -7,6 +7,7 @@ import { abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
 import { enviarBufferUSB } from '../../utils/impresoraUsb';
 import { apiOffline, estaOnline } from '../../utils/syncQueue';
 import { fechaLocalOffset, hoyLocal } from '../../utils/fecha';
+import { distribuirDescuentoGeneral, subtotalBase } from '../../utils/descuentoGeneral';
 import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
 import './PuntoVenta.css';
 
@@ -73,6 +74,11 @@ export default function PuntoVenta() {
   const [codigoBarras, setCodigoBarras] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState([]);
+  // Descuento sobre el total de la venta (no por producto) — a veces el
+  // descuento se pacta sobre la compra completa, no producto por producto.
+  // Se reparte a prorrata entre las líneas antes de emitir (el SRI no tiene
+  // un campo de "descuento general" en el XML) — ver utils/descuentoGeneral.js.
+  const [descuentoGeneral, setDescuentoGeneral] = useState('');
   // uid identifica cada línea del carrito de forma estable, independiente de
   // codigoPrincipal (que puede repetirse o venir vacío en líneas manuales) —
   // así actualizarLinea/quitarLinea nunca chocan entre dos líneas distintas.
@@ -239,17 +245,37 @@ export default function PuntoVenta() {
     return () => document.removeEventListener('mousedown', cerrar);
   }, []);
 
+  // Subtotal ANTES del descuento general — lo que se muestra como
+  // "Subtotal" en el resumen, y el tope contra el que se valida que el
+  // descuento general ingresado no sea mayor a lo que hay para descontar.
+  const subtotalAntesDescGeneral = useMemo(() => subtotalBase(carrito), [carrito]);
+
+  // Reparte el descuento general a prorrata entre las líneas (suma al
+  // descuento propio de cada una) — de ahí en más, el resto de los cálculos
+  // (y lo que se envía al backend al emitir) usan este carrito "efectivo",
+  // no el original, así el descuento general queda 100% reflejado.
+  const carritoConDescGeneral = useMemo(
+    () => distribuirDescuentoGeneral(carrito, descuentoGeneral),
+    [carrito, descuentoGeneral],
+  );
+
+  // Línea = cantidad × precio − descuento de la línea, y el IVA se calcula
+  // sobre esa base ya descontada (mismo criterio que FormFactura.jsx, para
+  // que un mismo carrito dé el mismo total sin importar por dónde se emita).
   const subtotal = useMemo(
-    () => carrito.reduce((acc, item) => acc + (Number(item.cantidad || 0) * Number(item.precioUnitario || 0)), 0),
-    [carrito],
+    () => carritoConDescGeneral.reduce((acc, item) => {
+      const linea = Number(item.cantidad || 0) * Number(item.precioUnitario || 0) - Number(item.descuento || 0);
+      return acc + linea;
+    }, 0),
+    [carritoConDescGeneral],
   );
 
   const totalConIva = useMemo(
-    () => carrito.reduce((acc, item) => {
-      const linea = Number(item.cantidad || 0) * Number(item.precioUnitario || 0);
+    () => carritoConDescGeneral.reduce((acc, item) => {
+      const linea = Number(item.cantidad || 0) * Number(item.precioUnitario || 0) - Number(item.descuento || 0);
       return acc + linea + linea * (Number(item.ivaPorcentaje || 0) / 100);
     }, 0),
-    [carrito],
+    [carritoConDescGeneral],
   );
 
   // Total a cobrar: con IVA para facturas, sin IVA para notas de venta (RIMPE)
@@ -305,6 +331,7 @@ export default function PuntoVenta() {
           cantidad: 1,
           precioUnitario: Number(producto.precioUnitario || 0),
           ivaPorcentaje: Number(producto.tarifaIva || 0),
+          descuento: 0,
         },
       ];
     });
@@ -324,7 +351,7 @@ export default function PuntoVenta() {
   const agregarLineaManual = () => {
     setCarrito((prev) => [
       ...prev,
-      { uid: nuevoUid(), codigoPrincipal: '', descripcion: '', cantidad: 1, precioUnitario: 0, ivaPorcentaje: 15, manual: true, crearEnCatalogo: false },
+      { uid: nuevoUid(), codigoPrincipal: '', descripcion: '', cantidad: 1, precioUnitario: 0, ivaPorcentaje: 15, descuento: 0, manual: true, crearEnCatalogo: false },
     ]);
   };
 
@@ -461,6 +488,10 @@ export default function PuntoVenta() {
       toast.error('Para añadir una línea manual al catálogo necesita un código (revisa las líneas marcadas)');
       return;
     }
+    if (Number(descuentoGeneral || 0) > subtotalAntesDescGeneral) {
+      toast.error(`El descuento general ($${Number(descuentoGeneral).toFixed(2)}) no puede ser mayor al subtotal ($${subtotalAntesDescGeneral.toFixed(2)})`);
+      return;
+    }
     if (pagos.some((p) => !(parseFloat(p.monto) > 0))) {
       toast.error('Cada forma de pago necesita un monto mayor a cero');
       return;
@@ -536,12 +567,12 @@ export default function PuntoVenta() {
             pagos: pagos.length > 1 ? pagos.map((p) => ({ formaPago: p.formaPago, total: Number(p.monto) || 0 })) : undefined,
             fechaEmision,
             clienteId: idClienteBD || undefined,
-            detalles: carrito.map((item) => ({
+            detalles: carritoConDescGeneral.map((item) => ({
               codigoPrincipal: item.codigoPrincipal,
               descripcion: item.descripcion,
               cantidad: Number(item.cantidad || 1),
               precioUnitario: Number(item.precioUnitario || 0),
-              descuento: 0,
+              descuento: Number(item.descuento || 0),
               ...(item.crearEnCatalogo && { crearEnCatalogo: true }),
             })),
             ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
@@ -555,7 +586,7 @@ export default function PuntoVenta() {
           toast.error(resp.data?.mensaje || 'No se pudo emitir la nota de venta');
           return;
         }
-        setCarrito([]);
+        setCarrito([]); setDescuentoGeneral('');
         if (resp.offline) {
           setDocEmitido({
             offline: true, pendienteId: resp.pendienteId,
@@ -587,12 +618,12 @@ export default function PuntoVenta() {
             telefonoComprador: telefono || undefined,
             fechaEmision,
             clienteId: idClienteBD || undefined,
-            detalles: carrito.map((item) => ({
+            detalles: carritoConDescGeneral.map((item) => ({
               codigoPrincipal: item.codigoPrincipal,
               descripcion: item.descripcion,
               cantidad: Number(item.cantidad || 1),
               precioUnitario: Number(item.precioUnitario || 0),
-              descuento: 0,
+              descuento: Number(item.descuento || 0),
               ivaPorcentaje: Number(item.ivaPorcentaje || 0),
               ...(item.crearEnCatalogo && { crearEnCatalogo: true }),
             })),
@@ -610,7 +641,7 @@ export default function PuntoVenta() {
           toast.error(resp.data?.error || resp.data?.mensaje || 'No se pudo emitir la factura');
           return;
         }
-        setCarrito([]);
+        setCarrito([]); setDescuentoGeneral('');
         if (resp.offline) {
           setDocEmitido({
             offline: true, pendienteId: resp.pendienteId,
@@ -830,6 +861,7 @@ export default function PuntoVenta() {
                   <th>Cantidad</th>
                   <th>Precio</th>
                   {tipoDocumento === 'factura' && <th>IVA</th>}
+                  <th>Dcto.</th>
                   <th>Total</th>
                   <th></th>
                 </tr>
@@ -855,10 +887,10 @@ export default function PuntoVenta() {
                         placeholder="Descripción" style={{ width: '100%', minWidth: 140 }} />
                     </td>
                     <td>
-                      <input type="number" min="1" step="1" value={item.cantidad} onChange={(e) => actualizarLinea(item.uid, 'cantidad', Number(e.target.value))} />
+                      <input type="number" min="1" step="1" value={item.cantidad} onChange={(e) => actualizarLinea(item.uid, 'cantidad', e.target.value)} />
                     </td>
                     <td>
-                      <input type="number" min="0" step="0.0001" value={item.precioUnitario} onChange={(e) => actualizarLinea(item.uid, 'precioUnitario', Number(e.target.value))} />
+                      <input type="number" min="0" step="0.0001" value={item.precioUnitario} onChange={(e) => actualizarLinea(item.uid, 'precioUnitario', e.target.value)} />
                     </td>
                     {tipoDocumento === 'factura' && (
                       <td>
@@ -867,12 +899,15 @@ export default function PuntoVenta() {
                         </select>
                       </td>
                     )}
-                    <td>${(Number(item.cantidad || 0) * Number(item.precioUnitario || 0)).toFixed(2)}</td>
+                    <td>
+                      <input type="number" min="0" step="0.01" value={item.descuento || 0} onChange={(e) => actualizarLinea(item.uid, 'descuento', e.target.value)} />
+                    </td>
+                    <td>${(Number(item.cantidad || 0) * Number(item.precioUnitario || 0) - Number(item.descuento || 0)).toFixed(2)}</td>
                     <td><button type="button" className="btn-link danger" onClick={() => quitarLinea(item.uid)}>Quitar</button></td>
                   </tr>
                 ))}
                 {carrito.length === 0 && (
-                  <tr><td colSpan={tipoDocumento === 'factura' ? 7 : 6} className="pos-empty">Agrega productos para comenzar una venta.</td></tr>
+                  <tr><td colSpan={tipoDocumento === 'factura' ? 8 : 7} className="pos-empty">Agrega productos para comenzar una venta.</td></tr>
                 )}
               </tbody>
             </table>
@@ -882,12 +917,25 @@ export default function PuntoVenta() {
           </button>
 
           <div className="pos-footer">
-            <div className="pos-total">
-              <span>Total</span>
-              <strong>${total.toFixed(2)}</strong>
+            <div className="pos-resumen">
+              <div className="pos-resumen-fila">
+                <span>Subtotal</span>
+                <span>${subtotalAntesDescGeneral.toFixed(2)}</span>
+              </div>
+              <div className="pos-resumen-fila pos-resumen-dcto">
+                <label htmlFor="pos-dcto-general">Dcto. general</label>
+                <input id="pos-dcto-general" type="number" min="0" step="0.01"
+                  value={descuentoGeneral}
+                  onChange={(e) => setDescuentoGeneral(e.target.value)}
+                  placeholder="0.00" title="Descuento sobre el total de la venta — se reparte entre los productos al emitir" />
+              </div>
+              <div className="pos-total">
+                <span>Total</span>
+                <strong>${total.toFixed(2)}</strong>
+              </div>
             </div>
             <div className="pos-actions">
-              <button type="button" className="btn-secondary" onClick={() => setCarrito([])}>Vaciar carrito</button>
+              <button type="button" className="btn-secondary" onClick={() => { setCarrito([]); setDescuentoGeneral(''); }}>Vaciar carrito</button>
               <button type="button" className="btn-primary" onClick={emitirDocumento} disabled={guardando || !pagosCuadran}>
                 {guardando ? 'Emitiendo...' : !pagosCuadran ? 'Formas de pago no cuadran' : 'Cobrar y emitir'}
               </button>
