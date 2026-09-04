@@ -60,6 +60,7 @@ import './App.css';
 const Login = lazy(() => import('./components/Auth/Login'));
 const Layout = lazy(() => import('./components/Layout/Layout'));
 const Dashboard = lazy(() => import('./components/Dashboard/Dashboard'));
+const Estadisticas = lazy(() => import('./components/Estadisticas/Estadisticas'));
 const GestionProductos = lazy(() => import('./components/Productos/GestionProductos'));
 const ListaCompras = lazy(() => import('./components/Compras/ListaCompras'));
 const FormCompra = lazy(() => import('./components/Compras/FormCompra'));
@@ -241,6 +242,9 @@ function App() {
 
                 {/* Caja diaria — disponible desde Lite */}
                 <Route path="caja" element={<ModuleRoute moduleKey="caja"><PermissionRoute permission="caja.ver"><CajaDiaria /></PermissionRoute></ModuleRoute>} />
+
+                {/* Estadísticas — ventas mensuales, disponible desde Lite */}
+                <Route path="estadisticas" element={<ModuleRoute moduleKey="facturacion"><PermissionRoute permission="estadisticas.ver"><Estadisticas /></PermissionRoute></ModuleRoute>} />
 
                 {/* POS — disponible desde Lite */}
                 <Route path="pos" element={<ModuleRoute moduleKey="pos"><PermissionRoute permission="pos.usar"><PuntoVenta /></PermissionRoute></ModuleRoute>} />

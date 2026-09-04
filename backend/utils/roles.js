@@ -70,6 +70,7 @@ const PERMISSIONS = {
   'retenciones.gestionar':    ['admin', 'supervisor', 'contador'],
   'liquidaciones.gestionar':  ['admin', 'supervisor', 'contador'],
   'tributario.reportes':      ['admin', 'supervisor', 'contador'],
+  'estadisticas.ver':         ['admin', 'supervisor', 'contador'],
 
   // contabilidad.ver  → puede ver asientos, plan, reportes (NO crear/editar)
   // contabilidad.gestionar → puede crear/editar asientos propios y no bloqueados

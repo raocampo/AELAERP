@@ -115,6 +115,7 @@ const GRUPOS_MENU = [
       { to: '/notas-debito',    icon: '🔴', label: 'Notas de Débito',   planMin: 'pro',    permiso: 'facturacion.emitir', modulo: 'facturacionHabilitada' },
       { to: '/guias-remision',  icon: '🚚', label: 'Guías de Remisión', planMin: 'medium', permiso: 'facturacion.ver', modulo: 'facturacionHabilitada' },
       { to: '/caja',            icon: '💵', label: 'Caja Diaria',       permiso: 'caja.ver', modulo: 'cajaDiariaHabilitada' },
+      { to: '/estadisticas',    icon: '📈', label: 'Estadísticas',      permiso: 'estadisticas.ver', modulo: 'facturacionHabilitada' },
     ],
   },
   {

@@ -49,6 +49,7 @@ export default function Dashboard() {
     { to: '/caja',        label: '💵 Caja Diaria',     show: sistema?.cajaDiariaHabilitada && tienePermiso(usuario?.rol, 'caja.ver', usuario?.permisosExtra) },
     { to: '/notas-venta', label: '🗒️ Notas de Venta',  show: tienePermiso(usuario?.rol, 'notasVenta.gestionar', usuario?.permisosExtra) },
     { to: '/facturas',    label: '🧾 Facturas',         show: !esLite && tienePermiso(usuario?.rol, 'facturacion.ver', usuario?.permisosExtra) },
+    { to: '/estadisticas', label: '📈 Estadísticas',    show: tienePermiso(usuario?.rol, 'estadisticas.ver', usuario?.permisosExtra) },
     { to: '/inventario',  label: '📚 Inventario',      show: sistema?.inventarioHabilitado && tienePermiso(usuario?.rol, 'inventario.ver', usuario?.permisosExtra) },
     { to: '/clientes',    label: '👤 Clientes',         show: tienePermiso(usuario?.rol, 'clientes.gestionar', usuario?.permisosExtra) },
     { to: '/productos',   label: '📦 Productos',        show: tienePermiso(usuario?.rol, 'productos.ver', usuario?.permisosExtra) },
