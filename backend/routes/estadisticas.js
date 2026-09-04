@@ -5,11 +5,18 @@
 
 const express = require('express');
 const router = express.Router();
+const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { diaCalendarioEC } = require('../utils/fechas');
 const { round2 } = require('../utils/contabilidad');
 
 router.use(proteger);
+// En modo monoinstancia resolverTenant (app.js) no inyecta req.prisma —
+// solo lo hace para tenants SaaS resueltos. Sin este fallback (mismo
+// patrón que empresas.js/cajaChica.js/cxc.js/cxp.js) req.prisma queda
+// undefined y explota en el primer .facturas.findMany() — exactamente
+// el error que tiró en Railway (modo MONOEMPRESA).
+router.use((req, _res, next) => { req.prisma = req.prisma || prisma; next(); });
 
 // Mismo criterio de "venta real" que backend/routes/empresas.js (Dashboard) —
 // excluye rechazadas, en proceso de firma/envío, con error, etc.
