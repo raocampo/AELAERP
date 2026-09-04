@@ -444,14 +444,21 @@
 .total-fila:last-child { border-bottom: none; }
 
 .total-fila-dcto-general input {
-  width: 90px;
+  width: 100px;
   text-align: right;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  padding: 3px 6px;
+  padding: 5px 8px;
   font-size: 0.85rem;
   color: #1e293b;
   background: white;
+  -moz-appearance: textfield;
+}
+
+.total-fila-dcto-general input::-webkit-outer-spin-button,
+.total-fila-dcto-general input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .total-principal {

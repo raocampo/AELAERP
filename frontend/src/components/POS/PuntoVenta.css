@@ -321,14 +321,30 @@
 }
 
 .pos-resumen-dcto input {
-  width: 90px;
+  width: 110px;
   text-align: right;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 4px 8px;
+  border-radius: 10px;
+  padding: 8px 10px;
   background: #ffffff;
   color: #1e293b;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+}
+
+/* Los montos se escriben, no se ajustan con las flechitas del spinner —
+   quitarlas deja el campo consistente con el resto de inputs de texto del
+   formulario (Identificación, Nombre, etc., que no tienen spinner). */
+.pos-resumen-dcto input::-webkit-outer-spin-button,
+.pos-resumen-dcto input::-webkit-inner-spin-button,
+.pos-pago-monto::-webkit-outer-spin-button,
+.pos-pago-monto::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.pos-resumen-dcto input,
+.pos-pago-monto {
+  -moz-appearance: textfield;
 }
 
 .pos-total {
