@@ -329,7 +329,13 @@ router.post('/', permitirGestionarProductos, checkLimiteProductos, async (req, r
       ordenMenu,
     } = req.body || {};
 
-    if (!codigoPrincipal || !nombre || precioUnitario === undefined) {
+    // Validar sobre el valor YA recortado — un código o nombre de solo
+    // espacios (" ") pasa la validación de truthiness pero queda vacío
+    // después de `.trim()` al guardar, dejando el producto sin nombre real
+    // (rompe el POS: la línea del carrito queda sin descripción).
+    const codigoPrincipalTrim = String(codigoPrincipal || '').trim();
+    const nombreTrim = String(nombre || '').trim();
+    if (!codigoPrincipalTrim || !nombreTrim || precioUnitario === undefined) {
       return res.status(400).json({ error: 'Código, nombre y precio son obligatorios' });
     }
     if (!validarCodigosNoCientificos(res, { codigoPrincipal, codigoAuxiliar })) return;
@@ -337,9 +343,9 @@ router.post('/', permitirGestionarProductos, checkLimiteProductos, async (req, r
     const item = await prisma.productos_servicios.create({
       data: {
         empresaId: req.empresa.id,
-        codigoPrincipal: codigoPrincipal.trim().toUpperCase(),
+        codigoPrincipal: codigoPrincipalTrim.toUpperCase(),
         codigoAuxiliar: codigoAuxiliar ? codigoAuxiliar.trim() : null,
-        nombre: nombre.trim(),
+        nombre: nombreTrim,
         precioUnitario: parseFloat(precioUnitario),
         costoUnitario: parseFloat(costoUnitario ?? 0),
         infoAdicional: infoAdicional ? infoAdicional.trim() : null,
@@ -392,6 +398,19 @@ router.put('/:id', permitirGestionarProductos, async (req, res) => {
     });
     if (!actual) return res.status(404).json({ error: 'Producto no encontrado' });
     if (!validarCodigosNoCientificos(res, { codigoPrincipal, codigoAuxiliar })) return;
+
+    // A diferencia de la creación, aquí cada campo es opcional (solo se
+    // actualiza el que venga en el body) — pero si SÍ viene, no puede quedar
+    // vacío tras el trim (un código o nombre de solo espacios pasaría un
+    // `!nombre` de truthiness). Sin esto, editar cualquier otro campo del
+    // producto podía vaciar silenciosamente el nombre y romper el POS (la
+    // línea del carrito queda sin descripción, bloqueando "Cobrar y emitir").
+    if (nombre !== undefined && !String(nombre).trim()) {
+      return res.status(400).json({ error: 'El nombre no puede quedar vacío' });
+    }
+    if (codigoPrincipal !== undefined && !String(codigoPrincipal).trim()) {
+      return res.status(400).json({ error: 'El código no puede quedar vacío' });
+    }
 
     const item = await prisma.productos_servicios.update({
       where: { id: actual.id },

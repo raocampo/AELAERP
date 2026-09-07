@@ -483,8 +483,17 @@ export default function PuntoVenta() {
       toast.error('Agrega al menos un producto al carrito');
       return;
     }
-    if (carrito.some((item) => !String(item.descripcion || '').trim())) {
-      toast.error('Todas las líneas del carrito necesitan una descripción (revisa las líneas manuales)');
+    const lineaSinDescripcion = carrito.find((item) => !String(item.descripcion || '').trim());
+    if (lineaSinDescripcion) {
+      // El nombre vacío puede venir de una línea manual sin llenar, pero
+      // también de un producto del catálogo con el nombre vaciado por
+      // error al editarlo — sin distinguir el caso, el mensaje anterior
+      // mandaba al cajero a buscar una línea manual que no existía.
+      toast.error(
+        lineaSinDescripcion.manual
+          ? 'Todas las líneas del carrito necesitan una descripción (revisa las líneas manuales)'
+          : `El producto con código "${lineaSinDescripcion.codigoPrincipal || '(sin código)'}" no tiene nombre en el catálogo — corrígelo en Gestión de Productos`
+      );
       return;
     }
     if (carrito.some((item) => item.crearEnCatalogo && !String(item.codigoPrincipal || '').trim())) {

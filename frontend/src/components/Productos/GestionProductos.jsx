@@ -149,6 +149,14 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
 
   const guardarProducto = async (e) => {
     e.preventDefault();
+    // El `required` de HTML5 no bloquea un valor de solo espacios (" ") —
+    // sin este check, guardar con el nombre "vaciado a un espacio" pasaba
+    // silenciosamente y dejaba el producto sin nombre real (rompe el POS:
+    // la línea del carrito queda sin descripción).
+    if (!form.codigoPrincipal.trim() || !form.nombre.trim()) {
+      toast.error('Código y nombre no pueden quedar vacíos');
+      return;
+    }
     setGuardando(true);
     try {
       const payload = {
