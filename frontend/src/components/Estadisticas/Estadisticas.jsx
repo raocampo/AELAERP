@@ -25,6 +25,7 @@ function TooltipMes({ active, payload, label }) {
     <div className="est-tooltip">
       <strong>{label}</strong>
       <span>{fmt(d.ventasTotal)}</span>
+      <small>Efectivo {fmt(d.efectivo)} · Bancos {fmt(d.banco)}</small>
       <small>{d.comprobantes} comprobante{d.comprobantes === 1 ? '' : 's'}</small>
     </div>
   );
@@ -33,20 +34,26 @@ function TooltipMes({ active, payload, label }) {
 export default function Estadisticas() {
   const [anio, setAnio] = useState(anioActual());
   const [data, setData] = useState(null);
+  const [productos, setProductos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
   const cargar = useCallback(async () => {
     setCargando(true);
     setError('');
-    try {
-      const res = await api.get('/estadisticas/ventas-mensuales', { params: { anio } });
-      setData(res.data?.data || null);
-    } catch (err) {
-      setError(err.response?.data?.mensaje || 'No se pudieron cargar las estadísticas');
-    } finally {
-      setCargando(false);
+    const [ventasRes, productosRes] = await Promise.allSettled([
+      api.get('/estadisticas/ventas-mensuales', { params: { anio } }),
+      api.get('/estadisticas/top-productos', { params: { anio, limit: 10 } }),
+    ]);
+    if (ventasRes.status === 'fulfilled') {
+      setData(ventasRes.value.data?.data || null);
+    } else {
+      setError(ventasRes.reason?.response?.data?.mensaje || 'No se pudieron cargar las estadísticas');
+      setData(null);
     }
+    // El top de productos es un complemento — si falla, no bloquea el resto.
+    setProductos(productosRes.status === 'fulfilled' ? productosRes.value.data?.data?.productos || [] : []);
+    setCargando(false);
   }, [anio]);
 
   useEffect(() => { cargar(); }, [cargar]);
@@ -91,6 +98,27 @@ export default function Estadisticas() {
               <strong>{mejorMes && mejorMes.ventasTotal > 0 ? mejorMes.nombre : '—'}</strong>
               <small>{mejorMes && mejorMes.ventasTotal > 0 ? fmt(mejorMes.ventasTotal) : 'Sin ventas todavía'}</small>
             </div>
+            {(() => {
+              if (data.variacionPct === null || data.variacionPct === undefined) {
+                return (
+                  <div className="est-metric">
+                    <span>vs {data.anioAnterior}</span>
+                    <strong>—</strong>
+                    <small>Sin ventas en {data.anioAnterior}</small>
+                  </div>
+                );
+              }
+              const sube = data.variacionPct >= 0;
+              const color = sube ? '#16a34a' : '#dc2626';
+              const delta = Math.abs(data.totalAnio - data.totalAnioAnterior);
+              return (
+                <div className="est-metric" style={{ borderLeftColor: color }}>
+                  <span>vs {data.anioAnterior}</span>
+                  <strong style={{ color }}>{sube ? '+' : '-'}{Math.abs(data.variacionPct)}%</strong>
+                  <small>{sube ? `${fmt(delta)} más` : `${fmt(delta)} menos`}</small>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="est-card">
@@ -103,9 +131,14 @@ export default function Estadisticas() {
                   <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false}
                     tickFormatter={(v) => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v}`} />
                   <Tooltip content={<TooltipMes />} cursor={{ fill: 'rgba(124, 58, 237, 0.06)' }} />
-                  <Bar dataKey="ventasTotal" fill="#7C3AED" radius={[6, 6, 0, 0]} maxBarSize={48} />
+                  <Bar dataKey="efectivo" stackId="ventas" fill="#7C3AED" name="Efectivo" />
+                  <Bar dataKey="banco" stackId="ventas" fill="#2563eb" radius={[6, 6, 0, 0]} maxBarSize={48} name="Bancos" />
                 </BarChart>
               </ResponsiveContainer>
+              <div className="est-chart-legend">
+                <span><i style={{ background: '#7C3AED' }} /> Efectivo</span>
+                <span><i style={{ background: '#2563eb' }} /> Bancos</span>
+              </div>
             </div>
           </div>
 
@@ -118,6 +151,8 @@ export default function Estadisticas() {
                     <th>Mes</th>
                     <th>Facturas</th>
                     <th>Notas de venta</th>
+                    <th>Efectivo</th>
+                    <th>Bancos</th>
                     <th>Total</th>
                     <th>Comprobantes</th>
                     <th>Ticket promedio</th>
@@ -129,6 +164,8 @@ export default function Estadisticas() {
                       <td>{m.nombre}</td>
                       <td>{fmt(m.ventasFacturas)}</td>
                       <td>{fmt(m.ventasNotas)}</td>
+                      <td>{fmt(m.efectivo)}</td>
+                      <td>{fmt(m.banco)}</td>
                       <td className="est-td-total">{fmt(m.ventasTotal)}</td>
                       <td>{m.comprobantes}</td>
                       <td>{fmt(m.ticketPromedio)}</td>
@@ -137,6 +174,34 @@ export default function Estadisticas() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          <div className="est-card">
+            <h2>Top 10 productos del año</h2>
+            {!productos?.length ? (
+              <div className="est-empty">Sin ventas de productos todavía en {anio}.</div>
+            ) : (
+              <div className="est-table-wrap">
+                <table className="est-table">
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th>Cantidad</th>
+                      <th>Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productos.map((p) => (
+                      <tr key={p.codigo || p.descripcion}>
+                        <td>{p.descripcion}</td>
+                        <td>{p.cantidad}</td>
+                        <td className="est-td-total">{fmt(p.monto)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </>
       )}
