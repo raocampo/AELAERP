@@ -8,6 +8,7 @@ const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
+const { tienePermiso } = require('../utils/roles');
 const { crearAsientoMovimientoBancario, siguienteNumeroGenerico } = require('../utils/contabilidad');
 
 // Prefijo de comprobante por categoría de movimiento — equivalente a los
@@ -45,15 +46,26 @@ function obtenerEmpresaId(req) {
 // ============================================================
 
 // GET /api/bancos — lista cuentas bancarias
-router.get('/', autorizarPermiso('bancos.ver'), async (req, res) => {
+// 'bancos.consultar' (roles operativos de POS) además de 'bancos.ver' —
+// necesitan ver el nombre de las cuentas para cobrar con transferencia/
+// tarjeta, sin que eso les dé acceso al Libro de Bancos completo.
+router.get('/', autorizarPermiso(['bancos.ver', 'bancos.consultar']), async (req, res) => {
   try {
     const empresaId = obtenerEmpresaId(req);
+    const soloConsulta = !tienePermiso(req.usuario.rol, 'bancos.ver', req.usuario.permisosExtra);
     const cuentas = await prisma.bancos.findMany({
       where: { empresaId, activo: true },
-      include: {
-        cuentaContable: { select: { codigo: true, nombre: true } },
-        _count: { select: { movimientos: true, cheques: true } },
-      },
+      // Un rol con solo 'bancos.consultar' (facturador/cajero/etc.) recibe
+      // exclusivamente id/nombre — sin saldos, movimientos ni cuenta contable.
+      select: soloConsulta
+        ? { id: true, nombre: true }
+        : {
+            id: true, empresaId: true, nombre: true, banco: true, tipoCuenta: true,
+            numeroCuenta: true, titular: true, saldoInicial: true, cuentaContableId: true,
+            activo: true, createdAt: true, updatedAt: true,
+            cuentaContable: { select: { codigo: true, nombre: true } },
+            _count: { select: { movimientos: true, cheques: true } },
+          },
       orderBy: { nombre: 'asc' },
     });
     res.json({ success: true, data: cuentas });

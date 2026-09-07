@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { categoriaFormaPago, requiereBanco, esEfectivo } = require('../utils/formasPago');
-const { validarPagosConBanco } = require('../utils/pagosVenta');
+const { validarPagosConBanco, desglosarEfectivoBanco } = require('../utils/pagosVenta');
 
 test('categoriaFormaPago clasifica los 4 vocabularios reales del sistema', () => {
   // POS-factura / FormFactura: uid interno antes de convertir a sriCodigo
@@ -62,4 +62,25 @@ test('validarPagosConBanco rechaza transferencia/tarjeta/app sin bancoId', () =>
 
 test('validarPagosConBanco pasa cuando la transferencia sí trae bancoId', () => {
   assert.doesNotThrow(() => validarPagosConBanco([{ uid: 'TRF', formaPago: '20', total: 100, bancoId: 3 }]));
+});
+
+test('desglosarEfectivoBanco reparte una factura con pagos mixtos (efectivo + transferencia)', () => {
+  const factura = {
+    importeTotal: 100,
+    pagos: [
+      { formaPago: '01', uid: '01', total: 30 },
+      { formaPago: '20', uid: 'TRF', total: 70, bancoId: 3 },
+    ],
+  };
+  const r = desglosarEfectivoBanco(factura);
+  assert.equal(r.efectivo, 30);
+  assert.equal(r.banco, 70);
+});
+
+test('desglosarEfectivoBanco cae al pago único cuando pagos es null (nota de venta simple)', () => {
+  const notaEfectivo = { total: 50, formaPago: 'Efectivo', pagos: null };
+  assert.deepEqual(desglosarEfectivoBanco(notaEfectivo), { efectivo: 50, banco: 0 });
+
+  const notaTransferencia = { total: 80, formaPago: 'Transferencia', pagos: null };
+  assert.deepEqual(desglosarEfectivoBanco(notaTransferencia), { efectivo: 0, banco: 80 });
 });

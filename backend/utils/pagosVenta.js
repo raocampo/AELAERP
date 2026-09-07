@@ -1,4 +1,4 @@
-const { requiereBanco } = require('./formasPago');
+const { requiereBanco, esEfectivo } = require('./formasPago');
 const { registrarMovimientoBancarioLigado } = require('./contabilidad');
 
 // Validación real (no solo de UI): rechaza pagos con transferencia/tarjeta/
@@ -46,4 +46,23 @@ async function registrarMovimientosBancariosDeVenta({
   return resultados;
 }
 
-module.exports = { validarPagosConBanco, registrarMovimientosBancariosDeVenta };
+// Reparte el total de una factura/nota de venta entre efectivo y banco, para
+// KPIs (Dashboard) que necesitan el desglose sin depender de Caja Diaria
+// (que puede estar deshabilitada por empresa). `fila` es la factura/nota tal
+// cual viene de Prisma: usa `fila.pagos` (array) si existe, si no cae al
+// pago único (`fila.formaPago` + `fila.total`/`fila.importeTotal`).
+function desglosarEfectivoBanco(fila) {
+  const lineas = Array.isArray(fila.pagos) && fila.pagos.length
+    ? fila.pagos
+    : [{ formaPago: fila.formaPago || 'Efectivo', total: fila.total ?? fila.importeTotal ?? 0 }];
+
+  let efectivo = 0;
+  let banco = 0;
+  for (const p of lineas) {
+    const monto = Number(p.total || 0);
+    if (esEfectivo(p)) efectivo += monto; else banco += monto;
+  }
+  return { efectivo, banco };
+}
+
+module.exports = { validarPagosConBanco, registrarMovimientosBancariosDeVenta, desglosarEfectivoBanco };

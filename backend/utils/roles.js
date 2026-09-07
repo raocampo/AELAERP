@@ -81,6 +81,11 @@ const PERMISSIONS = {
 
   'bancos.ver':      ['admin', 'supervisor', 'contador', 'asistente_contabilidad'],
   'bancos.gestionar':['admin', 'supervisor', 'contador'],
+  // Lectura mínima (solo id/nombre de cuenta, sin saldos/movimientos) para
+  // quien cobra en POS y necesita elegir a qué cuenta fue una transferencia/
+  // tarjeta — mismos roles que pos.usar, sin darles acceso al Libro de
+  // Bancos completo (eso sigue siendo bancos.ver).
+  'bancos.consultar':['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero'],
   'cheques.gestionar':['admin', 'supervisor', 'contador'],
 
   'cxc.ver':             ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],

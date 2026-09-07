@@ -8,6 +8,7 @@ const express = require('express');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
 const { proteger, soloAdmin, adminOContador } = require('../middleware/auth');
+const { desglosarEfectivoBanco } = require('../utils/pagosVenta');
 
 // Garantiza que req.prisma apunte a la BD del tenant activo (SaaS) o a la global (monoinstancia).
 router.use((req, _res, next) => { req.prisma = req.prisma || prisma; next(); });
@@ -233,6 +234,7 @@ router.get('/estadisticas', proteger, async (req, res) => {
       cajaHoy,
       facturasAñoSum, notasVentaAñoSum,
       configSriRimpe,
+      facturasHoy, notasVentaHoy, comprasHoyRes,
     ] = await Promise.all([
       // Conteo anual — solo facturas que representan una venta real (autorizada
       // por el SRI, o histórica sin envío al SRI). Excluye rechazadas, en
@@ -292,6 +294,23 @@ router.get('/estadisticas', proteger, async (req, res) => {
         where: { empresaId: eId, activo: true },
         select: { contribuyenteRimpe: true, negocioPopular: true },
       }),
+
+      // Ventas de hoy (desglose efectivo/bancos) — se trae `pagos` completo
+      // en vez de un simple `aggregate` porque el desglose por forma de pago
+      // vive DENTRO del JSON de cada fila, no es una columna agregable.
+      req.prisma.facturas.findMany({
+        where: { empresaId: eId, anulada: false, estadoSri: { in: ESTADOS_FACTURA_VALIDOS }, fechaEmision: { gte: hoyInicio, lt: hoyFin } },
+        select: { importeTotal: true, pagos: true },
+      }),
+      req.prisma.notas_venta.findMany({
+        where: { empresaId: eId, anulada: false, fechaEmision: { gte: hoyInicio, lt: hoyFin } },
+        select: { total: true, formaPago: true, pagos: true },
+      }),
+      req.prisma.facturas_compra.aggregate({
+        where: { empresaId: eId, anulada: false, fechaEmision: { gte: hoyInicio, lt: hoyFin } },
+        _sum: { importeTotal: true },
+        _count: { id: true },
+      }),
     ]);
 
     // Calcular saldo de caja hoy
@@ -324,6 +343,24 @@ router.get('/estadisticas', proteger, async (req, res) => {
 
     const ventasMes  = Number(facturasRes._sum.importeTotal ?? 0) + Number(notasVentaRes._sum.total ?? 0);
     const comprasMes = Number(comprasRes._sum.importeTotal ?? 0);
+
+    // Ventas de hoy + desglose efectivo/bancos — a partir de las filas
+    // reales (no de Caja Diaria, que puede estar deshabilitada por empresa).
+    const desgloseHoy = { efectivo: 0, banco: 0 };
+    for (const f of facturasHoy) {
+      const d = desglosarEfectivoBanco({ pagos: f.pagos, importeTotal: f.importeTotal });
+      desgloseHoy.efectivo += d.efectivo;
+      desgloseHoy.banco += d.banco;
+    }
+    for (const n of notasVentaHoy) {
+      const d = desglosarEfectivoBanco({ pagos: n.pagos, total: n.total, formaPago: n.formaPago });
+      desgloseHoy.efectivo += d.efectivo;
+      desgloseHoy.banco += d.banco;
+    }
+    const ventasHoy = Number((desgloseHoy.efectivo + desgloseHoy.banco).toFixed(2));
+    const ventasHoyEfectivo = Number(desgloseHoy.efectivo.toFixed(2));
+    const ventasHoyBancos = Number(desgloseHoy.banco.toFixed(2));
+    const comprasHoy = Number(comprasHoyRes._sum.importeTotal ?? 0);
     const limite     = req.empresa.factAnualesMax;
 
     // ── Alerta de tope de ingresos por régimen RIMPE ────────────────────────
@@ -370,6 +407,13 @@ router.get('/estadisticas', proteger, async (req, res) => {
         notasVentaMes: notasVentaRes._count.id,
         comprasMes,
         comprasMesCount: comprasRes._count.id,
+
+        // Hoy
+        ventasHoy,
+        ventasHoyEfectivo,
+        ventasHoyBancos,
+        comprasHoy,
+        comprasHoyCount: comprasHoyRes._count.id,
 
         // Maestros
         clientes,

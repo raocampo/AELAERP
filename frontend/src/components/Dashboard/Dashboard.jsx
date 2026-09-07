@@ -103,6 +103,18 @@ export default function Dashboard() {
       <p className="dash-section-label">Resumen de {mesLabel}</p>
       <div className="dash-metrics">
         <div className="dash-metric dash-metric--green">
+          <span>Ventas de hoy</span>
+          <strong>{cargando ? '…' : `$${fmt(stats?.ventasHoy)}`}</strong>
+          <small>{cargando ? '' : `Efectivo $${fmt(stats?.ventasHoyEfectivo)} · Bancos $${fmt(stats?.ventasHoyBancos)}`}</small>
+        </div>
+        {sistema?.comprasHabilitadas && (
+          <div className="dash-metric dash-metric--red">
+            <span>Compras de hoy</span>
+            <strong>{cargando ? '…' : `$${fmt(stats?.comprasHoy)}`}</strong>
+            <small>{cargando ? '' : `${stats?.comprasHoyCount ?? 0} facturas`}</small>
+          </div>
+        )}
+        <div className="dash-metric dash-metric--green">
           <span>Ventas del mes</span>
           <strong>{cargando ? '…' : `$${fmt(stats?.ventasMes)}`}</strong>
           <small>{cargando ? '' : `${(stats?.facturasMes ?? 0) + (stats?.notasVentaMes ?? 0)} comprobantes`}</small>
