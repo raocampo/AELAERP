@@ -250,11 +250,13 @@ export default function Layout() {
   const [clienteLogo, setClienteLogo] = useState(null);
   const pendientesSRI = usePendientesSRI();
 
-  // Cargar logo del cliente desde la configuración SRI
+  // Logo de la EMPRESA ACTIVA desde su configuración SRI. En multiempresa el
+  // endpoint resuelve la empresa por el JWT, así que al cambiar de empresa hay
+  // que reemplazar el logo — incluso por null, o quedaría pegado el anterior.
   useEffect(() => {
     api.get('/auth/branding')
-      .then(res => { if (res.data?.data?.logoUrl) setClienteLogo(res.data.data.logoUrl); })
-      .catch(() => {});
+      .then(res => setClienteLogo(res.data?.data?.logoUrl || null))
+      .catch(() => setClienteLogo(null));
   }, [empresa?.id]);
 
   // ── Sidebar colapsable — persiste en localStorage (mobile siempre expandido) ─

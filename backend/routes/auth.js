@@ -23,6 +23,7 @@ const {
 const { normalizarRol } = require('../utils/roles');
 const { obtenerEmpresaSri } = require('../utils/sriContribuyente');
 const { crearEmpresaYAdminInicial } = require('../utils/bootstrapEmpresa');
+const { obtenerBranding } = require('../utils/branding');
 
 const emitirToken = (usuario, opts = {}) => jwt.sign(
   {
@@ -98,22 +99,13 @@ router.get('/identificar-dominio', async (req, res) => {
   }
 });
 
-// GET /api/auth/branding — branding público (sin auth) para personalizar el login
+// GET /api/auth/branding — branding para el login (sin auth) y para el sidebar.
+// Autenticación OPCIONAL: si el request trae un JWT válido de este tenant se
+// devuelve el branding de la EMPRESA ACTIVA (clave en multiempresa: cada
+// empresa tiene su propio logo); sin token se devuelve el del tenant.
 router.get('/branding', async (req, res) => {
   try {
-    const config = await req.prisma.configuracion_sri.findFirst({
-      where:   { activo: true },
-      orderBy: { empresaId: 'asc' },
-      select:  { razonSocial: true, nombreComercial: true, logoUrl: true },
-    });
-
-    res.json({
-      success: true,
-      data: {
-        nombre:  config?.nombreComercial || config?.razonSocial || null,
-        logoUrl: config?.logoUrl         || null,
-      },
-    });
+    res.json({ success: true, data: await obtenerBranding(req, req.prisma) });
   } catch {
     res.json({ success: true, data: { nombre: null, logoUrl: null } });
   }
