@@ -802,6 +802,10 @@ const FIXES = [
   `ALTER TABLE "movimientos_caja_chica" ADD COLUMN IF NOT EXISTS "chequeId" INTEGER`,
   `ALTER TABLE "movimientos_caja_chica" ADD COLUMN IF NOT EXISTS "movimientoBancarioId" INTEGER`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "movimientos_caja_chica_movimientoBancarioId_key" ON "movimientos_caja_chica"("movimientoBancarioId")`,
+  // Bancos como destino real de ventas no-efectivo (2026-09-07) — Caja
+  // Diaria pasa a registrar una fila por línea de pago para poder excluir
+  // transferencia/tarjeta/app del "efectivo esperado" en el cuadre de cierre.
+  `ALTER TABLE "caja_movimientos" ADD COLUMN IF NOT EXISTS "esEfectivo" BOOLEAN NOT NULL DEFAULT true`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

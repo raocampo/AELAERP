@@ -10,6 +10,8 @@ import { format } from 'date-fns';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { parseFechaLocal } from '../../utils/fecha';
+import { requiereBanco } from '../../utils/formasPago';
+import { useBancos } from '../../hooks/useBancos';
 import './FormNotaVenta.css';
 
 const TIPOS_ID = [
@@ -35,7 +37,7 @@ const FORMAS_PAGO = [
 // en un valor que no existe entre sus opciones.
 const normalizarFormaPago = (fp) => (fp === 'Aplicaciones (Ahorita/De Una)' ? 'App Móvil' : fp);
 
-const PAGO_VACIO = { formaPago: 'Efectivo', monto: '' };
+const PAGO_VACIO = { formaPago: 'Efectivo', monto: '', bancoId: '' };
 
 // codigoAuxiliar no tiene input propio (poco usado a mano) pero se conserva
 // en el objeto para no perder el vínculo con el producto al EDITAR una nota
@@ -77,6 +79,7 @@ export default function FormNotaVenta() {
   // tocar); con 2+ se reparte el total a mano — necesario para no perder el
   // desglose real al editar una nota creada desde POS con 2+ formas de pago.
   const [pagos, setPagos] = useState([{ ...PAGO_VACIO }]);
+  const bancos = useBancos();
   const [numeroCheque, setNumeroCheque] = useState('');
   const [bancoEmisor,  setBancoEmisor]  = useState('');
   const [appNombre,    setAppNombre]    = useState('Ahorita');
@@ -119,7 +122,7 @@ export default function FormNotaVenta() {
   const pagosCuadran = Math.abs(restantePago) < 0.01;
 
   const agregarLineaPago = () => {
-    setPagos((prev) => [...prev, { formaPago: 'Efectivo', monto: restantePago > 0 ? restantePago.toFixed(2) : '' }]);
+    setPagos((prev) => [...prev, { formaPago: 'Efectivo', monto: restantePago > 0 ? restantePago.toFixed(2) : '', bancoId: '' }]);
   };
   const quitarLineaPago = (index) => {
     setPagos((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
@@ -164,8 +167,8 @@ export default function FormNotaVenta() {
         // recalcula solo via el efecto de arriba una vez que totales.total
         // esté listo con los detalles ya cargados.
         setPagos(Array.isArray(n.pagos) && n.pagos.length > 0
-          ? n.pagos.map((p) => ({ formaPago: normalizarFormaPago(p.formaPago) || 'Efectivo', monto: String(p.total ?? '') }))
-          : [{ formaPago: normalizarFormaPago(n.formaPago) || 'Efectivo', monto: '' }]);
+          ? n.pagos.map((p) => ({ formaPago: normalizarFormaPago(p.formaPago) || 'Efectivo', monto: String(p.total ?? ''), bancoId: p.bancoId || '' }))
+          : [{ formaPago: normalizarFormaPago(n.formaPago) || 'Efectivo', monto: '', bancoId: '' }]);
         setFecha(n.fechaEmision ? format(parseFechaLocal(n.fechaEmision), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
         setObs(n.observaciones || '');
       } catch {
@@ -319,6 +322,9 @@ export default function FormNotaVenta() {
         ? `Falta $${restantePago.toFixed(2)} por repartir entre las formas de pago`
         : `Las formas de pago suman $${Math.abs(restantePago).toFixed(2)} de más`);
     }
+    if (pagos.some((p) => requiereBanco({ formaPago: p.formaPago }) && !p.bancoId)) {
+      return toast.error('Selecciona la cuenta bancaria para cada pago con transferencia, tarjeta o app móvil');
+    }
 
     setSubmitting(true);
     try {
@@ -339,8 +345,9 @@ export default function FormNotaVenta() {
         })),
         formaPago: pagos.length === 1 ? pagos[0].formaPago : 'Mixto',
         pagos: pagos.length > 1
-          ? pagos.map((p) => ({ formaPago: p.formaPago, total: parseFloat(p.monto) || 0 }))
+          ? pagos.map((p) => ({ formaPago: p.formaPago, total: parseFloat(p.monto) || 0, bancoId: p.bancoId || undefined }))
           : undefined,
+        bancoId: pagos.length === 1 ? (pagos[0].bancoId || undefined) : undefined,
         formaPagoDetalles: pagos.length === 1 && pagos[0].formaPago === 'Cheque'
           ? { numeroCheque, bancoEmisor }
           : pagos.length === 1 && pagos[0].formaPago === 'App Móvil'
@@ -554,6 +561,15 @@ export default function FormNotaVenta() {
                       />
                       {pagos.length > 1 && (
                         <button type="button" className="fnv-pago-quitar" onClick={() => quitarLineaPago(index)} title="Quitar esta forma de pago">✕</button>
+                      )}
+                      {requiereBanco({ formaPago: pago.formaPago }) && (
+                        <select
+                          value={pago.bancoId || ''}
+                          onChange={e => actualizarLineaPago(index, 'bancoId', e.target.value)}
+                        >
+                          <option value="">— Cuenta bancaria —</option>
+                          {bancos.map(b => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+                        </select>
                       )}
                     </div>
                   ))}

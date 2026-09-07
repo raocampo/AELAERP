@@ -24,6 +24,8 @@ const { construirConfiguracionSriBase } = require('../utils/sriContribuyente');
 const { asegurarConfiguracionSistemaEmpresa } = require('../utils/configuracionSistema');
 const { siguienteSecuencial, siguienteSecuencialFacturaAtomico } = require('../utils/secuenciales');
 const { registrarMovimientoCaja } = require('../utils/caja');
+const { esEfectivo } = require('../utils/formasPago');
+const { validarPagosConBanco, registrarMovimientosBancariosDeVenta } = require('../utils/pagosVenta');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
 const { esErrorConectividad } = require('../utils/colaSRI');
 const { getCertBuffer, tieneCertificado, getCertInfo } = require('../utils/certUtils');
@@ -1156,6 +1158,15 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       }
     }
 
+    // Transferencia/tarjeta/app móvil exigen cuenta bancaria real (para que
+    // el cobro se vea en el módulo Bancos) — se hace cumplir aquí, no solo en
+    // la UI, antes de consumir un secuencial del SRI.
+    try {
+      validarPagosConBanco(pagos || []);
+    } catch (errPago) {
+      return res.status(errPago.status || 400).json({ ok: false, error: errPago.message });
+    }
+
     // Sector transporte terrestre comercial (Res. NAC-DGERCGC26-00000024,
     // Anexo 25 Ficha Técnica v2.34): la placa es obligatoria en el XML — se
     // valida aquí, antes de consumir un secuencial, igual que el resto de
@@ -1302,19 +1313,33 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
         metadata: { facturaId: creada.id },
       });
 
-      const totalCaja = pagosFinales.reduce((acc, pago) => acc + Number(pago.total || 0), 0) || Number(totales.importeTotal || 0);
-      await registrarMovimientoCaja({
-        tx,
+      // Una fila de caja_movimientos POR LÍNEA de pago (no agregada por
+      // venta) — necesario para que el cuadre de "efectivo esperado" pueda
+      // excluir transferencia/tarjeta/app (ver esEfectivo en caja.js).
+      for (const pago of pagosFinales) {
+        await registrarMovimientoCaja({
+          tx,
+          empresaId: req.empresa.id,
+          usuarioId: req.usuario.id,
+          fecha,
+          tipo: 'VENTA_FACTURA',
+          monto: Number(pago.total || 0),
+          descripcion: `Venta por factura ${numeroFactura}`,
+          referencia: numeroFactura,
+          categoria: pago.formaPago || null,
+          origenId: creada.id,
+          esEfectivo: esEfectivo(pago),
+          metadata: { facturaId: creada.id, pagos: pagosFinales },
+        });
+      }
+
+      await registrarMovimientosBancariosDeVenta({
+        pagos: pagosFinales,
         empresaId: req.empresa.id,
-        usuarioId: req.usuario.id,
         fecha,
-        tipo: 'VENTA_FACTURA',
-        monto: totalCaja,
-        descripcion: `Venta por factura ${numeroFactura}`,
-        referencia: numeroFactura,
-        categoria: pagosFinales.map((pago) => pago.formaPago).filter(Boolean).join(', ') || null,
-        origenId: creada.id,
-        metadata: { facturaId: creada.id, pagos: pagosFinales },
+        numero: numeroFactura,
+        tipoDocumento: 'factura',
+        db: tx,
       });
 
       return creada;
@@ -1568,17 +1593,38 @@ router.post('/:id/anular', permitirAnularFacturacion, async (req, res) => {
         revertir: true,
       });
 
-      await registrarMovimientoCaja({
-        tx,
+      // Revertir caja/bancos línea-por-línea, con el mismo desglose de pagos
+      // que se usó al emitir (si la factura es de antes de este cambio y no
+      // trae `pagos`, se cae a una sola línea con el total, como antes).
+      const pagosOriginales = Array.isArray(factura.pagos) && factura.pagos.length
+        ? factura.pagos
+        : [{ formaPago: 'Efectivo', total: factura.importeTotal }];
+
+      for (const pago of pagosOriginales) {
+        await registrarMovimientoCaja({
+          tx,
+          empresaId: req.empresa.id,
+          usuarioId: req.usuario.id,
+          fecha: new Date(),
+          tipo: 'ANULACION_FACTURA',
+          monto: Number(pago.total || 0),
+          descripcion: `Anulación de factura ${factura.numeroFactura}`,
+          referencia: factura.numeroFactura,
+          categoria: pago.formaPago || null,
+          origenId: factura.id,
+          esEfectivo: esEfectivo(pago),
+          metadata: { facturaId: factura.id },
+        });
+      }
+
+      await registrarMovimientosBancariosDeVenta({
+        pagos: pagosOriginales,
         empresaId: req.empresa.id,
-        usuarioId: req.usuario.id,
         fecha: new Date(),
-        tipo: 'ANULACION_FACTURA',
-        monto: Number(factura.importeTotal || 0),
-        descripcion: `Anulación de factura ${factura.numeroFactura}`,
-        referencia: factura.numeroFactura,
-        origenId: factura.id,
-        metadata: { facturaId: factura.id },
+        numero: factura.numeroFactura,
+        tipoDocumento: 'factura',
+        esReverso: true,
+        db: tx,
       });
 
       return anulada;

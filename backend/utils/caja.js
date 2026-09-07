@@ -70,6 +70,7 @@ async function registrarMovimientoCaja({
   categoria = null,
   origenId = null,
   metadata = null,
+  esEfectivo = true,
 }) {
   const config = await asegurarConfiguracionSistemaEmpresa(empresaId, tx);
   if (!config?.cajaDiariaHabilitada) return null;
@@ -88,6 +89,7 @@ async function registrarMovimientoCaja({
       tipo,
       categoria,
       monto: montoNum,
+      esEfectivo,
       descripcion,
       referencia,
       origenId: origenId ? parseInt(origenId, 10) : null,
@@ -102,19 +104,39 @@ function calcularResumenDesdeMovimientos(caja, movimientos = []) {
   let egresosManuales = 0;
   let ventasFacturas = 0;
   let ventasNotas = 0;
+  // Ventas en efectivo: subconjunto de ventasFacturas/ventasNotas que sí
+  // entró físicamente a la caja — es lo único que corresponde sumar al
+  // "efectivo esperado" del cuadre de cierre. Transferencia/tarjeta/app
+  // nunca tocan la caja física, aunque sí cuentan como venta del día.
+  let ventasFacturasEfectivo = 0;
+  let ventasNotasEfectivo = 0;
 
   movimientos.forEach((mov) => {
     const monto = Number(mov.monto || 0);
+    const esEfectivo = mov.esEfectivo !== false;
     if (mov.tipo === 'INGRESO') ingresosManuales += monto;
     if (mov.tipo === 'EGRESO') egresosManuales += monto;
-    if (mov.tipo === 'VENTA_FACTURA') ventasFacturas += monto;
-    if (mov.tipo === 'VENTA_NOTA') ventasNotas += monto;
-    if (mov.tipo === 'ANULACION_FACTURA') ventasFacturas -= monto;
-    if (mov.tipo === 'ANULACION_NOTA') ventasNotas -= monto;
+    if (mov.tipo === 'VENTA_FACTURA') {
+      ventasFacturas += monto;
+      if (esEfectivo) ventasFacturasEfectivo += monto;
+    }
+    if (mov.tipo === 'VENTA_NOTA') {
+      ventasNotas += monto;
+      if (esEfectivo) ventasNotasEfectivo += monto;
+    }
+    if (mov.tipo === 'ANULACION_FACTURA') {
+      ventasFacturas -= monto;
+      if (esEfectivo) ventasFacturasEfectivo -= monto;
+    }
+    if (mov.tipo === 'ANULACION_NOTA') {
+      ventasNotas -= monto;
+      if (esEfectivo) ventasNotasEfectivo -= monto;
+    }
   });
 
   const totalVentas = ventasFacturas + ventasNotas;
-  const totalEsperado = montoApertura + ingresosManuales + totalVentas - egresosManuales;
+  const totalVentasEfectivo = ventasFacturasEfectivo + ventasNotasEfectivo;
+  const totalEsperado = montoApertura + ingresosManuales + totalVentasEfectivo - egresosManuales;
   const montoCierreReal = caja?.montoCierreReal === null || caja?.montoCierreReal === undefined
     ? null
     : Number(caja.montoCierreReal);

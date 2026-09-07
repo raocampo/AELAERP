@@ -8,6 +8,8 @@ import { enviarBufferUSB } from '../../utils/impresoraUsb';
 import { apiOffline, estaOnline } from '../../utils/syncQueue';
 import { fechaLocalOffset, hoyLocal } from '../../utils/fecha';
 import { distribuirDescuentoGeneral, subtotalBase } from '../../utils/descuentoGeneral';
+import { requiereBanco } from '../../utils/formasPago';
+import { useBancos } from '../../hooks/useBancos';
 import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
 import './PuntoVenta.css';
 
@@ -58,7 +60,8 @@ export default function PuntoVenta() {
   // 2+ el cajero reparte el total entre varias formas de pago. El valor de
   // formaPago cambia de significado según tipoDocumento (código SRI para
   // factura, texto libre para nota de venta) — ver FORMAS_FACTURA/FORMAS_NOTA.
-  const [pagos, setPagos] = useState([{ formaPago: '01', monto: '', referencia: '' }]);
+  const [pagos, setPagos] = useState([{ formaPago: '01', monto: '', referencia: '', bancoId: '' }]);
+  const bancos = useBancos();
   const [fechaEmision, setFechaEmision] = useState(hoyLocal());
   // Res. SRI NAC-DGERCGC25-00000014: fecha de emisión = fecha real de la
   // operación, sin backdating — el backend rechaza más de 3 días de atraso
@@ -301,7 +304,7 @@ export default function PuntoVenta() {
   const agregarLineaPago = () => {
     setPagos((prev) => [
       ...prev,
-      { formaPago: tipoDocumento === 'factura' ? '01' : 'Efectivo', monto: restante > 0 ? restante.toFixed(2) : '', referencia: '' },
+      { formaPago: tipoDocumento === 'factura' ? '01' : 'Efectivo', monto: restante > 0 ? restante.toFixed(2) : '', referencia: '', bancoId: '' },
     ]);
   };
   const quitarLineaPago = (index) => {
@@ -500,6 +503,10 @@ export default function PuntoVenta() {
       toast.error(restante > 0 ? `Faltan $${restante.toFixed(2)} por cubrir en las formas de pago` : `Las formas de pago suman $${Math.abs(restante).toFixed(2)} de más`);
       return;
     }
+    if (pagos.some((p) => requiereBanco(tipoDocumento === 'factura' ? { uid: p.formaPago } : { formaPago: p.formaPago }) && !p.bancoId)) {
+      toast.error('Selecciona la cuenta bancaria para cada pago con transferencia, tarjeta o app móvil');
+      return;
+    }
 
     setGuardando(true);
     const online = estaOnline();
@@ -564,7 +571,11 @@ export default function PuntoVenta() {
             email: email || undefined,
             telefono: telefono || undefined,
             formaPago: pagos.length === 1 ? pagos[0].formaPago : 'Mixto',
-            pagos: pagos.length > 1 ? pagos.map((p) => ({ formaPago: p.formaPago, total: Number(p.monto) || 0 })) : undefined,
+            pagos: pagos.length > 1
+              ? pagos.map((p) => ({ formaPago: p.formaPago, total: Number(p.monto) || 0, bancoId: p.bancoId || undefined, referencia: p.referencia || undefined }))
+              : undefined,
+            bancoId: pagos.length === 1 ? (pagos[0].bancoId || undefined) : undefined,
+            referencia: pagos.length === 1 ? (pagos[0].referencia || undefined) : undefined,
             fechaEmision,
             clienteId: idClienteBD || undefined,
             detalles: carritoConDescGeneral.map((item) => ({
@@ -629,10 +640,12 @@ export default function PuntoVenta() {
             })),
             pagos: pagos.map((p) => ({
               formaPago: FORMAS_FACTURA.find(f => f.value === p.formaPago)?.sriCodigo || p.formaPago,
+              uid: p.formaPago,
               total: Number(p.monto) || 0,
               plazo: 0,
               unidadTiempo: 'dias',
               ...(p.referencia && { referencia: p.referencia }),
+              ...(p.bancoId && { bancoId: p.bancoId }),
             })),
             ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
           },
@@ -788,6 +801,16 @@ export default function PuntoVenta() {
                         <button type="button" className="btn-link danger" onClick={() => quitarLineaPago(index)} title="Quitar esta forma de pago">✕</button>
                       )}
                     </div>
+                    {requiereBanco(tipoDocumento === 'factura' ? { uid: pago.formaPago } : { formaPago: pago.formaPago }) && (
+                      <select
+                        value={pago.bancoId}
+                        onChange={(e) => actualizarLineaPago(index, 'bancoId', e.target.value)}
+                        style={{ marginTop: 2 }}
+                      >
+                        <option value="">— Elegir cuenta bancaria —</option>
+                        {bancos.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+                      </select>
+                    )}
                   </div>
                 ))}
                 {tipoDocumento === 'factura' && pagos.length === 1 && (pagos[0].formaPago === 'CHQ' || pagos[0].formaPago === 'TRF' || pagos[0].formaPago === 'APP') && (

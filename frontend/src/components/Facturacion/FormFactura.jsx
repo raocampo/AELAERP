@@ -10,6 +10,8 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { fmtLinea } from '../../utils/formato';
 import { distribuirDescuentoGeneral, subtotalBase } from '../../utils/descuentoGeneral';
+import { requiereBanco } from '../../utils/formasPago';
+import { useBancos } from '../../hooks/useBancos';
 import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
 import './FormFactura.css';
 
@@ -119,7 +121,9 @@ const ModalPago = ({ inicial, onGuardar, onCerrar }) => {
     valor: '', plazo: '0', unidadTiempo: 'dias',
     numeroCheque: '', bancoEmisor: '',
     appNombre: 'ahorita', codigoTransaccion: '', nombreOtraApp: '',
+    bancoId: '',
   });
+  const bancos = useBancos();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -137,6 +141,9 @@ const ModalPago = ({ inicial, onGuardar, onCerrar }) => {
     if (!pago.valor || parseFloat(pago.valor) <= 0) {
       toast.error('El valor del pago debe ser mayor a 0'); return;
     }
+    if (requiereBanco({ uid: pago.uid }) && !pago.bancoId) {
+      toast.error('Selecciona la cuenta bancaria para este pago'); return;
+    }
     const entry = FORMAS_PAGO_SRI.find(f => f.uid === pago.uid);
     const pagoFinal = {
       uid:             pago.uid,
@@ -145,6 +152,7 @@ const ModalPago = ({ inicial, onGuardar, onCerrar }) => {
       plazo:           parseInt(pago.plazo) || 0,
       unidadTiempo:    pago.unidadTiempo || 'dias',
       formaPago:       entry?.label || pago.uid,
+      ...(pago.bancoId && { bancoId: pago.bancoId }),
     };
     if (pago.uid === 'CHQ') {
       pagoFinal.numeroCheque = pago.numeroCheque;
@@ -189,6 +197,17 @@ const ModalPago = ({ inicial, onGuardar, onCerrar }) => {
               <label>Banco emisor</label>
               <input name="bancoEmisor" value={pago.bancoEmisor} onChange={handleChange} placeholder="Ej: Banco Pichincha" />
             </div>
+          </div>
+        )}
+
+        {/* Cuenta bancaria — obligatoria para transferencia, tarjeta y app móvil */}
+        {requiereBanco({ uid: pago.uid }) && (
+          <div className="fact-field" style={{ marginBottom: 12 }}>
+            <label>Cuenta bancaria *</label>
+            <select name="bancoId" value={pago.bancoId} onChange={handleChange}>
+              <option value="">— Seleccione —</option>
+              {bancos.map(b => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+            </select>
           </div>
         )}
 
@@ -538,6 +557,7 @@ const FormFactura = () => {
         plazo: '0', unidadTiempo: 'dias',
         numeroCheque: '', bancoEmisor: '',
         appNombre: 'ahorita', codigoTransaccion: '', nombreOtraApp: '',
+        bancoId: '',
       });
     }
     setPagoEditIdx(idx);
@@ -591,6 +611,7 @@ const FormFactura = () => {
         })),
         pagos: pagos.map(p => ({
           formaPago:    p.codigoFormaPago,
+          uid:          p.uid,
           total:        p.valor,
           plazo:        p.plazo || 0,
           unidadTiempo: p.unidadTiempo || 'dias',
@@ -598,6 +619,7 @@ const FormFactura = () => {
           ...(p.bancoEmisor       && { bancoEmisor:        p.bancoEmisor       }),
           ...(p.appNombre         && { appNombre:          p.appNombre         }),
           ...(p.codigoTransaccion && { codigoTransaccion:  p.codigoTransaccion }),
+          ...(p.bancoId           && { bancoId:            p.bancoId           }),
         })),
         observaciones: observaciones || undefined,
         fechaEmision,

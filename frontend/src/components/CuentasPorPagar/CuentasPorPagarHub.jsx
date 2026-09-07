@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
+import { useBancos } from '../../hooks/useBancos';
 import '../Bancos/Bancos.css';
 
 const METODOS_PAGO = ['efectivo', 'transferencia', 'cheque', 'tarjeta', 'caja_chica'];
@@ -11,14 +12,6 @@ const METODO_PAGO_LABEL = {
 
 function formatMoney(v) {
   return parseFloat(v || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function useBancos() {
-  const [bancos, setBancos] = useState([]);
-  useEffect(() => {
-    api.get('/bancos').then((r) => setBancos(r.data?.data || [])).catch(() => {});
-  }, []);
-  return bancos;
 }
 
 function useFondosCajaChica() {

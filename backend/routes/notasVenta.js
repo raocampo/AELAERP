@@ -19,6 +19,8 @@ const { checkLimiteNotasVenta } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { registrarAuditoria }   = require('../utils/auditoria');
 const { registrarMovimientoCaja } = require('../utils/caja');
+const { esEfectivo, requiereBanco } = require('../utils/formasPago');
+const { validarPagosConBanco, registrarMovimientosBancariosDeVenta } = require('../utils/pagosVenta');
 const { aplicarMovimientosVentaDesdeDetalles } = require('../utils/inventario');
 const { enviarDocumentoFiscal } = require('../utils/email');
 const {
@@ -69,10 +71,25 @@ function resolverPagos(pagos, formaPago, total) {
       err.esValidacion = true;
       throw err;
     }
-    pagosFinales = pagos.map((p) => ({ formaPago: String(p.formaPago || 'Efectivo'), total: parseFloat(p.total) || 0 }));
+    pagosFinales = pagos.map((p) => ({
+      formaPago: String(p.formaPago || 'Efectivo'),
+      total: parseFloat(p.total) || 0,
+      bancoId: p.bancoId || null,
+      referencia: p.referencia || null,
+    }));
     formaPagoFinal = 'Mixto';
   }
   return { pagosFinales, formaPagoFinal };
+}
+
+// pagosFinales es null cuando el pago no es mixto (contrato que ya
+// consumen el PDF/ticket para decidir si mostrar el desglose) — esta
+// variante SIEMPRE devuelve un array de 1+ líneas, para uso interno
+// (caja/bancos), sin tocar lo que se persiste en la columna `pagos`.
+function pagosParaCajaYBanco(pagosFinales, formaPagoFinal, total, bancoId, referencia) {
+  return (pagosFinales && pagosFinales.length)
+    ? pagosFinales
+    : [{ formaPago: formaPagoFinal, total, bancoId: bancoId || null, referencia: referencia || null }];
 }
 
 // Valida los datos comunes del destinatario/detalle — usado por crear y editar.
@@ -700,7 +717,7 @@ router.put('/:id', async (req, res) => {
 
     const {
       tipoIdentificacion, identificacion, razonSocial, direccion, email, telefono,
-      detalles, formaPago, pagos, fechaEmision, observaciones, clienteId,
+      detalles, formaPago, pagos, bancoId, referencia, fechaEmision, observaciones, clienteId,
     } = req.body;
 
     const errorValidacion = validarDatosNota({ tipoIdentificacion, identificacion, razonSocial, detalles });
@@ -716,6 +733,15 @@ router.put('/:id', async (req, res) => {
     } catch (errPagos) {
       return res.status(400).json({ success: false, mensaje: errPagos.message });
     }
+    const pagosNuevos = pagosParaCajaYBanco(pagosFinales, formaPagoFinal, total, bancoId, referencia);
+    try {
+      validarPagosConBanco(pagosNuevos);
+    } catch (errPago) {
+      return res.status(errPago.status || 400).json({ success: false, mensaje: errPago.message });
+    }
+    const pagosAnteriores = Array.isArray(nota.pagos) && nota.pagos.length
+      ? nota.pagos
+      : [{ formaPago: nota.formaPago || 'Efectivo', total: Number(nota.total || 0) }];
 
     // No renumera ni cambia establecimiento/puntoEmision: sigue siendo el
     // MISMO documento, solo corregido.
@@ -747,11 +773,18 @@ router.put('/:id', async (req, res) => {
         revertir: true,
       });
       if (Number(nota.total) > 0) {
-        await registrarMovimientoCaja({
-          tx, empresaId: req.empresa.id, usuarioId: req.usuario.id, fecha: new Date(),
-          tipo: 'ANULACION_NOTA', monto: Number(nota.total),
-          descripcion: `Ajuste por edición de nota ${nota.numeroNota} (reversa monto anterior)`,
-          referencia: nota.numeroNota, origenId: nota.id, metadata: { notaVentaId: nota.id, edicion: true },
+        for (const pago of pagosAnteriores) {
+          await registrarMovimientoCaja({
+            tx, empresaId: req.empresa.id, usuarioId: req.usuario.id, fecha: new Date(),
+            tipo: 'ANULACION_NOTA', monto: Number(pago.total || 0),
+            descripcion: `Ajuste por edición de nota ${nota.numeroNota} (reversa monto anterior)`,
+            referencia: nota.numeroNota, origenId: nota.id, categoria: pago.formaPago || null,
+            esEfectivo: esEfectivo(pago), metadata: { notaVentaId: nota.id, edicion: true },
+          });
+        }
+        await registrarMovimientosBancariosDeVenta({
+          pagos: pagosAnteriores, empresaId: req.empresa.id, fecha: new Date(),
+          numero: nota.numeroNota, tipoDocumento: 'nota de venta', esReverso: true, db: tx,
         });
       }
 
@@ -762,12 +795,18 @@ router.put('/:id', async (req, res) => {
         referencia: nota.numeroNota, metadata: { notaVentaId: nota.id, edicion: true },
       });
       if (total > 0) {
-        await registrarMovimientoCaja({
-          tx, empresaId: req.empresa.id, usuarioId: req.usuario.id, fecha: new Date(),
-          tipo: 'VENTA_NOTA', monto: total,
-          descripcion: `Ajuste por edición de nota ${nota.numeroNota} (nuevo monto)`,
-          referencia: nota.numeroNota, origenId: nota.id, categoria: formaPagoFinal,
-          metadata: { notaVentaId: nota.id, edicion: true },
+        for (const pago of pagosNuevos) {
+          await registrarMovimientoCaja({
+            tx, empresaId: req.empresa.id, usuarioId: req.usuario.id, fecha: new Date(),
+            tipo: 'VENTA_NOTA', monto: Number(pago.total || 0),
+            descripcion: `Ajuste por edición de nota ${nota.numeroNota} (nuevo monto)`,
+            referencia: nota.numeroNota, origenId: nota.id, categoria: pago.formaPago || null,
+            esEfectivo: esEfectivo(pago), metadata: { notaVentaId: nota.id, edicion: true },
+          });
+        }
+        await registrarMovimientosBancariosDeVenta({
+          pagos: pagosNuevos, empresaId: req.empresa.id, fecha: new Date(),
+          numero: nota.numeroNota, tipoDocumento: 'nota de venta', db: tx,
         });
       }
 
@@ -784,7 +823,11 @@ router.put('/:id', async (req, res) => {
           subtotal, totalDescuento, total,
           detalles,
           formaPago: formaPagoFinal,
-          pagos: pagosFinales,
+          // Con un solo pago no-efectivo también hay que persistir el
+          // desglose (aunque no sea "mixto") — si no, se pierde el bancoId y
+          // una edición/anulación posterior no podría revertir el
+          // movimiento bancario correcto.
+          pagos: pagosFinales || (pagosNuevos.some(requiereBanco) ? pagosNuevos : null),
           fechaEmision: fechaDoc,
           observaciones: observaciones || null,
         },
@@ -826,7 +869,7 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
 
     const {
       tipoIdentificacion, identificacion, razonSocial, direccion, email, telefono,
-      detalles, formaPago, pagos, fechaEmision, observaciones, clienteId,
+      detalles, formaPago, pagos, bancoId, referencia, fechaEmision, observaciones, clienteId,
       establecimiento: establecimientoBody, puntoEmision: puntoEmisionBody,
       idempotencyKey,
     } = req.body;
@@ -863,6 +906,12 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
       ({ pagosFinales, formaPagoFinal } = resolverPagos(pagos, formaPago, total));
     } catch (errPagos) {
       return res.status(400).json({ success: false, mensaje: errPagos.message });
+    }
+    const pagosNuevos = pagosParaCajaYBanco(pagosFinales, formaPagoFinal, total, bancoId, referencia);
+    try {
+      validarPagosConBanco(pagosNuevos);
+    } catch (errPago) {
+      return res.status(errPago.status || 400).json({ success: false, mensaje: errPago.message });
     }
 
     // Siguiente secuencial para esta empresa (respeta secuencial inicial configurado)
@@ -902,7 +951,11 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
           total,
           detalles,
           formaPago: formaPagoFinal,
-          pagos: pagosFinales,
+          // Con un solo pago no-efectivo también hay que persistir el
+          // desglose (aunque no sea "mixto") — si no, se pierde el bancoId y
+          // una edición/anulación posterior no podría revertir el
+          // movimiento bancario correcto.
+          pagos: pagosFinales || (pagosNuevos.some(requiereBanco) ? pagosNuevos : null),
           fechaEmision: fechaDoc,
           observaciones: observaciones || null,
           emisorId: req.usuario.id,
@@ -919,18 +972,30 @@ router.post('/', checkLimiteNotasVenta, async (req, res) => {
         metadata: { notaVentaId: creada.id },
       });
 
-      await registrarMovimientoCaja({
-        tx,
+      for (const pago of pagosNuevos) {
+        await registrarMovimientoCaja({
+          tx,
+          empresaId: req.empresa.id,
+          usuarioId: req.usuario.id,
+          fecha: fechaDoc,
+          tipo: 'VENTA_NOTA',
+          monto: Number(pago.total || 0),
+          descripcion: `Venta por nota ${numeroNota}`,
+          referencia: numeroNota,
+          categoria: pago.formaPago || null,
+          origenId: creada.id,
+          esEfectivo: esEfectivo(pago),
+          metadata: { notaVentaId: creada.id },
+        });
+      }
+
+      await registrarMovimientosBancariosDeVenta({
+        pagos: pagosNuevos,
         empresaId: req.empresa.id,
-        usuarioId: req.usuario.id,
         fecha: fechaDoc,
-        tipo: 'VENTA_NOTA',
-        monto: total,
-        descripcion: `Venta por nota ${numeroNota}`,
-        referencia: numeroNota,
-        categoria: formaPagoFinal,
-        origenId: creada.id,
-        metadata: { notaVentaId: creada.id },
+        numero: numeroNota,
+        tipoDocumento: 'nota de venta',
+        db: tx,
       });
 
       return creada;
@@ -1055,17 +1120,35 @@ router.put('/:id/anular', async (req, res) => {
         revertir: true,
       });
 
-      await registrarMovimientoCaja({
-        tx,
+      const pagosOriginales = Array.isArray(nota.pagos) && nota.pagos.length
+        ? nota.pagos
+        : [{ formaPago: nota.formaPago || 'Efectivo', total: Number(nota.total || 0) }];
+
+      for (const pago of pagosOriginales) {
+        await registrarMovimientoCaja({
+          tx,
+          empresaId: req.empresa.id,
+          usuarioId: req.usuario.id,
+          fecha: new Date(),
+          tipo: 'ANULACION_NOTA',
+          monto: Number(pago.total || 0),
+          descripcion: `Anulación de nota ${nota.numeroNota}`,
+          referencia: nota.numeroNota,
+          categoria: pago.formaPago || null,
+          origenId: nota.id,
+          esEfectivo: esEfectivo(pago),
+          metadata: { notaVentaId: nota.id },
+        });
+      }
+
+      await registrarMovimientosBancariosDeVenta({
+        pagos: pagosOriginales,
         empresaId: req.empresa.id,
-        usuarioId: req.usuario.id,
         fecha: new Date(),
-        tipo: 'ANULACION_NOTA',
-        monto: Number(nota.total || 0),
-        descripcion: `Anulación de nota ${nota.numeroNota}`,
-        referencia: nota.numeroNota,
-        origenId: nota.id,
-        metadata: { notaVentaId: nota.id },
+        numero: nota.numeroNota,
+        tipoDocumento: 'nota de venta',
+        esReverso: true,
+        db: tx,
       });
 
       return anulada;

@@ -527,6 +527,7 @@ model caja_movimientos {
   tipo        String   @db.VarChar(30)
   categoria   String?  @db.VarChar(30)
   monto       Decimal  @db.Decimal(14, 2)
+  esEfectivo  Boolean  @default(true)
   descripcion String?
   referencia  String?  @db.VarChar(120)
   origenId    Int?
