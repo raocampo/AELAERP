@@ -248,6 +248,19 @@
 
 .sri-error-info { color: #b91c1c; }
 
+/* Aviso técnico (no es un rechazo real de contenido) — tono neutro/azul en
+   vez del rojo de alarma que usa .det-errores para rechazos reales. */
+.det-errores--tecnico {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.sri-error-tecnico {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: #1e3a8a;
+}
+
 /* Tabla de detalles */
 .det-tabla-wrap { overflow-x: auto; }
 

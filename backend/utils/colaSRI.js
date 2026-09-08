@@ -45,6 +45,10 @@ const ERRORES_CONECTIVIDAD = new Set([
   'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET',
   'EHOSTUNREACH', 'ENETUNREACH', 'ECONNABORTED', 'EPIPE',
   'EAI_AGAIN', 'EADDRNOTAVAIL',
+  // El SRI devolvió una página HTML (mantenimiento/redirección de su
+  // infraestructura) en vez de una respuesta SOAP real — ver sri.js,
+  // enviarPeticionSoap. No es un rechazo de contenido del comprobante.
+  'SRI_RESPUESTA_NO_SOAP',
 ]);
 
 /**

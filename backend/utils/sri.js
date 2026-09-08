@@ -1049,6 +1049,19 @@ function enviarPeticionSoap(url, envelope, action, redirectsRestantes = MAX_REDI
           reject(new Error(`Servicio SRI no disponible (HTTP ${res.statusCode})`));
           return;
         }
+        // Con el statusCode ya resuelto (200, sin redirect pendiente), el
+        // body debería ser un sobre SOAP. Si en cambio es una página HTML
+        // (el mismo síntoma que el 302 sin seguir: la infraestructura del
+        // SRI devolvió una página de error/mantenimiento en vez de
+        // procesar la petición), NO es un rechazo real del comprobante —
+        // se lanza como error de conectividad para que quede en cola de
+        // reintento automático (colaSRI.js) en vez de marcarse RECHAZADO.
+        if (/<!DOCTYPE\s+HTML|<html[\s>]/i.test(data)) {
+          const err = new Error('El SRI devolvió una página HTML en vez de una respuesta SOAP (probable mantenimiento o redirección de su infraestructura)');
+          err.code = 'SRI_RESPUESTA_NO_SOAP';
+          reject(err);
+          return;
+        }
         resolve(data);
       });
     });

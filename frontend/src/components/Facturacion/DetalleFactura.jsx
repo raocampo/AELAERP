@@ -166,6 +166,15 @@ const DetalleFactura = () => {
   const detalles = typeof factura.detalles === 'string' ? JSON.parse(factura.detalles) : factura.detalles;
   const pagos    = typeof factura.pagos    === 'string' ? JSON.parse(factura.pagos)    : factura.pagos;
   const mensajes = factura.mensajesSri;
+  const mensajesReales = mensajes?.mensajes || mensajes?.recepcion?.mensajes;
+  // Sin mensajes reales de rechazo: el SRI nunca llegó a revisar el
+  // contenido de la factura, fue un problema técnico/de conectividad (ej.
+  // el SRI devolvió una página HTML en vez de su respuesta normal) — no
+  // amerita el mismo tono de alarma que un rechazo real de contenido.
+  const esProblemaTecnico = mensajes && !(Array.isArray(mensajesReales) && mensajesReales.length > 0) && (
+    mensajes.estado === 'DESCONOCIDO' || Boolean(mensajes.error) || Boolean(mensajes.code)
+    || /<!DOCTYPE\s+HTML|<html[\s>]/i.test(JSON.stringify(mensajes))
+  );
 
   // Res. SRI NAC-DGERCGC25-00000014, Art. 3 (vigente desde 2026-01-01): las
   // facturas a "Consumidor Final" (tipo '07') ya autorizadas por el SRI no se
@@ -229,27 +238,29 @@ const DetalleFactura = () => {
           </div>
         )}
         {factura.estadoSri === 'RECHAZADO' && mensajes && (
-          <div className="det-errores">
-            <strong>Mensajes del SRI:</strong>
-            {(() => {
-              const msgs = mensajes.mensajes || mensajes.recepcion?.mensajes;
-              if (Array.isArray(msgs) && msgs.length > 0) {
-                return (
-                  <ul className="sri-error-list">
-                    {msgs.map((m, i) => (
-                      <li key={i}>
-                        {m.identificador && <code className="sri-error-code">{m.identificador}</code>}
-                        {m.identificador ? ' ' : ''}{m.mensaje}
-                        {m.informacionAdicional && (
-                          <small className="sri-error-info"> — {m.informacionAdicional}</small>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                );
-              }
-              return <pre>{JSON.stringify(mensajes, null, 2)}</pre>;
-            })()}
+          <div className={esProblemaTecnico ? 'det-errores det-errores--tecnico' : 'det-errores'}>
+            <strong>{esProblemaTecnico ? 'Aviso:' : 'Mensajes del SRI:'}</strong>
+            {esProblemaTecnico ? (
+              <p className="sri-error-tecnico">
+                Hubo un problema temporal de comunicación con el servidor del SRI — esto{' '}
+                <strong>no significa que la factura tenga un error</strong>. Hacé clic en
+                "🔄 Reenviar SRI" para intentarlo de nuevo.
+              </p>
+            ) : Array.isArray(mensajesReales) && mensajesReales.length > 0 ? (
+              <ul className="sri-error-list">
+                {mensajesReales.map((m, i) => (
+                  <li key={i}>
+                    {m.identificador && <code className="sri-error-code">{m.identificador}</code>}
+                    {m.identificador ? ' ' : ''}{m.mensaje}
+                    {m.informacionAdicional && (
+                      <small className="sri-error-info"> — {m.informacionAdicional}</small>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <pre>{JSON.stringify(mensajes, null, 2)}</pre>
+            )}
           </div>
         )}
         <div className="det-clave">
