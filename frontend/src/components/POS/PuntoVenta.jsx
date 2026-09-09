@@ -810,6 +810,18 @@ export default function PuntoVenta() {
                         <button type="button" className="btn-link danger" onClick={() => quitarLineaPago(index)} title="Quitar esta forma de pago">✕</button>
                       )}
                     </div>
+                    {tipoDocumento === 'factura' && (pago.formaPago === 'CHQ' || pago.formaPago === 'TRF' || pago.formaPago === 'APP') && (
+                      <input
+                        style={{ marginTop: 2 }}
+                        value={pago.referencia || ''}
+                        onChange={(e) => actualizarLineaPago(index, 'referencia', e.target.value)}
+                        placeholder={
+                          pago.formaPago === 'CHQ' ? 'N° cheque y banco (Ej: #001 Pichincha)' :
+                          pago.formaPago === 'APP' ? 'App + código transacción (Ej: Ahorita ABC123)' :
+                          'N° referencia / comprobante'
+                        }
+                      />
+                    )}
                     {requiereBanco(tipoDocumento === 'factura' ? { uid: pago.formaPago } : { formaPago: pago.formaPago }) && (
                       <select
                         value={pago.bancoId}
@@ -822,18 +834,6 @@ export default function PuntoVenta() {
                     )}
                   </div>
                 ))}
-                {tipoDocumento === 'factura' && pagos.length === 1 && (pagos[0].formaPago === 'CHQ' || pagos[0].formaPago === 'TRF' || pagos[0].formaPago === 'APP') && (
-                  <input
-                    style={{ marginTop: 2 }}
-                    value={pagos[0].referencia}
-                    onChange={(e) => actualizarLineaPago(0, 'referencia', e.target.value)}
-                    placeholder={
-                      pagos[0].formaPago === 'CHQ' ? 'N° cheque y banco (Ej: #001 Pichincha)' :
-                      pagos[0].formaPago === 'APP' ? 'App + código transacción (Ej: Ahorita ABC123)' :
-                      'N° referencia / comprobante'
-                    }
-                  />
-                )}
                 <div className="pos-pagos-footer">
                   <button type="button" className="btn-link" onClick={agregarLineaPago}>+ Agregar forma de pago</button>
                   {!pagosCuadran && (
