@@ -3,10 +3,15 @@
 // tocar sus vocabularios originales (algunos van tal cual al XML del SRI).
 function categoriaFormaPago({ uid, formaPago } = {}) {
   const clave = String(uid ?? formaPago ?? '').trim().toLowerCase();
-  if (['trf', 'transferencia', '20'].includes(clave)) return 'TRANSFERENCIA';
+  if (['trf', 'transferencia'].includes(clave)) return 'TRANSFERENCIA';
   if (['16', '19', 'tarjeta débito', 'tarjeta crédito', 'tarjeta'].includes(clave)) return 'TARJETA';
   if (['app', 'app móvil', 'aplicaciones (ahorita/de una)', '17'].includes(clave)) return 'APP';
   if (['chq', 'cheque'].includes(clave)) return 'CHEQUE';
+  // "Otros con utilización del sistema financiero" (código SRI 20 genérico):
+  // NO es efectivo, pero es demasiado ambiguo para exigir una cuenta bancaria
+  // concreta — puede ser cheque, transferencia o depósito directo. Se registra
+  // como pago no-efectivo pero sin forzar cuenta ni movimiento en Bancos.
+  if (['20', 'otros con utilización del sistema financiero'].includes(clave)) return 'OTRO_FINANCIERO';
   return 'EFECTIVO'; // '01', 'efectivo', y cualquier valor no reconocido caen aquí (fail-safe: no exige banco)
 }
 

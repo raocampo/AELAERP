@@ -11,8 +11,11 @@ test('categoriaFormaPago clasifica los 4 vocabularios reales del sistema', () =>
   assert.equal(categoriaFormaPago({ uid: '16' }), 'TARJETA');
   assert.equal(categoriaFormaPago({ uid: '19' }), 'TARJETA');
   assert.equal(categoriaFormaPago({ uid: '01' }), 'EFECTIVO');
-  // FormFactura uid '20' ("Otros con utilización del sistema financiero")
-  assert.equal(categoriaFormaPago({ uid: '20' }), 'TRANSFERENCIA');
+  // FormFactura uid '20' ("Otros con utilización del sistema financiero"):
+  // genérico y ambiguo — no es efectivo pero NO exige cuenta bancaria.
+  assert.equal(categoriaFormaPago({ uid: '20' }), 'OTRO_FINANCIERO');
+  assert.equal(requiereBanco({ uid: '20' }), false);
+  assert.equal(esEfectivo({ uid: '20' }), false);
   // Notas de venta (POS y FormNotaVenta): label humano, sin uid
   assert.equal(categoriaFormaPago({ formaPago: 'Transferencia' }), 'TRANSFERENCIA');
   assert.equal(categoriaFormaPago({ formaPago: 'Cheque' }), 'CHEQUE');
@@ -47,10 +50,11 @@ test('esEfectivo es true solo para efectivo', () => {
   assert.equal(esEfectivo({ uid: 'CHQ' }), false);
 });
 
-test('validarPagosConBanco no rechaza efectivo ni cheque sin bancoId', () => {
+test('validarPagosConBanco no rechaza efectivo, cheque ni "Otros SRI 20" sin bancoId', () => {
   assert.doesNotThrow(() => validarPagosConBanco([
     { formaPago: 'Efectivo', total: 50 },
-    { uid: 'CHQ', formaPago: '20', total: 50 },
+    { uid: 'CHQ', formaPago: '20', total: 30 },
+    { uid: '20', formaPago: '20', total: 20 }, // "Otros con utilización del sistema financiero"
   ]));
 });
 
