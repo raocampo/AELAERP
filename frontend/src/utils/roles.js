@@ -9,6 +9,7 @@ export const ROLE_OPTIONS = [
   { value: 'mesero',                 label: 'Mesero' },
   { value: 'cajero',                 label: 'Cajero' },
   { value: 'cocina',                 label: 'Cocina' },
+  { value: 'vendedor',               label: 'Agente Vendedor' },
 ];
 
 const ROLE_LABELS = Object.fromEntries(ROLE_OPTIONS.map((role) => [role.value, role.label]));
@@ -25,6 +26,11 @@ const ROLE_ALIASES = {
   visor: 'supervisor',
   mesera: 'mesero',
   cajera: 'cajero',
+  asesor: 'vendedor',
+  vendedora: 'vendedor',
+  preventista: 'vendedor',
+  agente: 'vendedor',
+  agente_vendedor: 'vendedor',
 };
 
 const PERMISSIONS = {
@@ -61,7 +67,7 @@ const PERMISSIONS = {
   'cajaChica.gestionar': ['admin', 'supervisor', 'contador'],
 
   'clientes.gestionar':   ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'cajero'],
-  'productos.ver':        ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'mesero', 'cajero'],
+  'productos.ver':        ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'mesero', 'cajero', 'vendedor'],
   'productos.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],
   'productos.eliminar':   ['admin', 'supervisor'],
   'notasVenta.gestionar': ['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero'],
@@ -78,6 +84,11 @@ const PERMISSIONS = {
   'proformas.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],
   'proformas.convertir':  ['admin', 'supervisor', 'facturador'],
   'proformas.anular':     ['admin', 'supervisor'],
+
+  'vendedor.ver':      ['admin', 'supervisor', 'vendedor'],
+  'vendedor.pedidos':  ['admin', 'supervisor', 'vendedor'],
+  'vendedor.cobros':   ['admin', 'supervisor', 'vendedor'],
+  'vendedor.asignar':  ['admin', 'supervisor'],
 
   'mesas.gestionar':   ['admin', 'supervisor', 'facturador', 'secretaria', 'operador'],
   'mesas.tomarPedido': ['mesero'],
@@ -118,6 +129,7 @@ export const PERMISOS_POR_MODULO = [
   { modulo: 'Clientes',        permisos: ['clientes.gestionar'] },
   { modulo: 'Productos',       permisos: ['productos.ver', 'productos.gestionar', 'productos.eliminar'] },
   { modulo: 'Proformas',        permisos: ['proformas.gestionar', 'proformas.convertir', 'proformas.anular'] },
+  { modulo: 'Agente Vendedor',  permisos: ['vendedor.ver', 'vendedor.pedidos', 'vendedor.cobros', 'vendedor.asignar'] },
   { modulo: 'Ventas / Caja',   permisos: ['notasVenta.gestionar', 'caja.ver', 'caja.gestionar', 'pos.usar', 'estadisticas.ver'] },
   { modulo: 'Mesas y Comandas', permisos: ['mesas.gestionar', 'mesas.tomarPedido', 'mesas.cobrar', 'mesas.cocina', 'mesas.administrar'] },
   { modulo: 'Inventario',      permisos: ['inventario.ver', 'inventario.gestionar'] },
@@ -162,6 +174,10 @@ export const PERMISO_LABELS = {
   'proformas.gestionar':   'Gestionar proformas',
   'proformas.convertir':   'Convertir proforma a factura',
   'proformas.anular':      'Anular proformas',
+  'vendedor.ver':          'Acceder al módulo de vendedor (mi cartera)',
+  'vendedor.pedidos':      'Tomar pedidos de mis clientes',
+  'vendedor.cobros':       'Registrar cobros en ruta',
+  'vendedor.asignar':      'Asignar clientes a un vendedor',
   'mesas.gestionar':       'Tomar y cobrar pedidos de mesa (rol general)',
   'mesas.tomarPedido':     'Tomar pedidos de mesa (mesero)',
   'mesas.cobrar':          'Cobrar y anular pedidos de mesa (cajero)',

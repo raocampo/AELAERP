@@ -39,6 +39,10 @@ const ROLE_DEFINITIONS = {
     key: 'cocina',
     label: 'Cocina',
   },
+  vendedor: {
+    key: 'vendedor',
+    label: 'Agente Vendedor',
+  },
 };
 
 const ROLE_ALIASES = {
@@ -53,6 +57,11 @@ const ROLE_ALIASES = {
   visor: 'supervisor',
   mesera: 'mesero',
   cajera: 'cajero',
+  asesor: 'vendedor',
+  vendedora: 'vendedor',
+  preventista: 'vendedor',
+  agente: 'vendedor',
+  agente_vendedor: 'vendedor',
 };
 
 const PERMISSIONS = {
@@ -97,7 +106,7 @@ const PERMISSIONS = {
   'cajaChica.gestionar': ['admin', 'supervisor', 'contador'],
 
   'clientes.gestionar':   ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'cajero'],
-  'productos.ver':        ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'mesero', 'cajero'],
+  'productos.ver':        ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria', 'operador', 'mesero', 'cajero', 'vendedor'],
   'productos.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],
   'productos.eliminar':   ['admin', 'supervisor'],
   'notasVenta.gestionar': ['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero'],
@@ -114,6 +123,18 @@ const PERMISSIONS = {
   'proformas.gestionar':  ['admin', 'supervisor', 'facturador', 'secretaria'],
   'proformas.convertir':  ['admin', 'supervisor', 'facturador'],
   'proformas.anular':     ['admin', 'supervisor'],
+
+  // Módulo Agente Vendedor (roadmap docs/roadmap-agente-vendedor.md).
+  // vendedor.ver     → acceder al módulo (mi cartera, mis pedidos, mis comisiones)
+  // vendedor.pedidos → tomar/gestionar pedidos (proformas) de mis clientes
+  // vendedor.cobros  → registrar cobros en ruta contra facturas pendientes
+  // vendedor.asignar → (supervisor) asignar clientes a un vendedor
+  // Las rutas de vendedor.js aplican además scoping por usuarioId cuando
+  // el rol es exactamente 'vendedor' (admin/supervisor ven todo).
+  'vendedor.ver':      ['admin', 'supervisor', 'vendedor'],
+  'vendedor.pedidos':  ['admin', 'supervisor', 'vendedor'],
+  'vendedor.cobros':   ['admin', 'supervisor', 'vendedor'],
+  'vendedor.asignar':  ['admin', 'supervisor'],
 
   // Mesas y Comandas (restaurantes).
   // mesas.gestionar   → umbral amplio: puede tomar Y cobrar pedidos (roles
