@@ -29,6 +29,14 @@ test('esErrorConectividad reconoce el error de TLS cuando el SRI redirige a una 
   assert.equal(esErrorConectividad(err(null, "Error de red al contactar el SRI: Hostname/IP does not match certificate's altnames: IP: 181.113.227.222 is not in the cert's list:")), true);
 });
 
+test('esErrorConectividad reconoce un HTTP 500/503 del SRI (su server caído)', () => {
+  // Caso real 2026-09-10: factura 002-002-000000208 volvió a ERROR con
+  // "Servicio SRI no disponible (HTTP 500)".
+  assert.equal(esErrorConectividad(err('SRI_HTTP_NO_OK', 'El SRI respondió HTTP 500 — problema temporal de su servicio')), true);
+  assert.equal(esErrorConectividad(err(null, 'Servicio SRI no disponible (HTTP 500)')), true);
+  assert.equal(esErrorConectividad(err(null, 'El SRI respondió HTTP 503 — problema temporal de su servicio')), true);
+});
+
 test('esErrorConectividad reconoce mensajes de red sin código', () => {
   assert.equal(esErrorConectividad(err(null, 'socket hang up')), true);
   assert.equal(esErrorConectividad(err(null, 'Error de red: timeout')), true);

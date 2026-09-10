@@ -1044,17 +1044,20 @@ function enviarPeticionSoap(url, envelope, action) {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
-        if (res.statusCode >= 400) {
-          reject(new Error(`Servicio SRI no disponible (HTTP ${res.statusCode})`));
+        // Cualquier status que NO sea 2xx = el SRI no procesó la petición:
+        // 500/502/503/504 = su servidor caído o saturado; 4xx = endpoint
+        // mal. NADA de esto es un rechazo del contenido del comprobante
+        // (los rechazos reales vienen como HTTP 200 + SOAP con
+        // <estado>DEVUELTA</estado> y códigos de <mensaje>). Se trata como
+        // transitorio → el comprobante queda en cola y se reintenta.
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          const err = new Error(`El SRI respondió HTTP ${res.statusCode} — problema temporal de su servicio`);
+          err.code = 'SRI_HTTP_NO_OK';
+          reject(err);
           return;
         }
-        // Con el statusCode ya resuelto (200, sin redirect pendiente), el
-        // body debería ser un sobre SOAP. Si en cambio es una página HTML
-        // (el mismo síntoma que el 302 sin seguir: la infraestructura del
-        // SRI devolvió una página de error/mantenimiento en vez de
-        // procesar la petición), NO es un rechazo real del comprobante —
-        // se lanza como error de conectividad para que quede en cola de
-        // reintento automático (colaSRI.js) en vez de marcarse RECHAZADO.
+        // 200 pero el body es una página HTML en vez de un sobre SOAP —
+        // mismo síntoma de infra del SRI caída. También transitorio.
         if (/<!DOCTYPE\s+HTML|<html[\s>]/i.test(data)) {
           const err = new Error('El SRI devolvió una página HTML en vez de una respuesta SOAP (probable mantenimiento o redirección de su infraestructura)');
           err.code = 'SRI_RESPUESTA_NO_SOAP';

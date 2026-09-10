@@ -197,7 +197,7 @@ const DetalleFactura = () => {
           <button className="btn-secondary" onClick={descargarPDF}>📄 RIDE PDF</button>
           <button className="btn-secondary" onClick={imprimirRecibo}>🖨️ Recibo POS</button>
           <button className="btn-secondary" onClick={descargarXML}>📥 XML</button>
-          {['PENDIENTE_FIRMA', 'RECHAZADO'].includes(factura.estadoSri) && !factura.anulada && (
+          {['PENDIENTE_FIRMA', 'RECHAZADO', 'ERROR', 'FIRMADO_PENDIENTE_ENVIO'].includes(factura.estadoSri) && !factura.anulada && (
             <button className="btn-secondary" onClick={reenviar}>🔄 Reenviar SRI</button>
           )}
           {!factura.anulada && factura.estadoSri !== 'ANULADO' && !bloqueadoConsumidorFinal && (

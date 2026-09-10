@@ -276,7 +276,7 @@ const TabFacturas = ({ navigate, onIrNC }) => {
                           <IcDescargar/>
                         </button>
                       )}
-                      {['PENDIENTE_FIRMA', 'RECHAZADO', 'ENVIADO'].includes(f.estadoSri) && !f.anulada && (
+                      {['PENDIENTE_FIRMA', 'RECHAZADO', 'ENVIADO', 'ERROR', 'FIRMADO_PENDIENTE_ENVIO'].includes(f.estadoSri) && !f.anulada && (
                         <button className="btn-icon ic-reenviar" title="Reenviar al SRI"
                           onClick={() => reenviarSRI(f)}>
                           <IcReenviar/>

@@ -47,10 +47,13 @@ const ERRORES_CONECTIVIDAD = new Set([
   'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET',
   'EHOSTUNREACH', 'ENETUNREACH', 'ECONNABORTED', 'EPIPE',
   'EAI_AGAIN', 'EADDRNOTAVAIL',
-  // El SRI devolvió una página HTML (mantenimiento) en vez de SOAP, o
-  // respondió con un redirect 3xx desde su WS — ver sri.js/enviarPeticionSoap.
+  // El SRI devolvió una página HTML (mantenimiento) en vez de SOAP,
+  // respondió con un redirect 3xx, o con un HTTP no-2xx (500/502/503/4xx)
+  // desde su WS — ver sri.js/enviarPeticionSoap. Ninguno es rechazo de
+  // contenido del comprobante.
   'SRI_RESPUESTA_NO_SOAP',
   'SRI_REDIRECT',
+  'SRI_HTTP_NO_OK',
   // Errores de TLS al contactar el endpoint del SRI: se observó en
   // producción que su infra redirige a una IP cuyo certificado no la
   // cubre (ERR_TLS_CERT_ALTNAME_INVALID). Contactando al SRI, un error
@@ -78,7 +81,9 @@ function esErrorConectividad(err) {
          msg.includes('connect econnrefused') ||
          msg.includes('certificate') ||   // TLS del endpoint del SRI mal configurado
          msg.includes('altnames') ||
-         msg.includes('redirec');          // "redirección"/"redirect" del SRI
+         msg.includes('redirec') ||        // "redirección"/"redirect" del SRI
+         msg.includes('respondió http') || // HTTP no-2xx (500/502/503/...) del SRI
+         msg.includes('servicio sri no disponible');
 }
 
 // ─── Cache de configuraciones SRI por empresa ──────────────
