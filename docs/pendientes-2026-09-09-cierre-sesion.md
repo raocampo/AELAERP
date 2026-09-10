@@ -22,6 +22,7 @@ tramo:
 | `7d81ee3` | fix: respuesta HTML del SRI ya no se marca como rechazo real + mensaje menos alarmante |
 | `8cf7873` | docs: cierre tramo 2 |
 | `0ea09c6` | fix: POS no mostraba el input de referencia (App/Transf/Cheque) con pagos mixtos |
+| `f33b6b7` | fix: "Otros con utilización del sistema financiero" (SRI 20) ya no exige cuenta bancaria |
 
 Todo está en `origin/main` (`0ea09c6` es el HEAD). En esta sesión el
 Dashboard también ganó tarjetas de "Ventas de hoy" / "Compras de hoy"
@@ -57,6 +58,12 @@ con desglose efectivo/bancos (fue parte de `c18caa2`/tramo 1).
    de transacción de App/Transferencia/Cheque solo aparecía con una
    sola forma de pago. Ahora aparece por línea, como el selector de
    banco.
+8. **"Otros con utilización del sistema financiero" (SRI 20) exigía
+   cuenta bancaria**: estaba clasificado como TRANSFERENCIA. Es
+   demasiado genérico (puede ser cheque, transferencia o depósito) —
+   nueva categoría `OTRO_FINANCIERO`: cuenta como pago no-efectivo en
+   los reportes pero no fuerza cuenta ni movimiento en Bancos. Para
+   registrar en Bancos hay que elegir "Transferencia / Depósito".
 
 ## 🔴 Pendientes abiertos para seguir luego
 
@@ -105,8 +112,18 @@ con desglose efectivo/bancos (fue parte de `c18caa2`/tramo 1).
    y top productos. Si el usuario quiere más: top clientes, filtro de
    mes/rango personalizado, exportar a Excel/PDF — quedan como v3 si se
    piden.
-8. **Módulo móvil (Expo)**: sigue sin verificarse en dispositivo real,
-   hilo abierto desde agosto. Nada de esta sesión tocó móvil.
+8. **Módulo móvil (Expo)**: se levantó el dev server para probar en
+   dispositivo real (2026-09-10). `mobile/.env` (gitignored) creado con
+   `EXPO_PUBLIC_API_URL=https://aelaerp-production.up.railway.app/api`.
+   Arranque: `cd mobile && npx expo start --lan` (el modo `--tunnel`
+   pide instalar `@expo/ngrok` interactivamente y falla en modo no
+   interactivo — si se quiere túnel, `npm i -D @expo/ngrok` primero).
+   URL para Expo Go: `exp://<IP-LAN-de-la-PC>:8081` (teléfono en la
+   misma WiFi). Hay avisos de versiones de paquetes desactualizadas
+   (expo 54.0.35 vs 54.0.37, react-native 0.79 vs 0.81, etc.) —
+   candidato #1 si algo falla raro en el móvil; `npx expo install
+   --fix` los alinea. Pendiente: la verificación funcional clic a clic
+   en el dispositivo.
 
 ## Al retomar
 
