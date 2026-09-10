@@ -1005,16 +1005,17 @@ function soapRequest(url, soapBody, action, namespace) {
   return enviarPeticionSoap(url, envelope, action);
 }
 
-// El SRI a veces redirige su endpoint SOAP (301/302/303/307/308) — se
-// observó en producción un 302 de cel.sri.gob.ec a una IP cruda
-// (https://181.113.227.222), probablemente un rebalanceo/migración de su
-// infraestructura. Sin seguir el redirect, `data` terminaba siendo la
-// página HTML del redirect en vez del SOAP esperado — <estado> nunca
-// matcheaba, y la recepción/autorización quedaba en "DESCONOCIDO" con esa
-// página HTML como rawXml, en vez de reintentar contra la URL correcta.
-const MAX_REDIRECTS_SRI = 3;
-
-function enviarPeticionSoap(url, envelope, action, redirectsRestantes = MAX_REDIRECTS_SRI) {
+// El SRI a veces responde con una redirección (3xx) desde su endpoint
+// SOAP — observado en producción: 302 de cel.sri.gob.ec a una IP cruda
+// (https://181.113.227.222) durante incidentes de su infraestructura.
+// SEGUIR ese redirect nunca funcionó: una vez devolvía una página HTML,
+// otra vez daba error de TLS porque el certificado de esa IP no la
+// cubre. Los endpoints oficiales del SRI son estables y están fijados en
+// config/sri.js — un 3xx visible desde el WS es siempre malfuncionamiento
+// de su infra, nunca una migración real. Se trata como TRANSITORIO
+// (err.code 'SRI_REDIRECT' → esErrorConectividad lo reconoce) para que el
+// comprobante quede en cola de reintento, no marcado RECHAZADO/ERROR.
+function enviarPeticionSoap(url, envelope, action) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
     const options = {
@@ -1030,15 +1031,13 @@ function enviarPeticionSoap(url, envelope, action, redirectsRestantes = MAX_REDI
     };
 
     const req = https.request(options, (res) => {
-      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-        res.resume(); // descarta el body (la página HTML del redirect) — no es el SOAP que buscamos
-        if (redirectsRestantes <= 0) {
-          reject(new Error(`El SRI redirigió demasiadas veces (última ubicación: ${res.headers.location})`));
-          return;
-        }
-        const siguienteUrl = new URL(res.headers.location, url).toString();
-        console.log(`[SRI] Redirigido (HTTP ${res.statusCode}): ${url} -> ${siguienteUrl}`);
-        resolve(enviarPeticionSoap(siguienteUrl, envelope, action, redirectsRestantes - 1));
+      if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+        res.resume(); // descartar el body (página de error/redirect del SRI)
+        const destino = res.headers.location ? ` -> ${res.headers.location}` : '';
+        console.warn(`[SRI] Respondió con redirección HTTP ${res.statusCode}${destino} — problema temporal de su infraestructura, se reintentará`);
+        const err = new Error(`El SRI respondió con una redirección (HTTP ${res.statusCode}${destino}) — problema temporal de su infraestructura`);
+        err.code = 'SRI_REDIRECT';
+        reject(err);
         return;
       }
 

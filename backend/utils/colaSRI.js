@@ -40,20 +40,32 @@ function estaEnEspera(msj) {
   return new Date(msj.reintentarDesde) > new Date();
 }
 
-// Errores que indican problema de conectividad (no rechazo SRI)
+// Errores que indican problema de conectividad / infraestructura del SRI
+// (NO un rechazo de contenido del comprobante). Todos hacen que el
+// comprobante quede en FIRMADO_PENDIENTE_ENVIO y el worker lo reintente.
 const ERRORES_CONECTIVIDAD = new Set([
   'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET',
   'EHOSTUNREACH', 'ENETUNREACH', 'ECONNABORTED', 'EPIPE',
   'EAI_AGAIN', 'EADDRNOTAVAIL',
-  // El SRI devolvió una página HTML (mantenimiento/redirección de su
-  // infraestructura) en vez de una respuesta SOAP real — ver sri.js,
-  // enviarPeticionSoap. No es un rechazo de contenido del comprobante.
+  // El SRI devolvió una página HTML (mantenimiento) en vez de SOAP, o
+  // respondió con un redirect 3xx desde su WS — ver sri.js/enviarPeticionSoap.
   'SRI_RESPUESTA_NO_SOAP',
+  'SRI_REDIRECT',
+  // Errores de TLS al contactar el endpoint del SRI: se observó en
+  // producción que su infra redirige a una IP cuyo certificado no la
+  // cubre (ERR_TLS_CERT_ALTNAME_INVALID). Contactando al SRI, un error
+  // de certificado = su endpoint está mal, se reintenta después.
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+  'CERT_HAS_EXPIRED',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'ERR_SSL_WRONG_VERSION_NUMBER',
 ]);
 
 /**
- * Detecta si un error es de conectividad (internet caído)
- * vs un rechazo real del SRI.
+ * Detecta si un error es de conectividad / infra del SRI (reintentar)
+ * vs un rechazo real del contenido del comprobante (definitivo).
  */
 function esErrorConectividad(err) {
   if (!err) return false;
@@ -63,7 +75,10 @@ function esErrorConectividad(err) {
          msg.includes('network') ||
          msg.includes('timeout') ||
          msg.includes('getaddrinfo') ||
-         msg.includes('connect econnrefused');
+         msg.includes('connect econnrefused') ||
+         msg.includes('certificate') ||   // TLS del endpoint del SRI mal configurado
+         msg.includes('altnames') ||
+         msg.includes('redirec');          // "redirección"/"redirect" del SRI
 }
 
 // ─── Cache de configuraciones SRI por empresa ──────────────
