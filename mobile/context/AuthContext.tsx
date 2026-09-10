@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import type { Href } from 'expo-router';
 import api, { clearSession, STORAGE_KEYS } from '../services/api';
 import type { Empresa, Sistema, Usuario } from '../types';
+import { tienePermiso, esVendedor } from '../utils/roles';
 
 interface AuthState {
   usuario: Usuario | null;
@@ -20,6 +21,8 @@ interface AuthActions {
   cambiarEmpresa: (empresaId: number) => Promise<{ success: boolean }>;
   recargarSistema: () => Promise<void>;
   cargarEmpresasDisponibles: () => Promise<void>;
+  // Chequeo de permisos del usuario actual (rol + permisosExtra).
+  puede: (permiso: string | string[]) => boolean;
 }
 
 const AuthContext = createContext<AuthState & AuthActions>({} as AuthState & AuthActions);
@@ -28,7 +31,10 @@ const AuthContext = createContext<AuthState & AuthActions>({} as AuthState & Aut
 // gateada por módulo, siempre es el último recurso). `sistema` null/undefined
 // (sesión restaurada de una versión vieja de la app sin el campo todavía)
 // se trata como habilitado, hasta que recargarSistema() lo corrija.
-export function primerTabDisponible(sistema: Sistema | null): Href {
+export function primerTabDisponible(sistema: Sistema | null, usuario?: Usuario | null): Href {
+  // El vendedor no tiene POS/Inventario/Facturas — sus pantallas propias
+  // llegan en la Fase 1 del módulo. Hasta entonces cae a Configuración.
+  if (usuario && esVendedor(usuario.rol)) return '/(tabs)/configuracion';
   if (!sistema || sistema.posHabilitado !== false) return '/(tabs)/pos';
   if (sistema.inventarioHabilitado !== false) return '/(tabs)/inventario';
   if (sistema.facturacionHabilitada !== false) return '/(tabs)/facturas';
@@ -166,6 +172,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setEmpresaConfirmada(false);
   }, []);
 
+  const puede = useCallback(
+    (permiso: string | string[]) => tienePermiso(usuario?.rol, permiso, usuario?.permisosExtra ?? []),
+    [usuario],
+  );
+
   const cambiarEmpresa = useCallback(async (empresaId: number) => {
     try {
       const res = await api.post('/auth/cambiar-empresa', { empresaId });
@@ -186,6 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{
       usuario, empresa, sistema, cargando, empresasDisponibles, empresaConfirmada,
       login, logout, confirmarEmpresa, cambiarEmpresa, recargarSistema, cargarEmpresasDisponibles,
+      puede,
     }}>
       {children}
     </AuthContext.Provider>

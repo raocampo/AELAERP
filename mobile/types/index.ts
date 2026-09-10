@@ -1,9 +1,11 @@
 export interface Usuario {
   id: number;
   nombre: string;
+  username?: string;
   email: string;
   rol: string;
-  permisos: string[];
+  // El backend (routes/auth.js) devuelve `permisosExtra` en el login.
+  permisosExtra?: string[];
 }
 
 export interface Empresa {

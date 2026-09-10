@@ -25,8 +25,8 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
       // Logueado pero sin empresa confirmada → selector de empresa
       if (!inEmpresa) router.replace('/empresa');
     } else {
-      // Sesión completa → tabs (al primer módulo habilitado)
-      if (inLogin || inEmpresa) router.replace(primerTabDisponible(sistema));
+      // Sesión completa → tabs (al primer módulo habilitado según rol)
+      if (inLogin || inEmpresa) router.replace(primerTabDisponible(sistema, usuario));
     }
   }, [usuario, cargando, empresaConfirmada, segments, router, sistema]);
 

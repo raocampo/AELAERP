@@ -1,16 +1,18 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
+import { esVendedor } from '../../utils/roles';
 
 // `sistema` null/undefined (aún no cargó, o sesión vieja sin el campo) se
 // trata como habilitado — evita ocultar un tab por un instante mientras
 // recargarSistema() todavía no responde. Una vez que sistema llega, cada
 // módulo se oculta del tab bar (no se desmonta la ruta) si el tenant no lo
 // tiene contratado — mismo criterio que ModuleRoute en el frontend web.
-function hrefSiHabilitado(habilitado: boolean | undefined) {
-  return habilitado === false ? null : undefined;
+// `visibleRol` (opcional) lo oculta además si el rol no debería verlo.
+function href(habilitado: boolean | undefined, visibleRol = true) {
+  return habilitado === false || !visibleRol ? null : undefined;
 }
 
 function HeaderRight() {
@@ -33,7 +35,11 @@ const h = StyleSheet.create({
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  const { sistema } = useAuth();
+  const { sistema, usuario } = useAuth();
+
+  // El vendedor (rol de campo) no ve POS/Mesas/Inventario/Facturas — sus
+  // pantallas propias llegan en la Fase 1 del módulo Agente Vendedor.
+  const noEsVendedor = !esVendedor(usuario?.rol);
 
   // Altura del tab bar: 56 fijos + inset inferior del dispositivo (botones de nav)
   const TAB_HEIGHT = 56 + insets.bottom;
@@ -63,7 +69,7 @@ export default function TabsLayout() {
         options={{
           title: 'Punto de Venta',
           tabBarLabel: 'POS',
-          href: hrefSiHabilitado(sistema?.posHabilitado),
+          href: href(sistema?.posHabilitado, noEsVendedor),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cart-outline" size={size} color={color} />
           ),
@@ -74,7 +80,7 @@ export default function TabsLayout() {
         options={{
           title: 'Mesas',
           tabBarLabel: 'Mesas',
-          href: hrefSiHabilitado(sistema?.restauranteHabilitado),
+          href: href(sistema?.restauranteHabilitado, noEsVendedor),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="restaurant-outline" size={size} color={color} />
           ),
@@ -85,7 +91,7 @@ export default function TabsLayout() {
         options={{
           title: 'Inventario',
           tabBarLabel: 'Inventario',
-          href: hrefSiHabilitado(sistema?.inventarioHabilitado),
+          href: href(sistema?.inventarioHabilitado, noEsVendedor),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="cube-outline" size={size} color={color} />
           ),
@@ -96,7 +102,7 @@ export default function TabsLayout() {
         options={{
           title: 'Facturación',
           tabBarLabel: 'Facturas',
-          href: hrefSiHabilitado(sistema?.facturacionHabilitada),
+          href: href(sistema?.facturacionHabilitada, noEsVendedor),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="document-text-outline" size={size} color={color} />
           ),
