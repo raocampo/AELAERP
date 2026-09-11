@@ -35,11 +35,14 @@ const h = StyleSheet.create({
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  const { sistema, usuario } = useAuth();
+  const { sistema, usuario, puede } = useAuth();
 
   // El vendedor (rol de campo) no ve POS/Mesas/Inventario/Facturas — sus
   // pantallas propias llegan en la Fase 1 del módulo Agente Vendedor.
   const noEsVendedor = !esVendedor(usuario?.rol);
+  // El tab "Vendedor" lo ve quien tenga el permiso (vendedor, y también
+  // admin/supervisor para supervisión) — no depende de un módulo del tenant.
+  const veTabVendedor = puede('vendedor.ver');
 
   // Altura del tab bar: 56 fijos + inset inferior del dispositivo (botones de nav)
   const TAB_HEIGHT = 56 + insets.bottom;
@@ -105,6 +108,17 @@ export default function TabsLayout() {
           href: href(sistema?.facturacionHabilitada, noEsVendedor),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="document-text-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="vendedor"
+        options={{
+          title: 'Mis Clientes',
+          tabBarLabel: 'Vendedor',
+          href: href(true, veTabVendedor),
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="briefcase-outline" size={size} color={color} />
           ),
         }}
       />

@@ -32,9 +32,11 @@ const AuthContext = createContext<AuthState & AuthActions>({} as AuthState & Aut
 // (sesión restaurada de una versión vieja de la app sin el campo todavía)
 // se trata como habilitado, hasta que recargarSistema() lo corrija.
 export function primerTabDisponible(sistema: Sistema | null, usuario?: Usuario | null): Href {
-  // El vendedor no tiene POS/Inventario/Facturas — sus pantallas propias
-  // llegan en la Fase 1 del módulo. Hasta entonces cae a Configuración.
-  if (usuario && esVendedor(usuario.rol)) return '/(tabs)/configuracion';
+  // El vendedor no tiene POS/Inventario/Facturas — entra directo a su
+  // tab de "Mis Clientes" (módulo Agente Vendedor).
+  // Cast temporal: router.d.ts (rutas tipadas) se regenera recién al correr
+  // `expo start`/`expo prebuild`; la carpeta vendedor/ es nueva.
+  if (usuario && esVendedor(usuario.rol)) return '/(tabs)/vendedor' as Href;
   if (!sistema || sistema.posHabilitado !== false) return '/(tabs)/pos';
   if (sistema.inventarioHabilitado !== false) return '/(tabs)/inventario';
   if (sistema.facturacionHabilitada !== false) return '/(tabs)/facturas';

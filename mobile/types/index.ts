@@ -152,3 +152,33 @@ export interface ResumenInventario {
   stockBajo: number;
   sinStock: number;
 }
+
+// ── Módulo Agente Vendedor (docs/roadmap-agente-vendedor.md) ──────────────
+export interface ClienteVendedor {
+  id: number;
+  identificacion: string;
+  tipoIdentificacion: string;
+  razonSocial: string;
+  nombreComercial?: string | null;
+  direccion?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+  vendedorId?: number | null;
+  saldoPendiente: number;
+}
+
+export interface FacturaPendienteVendedor {
+  id: number;
+  numeroFactura: string;
+  fechaEmision: string;
+  importeTotal: number;
+  cobrado: number;
+  notaCredito: number;
+  saldo: number;
+}
+
+export interface EstadoCuentaVendedor {
+  cliente: ClienteVendedor;
+  saldoTotal: number;
+  facturasPendientes: FacturaPendienteVendedor[];
+}
