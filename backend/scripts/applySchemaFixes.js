@@ -78,6 +78,10 @@ const FIXES = [
   // diferencia de "createdAt" que sigue siendo el timestamp de auditoría de
   // cuándo se creó el registro) (2026-08-27)
   `ALTER TABLE "proformas" ADD COLUMN IF NOT EXISTS "fechaEmision" TIMESTAMP(3)`,
+  // Módulo Agente Vendedor Fase 2 — un "pedido" del vendedor es una proforma
+  // con vendedorId seteado (docs/roadmap-agente-vendedor.md) (2026-09-11)
+  `ALTER TABLE "proformas" ADD COLUMN IF NOT EXISTS "vendedorId" INTEGER`,
+  `CREATE INDEX IF NOT EXISTS "proformas_vendedorId_idx" ON "proformas"("vendedorId")`,
   // Firma digital y sello de empresa para proformas (2026-06-20)
   `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "firmaUrl" TEXT`,
   `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "selloUrl" TEXT`,

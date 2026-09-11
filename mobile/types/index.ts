@@ -182,3 +182,16 @@ export interface EstadoCuentaVendedor {
   saldoTotal: number;
   facturasPendientes: FacturaPendienteVendedor[];
 }
+
+export interface PedidoVendedor {
+  id: number;
+  numero: string;
+  razonSocial: string;
+  identificacion: string;
+  clienteId: number | null;
+  importeTotal: number;
+  estado: string;
+  fechaEmision: string;
+  createdAt: string;
+  facturaId: number | null;
+}

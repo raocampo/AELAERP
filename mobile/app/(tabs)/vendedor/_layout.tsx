@@ -11,6 +11,8 @@ export default function VendedorLayout() {
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="cliente" options={{ title: 'Cliente', headerBackTitle: 'Mis Clientes' }} />
+      <Stack.Screen name="pedido" options={{ title: 'Nuevo Pedido', headerBackTitle: 'Cliente' }} />
+      <Stack.Screen name="pedidos" options={{ title: 'Mis Pedidos', headerBackTitle: 'Mis Clientes' }} />
     </Stack>
   );
 }

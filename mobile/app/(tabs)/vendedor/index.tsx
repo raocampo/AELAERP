@@ -69,6 +69,13 @@ export default function MisClientesScreen() {
           <Text style={s.resNum}>${totalPorCobrar.toFixed(2)}</Text>
           <Text style={s.resLbl}>Por cobrar</Text>
         </View>
+        <TouchableOpacity
+          style={[s.resCard, s.resCardBtn]}
+          onPress={() => router.push('/(tabs)/vendedor/pedidos')}
+        >
+          <Ionicons name="receipt-outline" size={20} color="#1e40af" />
+          <Text style={s.resLbl}>Mis pedidos</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={s.searchBox}>
@@ -138,6 +145,7 @@ const s = StyleSheet.create({
   },
   resNum: { fontSize: 20, fontWeight: '800', color: '#1e40af' },
   resLbl: { fontSize: 11, color: '#64748b', marginTop: 2, fontWeight: '600' },
+  resCardBtn: { justifyContent: 'center' },
   searchBox: {
     flexDirection: 'row', alignItems: 'center', marginHorizontal: 12, marginBottom: 8,
     backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10,

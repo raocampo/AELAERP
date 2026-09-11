@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import api from '../../../services/api';
 import type { EstadoCuentaVendedor } from '../../../types';
 
@@ -14,6 +14,7 @@ function formatFecha(iso: string) {
 export default function DetalleClienteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
+  const router = useRouter();
   const [datos, setDatos] = useState<EstadoCuentaVendedor | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -85,6 +86,18 @@ export default function DetalleClienteScreen() {
             ${saldoTotal.toFixed(2)}
           </Text>
         </View>
+
+        <TouchableOpacity
+          style={s.pedidoBtn}
+          activeOpacity={0.85}
+          onPress={() => router.push({
+            pathname: '/(tabs)/vendedor/pedido',
+            params: { clienteId: cliente.id, nombre: cliente.nombreComercial || cliente.razonSocial },
+          })}
+        >
+          <Ionicons name="add-circle-outline" size={19} color="#fff" />
+          <Text style={s.pedidoBtnTxt}>Nuevo pedido</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={s.seccionTitulo}>Facturas pendientes</Text>
@@ -134,6 +147,11 @@ const s = StyleSheet.create({
   saldoNum: { fontSize: 20, fontWeight: '800' },
   saldoRojo: { color: '#dc2626' },
   saldoVerde: { color: '#16a34a' },
+  pedidoBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#1e40af', borderRadius: 10, paddingVertical: 12, marginTop: 12,
+  },
+  pedidoBtnTxt: { color: '#fff', fontSize: 14, fontWeight: '700' },
   seccionTitulo: { fontSize: 13, fontWeight: '700', color: '#64748b', marginTop: 16, marginHorizontal: 16, marginBottom: 4, textTransform: 'uppercase' },
   lista: { flex: 1 },
   listaContent: { paddingHorizontal: 12, paddingBottom: 20 },

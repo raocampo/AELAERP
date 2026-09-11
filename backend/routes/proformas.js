@@ -14,6 +14,7 @@ const { proteger, permitir } = require('../middleware/auth');
 const { normalizarRol }      = require('../utils/roles');
 const prisma                 = require('../config/prisma');
 const { enviarConFallback }  = require('../utils/email');
+const { siguienteSecuencial, formatNumero, calcularTotales } = require('../utils/proformas');
 
 // ─── Helper: resolver logo (igual que sri.js) ─────────────────────────────────
 function _resolverLogo(logoUrl) {
@@ -374,48 +375,10 @@ router.use(proteger);
 // usar el proxy global que apunta a DATABASE_URL
 router.use((req, _res, next) => { if (!req.prisma) req.prisma = prisma; next(); });
 
-// ─── Helper: siguiente secuencial ────────────────────────────────────────────
-async function siguienteSecuencial(prisma, empresaId) {
-  const last = await prisma.$queryRawUnsafe(
-    `SELECT COALESCE(MAX("secuencial"), 0) + 1 AS next FROM proformas WHERE "empresaId" = $1`,
-    empresaId
-  );
-  return parseInt(last[0]?.next || 1, 10);
-}
-
-function formatNumero(sec) {
-  return `PRF-001-${String(sec).padStart(9, '0')}`;
-}
-
-function calcularTotales(detalles) {
-  let sub0 = 0, sub5 = 0, sub15 = 0, totalDesc = 0, totalIva = 0;
-  for (const d of detalles) {
-    const cant   = parseFloat(d.cantidad)       || 0;
-    const precio = parseFloat(d.precioUnitario) || 0;
-    const desc   = parseFloat(d.descuento)      || 0;
-    const iva    = parseInt(d.ivaPorcentaje)    || 0;
-    const sub    = cant * precio - desc;
-    totalDesc += desc;
-    if (iva === 0 || iva === 6 || iva === 7) sub0  += sub;
-    if (iva === 5)  sub5  += sub;
-    if (iva === 15) sub15 += sub;
-    if (iva === 5)  totalIva += sub * 0.05;
-    if (iva === 15) totalIva += sub * 0.15;
-  }
-  return {
-    subtotal0:      parseFloat(sub0.toFixed(2)),
-    subtotal5:      parseFloat(sub5.toFixed(2)),
-    subtotal15:     parseFloat(sub15.toFixed(2)),
-    totalDescuento: parseFloat(totalDesc.toFixed(2)),
-    totalIva:       parseFloat(totalIva.toFixed(2)),
-    importeTotal:   parseFloat((sub0 + sub5 + sub15 + totalIva).toFixed(2)),
-  };
-}
-
 // ─── GET / — listar proformas con filtros ─────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { estado, q, desde, hasta, page = 1, limit = 25 } = req.query;
+    const { estado, q, desde, hasta, vendedorId, page = 1, limit = 25 } = req.query;
     const empresaId = req.empresa.id;
     const offset    = (parseInt(page) - 1) * parseInt(limit);
 
@@ -428,16 +391,20 @@ router.get('/', async (req, res) => {
     // auditoría de cuándo se creó el registro. COALESCE cubre proformas
     // creadas antes de que existiera esta columna.
     const fechaOrden = `COALESCE(p."fechaEmision", p."createdAt")`;
-    if (estado) { where += ` AND p.estado = $${i++}`; params.push(estado); }
-    if (q)      { where += ` AND (p."razonSocial" ILIKE $${i} OR p.numero ILIKE $${i})`; params.push(`%${q}%`); i++; }
-    if (desde)  { where += ` AND ${fechaOrden} >= $${i++}`; params.push(desde); }
-    if (hasta)  { where += ` AND ${fechaOrden} <= $${i++}`; params.push(hasta); }
+    if (estado)     { where += ` AND p.estado = $${i++}`; params.push(estado); }
+    if (q)          { where += ` AND (p."razonSocial" ILIKE $${i} OR p.numero ILIKE $${i})`; params.push(`%${q}%`); i++; }
+    if (desde)      { where += ` AND ${fechaOrden} >= $${i++}`; params.push(desde); }
+    if (hasta)      { where += ` AND ${fechaOrden} <= $${i++}`; params.push(hasta); }
+    if (vendedorId) { where += ` AND p."vendedorId" = $${i++}`; params.push(parseInt(vendedorId, 10)); }
 
     const countSql = `SELECT COUNT(*) FROM proformas p ${where}`;
     const dataSql  = `
       SELECT p.id, p.numero, p."razonSocial", p."identificacion",
-             p."importeTotal", p.estado, p."vigenciaHasta", p."createdAt", p."fechaEmision", p."facturaId"
-      FROM proformas p ${where}
+             p."importeTotal", p.estado, p."vigenciaHasta", p."createdAt", p."fechaEmision", p."facturaId",
+             p."vendedorId", u.nombre AS "vendedorNombre"
+      FROM proformas p
+      LEFT JOIN usuarios u ON u.id = p."vendedorId"
+      ${where}
       ORDER BY ${fechaOrden} DESC
       LIMIT $${i} OFFSET $${i+1}
     `;

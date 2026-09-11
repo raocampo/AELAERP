@@ -7,6 +7,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../context/useAuth';
+import { tienePermiso } from '../../utils/roles';
 import './ListaProformas.css';
 
 const ESTADOS = [
@@ -39,17 +41,26 @@ function fmtMonto(v) {
 
 export default function ListaProformas() {
   const navigate = useNavigate();
+  const { usuario } = useAuth();
+  const veVendedor = tienePermiso(usuario?.rol, 'vendedor.asignar', usuario?.permisosExtra);
   const [proformas, setProformas] = useState([]);
   const [total,     setTotal]     = useState(0);
   const [cargando,  setCargando]  = useState(true);
-  const [filtros, setFiltros] = useState({ q: '', estado: '', page: 1 });
+  const [vendedores, setVendedores] = useState([]);
+  const [filtros, setFiltros] = useState({ q: '', estado: '', vendedorId: '', page: 1 });
+
+  useEffect(() => {
+    if (!veVendedor) return;
+    api.get('/vendedor/agentes').then((res) => setVendedores(res.data?.data || [])).catch(() => {});
+  }, [veVendedor]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
       const params = new URLSearchParams();
-      if (filtros.q)      params.set('q',      filtros.q);
-      if (filtros.estado) params.set('estado', filtros.estado);
+      if (filtros.q)          params.set('q',          filtros.q);
+      if (filtros.estado)     params.set('estado',     filtros.estado);
+      if (filtros.vendedorId) params.set('vendedorId', filtros.vendedorId);
       params.set('page',  filtros.page);
       params.set('limit', 25);
       const res = await api.get(`/proformas?${params}`);
@@ -99,6 +110,17 @@ export default function ListaProformas() {
             </button>
           ))}
         </div>
+        {veVendedor && vendedores.length > 0 && (
+          <select
+            className="prf-filtro-search"
+            style={{ maxWidth: 220 }}
+            value={filtros.vendedorId}
+            onChange={e => handleFiltro('vendedorId', e.target.value)}
+          >
+            <option value="">Todos los vendedores</option>
+            {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}
+          </select>
+        )}
       </div>
 
       {/* Tabla */}
@@ -121,6 +143,7 @@ export default function ListaProformas() {
                   <th>Cliente</th>
                   <th>Total</th>
                   <th>Estado</th>
+                  {veVendedor && <th>Vendedor</th>}
                   <th>Vigencia hasta</th>
                   <th>Fecha</th>
                   <th>Acciones</th>
@@ -136,6 +159,11 @@ export default function ListaProformas() {
                     </td>
                     <td className="prf-monto">{fmtMonto(p.importetotal || p.importeTotal)}</td>
                     <td><BadgeEstado estado={p.estado} /></td>
+                    {veVendedor && (
+                      <td style={{ fontSize: '0.85rem', color: p.vendedorNombre ? '#1e293b' : '#94a3b8' }}>
+                        {p.vendedorNombre || '—'}
+                      </td>
+                    )}
                     <td>{fmtFecha(p.vigenciahasta || p.vigenciaHasta)}</td>
                     <td>{fmtFecha(p.fechaemision || p.fechaEmision || p.createdat || p.createdAt)}</td>
                     <td onClick={e => e.stopPropagation()}>

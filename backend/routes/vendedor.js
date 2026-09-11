@@ -10,6 +10,7 @@ const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { normalizarRol } = require('../utils/roles');
 const { scopeVendedor, saldoPendientePorCliente, estadoCuentaCliente } = require('../utils/vendedor');
+const { siguienteSecuencial, formatNumero, calcularTotales } = require('../utils/proformas');
 
 router.use(proteger);
 // req.prisma solo lo setea resolverTenant para tenants SaaS por subdominio;
@@ -150,6 +151,106 @@ router.post('/asignar', autorizarPermiso('vendedor.asignar'), async (req, res) =
   } catch (err) {
     console.error('POST /vendedor/asignar:', err);
     res.status(500).json({ success: false, mensaje: 'No se pudo asignar los clientes' });
+  }
+});
+
+// ─── Fase 2 — Pedidos del vendedor (proformas con vendedorId) ─────────────────
+// Ver docs/roadmap-agente-vendedor.md. Un "pedido" es una proforma normal:
+// no afecta inventario, la oficina la convierte a factura con el flujo
+// existente (marcar-convertida). Este wrapper solo fuerza los campos que
+// garantizan el scoping (vendedorId, creadoPor, cliente de la cartera) y
+// arranca en ENVIADA (no BORRADOR) porque ya es un pedido "en firme" tomado
+// en la calle, no un borrador a medio llenar.
+
+// POST /api/vendedor/pedidos — crear un pedido para un cliente de mi cartera.
+router.post('/pedidos', autorizarPermiso('vendedor.pedidos'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const eId = empresaId(req);
+    const { clienteId, detalles = [], observaciones } = req.body || {};
+
+    const cid = Number.parseInt(clienteId, 10);
+    if (!Number.isFinite(cid)) {
+      return res.status(400).json({ success: false, mensaje: 'Selecciona un cliente' });
+    }
+    if (!Array.isArray(detalles) || detalles.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'Debe incluir al menos un producto' });
+    }
+
+    // Sin walk-in: el cliente debe existir y estar en la cartera del
+    // vendedor (scopeVendedor devuelve {} para admin/supervisor, que puede
+    // tomar pedido para cualquier cliente de la empresa).
+    const cliente = await db.clientes.findFirst({
+      where: { id: cid, empresaId: eId, activo: true, ...scopeVendedor(req.usuario) },
+      select: {
+        id: true, tipoIdentificacion: true, identificacion: true,
+        razonSocial: true, direccion: true, telefono: true, email: true,
+      },
+    });
+    if (!cliente) {
+      return res.status(404).json({ success: false, mensaje: 'Cliente no encontrado o no está en tu cartera' });
+    }
+
+    const totales = calcularTotales(detalles);
+    const sec     = await siguienteSecuencial(db, eId);
+    const numero  = formatNumero(sec);
+    const rol     = normalizarRol(req.usuario.rol);
+    const vendedorId = rol === 'vendedor' ? req.usuario.id : null;
+
+    const [row] = await db.$queryRawUnsafe(`
+      INSERT INTO proformas (
+        "empresaId", "numero", "secuencial",
+        "tipoIdentificacion", "identificacion", "razonSocial",
+        "direccion", "email", "telefono", "clienteId",
+        "subtotal0", "subtotal5", "subtotal15",
+        "totalDescuento", "totalIva", "importeTotal",
+        "detalles", "observaciones",
+        "estado", "creadoPor", "vendedorId", "fechaEmision"
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+        $11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,NOW()
+      ) RETURNING *
+    `,
+      eId, numero, sec,
+      cliente.tipoIdentificacion, cliente.identificacion, cliente.razonSocial,
+      cliente.direccion || null, cliente.email || null, cliente.telefono || null, cliente.id,
+      totales.subtotal0, totales.subtotal5, totales.subtotal15,
+      totales.totalDescuento, totales.totalIva, totales.importeTotal,
+      JSON.stringify(detalles), observaciones || null,
+      'ENVIADA', req.usuario.id, vendedorId,
+    );
+
+    res.status(201).json({ success: true, data: row });
+  } catch (err) {
+    console.error('POST /vendedor/pedidos:', err);
+    res.status(500).json({ success: false, mensaje: 'No se pudo crear el pedido' });
+  }
+});
+
+// GET /api/vendedor/pedidos — mis pedidos (los de vendedorId = yo). admin/
+// supervisor ven todos los de la empresa.
+router.get('/pedidos', autorizarPermiso('vendedor.pedidos'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const eId = empresaId(req);
+    const soloMios = normalizarRol(req.usuario.rol) === 'vendedor';
+
+    let where = `WHERE p."empresaId" = $1`;
+    const params = [eId];
+    if (soloMios) { where += ` AND p."vendedorId" = $2`; params.push(req.usuario.id); }
+
+    const rows = await db.$queryRawUnsafe(`
+      SELECT p.id, p.numero, p."razonSocial", p."identificacion", p."clienteId",
+             p."importeTotal", p.estado, p."fechaEmision", p."createdAt", p."facturaId"
+      FROM proformas p ${where}
+      ORDER BY p."createdAt" DESC
+      LIMIT 100
+    `, ...params);
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('GET /vendedor/pedidos:', err);
+    res.status(500).json({ success: false, mensaje: 'No se pudieron cargar los pedidos' });
   }
 });
 
