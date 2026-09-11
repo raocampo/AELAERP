@@ -3,6 +3,20 @@
 Planeado el 2026-09-10. Épico de varias sesiones. Cada fase es
 independientemente desplegable; se hace una por sesión.
 
+## Estado
+
+- ✅ **Fase 0 — Fundación** (commits `26be142`, `e36b098`): rol
+  `vendedor` + permisos (backend/frontend), y la app móvil ya distingue
+  el rol (tabs recortados, `puede()` en `AuthContext`). La capa offline
+  genérica se difirió a antes de la Fase 5 (ver nota más abajo).
+- ✅ **Fase 1 — Cartera de clientes asignada** (commits `21ebe87`,
+  `babab0c`, `9394a52`): `clientes.vendedorId`, scoping por usuario,
+  `GET/POST /api/vendedor/*`, asignación masiva desde Gestión de
+  Clientes (web), y el tab "Mis Clientes" + detalle/estado de cuenta en
+  la app móvil. Verificado con tests + script e2e contra Postgres local
+  — el resto (mobile) solo con `tsc --noEmit` (sin dispositivo a mano).
+- ⏭️ **Fase 2 — Pedidos**: siguiente.
+
 ## Decisiones tomadas con el usuario
 
 - **Qué hace el vendedor**: toma **pedidos** (proformas, no factura),
