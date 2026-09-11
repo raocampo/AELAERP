@@ -65,10 +65,13 @@ export default function MisClientesScreen() {
           <Text style={s.resNum}>{clientes.length}</Text>
           <Text style={s.resLbl}>Clientes</Text>
         </View>
-        <View style={[s.resCard, { flex: 1 }]}>
+        <TouchableOpacity
+          style={[s.resCard, { flex: 1 }]}
+          onPress={() => router.push('/(tabs)/vendedor/cobros')}
+        >
           <Text style={s.resNum}>${totalPorCobrar.toFixed(2)}</Text>
           <Text style={s.resLbl}>Por cobrar</Text>
-        </View>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[s.resCard, s.resCardBtn]}
           onPress={() => router.push('/(tabs)/vendedor/pedidos')}

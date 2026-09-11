@@ -93,4 +93,46 @@ async function estadoCuentaCliente(db, empresaId, clienteId) {
   return { saldoTotal, facturasPendientes };
 }
 
-module.exports = { scopeVendedor, saldoPendientePorCliente, estadoCuentaCliente, agruparSuma, ESTADOS_FACTURA_VALIDOS };
+// Facturas con saldo > 0 de un conjunto de clientes, en formato plano (para
+// la pantalla "Cobros pendientes" del vendedor — no agrupado por cliente
+// como saldoPendientePorCliente, sino una lista única ordenada por
+// antigüedad). Mismo cálculo de saldo que el resto del módulo.
+async function facturasPendientesPorClientes(db, empresaId, clienteIds) {
+  if (!Array.isArray(clienteIds) || clienteIds.length === 0) return [];
+
+  const facturas = await db.facturas.findMany({
+    where: {
+      empresaId,
+      clienteId: { in: clienteIds },
+      anulada: false,
+      estadoSri: { in: ESTADOS_FACTURA_VALIDOS },
+    },
+    select: {
+      id: true, numeroFactura: true, fechaEmision: true, importeTotal: true,
+      clienteId: true, razonSocialComprador: true,
+    },
+    orderBy: { fechaEmision: 'asc' },
+  });
+  const fIds = facturas.map((f) => f.id);
+  const [cobrados, notasCredito] = await Promise.all([
+    agruparSuma(db.cobros_cliente, { empresaId, facturaId: { in: fIds }, anulado: false }, 'facturaId', 'monto'),
+    agruparSuma(db.notas_credito, { empresaId, facturaId: { in: fIds }, estadoSri: 'AUTORIZADO', anulada: false }, 'facturaId', 'importeTotal'),
+  ]);
+
+  return facturas
+    .map((f) => ({
+      id: f.id,
+      numeroFactura: f.numeroFactura,
+      fechaEmision: f.fechaEmision,
+      clienteId: f.clienteId,
+      clienteNombre: f.razonSocialComprador,
+      importeTotal: Number(f.importeTotal),
+      saldo: round2(Number(f.importeTotal) - (cobrados.get(f.id) || 0) - (notasCredito.get(f.id) || 0)),
+    }))
+    .filter((f) => f.saldo > 0.005);
+}
+
+module.exports = {
+  scopeVendedor, saldoPendientePorCliente, estadoCuentaCliente,
+  facturasPendientesPorClientes, agruparSuma, ESTADOS_FACTURA_VALIDOS,
+};

@@ -94,7 +94,7 @@ const PERMISSIONS = {
   // quien cobra en POS y necesita elegir a qué cuenta fue una transferencia/
   // tarjeta — mismos roles que pos.usar, sin darles acceso al Libro de
   // Bancos completo (eso sigue siendo bancos.ver).
-  'bancos.consultar':['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero'],
+  'bancos.consultar':['admin', 'supervisor', 'facturador', 'secretaria', 'operador', 'cajero', 'vendedor'],
   'cheques.gestionar':['admin', 'supervisor', 'contador'],
 
   'cxc.ver':             ['admin', 'supervisor', 'contador', 'asistente_contabilidad', 'facturador', 'secretaria'],

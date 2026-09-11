@@ -113,7 +113,16 @@ export default function DetalleClienteScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={s.facturaCard}>
+          <TouchableOpacity
+            style={s.facturaCard}
+            onPress={() => router.push({
+              pathname: '/(tabs)/vendedor/cobro',
+              params: {
+                facturaId: item.id, numeroFactura: item.numeroFactura,
+                clienteNombre: cliente.nombreComercial || cliente.razonSocial, saldo: item.saldo.toFixed(2),
+              },
+            })}
+          >
             <View style={{ flex: 1 }}>
               <Text style={s.facturaNumero}>{item.numeroFactura}</Text>
               <Text style={s.facturaFecha}>{formatFecha(item.fechaEmision)}</Text>
@@ -122,7 +131,8 @@ export default function DetalleClienteScreen() {
               <Text style={s.facturaSaldo}>${item.saldo.toFixed(2)}</Text>
               <Text style={s.facturaTotal}>de ${item.importeTotal.toFixed(2)}</Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={16} color="#cbd5e1" style={{ marginLeft: 6 }} />
+          </TouchableOpacity>
         )}
       />
     </SafeAreaView>

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { scopeVendedor, saldoPendientePorCliente, estadoCuentaCliente } = require('../utils/vendedor');
+const { scopeVendedor, saldoPendientePorCliente, estadoCuentaCliente, facturasPendientesPorClientes } = require('../utils/vendedor');
 
 test('scopeVendedor acota solo al rol vendedor', () => {
   assert.deepEqual(scopeVendedor({ rol: 'vendedor', id: 7 }), { vendedorId: 7 });
@@ -84,4 +84,28 @@ test('estadoCuentaCliente lista solo facturas con saldo > 0 y el total', async (
   assert.equal(r.facturasPendientes[0].numeroFactura, 'F-2');
   assert.equal(r.facturasPendientes[0].saldo, 80);
   assert.equal(r.saldoTotal, 80);
+});
+
+test('facturasPendientesPorClientes aplana facturas de varios clientes y excluye las saldadas', async () => {
+  const db = crearDb({
+    facturas: [
+      { id: 1, empresaId: 1, clienteId: 10, numeroFactura: 'F-1', razonSocialComprador: 'Cliente A', fechaEmision: new Date('2026-02-01'), importeTotal: 100, anulada: false, estadoSri: 'AUTORIZADO' },
+      { id: 2, empresaId: 1, clienteId: 20, numeroFactura: 'F-2', razonSocialComprador: 'Cliente B', fechaEmision: new Date('2026-01-01'), importeTotal: 50, anulada: false, estadoSri: 'AUTORIZADO' },
+      { id: 3, empresaId: 1, clienteId: 20, numeroFactura: 'F-3', razonSocialComprador: 'Cliente B', fechaEmision: new Date('2026-03-01'), importeTotal: 30, anulada: false, estadoSri: 'AUTORIZADO' },
+    ],
+    cobros: [{ facturaId: 3, empresaId: 1, monto: 30, anulado: false }], // F-3 saldada, se excluye
+  });
+  const r = await facturasPendientesPorClientes(db, 1, [10, 20]);
+  assert.equal(r.length, 2);
+  assert.deepEqual(new Set(r.map((f) => f.numeroFactura)), new Set(['F-1', 'F-2']));
+  const f2 = r.find((f) => f.numeroFactura === 'F-2');
+  assert.equal(f2.clienteNombre, 'Cliente B');
+  assert.equal(f2.saldo, 50);
+  const f1 = r.find((f) => f.numeroFactura === 'F-1');
+  assert.equal(f1.saldo, 100);
+});
+
+test('facturasPendientesPorClientes devuelve vacío sin clientes', async () => {
+  const r = await facturasPendientesPorClientes(crearDb(), 1, []);
+  assert.equal(r.length, 0);
 });

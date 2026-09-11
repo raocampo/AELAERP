@@ -879,6 +879,93 @@ function TabReportesCxC() {
   );
 }
 
+// ─── Tab Cobros de vendedores pendientes de verificar ───────────
+// Ver docs/roadmap-agente-vendedor.md Fase 3: el vendedor ya cobró en la
+// calle (el dinero está en caja/banco desde ese momento) pero el asiento
+// contable de partida doble se genera recién acá, bajo revisión humana.
+function TabCobrosVendedorPendientes() {
+  const [cobros, setCobros] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [verificando, setVerificando] = useState(null);
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    try {
+      const r = await api.get('/cxc/cobros/pendientes-verificar');
+      setCobros(r.data?.data || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const verificar = async (cobro) => {
+    if (!window.confirm(`¿Generar el asiento contable del cobro ${cobro.numero} por $${formatMoney(cobro.monto)}?`)) return;
+    setVerificando(cobro.id);
+    try {
+      await api.post(`/cxc/cobros/${cobro.id}/verificar`);
+      await cargar();
+    } catch (err) {
+      alert(err.response?.data?.mensaje || 'No se pudo generar el asiento');
+    } finally {
+      setVerificando(null);
+    }
+  };
+
+  return (
+    <div>
+      <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: 'var(--color-text-muted,#64748b)' }}>
+        Cobros registrados por vendedores en ruta. El dinero ya está reflejado en Caja/Bancos —
+        al verificar se genera el asiento contable de partida doble.
+      </p>
+      {cargando ? (
+        <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted, #64748b)' }}>Cargando...</p>
+      ) : cobros.length === 0 ? (
+        <div className="bancos-empty">
+          <div className="bancos-empty-icon">✅</div>
+          <p>Sin cobros pendientes de verificar</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="movimientos-tabla">
+            <thead>
+              <tr>
+                <th>N° Recibo</th>
+                <th>Fecha</th>
+                <th>Factura</th>
+                <th>Vendedor</th>
+                <th>Método</th>
+                <th style={{ textAlign: 'right' }}>Monto</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cobros.map((c) => (
+                <tr key={c.id}>
+                  <td style={{ fontWeight: 600 }}>{c.numero}</td>
+                  <td>{formatFechaCorta(c.fecha)}</td>
+                  <td>{c.factura?.numeroFactura} — {c.cliente?.nombreComercial || c.cliente?.razonSocial || c.factura?.razonSocialComprador}</td>
+                  <td>{c.usuario?.nombre || '—'}</td>
+                  <td>{c.metodoPago}{c.banco ? ` (${c.banco.nombre})` : ''}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>${formatMoney(c.monto)}</td>
+                  <td>
+                    <button className="btn btn-primary btn-sm" disabled={verificando === c.id} onClick={() => verificar(c)}>
+                      {verificando === c.id ? 'Generando...' : 'Verificar y generar asiento'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Tab Anticipos de Clientes ───────────────────────────────────
 function ModalAnticipo({ onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -1130,6 +1217,7 @@ export default function CuentasPorCobrarHub() {
     { id: 'vigentes',   label: 'Cuentas vigentes' },
     { id: 'canceladas', label: 'Cuentas canceladas' },
     { id: 'historial',  label: 'Historial de cobros' },
+    { id: 'cobros-vendedor', label: 'Cobros de vendedores' },
     { id: 'anticipos',  label: 'Anticipos' },
     { id: 'cheques',    label: 'Cheques' },
     { id: 'ordenes',    label: 'Órdenes de pago' },
@@ -1154,6 +1242,7 @@ export default function CuentasPorCobrarHub() {
       {tabActivo === 'vigentes'   && <TabFacturas estado="vigentes"   onCobrar={setModalCobro} key={`vig-${refresco}`} />}
       {tabActivo === 'canceladas' && <TabFacturas estado="canceladas" key={`can-${refresco}`} />}
       {tabActivo === 'historial'  && <TabHistorial key={`hist-${refresco}`} />}
+      {tabActivo === 'cobros-vendedor' && <TabCobrosVendedorPendientes key={`cv-${refresco}`} />}
       {tabActivo === 'anticipos'  && <TabAnticiposCliente key={`ant-${refresco}`} />}
       {tabActivo === 'cheques'    && <TabChequesRecibidos key={`chq-${refresco}`} />}
       {tabActivo === 'ordenes'    && <TabProximamente nombre="Órdenes de pago" />}

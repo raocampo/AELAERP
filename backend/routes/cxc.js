@@ -421,6 +421,62 @@ router.post('/cobros', autorizarPermiso('cxc.gestionar'), async (req, res) => {
   }
 });
 
+// ─── Cobros de vendedores pendientes de verificar ─────────────────────────────
+// Ver docs/roadmap-agente-vendedor.md Fase 3: el vendedor registra un cobro en
+// ruta (backend/routes/vendedor.js POST /cobros) que ya generó su movimiento
+// de caja/banco, pero deja el cobro sin asiento (asientoId = null) — bajo el
+// flujo normal de este archivo (POST /cobros de arriba) eso nunca pasa, así
+// que "asientoId IS NULL" identifica exactamente esos cobros sin necesitar
+// una columna nueva.
+
+// GET /api/cxc/cobros/pendientes-verificar
+router.get('/cobros/pendientes-verificar', autorizarPermiso('cxc.ver'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const cobros = await db.cobros_cliente.findMany({
+      where: { empresaId, asientoId: null, anulado: false },
+      include: {
+        factura: { select: { numeroFactura: true, razonSocialComprador: true } },
+        cliente: { select: { razonSocial: true, nombreComercial: true } },
+        usuario: { select: { nombre: true } },
+        banco: { select: { nombre: true } },
+      },
+      orderBy: { fecha: 'asc' },
+    });
+    res.json({ success: true, data: cobros });
+  } catch (error) {
+    console.error('GET /cxc/cobros/pendientes-verificar:', error);
+    res.status(500).json({ success: false, mensaje: 'No se pudieron cargar los cobros pendientes de verificar' });
+  }
+});
+
+// POST /api/cxc/cobros/:id/verificar — genera el asiento contable de un cobro
+// registrado por un vendedor en ruta (el dinero ya está en caja/banco desde
+// que se creó; esto solo formaliza la partida doble).
+router.post('/cobros/:id/verificar', autorizarPermiso('cxc.gestionar'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const empresaId = obtenerEmpresaId(req);
+    const id = parseIntSafe(req.params.id);
+    if (!id) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const cobro = await db.cobros_cliente.findFirst({ where: { id, empresaId } });
+    if (!cobro) return res.status(404).json({ success: false, mensaje: 'Cobro no encontrado' });
+    if (cobro.anulado) return res.status(400).json({ success: false, mensaje: 'El cobro está anulado' });
+    if (cobro.asientoId) return res.status(400).json({ success: false, mensaje: 'Este cobro ya tiene un asiento generado' });
+
+    const { asiento } = await db.$transaction((tx) =>
+      crearAsientoCobroCliente({ cobroId: cobro.id, usuarioId: req.usuario?.id, fecha: cobro.fecha, db: tx })
+    );
+
+    res.json({ success: true, data: { asientoId: asiento.id } });
+  } catch (error) {
+    console.error('POST /cxc/cobros/:id/verificar:', error);
+    res.status(500).json({ success: false, mensaje: error.message || 'No se pudo generar el asiento' });
+  }
+});
+
 // GET /api/cxc/reporte/antiguedad — antigüedad de saldos por rangos
 router.get('/reporte/antiguedad', autorizarPermiso('cxc.ver'), async (req, res) => {
   try {
