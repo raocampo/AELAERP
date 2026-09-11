@@ -34,6 +34,7 @@ test('capacidadesPlan aplica restricciones correctas por plan', () => {
     tributarioHabilitado: false,
     bancosHabilitado: false,
     talentoHumanoHabilitado: false,
+    vendedorHabilitado: false,
   });
 
   assert.deepEqual(capacidadesPlan('medium'), {
@@ -50,6 +51,7 @@ test('capacidadesPlan aplica restricciones correctas por plan', () => {
     tributarioHabilitado: true,
     bancosHabilitado: true,
     talentoHumanoHabilitado: true,
+    vendedorHabilitado: true,
   });
 });
 

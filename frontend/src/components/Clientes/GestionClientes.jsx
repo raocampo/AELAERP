@@ -31,8 +31,11 @@ const FORM_INICIAL = {
 };
 
 export default function GestionClientes() {
-  const { usuario } = useAuth();
-  const puedeAsignarVendedor = tienePermiso(usuario?.rol, 'vendedor.asignar', usuario?.permisosExtra);
+  const { usuario, sistema } = useAuth();
+  // Módulo gateado por plan Medium/Pro (o "combo") — si el tenant no lo
+  // tiene, ocultar la asignación aunque el rol sí tenga el permiso.
+  const puedeAsignarVendedor = tienePermiso(usuario?.rol, 'vendedor.asignar', usuario?.permisosExtra)
+    && sistema?.vendedorHabilitado !== false;
 
   const [clientes, setClientes] = useState([]);
   const [total, setTotal] = useState(0);

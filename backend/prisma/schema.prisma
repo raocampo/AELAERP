@@ -351,6 +351,10 @@ model configuracion_sistema {
   // imprime el recibo de venta) porque físicamente son equipos distintos:
   // una en caja, otra en cocina.
   restauranteHabilitado     Boolean  @default(false)
+  // Módulo Agente Vendedor (docs/roadmap-agente-vendedor.md) — gateado por
+  // plan Medium/Pro (capacidadesPlan), disponible en Lite solo por "combo"
+  // vía modulosContratados explícito (2026-09-11).
+  vendedorHabilitado        Boolean  @default(true)
   costosFijosMensuales      Decimal  @default(0) @db.Decimal(12, 2)
   impresoraCocinaIp         String?  @db.VarChar(50)
   impresoraCocinaPuerto     Int?     @default(9100)

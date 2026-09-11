@@ -60,7 +60,8 @@ export default function TabsLayout() {
   // pantallas propias llegan en la Fase 1 del módulo Agente Vendedor.
   const noEsVendedor = !esVendedor(usuario?.rol);
   // El tab "Vendedor" lo ve quien tenga el permiso (vendedor, y también
-  // admin/supervisor para supervisión) — no depende de un módulo del tenant.
+  // admin/supervisor para supervisión) Y el tenant tenga el módulo
+  // contratado (plan Medium/Pro o combo — ver configuracionSistema.js).
   const veTabVendedor = puede('vendedor.ver');
 
   // Altura del tab bar: 56 fijos + inset inferior del dispositivo (botones de nav)
@@ -135,7 +136,7 @@ export default function TabsLayout() {
         options={{
           title: 'Mis Clientes',
           tabBarLabel: 'Vendedor',
-          href: href(true, veTabVendedor),
+          href: href(sistema?.vendedorHabilitado, veTabVendedor),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="briefcase-outline" size={size} color={color} />
           ),

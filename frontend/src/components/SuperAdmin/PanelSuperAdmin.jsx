@@ -36,12 +36,13 @@ const MODULOS_CATALOGO = [
   { key: 'tributarioHabilitado',     label: 'Tributario (Declaraciones/Ret. recibidas/Reportes)' },
   { key: 'bancosHabilitado',         label: 'Bancos' },
   { key: 'talentoHumanoHabilitado',  label: 'Talento Humano' },
+  { key: 'vendedorHabilitado',       label: 'Agente Vendedor (pedidos/cartera/cobros en ruta)' },
 ];
 
 // Presets rápidos — mismos módulos que capacidadesPlan() en el backend
 const PRESETS_PLAN = {
   lite:   ['facturacionHabilitada', 'cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado', 'comprasHabilitadas'],
-  medium: ['facturacionHabilitada', 'cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado', 'comprasHabilitadas', 'buzonSriHabilitado', 'tributarioHabilitado', 'bancosHabilitado', 'talentoHumanoHabilitado'],
+  medium: ['facturacionHabilitada', 'cajaDiariaHabilitada', 'posHabilitado', 'inventarioHabilitado', 'comprasHabilitadas', 'buzonSriHabilitado', 'tributarioHabilitado', 'bancosHabilitado', 'talentoHumanoHabilitado', 'vendedorHabilitado'],
   pro:    MODULOS_CATALOGO.map((m) => m.key),
 };
 

@@ -8,11 +8,17 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
+const { requiereModulo } = require('../middleware/modulos');
 const { normalizarRol } = require('../utils/roles');
 const { scopeVendedor, saldoPendientePorCliente, estadoCuentaCliente } = require('../utils/vendedor');
 const { siguienteSecuencial, formatNumero, calcularTotales } = require('../utils/proformas');
 
 router.use(proteger);
+// Módulo gateado por plan Medium/Pro (o "combo" vía modulosContratados) —
+// ver utils/configuracionSistema.js. Un tenant Lite sin combo recibe 403 en
+// TODA la ruta /api/vendedor, sea la app móvil o los usos embebidos en
+// Clientes/Proformas (web).
+router.use(requiereModulo('vendedorHabilitado'));
 // req.prisma solo lo setea resolverTenant para tenants SaaS por subdominio;
 // en monoinstancia queda undefined (mismo patrón que cxc.js/proformas.js).
 router.use((req, _res, next) => { req.prisma = req.prisma || prisma; next(); });

@@ -33,8 +33,11 @@ const AuthContext = createContext<AuthState & AuthActions>({} as AuthState & Aut
 // se trata como habilitado, hasta que recargarSistema() lo corrija.
 export function primerTabDisponible(sistema: Sistema | null, usuario?: Usuario | null): Href {
   // El vendedor no tiene POS/Inventario/Facturas — entra directo a su
-  // tab de "Mis Clientes" (módulo Agente Vendedor).
-  if (usuario && esVendedor(usuario.rol)) return '/(tabs)/vendedor';
+  // tab de "Mis Clientes" (módulo Agente Vendedor). Si el tenant perdió el
+  // módulo (downgrade de plan) cae a Configuración, único tab siempre visible.
+  if (usuario && esVendedor(usuario.rol)) {
+    return sistema?.vendedorHabilitado === false ? '/(tabs)/configuracion' : '/(tabs)/vendedor';
+  }
   if (!sistema || sistema.posHabilitado !== false) return '/(tabs)/pos';
   if (sistema.inventarioHabilitado !== false) return '/(tabs)/inventario';
   if (sistema.facturacionHabilitada !== false) return '/(tabs)/facturas';

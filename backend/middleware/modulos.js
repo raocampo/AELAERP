@@ -11,6 +11,7 @@ const MENSAJES = {
   tributarioHabilitado: 'El modulo Tributario esta deshabilitado en la configuracion del sistema',
   bancosHabilitado: 'El modulo de Bancos esta deshabilitado en la configuracion del sistema',
   restauranteHabilitado: 'El modulo de Mesas y Comandas esta deshabilitado en la configuracion del sistema',
+  vendedorHabilitado: 'El modulo de Agente Vendedor no esta disponible en tu plan actual',
 };
 
 const requiereModulo = (campo, mensajePersonalizado = null) => async (req, res, next) => {

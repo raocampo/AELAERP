@@ -20,7 +20,7 @@ const MODULOS_TODOS = [
   'comprasHabilitadas', 'buzonSriHabilitado',
   'contabilidadHabilitada', 'retencionesHabilitadas', 'liquidacionesHabilitadas',
   'atsHabilitado', 'tributarioHabilitado', 'bancosHabilitado',
-  'talentoHumanoHabilitado',
+  'talentoHumanoHabilitado', 'vendedorHabilitado',
 ];
 
 // ─── Normalizar prefijos de regalo/combo (JSON en texto -> array) ────────────
@@ -84,6 +84,7 @@ function capacidadesPlan(plan) {
         tributarioHabilitado:     false,
         bancosHabilitado:         false,
         talentoHumanoHabilitado:  false,
+        vendedorHabilitado:       false,
       };
     case 'medium':
       return {
@@ -100,6 +101,7 @@ function capacidadesPlan(plan) {
         tributarioHabilitado:     true,
         bancosHabilitado:         true,
         talentoHumanoHabilitado:  true,
+        vendedorHabilitado:       true,
       };
     case 'pro':
     default:
@@ -117,6 +119,7 @@ function capacidadesPlan(plan) {
         tributarioHabilitado:     true,
         bancosHabilitado:         true,
         talentoHumanoHabilitado:  true,
+        vendedorHabilitado:       true,
       };
   }
 }
@@ -239,6 +242,7 @@ async function obtenerConfiguracionSistemaOperativa(empresaOrId, tx = prisma) {
     tributarioHabilitado:     caps.tributarioHabilitado     && Boolean(config?.tributarioHabilitado     ?? true),
     bancosHabilitado:         caps.bancosHabilitado         && Boolean(config?.bancosHabilitado         ?? true),
     talentoHumanoHabilitado:  caps.talentoHumanoHabilitado  && Boolean(config?.talentoHumanoHabilitado  ?? false),
+    vendedorHabilitado:       caps.vendedorHabilitado       && Boolean(config?.vendedorHabilitado       ?? true),
     // No gateado por plan (a diferencia de los de arriba) — cualquier plan
     // puede habilitarlo, es una preferencia operativa, no una capacidad
     // vendible por tier. Default false: aunque existan puntos_emision/cajas
@@ -301,6 +305,7 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
     tributarioHabilitado:     flag('tributarioHabilitado', true),
     bancosHabilitado:         flag('bancosHabilitado', true),
     talentoHumanoHabilitado:  flag('talentoHumanoHabilitado', false),
+    vendedorHabilitado:       flag('vendedorHabilitado', true),
     // Sin flag() — no gateado por plan/modulosContratados (ver comentario en
     // obtenerConfiguracionSistemaOperativa).
     sucursalesHabilitado:     Boolean(reqBody.sucursalesHabilitado !== undefined ? reqBody.sucursalesHabilitado : actual.sucursalesHabilitado),

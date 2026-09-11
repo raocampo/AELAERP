@@ -41,8 +41,9 @@ function fmtMonto(v) {
 
 export default function ListaProformas() {
   const navigate = useNavigate();
-  const { usuario } = useAuth();
-  const veVendedor = tienePermiso(usuario?.rol, 'vendedor.asignar', usuario?.permisosExtra);
+  const { usuario, sistema } = useAuth();
+  const veVendedor = tienePermiso(usuario?.rol, 'vendedor.asignar', usuario?.permisosExtra)
+    && sistema?.vendedorHabilitado !== false;
   const [proformas, setProformas] = useState([]);
   const [total,     setTotal]     = useState(0);
   const [cargando,  setCargando]  = useState(true);

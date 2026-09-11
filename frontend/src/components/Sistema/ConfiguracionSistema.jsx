@@ -62,6 +62,7 @@ const FORM_INICIAL = {
   tributarioHabilitado: true,
   bancosHabilitado: true,
   talentoHumanoHabilitado: false,
+  vendedorHabilitado: true,
   sbuEcuador: '480.00',
   regimenDecimoCuarto: 'sierra',
   importacionesHabilitado: false,
@@ -237,6 +238,7 @@ export default function ConfiguracionSistema() {
     { key: 'tributarioHabilitado',     label: 'Tributario' },
     { key: 'bancosHabilitado',         label: 'Bancos' },
     { key: 'talentoHumanoHabilitado',  label: 'Talento Humano' },
+    { key: 'vendedorHabilitado',       label: 'Agente Vendedor' },
   ];
 
   return (
@@ -725,6 +727,20 @@ export default function ConfiguracionSistema() {
               onChange={(e) => actualizar('bancosHabilitado', e.target.checked)}
               disabled={!caps.bancosHabilitado} />
             <span>Bancos{!caps.bancosHabilitado ? ' — no incluido en tu plan' : ''}</span>
+          </label>
+        </section>
+
+        {/* ── Agente Vendedor ───────────────────────────────────────────── */}
+        <section className="syscfg-card">
+          <h2>Agente Vendedor</h2>
+          <label className="syscfg-check">
+            <input type="checkbox" checked={form.vendedorHabilitado}
+              onChange={(e) => actualizar('vendedorHabilitado', e.target.checked)}
+              disabled={!caps.vendedorHabilitado} />
+            <span>
+              Habilitar Agente Vendedor (cartera de clientes, pedidos, cobros en ruta)
+              {!caps.vendedorHabilitado ? ' — no incluido en tu plan' : ''}
+            </span>
           </label>
         </section>
 

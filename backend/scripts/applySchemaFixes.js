@@ -82,6 +82,9 @@ const FIXES = [
   // con vendedorId seteado (docs/roadmap-agente-vendedor.md) (2026-09-11)
   `ALTER TABLE "proformas" ADD COLUMN IF NOT EXISTS "vendedorId" INTEGER`,
   `CREATE INDEX IF NOT EXISTS "proformas_vendedorId_idx" ON "proformas"("vendedorId")`,
+  // Módulo Agente Vendedor gateado por plan Medium/Pro (o "combo" vía
+  // modulosContratados) — ver utils/configuracionSistema.js (2026-09-11)
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "vendedorHabilitado" BOOLEAN NOT NULL DEFAULT true`,
   // Firma digital y sello de empresa para proformas (2026-06-20)
   `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "firmaUrl" TEXT`,
   `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "selloUrl" TEXT`,

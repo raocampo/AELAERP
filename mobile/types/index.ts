@@ -22,6 +22,7 @@ export interface Sistema {
   inventarioHabilitado: boolean;
   facturacionHabilitada: boolean;
   restauranteHabilitado: boolean;
+  vendedorHabilitado?: boolean;
   documentoPosDefault?: 'factura' | 'nota_venta';
   cajaNombre?: string;
 }
