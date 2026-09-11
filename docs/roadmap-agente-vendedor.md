@@ -22,7 +22,13 @@ independientemente desplegable; se hace una por sesión.
   end-to-end contra Postgres local (scoping, totales, aislamiento por
   vendedor) — **probado por primera vez en dispositivo real** (Expo Go
   SDK 54, resuelto el bloqueo que venía desde el 2026-09-09).
-- ⏭️ **Fase 3 — Cobros en ruta**: siguiente.
+- ✅ **Fase 3 — Cobros en ruta** (commit `26e747f`): el cobro del
+  vendedor genera de inmediato caja/banco (mismo mecanismo que POS), pero
+  el asiento contable se genera después, cuando Contabilidad lo verifica
+  desde Cuentas por Cobrar → "Cobros de vendedores". Decisión de negocio
+  clave: el módulo completo (Fases 0-3) quedó gateado a plan Medium/Pro
+  (o combo) — ver `vendedorHabilitado` en `configuracion_sistema`.
+- ⏭️ **Fase 4 — Comisiones y metas**: siguiente.
 
 ## Decisiones tomadas con el usuario
 
