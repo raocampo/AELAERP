@@ -15,7 +15,14 @@ independientemente desplegable; se hace una por sesión.
   Clientes (web), y el tab "Mis Clientes" + detalle/estado de cuenta en
   la app móvil. Verificado con tests + script e2e contra Postgres local
   — el resto (mobile) solo con `tsc --noEmit` (sin dispositivo a mano).
-- ⏭️ **Fase 2 — Pedidos**: siguiente.
+- ✅ **Fase 2 — Pedidos** (commit `b773d13`): `proformas.vendedorId`,
+  `POST/GET /api/vendedor/pedidos` (wrapper sobre proformas, sin
+  walk-in), filtro/columna "Vendedor" en Lista de Proformas (web),
+  pantallas "Nuevo Pedido" y "Mis Pedidos" en la app móvil. Verificado
+  end-to-end contra Postgres local (scoping, totales, aislamiento por
+  vendedor) — **probado por primera vez en dispositivo real** (Expo Go
+  SDK 54, resuelto el bloqueo que venía desde el 2026-09-09).
+- ⏭️ **Fase 3 — Cobros en ruta**: siguiente.
 
 ## Decisiones tomadas con el usuario
 
