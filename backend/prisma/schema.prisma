@@ -156,6 +156,7 @@ model usuarios {
   movimientosCajaChica  movimientos_caja_chica[]  @relation("MovCajaChicaUsuario")
   itemsCompraResueltos  items_compra_pendientes[]
   comandasMesero        restaurante_comandas[]
+  clientesAsignados     clientes[]                @relation("ClienteVendedor")
 
   empresasAcceso usuario_empresas[]
 
@@ -196,10 +197,14 @@ model clientes {
   email              String?  @db.VarChar(150)
   telefono           String?  @db.VarChar(20)
   activo             Boolean  @default(true)
+  // Agente vendedor asignado (módulo Agente Vendedor). El vendedor solo ve
+  // los clientes con su propio id acá. NULL = sin asignar.
+  vendedorId         Int?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   empresa     empresas            @relation(fields: [empresaId], references: [id])
+  vendedor    usuarios?           @relation("ClienteVendedor", fields: [vendedorId], references: [id])
   facturas    facturas[]
   notas_venta notas_venta[]
   cobros      cobros_cliente[]
@@ -208,6 +213,7 @@ model clientes {
   @@unique([empresaId, identificacion])
   @@index([empresaId])
   @@index([identificacion])
+  @@index([vendedorId])
   @@map("clientes")
 }
 

@@ -806,6 +806,10 @@ const FIXES = [
   // Diaria pasa a registrar una fila por línea de pago para poder excluir
   // transferencia/tarjeta/app del "efectivo esperado" en el cuadre de cierre.
   `ALTER TABLE "caja_movimientos" ADD COLUMN IF NOT EXISTS "esEfectivo" BOOLEAN NOT NULL DEFAULT true`,
+  // Módulo Agente Vendedor (2026-09-10) — cliente asignado a un vendedor.
+  // El vendedor solo ve sus clientes (scoping en backend/routes/vendedor.js).
+  `ALTER TABLE "clientes" ADD COLUMN IF NOT EXISTS "vendedorId" INTEGER`,
+  `CREATE INDEX IF NOT EXISTS "clientes_vendedorId_idx" ON "clientes"("vendedorId")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

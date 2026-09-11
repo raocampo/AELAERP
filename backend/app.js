@@ -67,6 +67,7 @@ const superAdminRoutes    = require('./routes/superAdmin');
 const impresoraRoutes     = require('./routes/impresora');
 const utilidadesRoutes    = require('./routes/utilidades');
 const proformasRoutes             = require('./routes/proformas');
+const vendedorRoutes              = require('./routes/vendedor');
 const retencionesRecibidasRoutes  = require('./routes/retenciones-recibidas');
 const externalRoutes              = require('./routes/external');
 const suscripcionPagoRoutes       = require('./routes/suscripcionPago');
@@ -139,6 +140,7 @@ app.use('/api/ext/v1',        externalRoutes);        // WebService externo — 
 app.use('/api/suscripcion-pago', suscripcionPagoRoutes); // Pagos de suscripción (PayPhone, transferencia, etc.)
 app.use('/api/utilidades',    utilidadesRoutes);
 app.use('/api/proformas',     proformasRoutes);
+app.use('/api/vendedor',      vendedorRoutes);
 
 app.get('/api/cola-sri/estado', proteger, async (req, res) => {
   try {
