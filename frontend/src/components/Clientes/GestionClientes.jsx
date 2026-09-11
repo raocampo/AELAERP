@@ -7,6 +7,8 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { IcEditar, IcActivar, IcDesactivar } from '../../utils/icons';
 import DropZone from '../shared/DropZone';
+import { useAuth } from '../../context/useAuth';
+import { tienePermiso } from '../../utils/roles';
 import './GestionClientes.css';
 
 const TIPOS_IDENTIFICACION = [
@@ -29,6 +31,9 @@ const FORM_INICIAL = {
 };
 
 export default function GestionClientes() {
+  const { usuario } = useAuth();
+  const puedeAsignarVendedor = tienePermiso(usuario?.rol, 'vendedor.asignar', usuario?.permisosExtra);
+
   const [clientes, setClientes] = useState([]);
   const [total, setTotal] = useState(0);
   const [cargando, setCargando] = useState(true);
@@ -39,6 +44,59 @@ export default function GestionClientes() {
   const [buscandoSri, setBuscandoSri] = useState(false);
   const [page, setPage] = useState(1);
   const LIMIT = 50;
+
+  // ─── Módulo Agente Vendedor — asignación de cartera (solo admin/supervisor) ──
+  const [vendedores, setVendedores] = useState([]);
+  const [seleccionados, setSeleccionados] = useState(() => new Set());
+  const [vendedorElegido, setVendedorElegido] = useState('');
+  const [asignando, setAsignando] = useState(false);
+
+  useEffect(() => {
+    if (!puedeAsignarVendedor) return;
+    api.get('/vendedor/agentes').then((res) => setVendedores(res.data?.data || [])).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const nombreVendedor = (vendedorId) => {
+    if (!vendedorId) return '— Sin asignar —';
+    return vendedores.find((v) => v.id === vendedorId)?.nombre || `#${vendedorId}`;
+  };
+
+  const toggleSeleccion = (id) => {
+    setSeleccionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSeleccionTodos = () => {
+    setSeleccionados((prev) => (
+      prev.size === clientes.length ? new Set() : new Set(clientes.map((c) => c.id))
+    ));
+  };
+
+  const asignarVendedor = async () => {
+    if (seleccionados.size === 0) return;
+    setAsignando(true);
+    try {
+      await api.post('/vendedor/asignar', {
+        clienteIds: [...seleccionados],
+        vendedorId: vendedorElegido || null,
+      });
+      toast.success(
+        vendedorElegido
+          ? `${seleccionados.size} cliente(s) asignado(s) a ${nombreVendedor(Number(vendedorElegido))}`
+          : `${seleccionados.size} cliente(s) desasignado(s)`
+      );
+      setSeleccionados(new Set());
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'No se pudo asignar los clientes');
+    } finally {
+      setAsignando(false);
+    }
+  };
 
   // ─── Catastro SRI — búsqueda por nombre ──────────────────────────────────────
   const [catastroResultados, setCatastroResultados] = useState([]);
@@ -353,6 +411,21 @@ export default function GestionClientes() {
         </div>
       )}
 
+      {/* ASIGNAR A VENDEDOR (solo admin/supervisor) */}
+      {puedeAsignarVendedor && seleccionados.size > 0 && (
+        <div className="clientes-card" style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px' }}>
+          <strong>{seleccionados.size} cliente(s) seleccionado(s)</strong>
+          <select value={vendedorElegido} onChange={(e) => setVendedorElegido(e.target.value)}>
+            <option value="">— Quitar vendedor asignado —</option>
+            {vendedores.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
+          </select>
+          <button className="btn-primary" onClick={asignarVendedor} disabled={asignando}>
+            {asignando ? 'Asignando...' : 'Asignar'}
+          </button>
+          <button className="btn-secondary" onClick={() => setSeleccionados(new Set())}>Cancelar</button>
+        </div>
+      )}
+
       {/* TABLA */}
       <div className="clientes-card">
         {cargando ? (
@@ -366,12 +439,23 @@ export default function GestionClientes() {
             <table className="clientes-table">
               <thead>
                 <tr>
+                  {puedeAsignarVendedor && (
+                    <th style={{ width: 28 }}>
+                      <input
+                        type="checkbox"
+                        checked={clientes.length > 0 && seleccionados.size === clientes.length}
+                        onChange={toggleSeleccionTodos}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </th>
+                  )}
                   <th>Identificación</th>
                   <th>Razón Social</th>
                   <th>Nombre Comercial</th>
                   <th>Email</th>
                   <th>Teléfono</th>
                   <th>Estado</th>
+                  {puedeAsignarVendedor && <th>Vendedor</th>}
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -383,6 +467,15 @@ export default function GestionClientes() {
                     style={{ cursor: 'pointer' }}
                     onClick={() => abrirEditar(c)}
                   >
+                    {puedeAsignarVendedor && (
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={seleccionados.has(c.id)}
+                          onChange={() => toggleSeleccion(c.id)}
+                        />
+                      </td>
+                    )}
                     <td>
                       <span className="tipo-badge">
                         {TIPOS_IDENTIFICACION.find((t) => t.valor === c.tipoIdentificacion)?.label || c.tipoIdentificacion}
@@ -398,6 +491,11 @@ export default function GestionClientes() {
                         {c.activo ? 'Activo' : 'Inactivo'}
                       </span>
                     </td>
+                    {puedeAsignarVendedor && (
+                      <td style={{ fontSize: '0.85rem', color: c.vendedorId ? '#1e293b' : '#94a3b8' }}>
+                        {nombreVendedor(c.vendedorId)}
+                      </td>
+                    )}
                     <td className="acciones" onClick={(e) => e.stopPropagation()}>
                       <div className="tbl-acciones">
                         <button className="btn-icon ic-editar" title="Editar cliente" onClick={() => abrirEditar(c)}><IcEditar/></button>

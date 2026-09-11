@@ -40,7 +40,7 @@ router.get('/', proteger, async (req, res) => {
       const [clientes, countResult] = await Promise.all([
         prisma.$queryRaw`
           SELECT id, "tipoIdentificacion", identificacion, "razonSocial", "nombreComercial",
-                 email, telefono, activo, "createdAt", "updatedAt", "empresaId"
+                 email, telefono, activo, "createdAt", "updatedAt", "empresaId", "vendedorId"
           FROM   clientes
           WHERE  "empresaId" = ${req.empresa.id}
             AND (
