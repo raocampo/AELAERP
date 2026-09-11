@@ -105,11 +105,7 @@ export default function MisClientesScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={s.card}
-            // El cast es temporal: expo-router regenera router.d.ts (rutas
-            // tipadas) recién al correr `expo start`/`expo prebuild` en una
-            // máquina de desarrollo — la carpeta vendedor/ es nueva y ese
-            // archivo generado todavía no la conoce en este entorno.
-            onPress={() => router.push({ pathname: '/(tabs)/vendedor/cliente', params: { id: item.id } } as any)}
+            onPress={() => router.push({ pathname: '/(tabs)/vendedor/cliente', params: { id: item.id } })}
           >
             <View style={s.info}>
               <Text style={s.nombre} numberOfLines={1}>{item.nombreComercial || item.razonSocial}</Text>

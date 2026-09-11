@@ -1,6 +1,6 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, StyleSheet } from 'react-native';
+import { Alert, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { esVendedor } from '../../utils/roles';
@@ -15,8 +15,23 @@ function href(habilitado: boolean | undefined, visibleRol = true) {
   return habilitado === false || !visibleRol ? null : undefined;
 }
 
+// Menú de cuenta (⋮): "Cambiar de empresa" y "Cerrar sesión" visibles desde
+// cualquier tab — antes solo existían al fondo de Configuración (poco
+// visible) y "cambiar de empresa" no existía en ningún lado tras el login.
 function HeaderRight() {
-  const { empresa } = useAuth();
+  const { empresa, empresasDisponibles, logout } = useAuth();
+  const router = useRouter();
+
+  const abrirMenu = () => {
+    const botones: any[] = [];
+    if (empresasDisponibles.length > 1) {
+      botones.push({ text: 'Cambiar de empresa', onPress: () => router.push('/cambiar-empresa') });
+    }
+    botones.push({ text: 'Cerrar sesión', style: 'destructive', onPress: () => logout() });
+    botones.push({ text: 'Cancelar', style: 'cancel' });
+    Alert.alert(empresa?.nombreComercial || empresa?.razonSocial || 'Cuenta', undefined, botones);
+  };
+
   return (
     <View style={h.row}>
       {empresa && (
@@ -24,13 +39,17 @@ function HeaderRight() {
           {empresa.nombreComercial || empresa.razonSocial}
         </Text>
       )}
+      <TouchableOpacity onPress={abrirMenu} style={h.menuBtn} hitSlop={10}>
+        <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
 
 const h = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', marginRight: 12 },
-  empNombre: { fontSize: 13, color: '#bfdbfe', fontWeight: '600', maxWidth: 160 },
+  row: { flexDirection: 'row', alignItems: 'center', marginRight: 8, gap: 10 },
+  empNombre: { fontSize: 13, color: '#bfdbfe', fontWeight: '600', maxWidth: 140 },
+  menuBtn: { padding: 4 },
 });
 
 export default function TabsLayout() {
