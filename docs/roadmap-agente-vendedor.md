@@ -28,7 +28,14 @@ independientemente desplegable; se hace una por sesión.
   desde Cuentas por Cobrar → "Cobros de vendedores". Decisión de negocio
   clave: el módulo completo (Fases 0-3) quedó gateado a plan Medium/Pro
   (o combo) — ver `vendedorHabilitado` en `configuracion_sistema`.
-- ⏭️ **Fase 4 — Comisiones y metas**: siguiente.
+- ✅ **Fase 4 — Comisiones y metas** (commit `d5a1ed1`): % configurable
+  por la empresa (no por vendedor), sobre subtotal sin IVA, mitad al
+  facturar + mitad al cobrar (proporcional en cobros parciales). Devengo
+  automático enganchado en marcar-convertida y en los 2 POST /cobros
+  existentes — sin tocar su lógica de negocio. Metas mensuales editables
+  desde Gestión de Clientes; "Mis Comisiones" con barra de progreso en
+  la app móvil.
+- ⏭️ **Fase 5 — Offline para el vendedor**: siguiente.
 
 ## Decisiones tomadas con el usuario
 
