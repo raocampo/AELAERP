@@ -85,6 +85,40 @@ const FIXES = [
   // Módulo Agente Vendedor gateado por plan Medium/Pro (o "combo" vía
   // modulosContratados) — ver utils/configuracionSistema.js (2026-09-11)
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "vendedorHabilitado" BOOLEAN NOT NULL DEFAULT true`,
+  // Agente Vendedor Fase 4 — comisiones configurables por la empresa +
+  // trazabilidad de qué vendedor originó cada factura (2026-09-11)
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "comisionVendedorFacturar" DECIMAL(5,2) NOT NULL DEFAULT 2.00`,
+  `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "comisionVendedorCobrar" DECIMAL(5,2) NOT NULL DEFAULT 1.00`,
+  `ALTER TABLE "facturas" ADD COLUMN IF NOT EXISTS "vendedorId" INTEGER`,
+  `CREATE INDEX IF NOT EXISTS "facturas_vendedorId_idx" ON "facturas"("vendedorId")`,
+  `CREATE TABLE IF NOT EXISTS "comision_devengada" (
+    "id"         SERIAL PRIMARY KEY,
+    "empresaId"  INTEGER NOT NULL,
+    "vendedorId" INTEGER NOT NULL,
+    "origen"     VARCHAR(20) NOT NULL,
+    "facturaId"  INTEGER,
+    "cobroId"    INTEGER,
+    "base"       DECIMAL(14,2) NOT NULL,
+    "porcentaje" DECIMAL(5,2) NOT NULL,
+    "monto"      DECIMAL(14,2) NOT NULL,
+    "fecha"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "estado"     VARCHAR(20) NOT NULL DEFAULT 'DEVENGADA',
+    "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS "comision_devengada_empresaId_idx" ON "comision_devengada"("empresaId")`,
+  `CREATE INDEX IF NOT EXISTS "comision_devengada_vendedorId_idx" ON "comision_devengada"("vendedorId")`,
+  `CREATE INDEX IF NOT EXISTS "comision_devengada_fecha_idx" ON "comision_devengada"("fecha")`,
+  `CREATE TABLE IF NOT EXISTS "meta_vendedor" (
+    "id"         SERIAL PRIMARY KEY,
+    "empresaId"  INTEGER NOT NULL,
+    "vendedorId" INTEGER NOT NULL,
+    "anio"       INTEGER NOT NULL,
+    "mes"        INTEGER NOT NULL,
+    "montoMeta"  DECIMAL(14,2) NOT NULL,
+    "updatedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "meta_vendedor_empresa_vend_anio_mes_key" ON "meta_vendedor"("empresaId", "vendedorId", "anio", "mes")`,
+  `CREATE INDEX IF NOT EXISTS "meta_vendedor_empresaId_idx" ON "meta_vendedor"("empresaId")`,
   // Firma digital y sello de empresa para proformas (2026-06-20)
   `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "firmaUrl" TEXT`,
   `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "selloUrl" TEXT`,

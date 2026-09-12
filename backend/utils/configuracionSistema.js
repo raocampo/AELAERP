@@ -306,6 +306,14 @@ function construirPayloadConfiguracionSistema(actual = {}, reqBody = {}) {
     bancosHabilitado:         flag('bancosHabilitado', true),
     talentoHumanoHabilitado:  flag('talentoHumanoHabilitado', false),
     vendedorHabilitado:       flag('vendedorHabilitado', true),
+    // Comisión del vendedor — política numérica, no un flag on/off; se valida
+    // el rango pero no se gatea por plan (el módulo completo ya lo está).
+    comisionVendedorFacturar: Number.isFinite(parseFloat(reqBody.comisionVendedorFacturar)) && parseFloat(reqBody.comisionVendedorFacturar) >= 0
+                                ? Math.min(100, parseFloat(reqBody.comisionVendedorFacturar))
+                                : parseFloat(actual.comisionVendedorFacturar) || 2.00,
+    comisionVendedorCobrar:   Number.isFinite(parseFloat(reqBody.comisionVendedorCobrar)) && parseFloat(reqBody.comisionVendedorCobrar) >= 0
+                                ? Math.min(100, parseFloat(reqBody.comisionVendedorCobrar))
+                                : parseFloat(actual.comisionVendedorCobrar) || 1.00,
     // Sin flag() — no gateado por plan/modulosContratados (ver comentario en
     // obtenerConfiguracionSistemaOperativa).
     sucursalesHabilitado:     Boolean(reqBody.sucursalesHabilitado !== undefined ? reqBody.sucursalesHabilitado : actual.sucursalesHabilitado),

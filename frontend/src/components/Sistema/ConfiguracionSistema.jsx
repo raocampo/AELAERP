@@ -63,6 +63,8 @@ const FORM_INICIAL = {
   bancosHabilitado: true,
   talentoHumanoHabilitado: false,
   vendedorHabilitado: true,
+  comisionVendedorFacturar: '2.00',
+  comisionVendedorCobrar: '1.00',
   sbuEcuador: '480.00',
   regimenDecimoCuarto: 'sierra',
   importacionesHabilitado: false,
@@ -742,6 +744,34 @@ export default function ConfiguracionSistema() {
               {!caps.vendedorHabilitado ? ' — no incluido en tu plan' : ''}
             </span>
           </label>
+          {form.vendedorHabilitado && caps.vendedorHabilitado && (
+            <div className="syscfg-row" style={{ marginTop: '1rem' }}>
+              <div className="syscfg-field">
+                <label>Comisión al facturar el pedido (%)</label>
+                <input
+                  type="number" step="0.01" min="0" max="100"
+                  value={form.comisionVendedorFacturar}
+                  onChange={(e) => actualizar('comisionVendedorFacturar', e.target.value)}
+                  style={{ maxWidth: '140px' }}
+                />
+                <small className="syscfg-hint">
+                  % sobre el subtotal sin IVA de la factura, devengado cuando el pedido del vendedor se convierte en factura.
+                </small>
+              </div>
+              <div className="syscfg-field">
+                <label>Comisión al cobrar (%)</label>
+                <input
+                  type="number" step="0.01" min="0" max="100"
+                  value={form.comisionVendedorCobrar}
+                  onChange={(e) => actualizar('comisionVendedorCobrar', e.target.value)}
+                  style={{ maxWidth: '140px' }}
+                />
+                <small className="syscfg-hint">
+                  % sobre la porción sin IVA de cada cobro registrado contra esa factura.
+                </small>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ── Talento Humano ────────────────────────────────────────────── */}

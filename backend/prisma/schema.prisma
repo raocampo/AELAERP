@@ -112,6 +112,8 @@ model empresas {
   restauranteMesas                 restaurante_mesas[]
   restauranteComandas              restaurante_comandas[]
   restauranteLlamadas              restaurante_llamadas[]
+  comisionesDevengadas             comision_devengada[]
+  metasVendedor                    meta_vendedor[]
 
   @@map("empresas")
 }
@@ -157,6 +159,9 @@ model usuarios {
   itemsCompraResueltos  items_compra_pendientes[]
   comandasMesero        restaurante_comandas[]
   clientesAsignados     clientes[]                @relation("ClienteVendedor")
+  facturasComoVendedor  facturas[]                @relation("FacturaAgenteVendedor")
+  comisionesDevengadas  comision_devengada[]
+  metasVendedor         meta_vendedor[]
 
   empresasAcceso usuario_empresas[]
 
@@ -355,6 +360,12 @@ model configuracion_sistema {
   // plan Medium/Pro (capacidadesPlan), disponible en Lite solo por "combo"
   // vía modulosContratados explícito (2026-09-11).
   vendedorHabilitado        Boolean  @default(true)
+  // Comisión del Agente Vendedor — política configurable por la empresa
+  // (2026-09-11): % sobre el subtotal SIN IVA, mitad al facturar el pedido,
+  // mitad al cobrarlo (ver backend/utils/comisiones.js). Sin override por
+  // vendedor individual por ahora — un solo % vale para todos.
+  comisionVendedorFacturar Decimal  @default(2.00) @db.Decimal(5, 2)
+  comisionVendedorCobrar   Decimal  @default(1.00) @db.Decimal(5, 2)
   costosFijosMensuales      Decimal  @default(0) @db.Decimal(12, 2)
   impresoraCocinaIp         String?  @db.VarChar(50)
   impresoraCocinaPuerto     Int?     @default(9100)
@@ -738,24 +749,79 @@ model facturas {
   // sectorTransporte está seteado (Res. NAC-DGERCGC26-00000024, Anexo 25).
   placaVehiculo               String?   @db.VarChar(10)
   emisorId                    Int?
+  // Agente Vendedor que originó esta venta (copiado del pedido/proforma al
+  // convertir — docs/roadmap-agente-vendedor.md Fase 4). Distinto del campo
+  // `vendedor` de arriba, que es texto libre sin relación (legado/SRI).
+  vendedorId                  Int?
   createdAt                   DateTime  @default(now())
   updatedAt                   DateTime  @updatedAt
 
   empresa              empresas?               @relation(fields: [empresaId], references: [id])
   cliente              clientes?               @relation(fields: [clienteId], references: [id])
   emisor               usuarios?               @relation(fields: [emisorId], references: [id])
+  agenteVendedor       usuarios?               @relation("FacturaAgenteVendedor", fields: [vendedorId], references: [id])
   notas_credito        notas_credito[]
   retencionesRecibidas retenciones_recibidas[]
   asientos             asientos_contables[]
   cobros               cobros_cliente[]
   comandas             restaurante_comandas[]
+  comisionesDevengadas comision_devengada[]
 
   @@index([empresaId])
   @@index([estadoSri])
   @@index([fechaEmision])
   @@index([identificacionComprador])
   @@index([empresaId, establecimiento, puntoEmision])
+  @@index([vendedorId])
   @@map("facturas")
+}
+
+// ── Módulo Agente Vendedor — Fase 4: Comisiones y metas ─────────────────────
+// Ver docs/roadmap-agente-vendedor.md. Comisión mixta: se devenga una parte
+// al facturar el pedido (comisionVendedorFacturar % sobre el subtotal sin
+// IVA de la factura) y otra al cobrarla (comisionVendedorCobrar % sobre la
+// porción neta —sin IVA— de cada cobro). % configurables por la empresa en
+// configuracion_sistema, sin override por vendedor individual por ahora.
+model comision_devengada {
+  id          Int      @id @default(autoincrement())
+  empresaId   Int
+  vendedorId  Int
+  origen      String   @db.VarChar(20) // FACTURACION | COBRO
+  facturaId   Int?
+  cobroId     Int?
+  base        Decimal  @db.Decimal(14, 2) // monto neto (sin IVA) sobre el que se calculó
+  porcentaje  Decimal  @db.Decimal(5, 2)
+  monto       Decimal  @db.Decimal(14, 2)
+  fecha       DateTime @default(now())
+  estado      String   @default("DEVENGADA") @db.VarChar(20) // DEVENGADA | LIQUIDADA
+  createdAt   DateTime @default(now())
+
+  empresa  empresas @relation(fields: [empresaId], references: [id])
+  vendedor usuarios @relation(fields: [vendedorId], references: [id])
+  factura  facturas? @relation(fields: [facturaId], references: [id])
+  cobro    cobros_cliente? @relation(fields: [cobroId], references: [id])
+
+  @@index([empresaId])
+  @@index([vendedorId])
+  @@index([fecha])
+  @@map("comision_devengada")
+}
+
+model meta_vendedor {
+  id         Int      @id @default(autoincrement())
+  empresaId  Int
+  vendedorId Int
+  anio       Int
+  mes        Int
+  montoMeta  Decimal  @db.Decimal(14, 2)
+  updatedAt  DateTime @updatedAt
+
+  empresa  empresas @relation(fields: [empresaId], references: [id])
+  vendedor usuarios @relation(fields: [vendedorId], references: [id])
+
+  @@unique([empresaId, vendedorId, anio, mes])
+  @@index([empresaId])
+  @@map("meta_vendedor")
 }
 
 // ====================================
@@ -903,6 +969,7 @@ model cobros_cliente {
   banco   bancos?             @relation(fields: [bancoId], references: [id])
   cheque  cheques?            @relation(fields: [chequeId], references: [id])
   asiento asientos_contables? @relation(fields: [asientoId], references: [id])
+  comisionesDevengadas comision_devengada[]
 
   @@unique([empresaId, numero])
   @@index([empresaId])

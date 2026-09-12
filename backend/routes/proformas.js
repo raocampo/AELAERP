@@ -15,6 +15,7 @@ const { normalizarRol }      = require('../utils/roles');
 const prisma                 = require('../config/prisma');
 const { enviarConFallback }  = require('../utils/email');
 const { siguienteSecuencial, formatNumero, calcularTotales } = require('../utils/proformas');
+const { devengarComisionFacturacion } = require('../utils/comisiones');
 
 // ─── Helper: resolver logo (igual que sri.js) ─────────────────────────────────
 function _resolverLogo(logoUrl) {
@@ -599,7 +600,7 @@ router.post('/:id/marcar-convertida', async (req, res) => {
     }
 
     const [actual] = await req.prisma.$queryRawUnsafe(
-      `SELECT estado FROM proformas WHERE id = $1 AND "empresaId" = $2`, id, empresaId
+      `SELECT estado, "vendedorId" FROM proformas WHERE id = $1 AND "empresaId" = $2`, id, empresaId
     );
     if (!actual) return res.status(404).json({ ok: false, mensaje: 'Proforma no encontrada' });
     if (['CONVERTIDA', 'ANULADA'].includes(actual.estado)) {
@@ -611,6 +612,23 @@ router.post('/:id/marcar-convertida', async (req, res) => {
        WHERE id = $1 AND "empresaId" = $2 RETURNING *`,
       id, empresaId, facturaId || null
     );
+
+    // Agente Vendedor Fase 4: si el pedido era de un vendedor, la factura
+    // hereda el vendedorId (trazabilidad para comisión al cobrar) y se
+    // devenga la comisión "al facturar" sobre el subtotal sin IVA.
+    if (actual.vendedorId && facturaId) {
+      const factura = await req.prisma.facturas.findUnique({
+        where: { id: parseInt(facturaId, 10) },
+        select: { id: true, importeTotal: true, totalIva: true },
+      });
+      if (factura) {
+        await req.prisma.facturas.update({ where: { id: factura.id }, data: { vendedorId: actual.vendedorId } });
+        await devengarComisionFacturacion({
+          db: req.prisma, empresaId, vendedorId: actual.vendedorId, facturaId: factura.id,
+          subtotalSinIva: Number(factura.importeTotal) - Number(factura.totalIva),
+        });
+      }
+    }
 
     res.json({ ok: true, data: row });
   } catch (err) {

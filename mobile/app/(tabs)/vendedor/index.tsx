@@ -72,12 +72,21 @@ export default function MisClientesScreen() {
           <Text style={s.resNum}>${totalPorCobrar.toFixed(2)}</Text>
           <Text style={s.resLbl}>Por cobrar</Text>
         </TouchableOpacity>
+      </View>
+      <View style={[s.resumenRow, { marginTop: 0 }]}>
         <TouchableOpacity
-          style={[s.resCard, s.resCardBtn]}
+          style={[s.resCard, s.resCardBtn, { flex: 1 }]}
           onPress={() => router.push('/(tabs)/vendedor/pedidos')}
         >
           <Ionicons name="receipt-outline" size={20} color="#1e40af" />
           <Text style={s.resLbl}>Mis pedidos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.resCard, s.resCardBtn, { flex: 1 }]}
+          onPress={() => router.push('/(tabs)/vendedor/comisiones')}
+        >
+          <Ionicons name="trending-up-outline" size={20} color="#16a34a" />
+          <Text style={s.resLbl}>Comisiones</Text>
         </TouchableOpacity>
       </View>
 

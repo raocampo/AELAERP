@@ -17,6 +17,7 @@ const { siguienteSecuencial, formatNumero, calcularTotales } = require('../utils
 const { siguienteNumeroGenerico, round2 } = require('../utils/contabilidad');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { registrarMovimientoBancarioLigado } = require('../utils/contabilidad');
+const { devengarComisionCobro } = require('../utils/comisiones');
 
 const METODOS_COBRO_VENDEDOR = ['efectivo', 'transferencia'];
 
@@ -379,6 +380,17 @@ router.post('/cobros', autorizarPermiso('vendedor.cobros'), async (req, res) => 
         });
       }
 
+      // Agente Vendedor Fase 4: si la factura es de un pedido de vendedor,
+      // devenga la comisión "al cobrar" (proporcional, sin IVA) — igual que
+      // el mismo hook en cxc.js POST /cobros.
+      if (factura.vendedorId) {
+        await devengarComisionCobro({
+          db: tx, empresaId: eId, vendedorId: factura.vendedorId, facturaId: factura.id, cobroId: nuevo.id,
+          montoCobro: montoNum, importeTotalFactura: factura.importeTotal, totalIvaFactura: factura.totalIva,
+          fecha: nuevo.fecha,
+        });
+      }
+
       return nuevo;
     });
 
@@ -389,6 +401,97 @@ router.post('/cobros', autorizarPermiso('vendedor.cobros'), async (req, res) => 
   } catch (error) {
     console.error('POST /vendedor/cobros:', error);
     res.status(error.status || 500).json({ success: false, mensaje: error.message || 'No se pudo registrar el cobro' });
+  }
+});
+
+// ─── Fase 4 — Comisiones y metas ───────────────────────────────────────────────
+// Ver docs/roadmap-agente-vendedor.md. El devengo real ocurre en
+// proformas.js (marcar-convertida) y en los dos POST /cobros (cxc.js y
+// arriba en este archivo) — acá solo se consulta lo ya devengado.
+
+// GET /api/vendedor/comisiones?anio=&mes= — mi acumulado del mes (o de todos
+// los vendedores si soy admin/supervisor) + meta del mes.
+router.get('/comisiones', autorizarPermiso('vendedor.ver'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const eId = empresaId(req);
+    const now = new Date();
+    const anio = Number.parseInt(req.query.anio, 10) || now.getFullYear();
+    const mes = Number.parseInt(req.query.mes, 10) || (now.getMonth() + 1);
+    const desde = new Date(Date.UTC(anio, mes - 1, 1));
+    const hasta = new Date(Date.UTC(anio, mes, 1));
+    const soloYo = normalizarRol(req.usuario.rol) === 'vendedor';
+
+    let vendedores;
+    if (soloYo) {
+      vendedores = [{ id: req.usuario.id, nombre: req.usuario.nombre }];
+    } else {
+      const usuariosEmpresa = await db.usuarios.findMany({
+        where: { empresaId: eId, activo: true },
+        select: { id: true, nombre: true, rol: true },
+      });
+      vendedores = usuariosEmpresa
+        .filter((u) => normalizarRol(u.rol) === 'vendedor')
+        .map(({ id, nombre }) => ({ id, nombre }));
+    }
+    const vendedorIds = vendedores.map((v) => v.id);
+    if (vendedorIds.length === 0) return res.json({ success: true, data: [], anio, mes });
+
+    const [devengadas, metas] = await Promise.all([
+      db.comision_devengada.groupBy({
+        by: ['vendedorId'],
+        where: { empresaId: eId, vendedorId: { in: vendedorIds }, fecha: { gte: desde, lt: hasta } },
+        _sum: { monto: true },
+      }),
+      db.meta_vendedor.findMany({ where: { empresaId: eId, vendedorId: { in: vendedorIds }, anio, mes } }),
+    ]);
+    const devengadoPorVendedor = new Map(devengadas.map((d) => [d.vendedorId, Number(d._sum.monto || 0)]));
+    const metaPorVendedor = new Map(metas.map((m) => [m.vendedorId, Number(m.montoMeta)]));
+
+    const data = vendedores.map((v) => ({
+      vendedorId: v.id,
+      nombre: v.nombre,
+      comisionDevengada: round2(devengadoPorVendedor.get(v.id) || 0),
+      meta: metaPorVendedor.has(v.id) ? metaPorVendedor.get(v.id) : null,
+    }));
+
+    res.json({ success: true, data, anio, mes });
+  } catch (err) {
+    console.error('GET /vendedor/comisiones:', err);
+    res.status(500).json({ success: false, mensaje: 'No se pudieron cargar las comisiones' });
+  }
+});
+
+// POST /api/vendedor/metas — (supervisor) fija/actualiza la meta mensual de
+// un vendedor. Body: { vendedorId, anio, mes, montoMeta }
+router.post('/metas', autorizarPermiso('vendedor.asignar'), async (req, res) => {
+  try {
+    const db = req.prisma;
+    const eId = empresaId(req);
+    const { vendedorId, anio, mes, montoMeta } = req.body || {};
+
+    const vId = Number.parseInt(vendedorId, 10);
+    const a = Number.parseInt(anio, 10);
+    const m = Number.parseInt(mes, 10);
+    const monto = round2(montoMeta);
+    if (!vId || !a || !m || m < 1 || m > 12 || !(monto >= 0)) {
+      return res.status(400).json({ success: false, mensaje: 'Datos inválidos' });
+    }
+
+    const vend = await db.usuarios.findFirst({ where: { id: vId, empresaId: eId }, select: { rol: true } });
+    if (!vend || normalizarRol(vend.rol) !== 'vendedor') {
+      return res.status(400).json({ success: false, mensaje: 'El usuario seleccionado no es un vendedor' });
+    }
+
+    const meta = await db.meta_vendedor.upsert({
+      where: { empresaId_vendedorId_anio_mes: { empresaId: eId, vendedorId: vId, anio: a, mes: m } },
+      update: { montoMeta: monto },
+      create: { empresaId: eId, vendedorId: vId, anio: a, mes: m, montoMeta: monto },
+    });
+    res.json({ success: true, data: meta });
+  } catch (err) {
+    console.error('POST /vendedor/metas:', err);
+    res.status(500).json({ success: false, mensaje: 'No se pudo guardar la meta' });
   }
 });
 

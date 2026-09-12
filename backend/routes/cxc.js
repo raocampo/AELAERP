@@ -24,6 +24,7 @@ const {
   siguienteNumeroGenerico,
   round2,
 } = require('../utils/contabilidad');
+const { devengarComisionCobro } = require('../utils/comisiones');
 
 // ─── Helper: resolver logo (mismo patrón que sri.js / proformas.js) ──────────
 function _resolverLogo(logoUrl) {
@@ -411,6 +412,17 @@ router.post('/cobros', autorizarPermiso('cxc.gestionar'), async (req, res) => {
       });
 
       await crearAsientoCobroCliente({ cobroId: nuevo.id, usuarioId: req.usuario?.id, fecha: nuevo.fecha, db: tx });
+
+      // Agente Vendedor Fase 4: si la factura es de un pedido de vendedor,
+      // devenga la comisión "al cobrar" (proporcional, sin IVA).
+      if (factura.vendedorId) {
+        await devengarComisionCobro({
+          db: tx, empresaId, vendedorId: factura.vendedorId, facturaId: factura.id, cobroId: nuevo.id,
+          montoCobro: montoNum, importeTotalFactura: factura.importeTotal, totalIvaFactura: factura.totalIva,
+          fecha: nuevo.fecha,
+        });
+      }
+
       return nuevo;
     });
 

@@ -15,6 +15,7 @@ export default function VendedorLayout() {
       <Stack.Screen name="pedidos" options={{ title: 'Mis Pedidos', headerBackTitle: 'Mis Clientes' }} />
       <Stack.Screen name="cobros" options={{ title: 'Cobros Pendientes', headerBackTitle: 'Mis Clientes' }} />
       <Stack.Screen name="cobro" options={{ title: 'Registrar Cobro', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="comisiones" options={{ title: 'Mis Comisiones', headerBackTitle: 'Mis Clientes' }} />
     </Stack>
   );
 }

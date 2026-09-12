@@ -9,6 +9,7 @@ import { IcEditar, IcActivar, IcDesactivar } from '../../utils/icons';
 import DropZone from '../shared/DropZone';
 import { useAuth } from '../../context/useAuth';
 import { tienePermiso } from '../../utils/roles';
+import ComisionesVendedorPanel from './ComisionesVendedorPanel';
 import './GestionClientes.css';
 
 const TIPOS_IDENTIFICACION = [
@@ -527,6 +528,8 @@ export default function GestionClientes() {
           </div>
         )}
       </div>
+
+      {puedeAsignarVendedor && <ComisionesVendedorPanel />}
 
       {/* MODAL IMPORTAR EXCEL */}
       {modalImport && (
