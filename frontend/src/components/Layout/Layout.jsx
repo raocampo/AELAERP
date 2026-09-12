@@ -8,7 +8,7 @@
 import { useState, useEffect, Component } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
-import { obtenerRolLabel, tienePermiso } from '../../utils/roles';
+import { obtenerRolLabel, tienePermiso, normalizarRol } from '../../utils/roles';
 import {
   moduloDeshabilitadoPorConfiguracion,
   planBloqueadoPorRequisito,
@@ -90,7 +90,8 @@ function usePendientesSRI() {
 
 // ─── Ítems independientes (fuera de grupos) ───────────────────────────────────
 const ITEMS_SUELTOS = [
-  { to: '/dashboard', icon: '🏠', label: 'Dashboard' },
+  { to: '/dashboard', icon: '🏠', label: 'Dashboard', ocultoParaRoles: ['vendedor'] },
+  { to: '/panel-vendedor', icon: '🧑‍💼', label: 'Mi Panel', soloRoles: ['vendedor'] },
   { to: '/pos',       icon: '🛍️', label: 'POS', permiso: 'pos.usar', modulo: 'posHabilitado' },
   { to: '/restaurante/mesas', icon: '🍽️', label: 'Mesas', permiso: ['mesas.gestionar', 'mesas.tomarPedido', 'mesas.cobrar'], modulo: 'restauranteHabilitado' },
   { to: '/restaurante/cocina', icon: '🔥', label: 'Cocina', permiso: ['mesas.gestionar', 'mesas.cocina'], modulo: 'restauranteHabilitado' },
@@ -135,9 +136,9 @@ const GRUPOS_MENU = [
     icon: '📦',
     label: 'Inventario',
     items: [
-      { to: '/productos',  icon: '📦', label: 'Productos',  permiso: 'productos.ver' },
+      { to: '/productos',  icon: '📦', label: 'Productos',  permiso: 'productos.ver', ocultoParaRoles: ['vendedor'] },
       { to: '/inventario', icon: '📚', label: 'Inventario', permiso: 'inventario.ver', modulo: 'inventarioHabilitado' },
-      { to: '/productos/etiquetas', icon: '🏷️', label: 'Etiquetas de Productos', permiso: 'productos.ver' },
+      { to: '/productos/etiquetas', icon: '🏷️', label: 'Etiquetas de Productos', permiso: 'productos.ver', ocultoParaRoles: ['vendedor'] },
     ],
   },
   {
@@ -429,6 +430,8 @@ export default function Layout() {
           {ITEMS_SUELTOS.map((item) => {
             if (item.modulo && moduloDeshabilitadoPorConfiguracion(item, sistema)) return null;
             if (item.permiso && !tienePermiso(usuario?.rol, item.permiso, usuario?.permisosExtra)) return null;
+            if (item.ocultoParaRoles?.includes(normalizarRol(usuario?.rol))) return null;
+            if (item.soloRoles && !item.soloRoles.includes(normalizarRol(usuario?.rol))) return null;
             if (ocultoPorNegocioPopular(item.to, sistema)) return null;
             return (
               <NavLink
@@ -452,6 +455,8 @@ export default function Layout() {
             const itemsProcesados = grupo.items
               .filter((item) => {
                 if (item.soloMulti && !modoMulti) return false;
+                if (item.ocultoParaRoles?.includes(normalizarRol(usuario?.rol))) return false;
+                if (item.soloRoles && !item.soloRoles.includes(normalizarRol(usuario?.rol))) return false;
                 if (ocultoPorNegocioPopular(item.to, sistema)) return false;
                 return true;
               })

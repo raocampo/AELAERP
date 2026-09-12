@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
 import api, { SESSION_STORAGE_KEYS } from '../../services/api';
+import { normalizarRol } from '../../utils/roles';
 import toast from 'react-hot-toast';
 import './Login.css';
 
@@ -116,7 +117,7 @@ export default function Login() {
         if (recordar) localStorage.setItem(RECORDAR_KEY, loginId);
         else localStorage.removeItem(RECORDAR_KEY);
         toast.success(`Bienvenido, ${res.usuario.nombre}`);
-        navigate('/dashboard');
+        navigate(normalizarRol(res.usuario?.rol) === 'vendedor' ? '/panel-vendedor' : '/dashboard');
       } else {
         toast.error(res.mensaje || 'Credenciales inválidas');
       }

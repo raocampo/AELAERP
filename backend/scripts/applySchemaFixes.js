@@ -85,6 +85,21 @@ const FIXES = [
   // Módulo Agente Vendedor gateado por plan Medium/Pro (o "combo" vía
   // modulosContratados) — ver utils/configuracionSistema.js (2026-09-11)
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "vendedorHabilitado" BOOLEAN NOT NULL DEFAULT true`,
+  // Backfill: tenants que YA tenían "modulosContratados" explícito (techo
+  // manual vía panel super-admin, distinto del techo legado por plan) desde
+  // antes de que existiera "vendedorHabilitado" quedaban con el módulo
+  // bloqueado aunque su plan sea Medium/Pro — capacidadesModulos() usa el
+  // array explícito como techo EXACTO, ignorando el plan por completo si
+  // está seteado. Se agrega la clave a esos arrays cuando el plan lo
+  // ameritaría, para que el rollout de un flag nuevo no rompa combos ya
+  // configurados. Idempotente: el chequeo "NOT @>" evita re-agregar
+  // (2026-09-12, hallado con el tenant Corp Simtelec en producción).
+  `UPDATE "empresas"
+     SET "modulosContratados" = "modulosContratados" || '["vendedorHabilitado"]'::jsonb
+   WHERE "modulosContratados" IS NOT NULL
+     AND jsonb_typeof("modulosContratados") = 'array'
+     AND NOT ("modulosContratados" @> '["vendedorHabilitado"]'::jsonb)
+     AND "plan" IN ('medium', 'pro')`,
   // Agente Vendedor Fase 4 — comisiones configurables por la empresa +
   // trazabilidad de qué vendedor originó cada factura (2026-09-11)
   `ALTER TABLE "configuracion_sistema" ADD COLUMN IF NOT EXISTS "comisionVendedorFacturar" DECIMAL(5,2) NOT NULL DEFAULT 2.00`,

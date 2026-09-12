@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
-import { tienePermiso } from '../../utils/roles';
+import { tienePermiso, normalizarRol } from '../../utils/roles';
 import { ocultoPorNegocioPopular } from '../../utils/sistema';
 import './Dashboard.css';
 
@@ -22,8 +22,13 @@ export default function Dashboard() {
   const [stats,    setStats]    = useState(null);
   const [certInfo, setCertInfo] = useState(null);
   const [cargando, setCargando] = useState(true);
+  // El rol vendedor no usa este dashboard de administrador — tiene su propio
+  // panel de consulta (cartera + comisiones), ver PanelVendedor.jsx. Cubre
+  // tanto el redirect post-login como quien llegue acá por URL directa.
+  const esVendedorRol = normalizarRol(usuario?.rol) === 'vendedor';
 
   useEffect(() => {
+    if (esVendedorRol) { setCargando(false); return; }
     let ignore = false;
     Promise.allSettled([
       api.get('/empresas/estadisticas'),
@@ -38,7 +43,7 @@ export default function Dashboard() {
       }
     }).finally(() => { if (!ignore) setCargando(false); });
     return () => { ignore = true; };
-  }, []);
+  }, [esVendedorRol]);
 
   const ahora = new Date();
   const mesLabel = `${MESES[ahora.getMonth()]} ${ahora.getFullYear()}`;
@@ -83,6 +88,8 @@ export default function Dashboard() {
 
   // Alerta stock bajo
   const hayStockBajo = (stats?.stockBajo ?? 0) > 0;
+
+  if (esVendedorRol) return <Navigate to="/panel-vendedor" replace />;
 
   return (
     <div className="dash-root">

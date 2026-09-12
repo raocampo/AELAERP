@@ -60,6 +60,7 @@ import './App.css';
 const Login = lazy(() => import('./components/Auth/Login'));
 const Layout = lazy(() => import('./components/Layout/Layout'));
 const Dashboard = lazy(() => import('./components/Dashboard/Dashboard'));
+const PanelVendedor = lazy(() => import('./components/Vendedor/PanelVendedor'));
 const Estadisticas = lazy(() => import('./components/Estadisticas/Estadisticas'));
 const GestionProductos = lazy(() => import('./components/Productos/GestionProductos'));
 const ListaCompras = lazy(() => import('./components/Compras/ListaCompras'));
@@ -209,6 +210,7 @@ function App() {
               }>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
+                <Route path="panel-vendedor" element={<PermissionRoute permission="vendedor.ver"><PanelVendedor /></PermissionRoute>} />
 
                 {/* Proformas — todos los planes */}
                 <Route path="proformas"          element={<PermissionRoute permission="proformas.gestionar"><ListaProformas /></PermissionRoute>} />
