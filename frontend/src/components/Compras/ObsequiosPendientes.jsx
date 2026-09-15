@@ -33,7 +33,11 @@ function ModalAsignar({ item, productoPreseleccionado, onClose, onAsignado }) {
   const [buscando, setBuscando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [productoElegido, setProductoElegido] = useState(productoPreseleccionado || null);
-  const [unidadesEquivalentes, setUnidadesEquivalentes] = useState(String(adivinarUnidadesDesdeNombre(item.descripcion)));
+  // No se asume la unidad adivinada del nombre — un ítem que "suena" a X8
+  // puede venderse igual completo, sin dividirse (ej. una lonchera de
+  // salchichas). Arranca en 1 (sin dividir); la sugerencia se ofrece aparte.
+  const [unidadesEquivalentes, setUnidadesEquivalentes] = useState('1');
+  const sugerenciaUnidades = adivinarUnidadesDesdeNombre(item.descripcion);
   const [recordarCodigo, setRecordarCodigo] = useState(true);
 
   useEffect(() => {
@@ -118,14 +122,33 @@ function ModalAsignar({ item, productoPreseleccionado, onClose, onAsignado }) {
                 </button>
               )}
             </div>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-              ¿Cuántas unidades de este producto representa cada "{item.descripcion}"?
+            <p style={{ fontSize: '.85rem', color: '#1e293b', margin: '0 0 .3rem', fontWeight: 600 }}>
+              ¿"{item.descripcion}" se vende TAL CUAL (como {productoElegido.nombre}), o representa varias
+              unidades de {productoElegido.nombre} que se venden sueltas?
+            </p>
+            <label style={{ display: 'block', marginBottom: '0.3rem' }}>
+              Unidades de {productoElegido.nombre} que representa cada "{item.descripcion}"
               <input
                 type="number" min="1" step="1"
                 value={unidadesEquivalentes}
                 onChange={(e) => setUnidadesEquivalentes(e.target.value)}
               />
             </label>
+            <p style={{ fontSize: '.78rem', color: '#64748b', margin: '0 0 .5rem' }}>
+              Deja <strong>1</strong> si se vende completo, sin dividir.
+              {sugerenciaUnidades > 1 && Number(unidadesEquivalentes) !== sugerenciaUnidades && (
+                <>
+                  {' '}El nombre sugiere que trae {sugerenciaUnidades} unidades — si esas SÍ se venden sueltas,{' '}
+                  <button
+                    type="button"
+                    onClick={() => setUnidadesEquivalentes(String(sugerenciaUnidades))}
+                    style={{ background: 'none', border: 'none', padding: 0, color: '#7C3AED', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
+                  >
+                    usar {sugerenciaUnidades}
+                  </button>.
+                </>
+              )}
+            </p>
             <p style={{ fontSize: '.8rem', color: '#64748b', marginTop: 0 }}>
               Se sumarán {Number(item.cantidad).toFixed(3)} × {Math.max(1, parseInt(unidadesEquivalentes, 10) || 1)} ={' '}
               <strong>{(Number(item.cantidad) * Math.max(1, parseInt(unidadesEquivalentes, 10) || 1)).toFixed(3)}</strong> al

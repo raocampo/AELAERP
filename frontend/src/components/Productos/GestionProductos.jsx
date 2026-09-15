@@ -74,6 +74,7 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
   const [fusionEnviando, setFusionEnviando] = useState(false);
   const [fusionCandidatos, setFusionCandidatos] = useState([]);
   const [fusionCargandoCandidatos, setFusionCargandoCandidatos] = useState(false);
+  const [fusionSugerencia, setFusionSugerencia] = useState(1);
   const [modalEliminarInv, setModalEliminarInv] = useState(false);
   const [eliminarProductosInv, setEliminarProductosInv] = useState(false);
   const [eliminandoInv, setEliminandoInv] = useState(false);
@@ -222,7 +223,12 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
     setFusionBusqueda('');
     setFusionResultados([]);
     setFusionDestino(null);
-    setFusionUnidades(String(adivinarUnidadesDesdeNombre(producto.nombre)));
+    // No se pre-llena con la unidad adivinada del nombre — un paquete que
+    // "suena" a X8 puede venderse igual completo, sin dividirse (ej. una
+    // lonchera de salchichas). Se arranca en 1 (sin dividir) y la
+    // sugerencia se ofrece aparte, para que el usuario decida a propósito.
+    setFusionUnidades('1');
+    setFusionSugerencia(adivinarUnidadesDesdeNombre(producto.nombre));
     setFusionCandidatos([]);
     setFusionCargandoCandidatos(true);
     api.get(`/productos/${producto.id}/candidatos-fusion`)
@@ -1191,14 +1197,34 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                       Cambiar producto
                     </button>
                   </div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-                    ¿Cuántas unidades de "{fusionDestino.nombre}" representa cada "{modalFusion.nombre}"?
+                  <p style={{ fontSize: '.85rem', color: '#1e293b', margin: '0 0 .3rem', fontWeight: 600 }}>
+                    ¿"{modalFusion.nombre}" se vende TAL CUAL (como "{fusionDestino.nombre}"), o representa varias
+                    unidades de "{fusionDestino.nombre}" que se venden sueltas?
+                  </p>
+                  <label style={{ display: 'block', marginBottom: '0.3rem' }}>
+                    Unidades de "{fusionDestino.nombre}" que representa cada "{modalFusion.nombre}"
                     <input
                       type="number" min="1" step="1"
                       value={fusionUnidades}
                       onChange={(e) => setFusionUnidades(e.target.value)}
                     />
                   </label>
+                  <p style={{ fontSize: '.78rem', color: '#64748b', margin: '0 0 .5rem' }}>
+                    Deja <strong>1</strong> si se vende completo, sin dividir (ej. un paquete cerrado que se vende
+                    tal cual).
+                    {fusionSugerencia > 1 && Number(fusionUnidades) !== fusionSugerencia && (
+                      <>
+                        {' '}El nombre sugiere que trae {fusionSugerencia} unidades — si esas SÍ se venden sueltas,{' '}
+                        <button
+                          type="button"
+                          onClick={() => setFusionUnidades(String(fusionSugerencia))}
+                          style={{ background: 'none', border: 'none', padding: 0, color: '#7C3AED', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
+                        >
+                          usar {fusionSugerencia}
+                        </button>.
+                      </>
+                    )}
+                  </p>
                   <p style={{ fontSize: '.8rem', color: '#64748b' }}>
                     El stock de "{modalFusion.nombre}" ({Number(modalFusion.stockActual || 0).toFixed(2)}) se sumará
                     como {Number(modalFusion.stockActual || 0).toFixed(2)} × {Math.max(1, parseInt(fusionUnidades, 10) || 1)} ={' '}
