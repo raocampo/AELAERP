@@ -78,6 +78,9 @@ export default function DetalleCompra() {
   const [margenSelId, setMargenSelId]       = useState('');
   const [crearSiNoExiste, setCrearSiNoExiste] = useState(true);
   const [registrandoInv, setRegistrandoInv] = useState(false);
+  // Códigos de línea que el usuario destildó de "Incluir en inventario" —
+  // se resuelven/vinculan al producto igual, pero no suman stock.
+  const [codigosSinInventario, setCodigosSinInventario] = useState(new Set());
 
   // Modal ver asiento contable
   const [modalAsiento, setModalAsiento] = useState(null);
@@ -220,6 +223,7 @@ export default function DetalleCompra() {
   const abrirModalInv = async () => {
     setMargenSelId('');
     setCrearSiNoExiste(true);
+    setCodigosSinInventario(new Set());
     setModalInv(true);
     try {
       const res = await api.get('/utilidades');
@@ -230,7 +234,7 @@ export default function DetalleCompra() {
   const registrarInventario = async () => {
     setRegistrandoInv(true);
     try {
-      const body = { crearSiNoExiste };
+      const body = { crearSiNoExiste, codigosSinInventario: [...codigosSinInventario] };
       if (margenSelId) {
         const u = utilidades.find((u) => u.id === Number(margenSelId));
         if (u) body.margenPct = Number(u.porcentaje);
@@ -505,16 +509,42 @@ export default function DetalleCompra() {
                   Todas las líneas de esta compra ya tienen un producto de catálogo asignado.
                 </p>
               ) : (
-                <div style={{ background: '#f8fafc', borderRadius: '.5rem', padding: '.6rem .75rem', marginBottom: '.75rem', maxHeight: 180, overflowY: 'auto' }}>
-                  {pendientesIntegrar.map((d, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.85rem', padding: '.25rem 0', borderBottom: i < pendientesIntegrar.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
-                      <span>{d.descripcion || d.codigoPrincipal}</span>
-                      <span style={{ color: '#64748b', marginLeft: '.5rem', whiteSpace: 'nowrap' }}>
-                        {fmtNumero(d.cantidad, 2)} × {fmtMoneda(d.precioUnitario)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <p style={{ fontSize: '.78rem', color: '#64748b', margin: '0 0 .4rem' }}>
+                    Destilda una línea si NO debe sumar stock (ej. una muestra, un ítem dañado, o algo que no
+                    manejas en inventario) — igual quedará vinculada al producto del catálogo.
+                  </p>
+                  <div style={{ background: '#f8fafc', borderRadius: '.5rem', padding: '.6rem .75rem', marginBottom: '.75rem', maxHeight: 220, overflowY: 'auto' }}>
+                    {pendientesIntegrar.map((d, i) => {
+                      const codigo = d.codigoPrincipal;
+                      const incluida = !codigosSinInventario.has(codigo);
+                      return (
+                        <label
+                          key={i}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '.5rem', cursor: 'pointer',
+                            fontSize: '.85rem', padding: '.3rem 0', borderBottom: i < pendientesIntegrar.length - 1 ? '1px solid #e2e8f0' : 'none',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={incluida}
+                            onChange={() => setCodigosSinInventario((prev) => {
+                              const next = new Set(prev);
+                              if (incluida) next.add(codigo); else next.delete(codigo);
+                              return next;
+                            })}
+                            style={{ width: 15, height: 15, flexShrink: 0 }}
+                          />
+                          <span style={{ flex: 1 }}>{d.descripcion || codigo}</span>
+                          <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>
+                            {fmtNumero(d.cantidad, 2)} × {fmtMoneda(d.precioUnitario)}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
               )}
 
               <label className="dc-modal-label" style={{ display: 'flex', alignItems: 'center', gap: '.5rem', cursor: 'pointer', marginBottom: '.6rem' }}>

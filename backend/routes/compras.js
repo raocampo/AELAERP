@@ -1862,8 +1862,15 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
   const compraId  = parseInt(req.params.id, 10);
   const empresaId = req.empresa.id;
   const usuarioId = req.usuario?.id || null;
-  const { margenPct, crearSiNoExiste = false } = req.body || {};
+  const { margenPct, crearSiNoExiste = false, codigosSinInventario = [] } = req.body || {};
   const usarPvpAuto = margenPct !== undefined && margenPct !== null && !isNaN(Number(margenPct)) && Number(margenPct) >= 0;
+  // Líneas que el usuario destildó explícitamente en el modal ("Incluir en
+  // inventario") — se resuelven/vinculan al producto igual que cualquier
+  // otra línea, pero NO suman stock. Mismo criterio que "producto no
+  // inventariable": queda enlazada al catálogo sin mover inventario.
+  const codigosSinInventarioSet = new Set(
+    (Array.isArray(codigosSinInventario) ? codigosSinInventario : []).map((c) => String(c || '').trim().toUpperCase())
+  );
 
   try {
     const compra = await prisma.facturas_compra.findFirst({
@@ -2027,6 +2034,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
         }
 
         if (!prod.inventariable) continue; // No inventariable — omitir sin error
+        if (codigosSinInventarioSet.has(String(det.codigoPrincipal || '').trim().toUpperCase())) continue; // El usuario decidió no incluir esta línea en inventario
 
         const cantidad = Number(det.cantidad || 0);
         if (cantidad <= 0) continue;
