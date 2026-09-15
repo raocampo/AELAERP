@@ -83,6 +83,7 @@ function ModalAsignar({ item, productoPreseleccionado, onClose, onAsignado }) {
               placeholder="Buscar producto por código o nombre..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e2e8f0', borderRadius: 8, padding: '.5rem .6rem', fontSize: '.9rem' }}
             />
             <div style={{ maxHeight: 280, overflowY: 'auto', marginTop: '0.75rem' }}>
               {buscando && <div className="compras-empty">Buscando...</div>}

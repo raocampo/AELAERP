@@ -72,6 +72,8 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
   const [fusionDestino, setFusionDestino] = useState(null);
   const [fusionUnidades, setFusionUnidades] = useState('1');
   const [fusionEnviando, setFusionEnviando] = useState(false);
+  const [fusionCandidatos, setFusionCandidatos] = useState([]);
+  const [fusionCargandoCandidatos, setFusionCargandoCandidatos] = useState(false);
   const [modalEliminarInv, setModalEliminarInv] = useState(false);
   const [eliminarProductosInv, setEliminarProductosInv] = useState(false);
   const [eliminandoInv, setEliminandoInv] = useState(false);
@@ -221,6 +223,12 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
     setFusionResultados([]);
     setFusionDestino(null);
     setFusionUnidades(String(adivinarUnidadesDesdeNombre(producto.nombre)));
+    setFusionCandidatos([]);
+    setFusionCargandoCandidatos(true);
+    api.get(`/productos/${producto.id}/candidatos-fusion`)
+      .then((r) => setFusionCandidatos(r.data?.data || []))
+      .catch(() => {})
+      .finally(() => setFusionCargandoCandidatos(false));
   };
 
   useEffect(() => {
@@ -1130,37 +1138,51 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 a él, sin volver a crear un duplicado.
               </p>
 
-              {!fusionDestino ? (
-                <>
-                  <input
-                    autoFocus
-                    placeholder="Buscar el producto que sobrevive, por código o nombre..."
-                    value={fusionBusqueda}
-                    onChange={(e) => setFusionBusqueda(e.target.value)}
-                  />
-                  <div style={{ maxHeight: 260, overflowY: 'auto', marginTop: '0.75rem' }}>
-                    {fusionBuscando && <div className="prod-empty">Buscando...</div>}
-                    {!fusionBuscando && fusionBusqueda.trim().length >= 2 && fusionResultados.length === 0 && (
-                      <div className="prod-empty">Sin resultados</div>
+              {!fusionDestino ? (() => {
+                const buscando = fusionBusqueda.trim().length >= 2;
+                const lista = buscando ? fusionResultados : fusionCandidatos;
+                const cargando = buscando ? fusionBuscando : fusionCargandoCandidatos;
+                return (
+                  <>
+                    <input
+                      autoFocus
+                      placeholder="Buscar por código o nombre (o elige una sugerencia abajo)..."
+                      value={fusionBusqueda}
+                      onChange={(e) => setFusionBusqueda(e.target.value)}
+                      style={{
+                        width: '100%', boxSizing: 'border-box', border: '1px solid #e2e8f0',
+                        borderRadius: 10, padding: '10px 12px', fontSize: '.95rem', color: '#1e293b',
+                      }}
+                    />
+                    {!buscando && (
+                      <p style={{ fontSize: '.78rem', color: '#64748b', margin: '.5rem 0 0' }}>
+                        {fusionCargandoCandidatos ? 'Buscando posibles coincidencias…' : lista.length > 0 ? 'Posibles coincidencias (por nombre parecido):' : 'No encontré coincidencias automáticas — busca manualmente arriba.'}
+                      </p>
                     )}
-                    {fusionResultados.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setFusionDestino(p)}
-                        style={{
-                          display: 'flex', justifyContent: 'space-between', width: '100%',
-                          padding: '0.5rem 0.75rem', marginBottom: '0.25rem', textAlign: 'left',
-                          background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer',
-                        }}
-                      >
-                        <span><strong>{p.codigoPrincipal}</strong> — {p.nombre}</span>
-                        <span style={{ color: '#64748b' }}>Stock: {Number(p.stockActual || 0).toFixed(2)}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : (
+                    <div style={{ maxHeight: 260, overflowY: 'auto', marginTop: '0.5rem' }}>
+                      {cargando && <div className="prod-empty">Buscando...</div>}
+                      {!cargando && buscando && lista.length === 0 && (
+                        <div className="prod-empty">Sin resultados</div>
+                      )}
+                      {lista.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setFusionDestino(p)}
+                          style={{
+                            display: 'flex', justifyContent: 'space-between', width: '100%',
+                            padding: '0.5rem 0.75rem', marginBottom: '0.25rem', textAlign: 'left',
+                            background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer',
+                          }}
+                        >
+                          <span><strong>{p.codigoPrincipal}</strong> — {p.nombre}</span>
+                          <span style={{ color: '#64748b' }}>Stock: {Number(p.stockActual || 0).toFixed(2)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                );
+              })() : (
                 <>
                   <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '0.6rem 0.75rem', marginBottom: '0.75rem' }}>
                     Sobrevive: <strong>{fusionDestino.codigoPrincipal}</strong> — {fusionDestino.nombre}

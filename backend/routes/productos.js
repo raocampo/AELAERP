@@ -10,6 +10,7 @@ const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { checkLimiteProductos } = require('../middleware/edition');
 const { aplicarMovimientoInventario } = require('../utils/inventario');
+const { similitudNombres, pareceMismoProductoEmpacado } = require('../utils/comprasInventario');
 const {
   crearPlantillaProductosXlsx,
   crearExportacionProductosXlsx,
@@ -453,6 +454,45 @@ router.put('/:id', permitirGestionarProductos, async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Producto no encontrado' });
     res.status(500).json({ error: 'Error al actualizar' });
+  }
+});
+
+// ─── GET /api/productos/:id/candidatos-fusion ────────────────────────────────
+// Sugiere, entre los demás productos activos de la empresa, cuáles podrían
+// ser el mismo ítem que :id bajo otro código (ej. la presentación en
+// paquete de un producto que ya existe suelto) — mismas 2 señales que ya
+// frenan la creación automática de duplicados al integrar una compra
+// (similitudNombres + pareceMismoProductoEmpacado, ver
+// utils/comprasInventario.js), pero acá se listan varios candidatos en vez
+// de quedarse con el mejor, para que el usuario elija al abrir "Fusionar".
+router.get('/:id/candidatos-fusion', permitirGestionarProductos, async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const origen = await prisma.productos_servicios.findFirst({
+      where: { id: parseInt(req.params.id, 10), empresaId },
+    });
+    if (!origen) return res.status(404).json({ error: 'Producto no encontrado' });
+
+    const otros = await prisma.productos_servicios.findMany({
+      where: { empresaId, activo: true, id: { not: origen.id } },
+      select: { id: true, codigoPrincipal: true, nombre: true, stockActual: true },
+    });
+
+    const candidatos = otros
+      .map((p) => ({
+        producto: p,
+        score: similitudNombres(origen.nombre, p.nombre),
+        empaque: pareceMismoProductoEmpacado(origen.nombre, p.nombre),
+      }))
+      .filter((c) => c.score > 0 || c.empaque)
+      .sort((a, b) => (Number(b.empaque) - Number(a.empaque)) || (b.score - a.score))
+      .slice(0, 8)
+      .map((c) => c.producto);
+
+    res.json({ data: candidatos });
+  } catch (err) {
+    console.error('GET /productos/:id/candidatos-fusion:', err);
+    res.status(500).json({ error: 'Error al buscar candidatos' });
   }
 });
 
