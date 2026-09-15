@@ -803,6 +803,12 @@ const FIXES = [
   `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "imagenMenuUrl" TEXT`,
   `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "visibleEnMenu" BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "ordenMenu" INTEGER NOT NULL DEFAULT 0`,
+  // Venta por paquete además de por unidad (2026-09-14) — ver comentario en
+  // schema.prisma. Defaults preservan el comportamiento actual (1 = sin
+  // paquete, precioPaquete NULL = no se ofrece esa opción de venta).
+  `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "unidadesPorPaquete" INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "nombrePaquete" VARCHAR(50)`,
+  `ALTER TABLE "productos_servicios" ADD COLUMN IF NOT EXISTS "precioPaquete" DECIMAL(14,4)`,
   // Notas a los Estados Financieros — texto libre numerado por año fiscal
   `CREATE TABLE IF NOT EXISTS "notas_estados_financieros" (
     "id"          SERIAL PRIMARY KEY,

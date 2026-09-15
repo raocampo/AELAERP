@@ -146,24 +146,39 @@ async function aplicarMovimientosVentaDesdeDetalles({
     await _asegurarProductosDesdeDetalles({ tx, empresaId, detalles });
   }
 
-  const agregados = new Map();
-  detalles.forEach((detalle) => {
-    const codigo = String(detalle.codigoPrincipal || '').trim().toUpperCase();
-    const cantidad = roundStock(detalle.cantidad || 0);
-    if (!codigo || cantidad <= 0) return;
-    agregados.set(codigo, roundStock((agregados.get(codigo) || 0) + cantidad));
-  });
-
-  const codigos = [...agregados.keys()];
-  if (codigos.length === 0) return [];
+  // Buscar los productos ANTES de sumar cantidades (y no después, como
+  // antes) — una línea vendida "por paquete" (detalle.esPaquete) descuenta
+  // stock por `unidadesPorPaquete`, no por la cantidad de paquetes vendida,
+  // y ese factor solo se conoce leyendo el producto real en BD. Nunca se
+  // confía en un factor que mande el cliente, para que no se pueda alterar
+  // el descuento de stock manipulando el request.
+  const codigosDetalle = [...new Set(
+    detalles.map((d) => String(d.codigoPrincipal || '').trim().toUpperCase()).filter(Boolean)
+  )];
+  if (codigosDetalle.length === 0) return [];
 
   const productos = await tx.productos_servicios.findMany({
     where: {
       empresaId,
-      codigoPrincipal: { in: codigos },
+      codigoPrincipal: { in: codigosDetalle },
       inventariable: true,
     },
   });
+  const productoPorCodigo = new Map(productos.map((p) => [p.codigoPrincipal, p]));
+
+  const agregados = new Map();
+  detalles.forEach((detalle) => {
+    const codigo = String(detalle.codigoPrincipal || '').trim().toUpperCase();
+    const cantidadLinea = roundStock(detalle.cantidad || 0);
+    if (!codigo || cantidadLinea <= 0) return;
+    const factor = detalle.esPaquete
+      ? Math.max(1, parseInt(productoPorCodigo.get(codigo)?.unidadesPorPaquete ?? 1, 10) || 1)
+      : 1;
+    const cantidad = roundStock(cantidadLinea * factor);
+    agregados.set(codigo, roundStock((agregados.get(codigo) || 0) + cantidad));
+  });
+
+  if (agregados.size === 0) return [];
 
   const tipo = revertir
     ? (tipoDocumento === 'NOTA_VENTA' ? 'ANULACION_NOTA' : 'ANULACION_FACTURA')

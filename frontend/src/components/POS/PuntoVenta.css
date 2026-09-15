@@ -209,6 +209,22 @@
   background: #f1f5f9;
 }
 
+.pos-search-item-wrap {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pos-search-item-wrap:last-child {
+  border-bottom: 0;
+}
+
+.pos-search-item-paquete {
+  background: #fffbeb;
+}
+
+.pos-search-item-paquete:hover {
+  background: #fef3c7;
+}
+
 .pos-table-wrap {
   overflow-x: auto;
 }

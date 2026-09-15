@@ -399,13 +399,21 @@ async function importarDocumentoRecibido({
         detallesActualizados[i] = { ...det, productoId: prod.id, inventariable: prod.inventariable };
 
         if (registraInventario && prod.inventariable !== false) {
+          // Venta por paquete además de por unidad (2026-09-14) — mismo
+          // cálculo que en routes/compras.js POST /:id/registrar-inventario.
+          const unidadesPorPaquete = Math.max(1, parseInt(prod.unidadesPorPaquete ?? 1, 10) || 1);
+          const cantidadStock = toNum(det.cantidad, 0) * unidadesPorPaquete;
+          const costoPorUnidad = unidadesPorPaquete > 1
+            ? Number((toNum(det.precioUnitario, 0) / unidadesPorPaquete).toFixed(4))
+            : toNum(det.precioUnitario, 0);
+
           await aplicarMovimientoInventario({
             tx,
             empresaId,
             productoId: prod.id,
             usuarioId,
             tipo: 'ENTRADA',
-            deltaCantidad: toNum(det.cantidad, 0),
+            deltaCantidad: cantidadStock,
             // Antes: `BUZON-${nuevaCompra.id}` — inconsistente con el resto
             // del sistema (creación manual y "Integrar al inventario" usan
             // el número de factura como referencia), lo que le impedía a
@@ -418,7 +426,7 @@ async function importarDocumentoRecibido({
             metadata: { compraId: nuevaCompra.id, tipo: 'BUZON_SRI' },
             // Ítem regalo/combo emparejado (costo $0): NO pasar costoUnitario
             // para no sobreescribir el costo real del producto con $0.
-            ...(resolucion.esRegaloMatcheado ? {} : { costoUnitario: det.precioUnitario || 0 }),
+            ...(resolucion.esRegaloMatcheado ? {} : { costoUnitario: costoPorUnidad }),
           });
           movimientosInventario += 1;
           // Marca definitiva de "esta línea puntual ya tiene su movimiento"

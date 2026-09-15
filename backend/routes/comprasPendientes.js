@@ -75,14 +75,16 @@ router.post('/:id/asignar', async (req, res) => {
 
       // Regalo/combo a $0: NO pasar costoUnitario, para no sobreescribir el
       // costo real del producto asignado (aplicarMovimientoInventario
-      // sobreescribe el costo, no lo promedia).
+      // sobreescribe el costo, no lo promedia). La cantidad sí se convierte
+      // a unidades individuales si el producto se vende empacado (2026-09-14).
+      const unidadesPorPaqueteRegalo = Math.max(1, parseInt(producto.unidadesPorPaquete ?? 1, 10) || 1);
       const movimiento = await aplicarMovimientoInventario({
         tx,
         empresaId,
         productoId: producto.id,
         usuarioId,
         tipo: 'ENTRADA',
-        deltaCantidad: item.cantidad,
+        deltaCantidad: Number(item.cantidad || 0) * unidadesPorPaqueteRegalo,
         // Antes: item.codigoPrincipal — inconsistente con la referencia
         // (numeroFactura) que usan los otros 2 flujos que aplican
         // movimientos de compra (creación manual y "Integrar al

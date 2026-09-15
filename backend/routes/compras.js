@@ -1351,6 +1351,9 @@ router.post('/', async (req, res) => {
           productoId: resolucion?.producto?.id || null,
           inventariable: resolucion?.producto?.inventariable ?? detalle.inventariable,
           esRegaloMatcheado: Boolean(resolucion?.esRegaloMatcheado),
+          // Venta por paquete (2026-09-14) — se copia acá para no volver a
+          // buscar el producto al aplicar el movimiento más abajo.
+          unidadesPorPaquete: Math.max(1, parseInt(resolucion?.producto?.unidadesPorPaquete ?? 1, 10) || 1),
         });
       }
 
@@ -1404,13 +1407,21 @@ router.post('/', async (req, res) => {
         for (const detalle of detallesProcesados) {
           if (!detalle.productoId || !detalle.inventariable) continue;
 
+          // Venta por paquete además de por unidad — ver el mismo cálculo en
+          // POST /:id/registrar-inventario más abajo en este archivo.
+          const unidadesPorPaquete = detalle.unidadesPorPaquete || 1;
+          const cantidadStock = Number(detalle.cantidad || 0) * unidadesPorPaquete;
+          const costoPorUnidad = unidadesPorPaquete > 1
+            ? Number(((Number(detalle.precioUnitario) || 0) / unidadesPorPaquete).toFixed(4))
+            : (Number(detalle.precioUnitario) || 0);
+
           const movimiento = await aplicarMovimientoInventario({
             tx,
             empresaId: req.empresa.id,
             productoId: detalle.productoId,
             usuarioId: req.usuario.id,
             tipo: 'ENTRADA',
-            deltaCantidad: detalle.cantidad,
+            deltaCantidad: cantidadStock,
             referencia: normalizarNumeroFactura(numeroFactura),
             observacion: detalle.esRegaloMatcheado
               ? `Entrada por regalo/combo de factura ${normalizarNumeroFactura(numeroFactura)}`
@@ -1419,7 +1430,7 @@ router.post('/', async (req, res) => {
             // Ítem regalo/combo emparejado (costo $0): NO pasar costoUnitario
             // para no sobreescribir el costo real del producto con $0
             // (aplicarMovimientoInventario sobreescribe, no promedia).
-            ...(detalle.esRegaloMatcheado ? {} : { costoUnitario: detalle.precioUnitario }),
+            ...(detalle.esRegaloMatcheado ? {} : { costoUnitario: costoPorUnidad }),
           });
 
           if (movimiento?.movimiento) movimientosInventario += 1;
@@ -2020,6 +2031,19 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
         const cantidad = Number(det.cantidad || 0);
         if (cantidad <= 0) continue;
 
+        // Venta por paquete además de por unidad (2026-09-14): el proveedor
+        // vende empacado (ej. funda de 10) pero el stock siempre se lleva
+        // en unidades individuales. `unidadesPorPaquete` se configura en el
+        // catálogo del producto (Gestión de Productos) — si el producto no
+        // lo tiene configurado, el default es 1 y esto no cambia nada.
+        // `det.precioUnitario` es el costo del paquete tal como se compró;
+        // se divide para guardar el costo por unidad individual real.
+        const unidadesPorPaquete = Math.max(1, parseInt(prod.unidadesPorPaquete ?? 1, 10) || 1);
+        const cantidadStock = cantidad * unidadesPorPaquete;
+        const costoPorUnidad = unidadesPorPaquete > 1
+          ? Number(((Number(det.precioUnitario) || 0) / unidadesPorPaquete).toFixed(4))
+          : (Number(det.precioUnitario) || 0);
+
         // Chequeo legado por producto+factura — se ejecuta para TODA línea
         // que llega hasta acá, no solo las que ya tenían productoId antes
         // de esta corrida. Es tentador pensar que una línea "recién
@@ -2049,7 +2073,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
           productoId: prod.id,
           usuarioId,
           tipo: 'ENTRADA',
-          deltaCantidad: cantidad,
+          deltaCantidad: cantidadStock,
           referencia: compra.numeroFactura,
           observacion: esRegaloMatcheado
             ? `Entrada por regalo/combo — compra ${compra.numeroFactura}`
@@ -2057,15 +2081,15 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
           metadata: { compraId, tipo: 'REGISTRO_MANUAL' },
           // Ítem regalo/combo emparejado (costo $0): NO pasar costoUnitario
           // para no sobreescribir el costo real del producto con $0.
-          ...(esRegaloMatcheado ? {} : { costoUnitario: det.precioUnitario || 0 }),
+          ...(esRegaloMatcheado ? {} : { costoUnitario: costoPorUnidad }),
         });
         detallesActualizados[i] = { ...detallesActualizados[i], movimientoAplicado: true };
 
-        if (!esRegaloMatcheado && usarPvpAuto && Number(det.precioUnitario || 0) > 0) {
-          const nuevoPvp = Number((det.precioUnitario * (1 + Number(margenPct) / 100)).toFixed(4));
+        if (!esRegaloMatcheado && usarPvpAuto && costoPorUnidad > 0) {
+          const nuevoPvp = Number((costoPorUnidad * (1 + Number(margenPct) / 100)).toFixed(4));
           await tx.productos_servicios.update({
             where: { id: prod.id },
-            data: { precioUnitario: nuevoPvp, costoUnitario: det.precioUnitario },
+            data: { precioUnitario: nuevoPvp, costoUnitario: costoPorUnidad },
           });
         }
 

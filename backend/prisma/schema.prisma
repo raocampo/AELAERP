@@ -271,6 +271,14 @@ model productos_servicios {
   inventariable   Boolean  @default(false)
   stockActual     Decimal  @default(0) @db.Decimal(14, 3)
   stockMinimo     Decimal  @default(0) @db.Decimal(14, 3)
+  // Venta por paquete además de por unidad (2026-09-14) — el stock SIEMPRE
+  // se lleva en unidades individuales; estos 3 campos son opcionales y no
+  // cambian nada si no se usan (default = comportamiento actual). Ej.: el
+  // proveedor vende una funda de 10 Bonice a $1.90, pero el negocio vende
+  // cada Bonice suelto a $0.25 Y a veces también la funda entera cerrada.
+  unidadesPorPaquete Int      @default(1)
+  nombrePaquete      String?  @db.VarChar(50)
+  precioPaquete      Decimal? @db.Decimal(14, 4)
   infoAdicional   String?
   activo          Boolean  @default(true)
   // ── Menú digital (módulo restaurante) ── campos opcionales, sin efecto

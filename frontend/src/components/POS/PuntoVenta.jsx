@@ -314,12 +314,18 @@ export default function PuntoVenta() {
     setPagos((prev) => prev.map((p, i) => (i === index ? { ...p, [campo]: valor } : p)));
   };
 
-  const agregarProducto = (producto) => {
+  // `esPaquete`: vender la presentación empacada completa (ej. "Funda x10")
+  // en vez de la unidad suelta — mismo producto/código, pero es una línea
+  // de carrito distinta (precio y cantidad tienen otro significado: acá
+  // "cantidad" son paquetes, no unidades). El backend resuelve el factor
+  // real de conversión desde el catálogo al descontar stock — nunca desde
+  // lo que mande esta pantalla (ver utils/inventario.js).
+  const agregarProducto = (producto, esPaquete = false) => {
     setCarrito((prev) => {
-      const existente = prev.find((item) => item.codigoPrincipal === producto.codigoPrincipal);
+      const existente = prev.find((item) => item.codigoPrincipal === producto.codigoPrincipal && Boolean(item.esPaquete) === esPaquete);
       if (existente) {
         return prev.map((item) => (
-          item.codigoPrincipal === producto.codigoPrincipal
+          item === existente
             ? { ...item, cantidad: Number(item.cantidad) + 1 }
             : item
         ));
@@ -330,11 +336,12 @@ export default function PuntoVenta() {
         {
           uid: nuevoUid(),
           codigoPrincipal: producto.codigoPrincipal,
-          descripcion: producto.nombre,
+          descripcion: esPaquete ? `${producto.nombre} (${producto.nombrePaquete})` : producto.nombre,
           cantidad: 1,
-          precioUnitario: Number(producto.precioUnitario || 0),
+          precioUnitario: Number((esPaquete ? producto.precioPaquete : producto.precioUnitario) || 0),
           ivaPorcentaje: Number(producto.tarifaIva || 0),
           descuento: 0,
+          ...(esPaquete ? { esPaquete: true } : {}),
         },
       ];
     });
@@ -594,6 +601,7 @@ export default function PuntoVenta() {
               precioUnitario: Number(item.precioUnitario || 0),
               descuento: Number(item.descuento || 0),
               ...(item.crearEnCatalogo && { crearEnCatalogo: true }),
+              ...(item.esPaquete && { esPaquete: true }),
             })),
             ...(puntoVenta && { establecimiento: puntoVenta.establecimiento, puntoEmision: puntoVenta.puntoEmision }),
           },
@@ -646,6 +654,7 @@ export default function PuntoVenta() {
               descuento: Number(item.descuento || 0),
               ivaPorcentaje: Number(item.ivaPorcentaje || 0),
               ...(item.crearEnCatalogo && { crearEnCatalogo: true }),
+              ...(item.esPaquete && { esPaquete: true }),
             })),
             pagos: pagos.map((p) => ({
               formaPago: FORMAS_FACTURA.find(f => f.value === p.formaPago)?.sriCodigo || p.formaPago,
@@ -874,11 +883,20 @@ export default function PuntoVenta() {
             {resultados.length > 0 && (
               <div className="pos-search-drop">
                 {resultados.map((producto) => (
-                  <button key={producto.id} type="button" className="pos-search-item" onClick={() => agregarProducto(producto)}>
-                    <strong>{producto.codigoPrincipal}</strong>
-                    <span>{producto.nombre}</span>
-                    <small>${Number(producto.precioUnitario || 0).toFixed(2)}</small>
-                  </button>
+                  <div key={producto.id} className="pos-search-item-wrap">
+                    <button type="button" className="pos-search-item" onClick={() => agregarProducto(producto)}>
+                      <strong>{producto.codigoPrincipal}</strong>
+                      <span>{producto.nombre}</span>
+                      <small>${Number(producto.precioUnitario || 0).toFixed(2)}</small>
+                    </button>
+                    {Number(producto.unidadesPorPaquete) > 1 && producto.precioPaquete != null && (
+                      <button type="button" className="pos-search-item pos-search-item-paquete" onClick={() => agregarProducto(producto, true)}>
+                        <strong>📦</strong>
+                        <span>{producto.nombrePaquete || `Paquete x${producto.unidadesPorPaquete}`}</span>
+                        <small>${Number(producto.precioPaquete || 0).toFixed(2)}</small>
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}

@@ -19,6 +19,9 @@ const FORM_INICIAL = {
   inventariable: false,
   stockActual: '0',
   stockMinimo: '0',
+  unidadesPorPaquete: '1',
+  nombrePaquete: '',
+  precioPaquete: '',
   infoAdicional: '',
   activo: true,
   categoriaMenu: '',
@@ -136,6 +139,9 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       inventariable: Boolean(producto.inventariable),
       stockActual: producto.stockActual ?? '0',
       stockMinimo: producto.stockMinimo ?? '0',
+      unidadesPorPaquete: producto.unidadesPorPaquete ?? 1,
+      nombrePaquete: producto.nombrePaquete || '',
+      precioPaquete: producto.precioPaquete ?? '',
       infoAdicional: producto.infoAdicional || '',
       activo: Boolean(producto.activo),
       categoriaMenu: producto.categoriaMenu || '',
@@ -165,6 +171,10 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
         costoUnitario: Number(form.costoUnitario || 0),
         stockActual: Number(form.stockActual || 0),
         stockMinimo: Number(form.stockMinimo || 0),
+        unidadesPorPaquete: Math.max(1, parseInt(form.unidadesPorPaquete || 1, 10) || 1),
+        nombrePaquete: form.nombrePaquete?.trim() || null,
+        precioPaquete: form.precioPaquete === '' || form.precioPaquete === null
+          ? null : Number(form.precioPaquete),
       };
 
       if (form.id) {
@@ -850,6 +860,36 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                     <span>Stock mínimo</span>
                     <input type="number" min="0" step="0.001" value={form.stockMinimo} onChange={(e) => setForm((prev) => ({ ...prev, stockMinimo: e.target.value }))} />
                   </label>
+                  <label>
+                    <span>Unidades por paquete</span>
+                    <input
+                      type="number" min="1" step="1"
+                      value={form.unidadesPorPaquete}
+                      onChange={(e) => setForm((prev) => ({ ...prev, unidadesPorPaquete: e.target.value }))}
+                    />
+                    <small>El proveedor lo vende empacado (ej. funda de 10) pero el stock siempre se lleva en unidades sueltas. Deja en 1 si no aplica.</small>
+                  </label>
+                  {Number(form.unidadesPorPaquete) > 1 && (
+                    <>
+                      <label>
+                        <span>Nombre del paquete</span>
+                        <input
+                          placeholder="Ej: Funda x10, Caja"
+                          value={form.nombrePaquete}
+                          onChange={(e) => setForm((prev) => ({ ...prev, nombrePaquete: e.target.value }))}
+                        />
+                      </label>
+                      <label>
+                        <span>Precio de venta del paquete completo</span>
+                        <input
+                          type="number" min="0" step="0.01"
+                          placeholder="Déjalo vacío si no se vende el paquete entero"
+                          value={form.precioPaquete}
+                          onChange={(e) => setForm((prev) => ({ ...prev, precioPaquete: e.target.value }))}
+                        />
+                      </label>
+                    </>
+                  )}
                 </>
               )}
               <label className="prod-check full">
