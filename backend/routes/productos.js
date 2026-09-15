@@ -9,6 +9,7 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { checkLimiteProductos } = require('../middleware/edition');
+const { aplicarMovimientoInventario } = require('../utils/inventario');
 const {
   crearPlantillaProductosXlsx,
   crearExportacionProductosXlsx,
@@ -452,6 +453,84 @@ router.put('/:id', permitirGestionarProductos, async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Producto no encontrado' });
     res.status(500).json({ error: 'Error al actualizar' });
+  }
+});
+
+// ─── POST /api/productos/:id/fusionar ────────────────────────────────────────
+// El producto :id (origen, duplicado — ej. la presentación en paquete que el
+// proveedor factura con otro código) se fusiona dentro de productoDestinoId
+// (el que sobrevive). Su código de compra queda vinculado en
+// codigos_compra_alternos con el factor indicado, para que la próxima compra
+// con ese código resuelva directo contra el destino (ver
+// buscarProductoCoincidente en utils/comprasInventario.js). El stock actual
+// del origen se traspasa (convertido por el factor) y el origen queda
+// inactivo — no se borra, para no romper el historial de ventas/compras.
+router.post('/:id/fusionar', permitirGestionarProductos, async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const usuarioId = req.usuario?.id || null;
+    const origenId = parseInt(req.params.id, 10);
+    const { productoDestinoId, unidadesEquivalentes } = req.body || {};
+
+    const destinoId = parseInt(productoDestinoId, 10);
+    if (!destinoId) {
+      return res.status(400).json({ success: false, mensaje: 'Debes indicar el producto destino (el que sobrevive)' });
+    }
+    if (destinoId === origenId) {
+      return res.status(400).json({ success: false, mensaje: 'El producto origen y destino no pueden ser el mismo' });
+    }
+    const factor = Math.max(1, parseInt(unidadesEquivalentes ?? 1, 10) || 1);
+
+    const resultado = await prisma.$transaction(async (tx) => {
+      const origen = await tx.productos_servicios.findFirst({ where: { id: origenId, empresaId } });
+      if (!origen) throw new Error('Producto origen no encontrado');
+      const destino = await tx.productos_servicios.findFirst({ where: { id: destinoId, empresaId } });
+      if (!destino) throw new Error('Producto destino no encontrado');
+
+      const codigos = [origen.codigoPrincipal, origen.codigoAuxiliar].filter(Boolean);
+      for (const codigo of codigos) {
+        await tx.codigos_compra_alternos.upsert({
+          where: { empresaId_codigo: { empresaId, codigo } },
+          create: { empresaId, codigo, productoId: destino.id, unidadesEquivalentes: factor },
+          update: { productoId: destino.id, unidadesEquivalentes: factor },
+        });
+      }
+
+      const stockOrigen = Number(origen.stockActual || 0);
+      if (stockOrigen !== 0) {
+        await aplicarMovimientoInventario({
+          tx, empresaId, productoId: destino.id, usuarioId,
+          tipo: 'AJUSTE',
+          deltaCantidad: stockOrigen * factor,
+          observacion: `Fusión: stock traspasado desde "${origen.nombre}" (${origen.codigoPrincipal})`,
+          metadata: { fusionOrigenId: origen.id },
+        });
+        await aplicarMovimientoInventario({
+          tx, empresaId, productoId: origen.id, usuarioId,
+          tipo: 'AJUSTE',
+          deltaCantidad: -stockOrigen,
+          observacion: `Fusión: stock traspasado a "${destino.nombre}" (${destino.codigoPrincipal})`,
+          metadata: { fusionDestinoId: destino.id },
+        });
+      }
+
+      const origenActualizado = await tx.productos_servicios.update({
+        where: { id: origen.id },
+        data: {
+          activo: false,
+          infoAdicional: `${origen.infoAdicional ? origen.infoAdicional + ' — ' : ''}Fusionado con "${destino.nombre}" (#${destino.id}) el ${new Date().toISOString().slice(0, 10)}`,
+        },
+      });
+
+      const destinoActualizado = await tx.productos_servicios.findFirst({ where: { id: destino.id } });
+
+      return { origen: origenActualizado, destino: destinoActualizado };
+    });
+
+    res.json({ success: true, data: resultado, mensaje: 'Productos fusionados correctamente' });
+  } catch (error) {
+    console.error('POST /productos/:id/fusionar:', error);
+    res.status(400).json({ success: false, mensaje: error.message || 'No se pudo fusionar el producto' });
   }
 });
 

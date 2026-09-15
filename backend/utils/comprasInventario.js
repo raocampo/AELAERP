@@ -91,6 +91,26 @@ function similitudNombres(nombreA, nombreB) {
 
 const UMBRAL_POSIBLE_DUPLICADO = 0.34;
 
+// Un código de proveedor para la presentación en paquete/caja de un
+// producto (ej. "SALCHICHA LONCHERA X8 EUROPEA 400GR/50", "SCHICK...
+// DPLx12/12", "VASO H.G 5.ONZAS... PAQ*50U/120") agrega varias palabras
+// propias del empaque al nombre — eso hace que el Jaccard normal contra
+// la unidad suelta ("SALCHICHA CARNE LA EUROPEA 400G") caiga por debajo
+// del umbral general y el producto se cree como duplicado en vez de
+// quedar pendiente de confirmación. Si CUALQUIERA de los 2 nombres trae
+// un marcador de empaque explícito, basta con 1 palabra significativa en
+// común (marca/nombre base) para sospechar que es el mismo ítem.
+const MARCADOR_PAQUETE = /\bPAQ\b|\bX\d{1,3}\b|DPLX?\d+|\bT\d+\/\d+\b|\/\d{2,4}\b|\bCAJA\b|\bDISPLAY\b|\bLONCHERA\b/i;
+
+function pareceMismoProductoEmpacado(nombreA, nombreB) {
+  if (!MARCADOR_PAQUETE.test(nombreA) && !MARCADOR_PAQUETE.test(nombreB)) return false;
+  const tokensA = new Set(tokensSignificativos(nombreA));
+  const tokensB = new Set(tokensSignificativos(nombreB));
+  if (tokensA.size === 0 || tokensB.size === 0) return false;
+  for (const t of tokensA) if (tokensB.has(t)) return true;
+  return false;
+}
+
 // Busca, entre los productos activos de la empresa, el más parecido por
 // nombre al de la línea de compra. Devuelve { producto, score } o null si
 // nada supera el umbral. No se ejecuta si ya hubo match exacto por código.
@@ -105,7 +125,8 @@ async function buscarPosibleDuplicadoPorNombre(tx, empresaId, descripcion) {
   let mejor = null;
   for (const candidato of candidatos) {
     const score = similitudNombres(descripcion, candidato.nombre);
-    if (score >= UMBRAL_POSIBLE_DUPLICADO && (!mejor || score > mejor.score)) {
+    const esSospechosoPorEmpaque = score < UMBRAL_POSIBLE_DUPLICADO && pareceMismoProductoEmpacado(descripcion, candidato.nombre);
+    if ((score >= UMBRAL_POSIBLE_DUPLICADO || esSospechosoPorEmpaque) && (!mejor || score > mejor.score)) {
       mejor = { producto: candidato, score };
     }
   }
@@ -113,26 +134,49 @@ async function buscarPosibleDuplicadoPorNombre(tx, empresaId, descripcion) {
 }
 
 // ─── Match exacto (productoId / codigoPrincipal / codigoAuxiliar) ────────────
-// Comportamiento sin cambios respecto al histórico buscarProductoCoincidente.
+// `activo: true` en los 3 filtros: un producto desactivado (ej. fusionado
+// dentro de otro, ver POST /productos/:id/fusionar) deja de "atrapar" su
+// propio código, para que el alias de codigos_compra_alternos (más abajo)
+// pueda tomar el control y redirigir al producto real.
 async function buscarProductoCoincidente(tx, empresaId, detalle) {
   if (detalle.productoId) {
     const porId = await tx.productos_servicios.findFirst({
-      where: { id: detalle.productoId, empresaId },
+      where: { id: detalle.productoId, empresaId, activo: true },
     });
     if (porId) return porId;
   }
 
   if (detalle.codigoPrincipal) {
     const porCodigo = await tx.productos_servicios.findFirst({
-      where: { empresaId, codigoPrincipal: detalle.codigoPrincipal },
+      where: { empresaId, codigoPrincipal: detalle.codigoPrincipal, activo: true },
     });
     if (porCodigo) return porCodigo;
   }
 
   if (detalle.codigoAuxiliar) {
-    return tx.productos_servicios.findFirst({
-      where: { empresaId, codigoAuxiliar: detalle.codigoAuxiliar },
+    const porAuxiliar = await tx.productos_servicios.findFirst({
+      where: { empresaId, codigoAuxiliar: detalle.codigoAuxiliar, activo: true },
     });
+    if (porAuxiliar) return porAuxiliar;
+  }
+
+  // Alias de código de compra (2026-09-15): el código de esta línea no
+  // corresponde a ningún producto propio, pero fue vinculado explícitamente
+  // (por fusión manual o por "recordar código" al resolver un pendiente) al
+  // producto real. Se devuelve con `unidadesPorPaquete` sobreescrito en
+  // memoria (nunca se persiste) por el factor del alias, para que los
+  // call-sites que ya leen ese campo apliquen la conversión sin cambios.
+  const codigosAlias = [detalle.codigoPrincipal, detalle.codigoAuxiliar].filter(Boolean);
+  if (codigosAlias.length > 0) {
+    const alias = await tx.codigos_compra_alternos.findFirst({
+      where: { empresaId, codigo: { in: codigosAlias } },
+    });
+    if (alias) {
+      const producto = await tx.productos_servicios.findFirst({
+        where: { id: alias.productoId, empresaId, activo: true },
+      });
+      if (producto) return { ...producto, unidadesPorPaquete: alias.unidadesEquivalentes };
+    }
   }
 
   return null;
@@ -324,4 +368,5 @@ module.exports = {
   normalizarCodigoSinPrefijo,
   similitudNombres,
   buscarPosibleDuplicadoPorNombre,
+  pareceMismoProductoEmpacado,
 };

@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { resolverProductoCompra } = require('../utils/comprasInventario');
+const {
+  resolverProductoCompra,
+  buscarProductoCoincidente,
+  buscarPosibleDuplicadoPorNombre,
+  pareceMismoProductoEmpacado,
+} = require('../utils/comprasInventario');
 
 function crearTxFake() {
   const creados = [];
@@ -13,6 +18,9 @@ function crearTxFake() {
         creados.push(producto);
         return producto;
       },
+    },
+    codigos_compra_alternos: {
+      findFirst: async () => null, // sin alias registrado, salvo que un test lo sobreescriba
     },
   };
 }
@@ -61,4 +69,65 @@ test('resolverProductoCompra deja el código intacto cuando es válido', async (
   assert.equal(resultado.producto.codigoPrincipal, '7802225427777');
   assert.equal(resultado.producto.codigoAuxiliar, '7802225427777');
   assert.doesNotMatch(resultado.producto.infoAdicional, /notación científica/);
+});
+
+test('buscarProductoCoincidente resuelve por alias de codigos_compra_alternos cuando no hay match exacto, con el factor del alias', async () => {
+  const productoReal = { id: 42, empresaId: 1, codigoPrincipal: '7861021705199', unidadesPorPaquete: 1 };
+  const tx = {
+    productos_servicios: {
+      findFirst: async ({ where }) => (where.id === 42 ? productoReal : null),
+    },
+    codigos_compra_alternos: {
+      findFirst: async ({ where }) => (
+        where.codigo.in.includes('EU20079P') ? { productoId: 42, unidadesEquivalentes: 8 } : null
+      ),
+    },
+  };
+
+  const resultado = await buscarProductoCoincidente(tx, 1, { codigoPrincipal: 'EU20079P' });
+
+  assert.equal(resultado.id, 42);
+  assert.equal(resultado.unidadesPorPaquete, 8); // sobreescrito por el alias, no toca el producto real
+});
+
+test('buscarProductoCoincidente no usa un producto desactivado ni por match exacto', async () => {
+  const tx = {
+    productos_servicios: {
+      // Simula la fila real: existe con ese código pero está inactiva
+      // (fusionada) — no debe devolverse, para que el alias tome el control.
+      findFirst: async ({ where }) => (where.activo === true ? null : { id: 1, activo: false }),
+    },
+    codigos_compra_alternos: { findFirst: async () => null },
+  };
+
+  const resultado = await buscarProductoCoincidente(tx, 1, { codigoPrincipal: 'EU20079P' });
+  assert.equal(resultado, null);
+});
+
+test('pareceMismoProductoEmpacado detecta el caso real que el Jaccard estricto no atrapa', () => {
+  assert.equal(
+    pareceMismoProductoEmpacado('SALCHICHA CARNE LA EUROPEA 400G', 'SALCHICHA LONCHERA X8 EUROPEA 400GR/50'),
+    true,
+  );
+  assert.equal(
+    pareceMismoProductoEmpacado('AFEITADORA SCHICK  XTREME3', 'SCHICK AFEITADORA XTREME III HOMBRE DPLx12/12'),
+    true,
+  );
+  // Sin marcador de empaque en ninguno de los 2 nombres, no debe activarse
+  // (evita falsos positivos entre productos legítimamente distintos).
+  assert.equal(pareceMismoProductoEmpacado('AVENA QUAKER 250G', 'AVENA QUAKER 500G'), false);
+});
+
+test('buscarPosibleDuplicadoPorNombre marca POSIBLE_DUPLICADO por marcador de empaque aunque el Jaccard no llegue al umbral', async () => {
+  const tx = {
+    productos_servicios: {
+      findMany: async () => [
+        { id: 5, codigoPrincipal: '7861021705199', nombre: 'SALCHICHA CARNE LA EUROPEA 400G' },
+      ],
+    },
+  };
+
+  const resultado = await buscarPosibleDuplicadoPorNombre(tx, 1, 'SALCHICHA LONCHERA X8 EUROPEA 400GR/50');
+  assert.ok(resultado);
+  assert.equal(resultado.producto.id, 5);
 });

@@ -114,6 +114,7 @@ model empresas {
   restauranteLlamadas              restaurante_llamadas[]
   comisionesDevengadas             comision_devengada[]
   metasVendedor                    meta_vendedor[]
+  codigosCompraAlternos            codigos_compra_alternos[]
 
   @@map("empresas")
 }
@@ -297,10 +298,34 @@ model productos_servicios {
   movimientosInventario movimientos_inventario[]
   itemsCompraAsignados  items_compra_pendientes[] @relation("ItemPendienteAsignado")
   itemsCompraSugeridos  items_compra_pendientes[] @relation("ItemPendienteSugerido")
+  codigosCompraAlternos codigos_compra_alternos[]
 
   @@unique([empresaId, codigoPrincipal])
   @@index([empresaId])
   @@map("productos_servicios")
+}
+
+// Código de proveedor (paquete/caja) que en realidad corresponde a un
+// producto YA existente en el catálogo — evita que compras sucesivas del
+// mismo ítem con un código distinto (unidad vs. caja) creen un producto
+// duplicado. Ver utils/comprasInventario.js:buscarProductoCoincidente y
+// routes/productos.js POST /:id/fusionar (2026-09-15).
+model codigos_compra_alternos {
+  id                   Int      @id @default(autoincrement())
+  empresaId            Int
+  codigo               String   @db.VarChar(50)
+  productoId           Int
+  // Cuántas unidades de stock del producto real representa 1 unidad
+  // comprada con ESTE código (ej. una lonchera de 8 vale 8).
+  unidadesEquivalentes Int      @default(1)
+  createdAt            DateTime @default(now())
+
+  empresa  empresas            @relation(fields: [empresaId], references: [id])
+  producto productos_servicios @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([empresaId, codigo])
+  @@index([empresaId])
+  @@map("codigos_compra_alternos")
 }
 
 // ====================================

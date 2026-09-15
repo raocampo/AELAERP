@@ -53,11 +53,12 @@ router.post('/:id/asignar', async (req, res) => {
     const empresaId = req.empresa.id;
     const usuarioId = req.usuario?.id || null;
     const id = parseInt(req.params.id, 10);
-    const { productoId } = req.body || {};
+    const { productoId, unidadesEquivalentes, recordarCodigo = true } = req.body || {};
 
     if (!productoId) {
       return res.status(400).json({ success: false, mensaje: 'Debes indicar el producto a asignar' });
     }
+    const factor = Math.max(1, parseInt(unidadesEquivalentes ?? 1, 10) || 1);
 
     const item = await prisma.items_compra_pendientes.findFirst({ where: { id, empresaId } });
     if (!item) return res.status(404).json({ success: false, mensaje: 'Ítem pendiente no encontrado' });
@@ -75,16 +76,18 @@ router.post('/:id/asignar', async (req, res) => {
 
       // Regalo/combo a $0: NO pasar costoUnitario, para no sobreescribir el
       // costo real del producto asignado (aplicarMovimientoInventario
-      // sobreescribe el costo, no lo promedia). La cantidad sí se convierte
-      // a unidades individuales si el producto se vende empacado (2026-09-14).
-      const unidadesPorPaqueteRegalo = Math.max(1, parseInt(producto.unidadesPorPaquete ?? 1, 10) || 1);
+      // sobreescribe el costo, no lo promedia). La cantidad se convierte a
+      // unidades individuales por `factor` — si el usuario no indicó
+      // `unidadesEquivalentes` explícito, se usa el `unidadesPorPaquete` ya
+      // configurado en el producto (venta por paquete, 2026-09-14).
+      const factorReal = unidadesEquivalentes != null ? factor : Math.max(1, parseInt(producto.unidadesPorPaquete ?? 1, 10) || 1);
       const movimiento = await aplicarMovimientoInventario({
         tx,
         empresaId,
         productoId: producto.id,
         usuarioId,
         tipo: 'ENTRADA',
-        deltaCantidad: Number(item.cantidad || 0) * unidadesPorPaqueteRegalo,
+        deltaCantidad: Number(item.cantidad || 0) * factorReal,
         // Antes: item.codigoPrincipal — inconsistente con la referencia
         // (numeroFactura) que usan los otros 2 flujos que aplican
         // movimientos de compra (creación manual y "Integrar al
@@ -96,6 +99,19 @@ router.post('/:id/asignar', async (req, res) => {
           : `Entrada por regalo/combo asignado manualmente (ítem pendiente #${item.id})`,
         metadata: { itemPendienteId: item.id, compraId: item.compraId },
       });
+
+      // Recordar el código para la próxima compra (2026-09-15): si el
+      // usuario no lo desmarca, este código de proveedor queda vinculado al
+      // producto elegido — la siguiente compra con el mismo código resuelve
+      // directo, sin volver a generar un ítem pendiente. Ver
+      // buscarProductoCoincidente en utils/comprasInventario.js.
+      if (recordarCodigo && item.codigoPrincipal) {
+        await tx.codigos_compra_alternos.upsert({
+          where: { empresaId_codigo: { empresaId, codigo: item.codigoPrincipal } },
+          create: { empresaId, codigo: item.codigoPrincipal, productoId: producto.id, unidadesEquivalentes: factorReal },
+          update: { productoId: producto.id, unidadesEquivalentes: factorReal },
+        });
+      }
 
       const actualizado = await tx.items_compra_pendientes.update({
         where: { id: item.id },

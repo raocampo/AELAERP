@@ -4,6 +4,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/useAuth';
 import { descargarCsv } from '../../utils/exportCsv';
 import { IcEditar, IcEliminar } from '../../utils/icons';
+import { adivinarUnidadesDesdeNombre } from '../../utils/adivinarPaquete';
 import DropZone from '../shared/DropZone';
 import './GestionProductos.css';
 
@@ -63,6 +64,14 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
   const [exportandoInvExcel, setExportandoInvExcel] = useState(false);
   const [modalProducto,   setModalProducto]   = useState(false);
   const [modalMovimiento, setModalMovimiento] = useState(false);
+  // Fusionar productos duplicados (2026-09-15)
+  const [modalFusion, setModalFusion] = useState(null); // producto origen (duplicado) o null
+  const [fusionBusqueda, setFusionBusqueda] = useState('');
+  const [fusionResultados, setFusionResultados] = useState([]);
+  const [fusionBuscando, setFusionBuscando] = useState(false);
+  const [fusionDestino, setFusionDestino] = useState(null);
+  const [fusionUnidades, setFusionUnidades] = useState('1');
+  const [fusionEnviando, setFusionEnviando] = useState(false);
   const [modalEliminarInv, setModalEliminarInv] = useState(false);
   const [eliminarProductosInv, setEliminarProductosInv] = useState(false);
   const [eliminandoInv, setEliminandoInv] = useState(false);
@@ -203,6 +212,45 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
       await cargar({ busquedaActual: busqueda });
     } catch (error) {
       toast.error(error.response?.data?.mensaje || error.response?.data?.error || 'No se pudo eliminar');
+    }
+  };
+
+  const abrirFusion = (producto) => {
+    setModalFusion(producto);
+    setFusionBusqueda('');
+    setFusionResultados([]);
+    setFusionDestino(null);
+    setFusionUnidades(String(adivinarUnidadesDesdeNombre(producto.nombre)));
+  };
+
+  useEffect(() => {
+    if (!modalFusion || fusionBusqueda.trim().length < 2) { setFusionResultados([]); return; }
+    let ignore = false;
+    setFusionBuscando(true);
+    const timer = setTimeout(() => {
+      api.get('/productos/buscar', { params: { q: fusionBusqueda.trim() } })
+        .then((r) => { if (!ignore) setFusionResultados((r.data?.data || []).filter((p) => p.id !== modalFusion.id)); })
+        .catch(() => {})
+        .finally(() => { if (!ignore) setFusionBuscando(false); });
+    }, 250);
+    return () => { ignore = true; clearTimeout(timer); };
+  }, [fusionBusqueda, modalFusion]);
+
+  const confirmarFusion = async () => {
+    if (!modalFusion || !fusionDestino) return;
+    setFusionEnviando(true);
+    try {
+      const res = await api.post(`/productos/${modalFusion.id}/fusionar`, {
+        productoDestinoId: fusionDestino.id,
+        unidadesEquivalentes: Math.max(1, parseInt(fusionUnidades, 10) || 1),
+      });
+      toast.success(res.data?.mensaje || 'Productos fusionados');
+      setModalFusion(null);
+      await cargar({ busquedaActual: busqueda });
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'No se pudo fusionar el producto');
+    } finally {
+      setFusionEnviando(false);
     }
   };
 
@@ -495,6 +543,7 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                         <td className="prod-table-actions">
                           <div className="tbl-acciones">
                             <button className="btn-icon ic-editar" title="Editar" onClick={() => editarProducto(producto)}><IcEditar/></button>
+                            <button className="btn-icon" title="Fusionar con otro producto (es un duplicado)" onClick={() => abrirFusion(producto)}>🔗</button>
                             <button className="btn-icon ic-eliminar" title="Eliminar" onClick={() => eliminarProducto(producto.id)}><IcEliminar/></button>
                           </div>
                         </td>
@@ -1062,6 +1111,90 @@ export default function GestionProductos({ initialTab = 'catalogo' }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL FUSIONAR PRODUCTOS DUPLICADOS ── */}
+      {modalFusion && (
+        <div className="prod-modal-overlay" onClick={() => setModalFusion(null)}>
+          <div className="prod-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="prod-modal-head">
+              <h2>Fusionar producto duplicado</h2>
+              <button className="prod-modal-close" onClick={() => setModalFusion(null)}>✕</button>
+            </div>
+            <div className="prod-modal-body">
+              <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.85rem' }}>
+                <strong>{modalFusion.codigoPrincipal}</strong> — {modalFusion.nombre} quedará <strong>inactivo</strong> y
+                su código quedará vinculado al producto que elijas: la próxima compra con ese código ya irá directo
+                a él, sin volver a crear un duplicado.
+              </p>
+
+              {!fusionDestino ? (
+                <>
+                  <input
+                    autoFocus
+                    placeholder="Buscar el producto que sobrevive, por código o nombre..."
+                    value={fusionBusqueda}
+                    onChange={(e) => setFusionBusqueda(e.target.value)}
+                  />
+                  <div style={{ maxHeight: 260, overflowY: 'auto', marginTop: '0.75rem' }}>
+                    {fusionBuscando && <div className="prod-empty">Buscando...</div>}
+                    {!fusionBuscando && fusionBusqueda.trim().length >= 2 && fusionResultados.length === 0 && (
+                      <div className="prod-empty">Sin resultados</div>
+                    )}
+                    {fusionResultados.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setFusionDestino(p)}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', width: '100%',
+                          padding: '0.5rem 0.75rem', marginBottom: '0.25rem', textAlign: 'left',
+                          background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer',
+                        }}
+                      >
+                        <span><strong>{p.codigoPrincipal}</strong> — {p.nombre}</span>
+                        <span style={{ color: '#64748b' }}>Stock: {Number(p.stockActual || 0).toFixed(2)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '0.6rem 0.75rem', marginBottom: '0.75rem' }}>
+                    Sobrevive: <strong>{fusionDestino.codigoPrincipal}</strong> — {fusionDestino.nombre}
+                    <div style={{ fontSize: '.8rem', color: '#64748b' }}>Stock actual: {Number(fusionDestino.stockActual || 0).toFixed(2)}</div>
+                    <button type="button" className="btn-secondary" style={{ marginTop: 6 }} onClick={() => setFusionDestino(null)}>
+                      Cambiar producto
+                    </button>
+                  </div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+                    ¿Cuántas unidades de "{fusionDestino.nombre}" representa cada "{modalFusion.nombre}"?
+                    <input
+                      type="number" min="1" step="1"
+                      value={fusionUnidades}
+                      onChange={(e) => setFusionUnidades(e.target.value)}
+                    />
+                  </label>
+                  <p style={{ fontSize: '.8rem', color: '#64748b' }}>
+                    El stock de "{modalFusion.nombre}" ({Number(modalFusion.stockActual || 0).toFixed(2)}) se sumará
+                    como {Number(modalFusion.stockActual || 0).toFixed(2)} × {Math.max(1, parseInt(fusionUnidades, 10) || 1)} ={' '}
+                    <strong>{(Number(modalFusion.stockActual || 0) * Math.max(1, parseInt(fusionUnidades, 10) || 1)).toFixed(2)}</strong> al
+                    stock de "{fusionDestino.nombre}".
+                  </p>
+                </>
+              )}
+
+              <div className="prod-actions full">
+                <button className="btn-secondary" onClick={() => setModalFusion(null)} disabled={fusionEnviando}>Cancelar</button>
+                {fusionDestino && (
+                  <button className="btn-primary" onClick={confirmarFusion} disabled={fusionEnviando}>
+                    {fusionEnviando ? 'Fusionando...' : 'Confirmar fusión'}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

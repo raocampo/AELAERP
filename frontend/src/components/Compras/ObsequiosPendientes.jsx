@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { parseFechaLocal } from '../../utils/fecha';
+import { adivinarUnidadesDesdeNombre } from '../../utils/adivinarPaquete';
 import './ListaCompras.css';
 import './DetalleCompra.css';
 
@@ -26,11 +27,14 @@ const MOTIVOS = [
 ];
 
 // ─── Modal: asignar a un producto existente ──────────────────────────────────
-function ModalAsignar({ item, onClose, onAsignado }) {
+function ModalAsignar({ item, productoPreseleccionado, onClose, onAsignado }) {
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState([]);
   const [buscando, setBuscando] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [productoElegido, setProductoElegido] = useState(productoPreseleccionado || null);
+  const [unidadesEquivalentes, setUnidadesEquivalentes] = useState(String(adivinarUnidadesDesdeNombre(item.descripcion)));
+  const [recordarCodigo, setRecordarCodigo] = useState(true);
 
   useEffect(() => {
     if (busqueda.trim().length < 2) { setResultados([]); return; }
@@ -45,10 +49,15 @@ function ModalAsignar({ item, onClose, onAsignado }) {
     return () => { ignore = true; clearTimeout(timer); };
   }, [busqueda]);
 
-  const asignar = async (producto) => {
+  const confirmar = async () => {
+    if (!productoElegido) return;
     setEnviando(true);
     try {
-      const res = await api.post(`/compras/pendientes/${item.id}/asignar`, { productoId: producto.id });
+      const res = await api.post(`/compras/pendientes/${item.id}/asignar`, {
+        productoId: productoElegido.id,
+        unidadesEquivalentes: Math.max(1, parseInt(unidadesEquivalentes, 10) || 1),
+        recordarCodigo,
+      });
       toast.success(res.data?.mensaje || 'Ítem asignado correctamente');
       onAsignado();
     } catch (err) {
@@ -63,39 +72,78 @@ function ModalAsignar({ item, onClose, onAsignado }) {
       <div className="dc-modal" onClick={(e) => e.stopPropagation()}>
         <h3>Asignar a producto existente</h3>
         <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.85rem' }}>
-          Se sumará la cantidad <strong>{Number(item.cantidad).toFixed(3)}</strong> de "{item.descripcion}"
-          al stock del producto que elijas, sin modificar su costo.
+          La factura dice <strong>"{item.descripcion}"</strong> (código {item.codigoPrincipal}) — elige a cuál
+          producto de tu catálogo corresponde.
         </p>
-        <input
-          autoFocus
-          placeholder="Buscar producto por código o nombre..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-        />
-        <div style={{ maxHeight: 280, overflowY: 'auto', marginTop: '0.75rem' }}>
-          {buscando && <div className="compras-empty">Buscando...</div>}
-          {!buscando && busqueda.trim().length >= 2 && resultados.length === 0 && (
-            <div className="compras-empty">Sin resultados</div>
-          )}
-          {resultados.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              disabled={enviando}
-              onClick={() => asignar(p)}
-              style={{
-                display: 'flex', justifyContent: 'space-between', width: '100%',
-                padding: '0.5rem 0.75rem', marginBottom: '0.25rem', textAlign: 'left',
-                background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer',
-              }}
-            >
-              <span><strong>{p.codigoPrincipal}</strong> — {p.nombre}</span>
-              <span style={{ color: '#64748b' }}>Stock: {Number(p.stockActual || 0).toFixed(2)}</span>
-            </button>
-          ))}
-        </div>
+
+        {!productoElegido ? (
+          <>
+            <input
+              autoFocus
+              placeholder="Buscar producto por código o nombre..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+            />
+            <div style={{ maxHeight: 280, overflowY: 'auto', marginTop: '0.75rem' }}>
+              {buscando && <div className="compras-empty">Buscando...</div>}
+              {!buscando && busqueda.trim().length >= 2 && resultados.length === 0 && (
+                <div className="compras-empty">Sin resultados</div>
+              )}
+              {resultados.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setProductoElegido(p)}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', width: '100%',
+                    padding: '0.5rem 0.75rem', marginBottom: '0.25rem', textAlign: 'left',
+                    background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer',
+                  }}
+                >
+                  <span><strong>{p.codigoPrincipal}</strong> — {p.nombre}</span>
+                  <span style={{ color: '#64748b' }}>Stock: {Number(p.stockActual || 0).toFixed(2)}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '0.6rem 0.75rem', marginBottom: '0.75rem' }}>
+              <strong>{productoElegido.codigoPrincipal}</strong> — {productoElegido.nombre}
+              <div style={{ fontSize: '.8rem', color: '#64748b' }}>Stock actual: {Number(productoElegido.stockActual || 0).toFixed(2)}</div>
+              {!productoPreseleccionado && (
+                <button type="button" className="btn-secondary" style={{ marginTop: 6 }} onClick={() => setProductoElegido(null)}>
+                  Cambiar producto
+                </button>
+              )}
+            </div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>
+              ¿Cuántas unidades de este producto representa cada "{item.descripcion}"?
+              <input
+                type="number" min="1" step="1"
+                value={unidadesEquivalentes}
+                onChange={(e) => setUnidadesEquivalentes(e.target.value)}
+              />
+            </label>
+            <p style={{ fontSize: '.8rem', color: '#64748b', marginTop: 0 }}>
+              Se sumarán {Number(item.cantidad).toFixed(3)} × {Math.max(1, parseInt(unidadesEquivalentes, 10) || 1)} ={' '}
+              <strong>{(Number(item.cantidad) * Math.max(1, parseInt(unidadesEquivalentes, 10) || 1)).toFixed(3)}</strong> al
+              stock de {productoElegido.nombre}, sin modificar su costo.
+            </p>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <input type="checkbox" checked={recordarCodigo} onChange={(e) => setRecordarCodigo(e.target.checked)} />
+              Recordar el código {item.codigoPrincipal} para que la próxima compra ya vaya directo a este producto
+            </label>
+          </>
+        )}
+
         <div style={{ marginTop: '1rem', textAlign: 'right' }}>
           <button className="btn-secondary" onClick={onClose} disabled={enviando}>Cancelar</button>
+          {productoElegido && (
+            <button className="btn-primary" onClick={confirmar} disabled={enviando} style={{ marginLeft: '0.5rem' }}>
+              {enviando ? 'Asignando...' : 'Confirmar'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -169,7 +217,6 @@ export default function ObsequiosPendientes() {
   const [loading, setLoading] = useState(true);
   const [modalAsignar, setModalAsignar] = useState(null);
   const [modalCrear, setModalCrear] = useState(null);
-  const [asignandoRapido, setAsignandoRapido] = useState(null);
 
   const cargar = () => {
     setLoading(true);
@@ -200,18 +247,9 @@ export default function ObsequiosPendientes() {
     }
   };
 
-  const usarSugerido = async (item) => {
+  const usarSugerido = (item) => {
     if (!item.productoSugerido) return;
-    setAsignandoRapido(item.id);
-    try {
-      const res = await api.post(`/compras/pendientes/${item.id}/asignar`, { productoId: item.productoSugerido.id });
-      toast.success(res.data?.mensaje || `Sumado al stock de ${item.productoSugerido.nombre}`);
-      cargar();
-    } catch (err) {
-      toast.error(err.response?.data?.mensaje || 'Error al asignar el ítem');
-    } finally {
-      setAsignandoRapido(null);
-    }
+    setModalAsignar({ ...item, __preseleccionar: true });
   };
 
   return (
@@ -296,12 +334,8 @@ export default function ObsequiosPendientes() {
                       {item.estado === 'PENDIENTE' ? (
                         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                           {item.productoSugerido && (
-                            <button
-                              className="btn-primary"
-                              disabled={asignandoRapido === item.id}
-                              onClick={() => usarSugerido(item)}
-                            >
-                              {asignandoRapido === item.id ? 'Asignando...' : 'Sí, es el mismo'}
+                            <button className="btn-primary" onClick={() => usarSugerido(item)}>
+                              Sí, es el mismo
                             </button>
                           )}
                           <button className="btn-secondary" onClick={() => setModalAsignar(item)}>Asignar</button>
@@ -327,6 +361,7 @@ export default function ObsequiosPendientes() {
       {modalAsignar && (
         <ModalAsignar
           item={modalAsignar}
+          productoPreseleccionado={modalAsignar.__preseleccionar ? modalAsignar.productoSugerido : null}
           onClose={() => setModalAsignar(null)}
           onAsignado={() => { setModalAsignar(null); cargar(); }}
         />

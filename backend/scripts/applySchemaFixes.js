@@ -872,6 +872,21 @@ const FIXES = [
   // El vendedor solo ve sus clientes (scoping en backend/routes/vendedor.js).
   `ALTER TABLE "clientes" ADD COLUMN IF NOT EXISTS "vendedorId" INTEGER`,
   `CREATE INDEX IF NOT EXISTS "clientes_vendedorId_idx" ON "clientes"("vendedorId")`,
+  // Fusión de productos duplicados (2026-09-15) — un código de proveedor
+  // (paquete/caja) que en realidad es el mismo producto que otro código ya
+  // en catálogo se vincula acá en vez de crear un producto nuevo; ver
+  // buscarProductoCoincidente en utils/comprasInventario.js.
+  `CREATE TABLE IF NOT EXISTS "codigos_compra_alternos" (
+    "id"                   SERIAL PRIMARY KEY,
+    "empresaId"            INTEGER NOT NULL,
+    "codigo"               VARCHAR(50) NOT NULL,
+    "productoId"           INTEGER NOT NULL,
+    "unidadesEquivalentes" INTEGER NOT NULL DEFAULT 1,
+    "createdAt"            TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "codigos_compra_alternos_productoId_fkey" FOREIGN KEY ("productoId") REFERENCES "productos_servicios"("id") ON DELETE CASCADE
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "codigos_compra_alternos_empresaId_codigo_key" ON "codigos_compra_alternos"("empresaId", "codigo")`,
+  `CREATE INDEX IF NOT EXISTS "codigos_compra_alternos_empresaId_idx" ON "codigos_compra_alternos"("empresaId")`,
 ];
 
 async function applyFixesToDb(connectionString, label) {
