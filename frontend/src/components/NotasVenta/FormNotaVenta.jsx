@@ -269,7 +269,11 @@ export default function FormNotaVenta() {
     } catch { /* ignore */ }
   };
 
-  const agregarDesdeProducto = (prod) => {
+  // `esPaquete`: vender la presentación empacada completa (ej. "Funda x10")
+  // en vez de la unidad suelta — el backend resuelve el factor real de
+  // conversión desde el catálogo al descontar stock, nunca desde lo que
+  // mande esta pantalla (ver utils/inventario.js).
+  const agregarDesdeProducto = (prod, esPaquete = false) => {
     setDetalles(prev => {
       // Si la única línea existente está totalmente vacía (estado inicial),
       // se reemplaza en vez de dejar una fila en blanco antes del producto.
@@ -277,12 +281,13 @@ export default function FormNotaVenta() {
         ? []
         : prev;
       return [...base, {
-        descripcion:     prod.nombre,
+        descripcion:     esPaquete ? `${prod.nombre} (${prod.nombrePaquete})` : prod.nombre,
         cantidad:        '1',
-        precioUnitario:  String(prod.precioUnitario ?? ''),
+        precioUnitario:  String((esPaquete ? prod.precioPaquete : prod.precioUnitario) ?? ''),
         descuento:       '0',
         codigoPrincipal: prod.codigoPrincipal || '',
         codigoAuxiliar:  prod.codigoAuxiliar  || '',
+        ...(esPaquete ? { esPaquete: true } : {}),
       }];
     });
     setBusqProd('');
@@ -342,6 +347,7 @@ export default function FormNotaVenta() {
           descuento:       parseFloat(d.descuento)      || 0,
           codigoPrincipal: d.codigoPrincipal || undefined,
           codigoAuxiliar:  d.codigoAuxiliar  || undefined,
+          ...(d.esPaquete && { esPaquete: true }),
         })),
         formaPago: pagos.length === 1 ? pagos[0].formaPago : 'Mixto',
         pagos: pagos.length > 1
@@ -467,11 +473,20 @@ export default function FormNotaVenta() {
               {prodDropOpen && prodResults.length > 0 && (
                 <div className="fnv-prod-drop">
                   {prodResults.map(p => (
-                    <button key={p.id} type="button" className="fnv-prod-item" onClick={() => agregarDesdeProducto(p)}>
-                      <span className="fnv-prod-codigo">{p.codigoPrincipal}</span>
-                      <span className="fnv-prod-nombre">{p.nombre}</span>
-                      <span className="fnv-prod-precio">${parseFloat(p.precioUnitario || 0).toFixed(2)}</span>
-                    </button>
+                    <div key={p.id}>
+                      <button type="button" className="fnv-prod-item" onClick={() => agregarDesdeProducto(p)}>
+                        <span className="fnv-prod-codigo">{p.codigoPrincipal}</span>
+                        <span className="fnv-prod-nombre">{p.nombre}</span>
+                        <span className="fnv-prod-precio">${parseFloat(p.precioUnitario || 0).toFixed(2)}</span>
+                      </button>
+                      {Number(p.unidadesPorPaquete) > 1 && p.precioPaquete != null && (
+                        <button type="button" className="fnv-prod-item fnv-prod-item-paquete" onClick={() => agregarDesdeProducto(p, true)}>
+                          <span className="fnv-prod-codigo">📦</span>
+                          <span className="fnv-prod-nombre">{p.nombrePaquete || `Paquete x${p.unidadesPorPaquete}`}</span>
+                          <span className="fnv-prod-precio">${parseFloat(p.precioPaquete).toFixed(2)}</span>
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}

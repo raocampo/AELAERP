@@ -510,15 +510,20 @@ const FormFactura = () => {
     } catch { /* ignore */ }
   };
 
-  const agregarDesdeProducto = (prod) => {
+  // `esPaquete`: vender la presentación empacada completa (ej. "Funda x10")
+  // en vez de la unidad suelta — el backend resuelve el factor real de
+  // conversión desde el catálogo al descontar stock, nunca desde lo que
+  // mande esta pantalla (ver utils/inventario.js).
+  const agregarDesdeProducto = (prod, esPaquete = false) => {
     setDetalles(prev => [...prev, {
       codigoPrincipal: prod.codigoPrincipal,
       codigoAuxiliar:  prod.codigoAuxiliar || '',
-      descripcion:     prod.nombre,
+      descripcion:     esPaquete ? `${prod.nombre} (${prod.nombrePaquete})` : prod.nombre,
       cantidad:        '1',
-      precioUnitario:  String(prod.precioUnitario),
+      precioUnitario:  String((esPaquete ? prod.precioPaquete : prod.precioUnitario) || 0),
       descuento:       '0',
       ivaPorcentaje:   mapearIva(prod.tarifaIva),
+      ...(esPaquete ? { esPaquete: true } : {}),
     }]);
     setBusqProd('');
     setProdDropOpen(false);
@@ -608,6 +613,7 @@ const FormFactura = () => {
           precioUnitario:  parseFloat(d.precioUnitario) || 0,
           descuento:       parseFloat(d.descuento)      || 0,
           ivaPorcentaje:   parseInt(d.ivaPorcentaje)    || 0,
+          ...(d.esPaquete && { esPaquete: true }),
         })),
         pagos: pagos.map(p => ({
           formaPago:    p.codigoFormaPago,
@@ -788,11 +794,21 @@ const FormFactura = () => {
               {prodDropOpen && prodResults.length > 0 && (
                 <div className="prod-auto-drop">
                   {prodResults.map(p => (
-                    <div key={p.id} className="prod-auto-item"
-                      onMouseDown={() => agregarDesdeProducto(p)}>
-                      <span className="prod-auto-codigo">{p.codigoPrincipal}</span>
-                      <span className="prod-auto-nombre">{p.nombre}</span>
-                      <span className="prod-auto-precio">${parseFloat(p.precioUnitario).toFixed(2)}</span>
+                    <div key={p.id}>
+                      <div className="prod-auto-item"
+                        onMouseDown={() => agregarDesdeProducto(p)}>
+                        <span className="prod-auto-codigo">{p.codigoPrincipal}</span>
+                        <span className="prod-auto-nombre">{p.nombre}</span>
+                        <span className="prod-auto-precio">${parseFloat(p.precioUnitario).toFixed(2)}</span>
+                      </div>
+                      {Number(p.unidadesPorPaquete) > 1 && p.precioPaquete != null && (
+                        <div className="prod-auto-item prod-auto-item-paquete"
+                          onMouseDown={() => agregarDesdeProducto(p, true)}>
+                          <span className="prod-auto-codigo">📦</span>
+                          <span className="prod-auto-nombre">{p.nombrePaquete || `Paquete x${p.unidadesPorPaquete}`}</span>
+                          <span className="prod-auto-precio">${parseFloat(p.precioPaquete).toFixed(2)}</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

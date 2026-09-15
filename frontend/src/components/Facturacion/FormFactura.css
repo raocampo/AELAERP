@@ -216,6 +216,8 @@
 
 .prod-auto-item:hover { background: #f0f4ff; }
 .prod-auto-item:last-child { border-bottom: none; }
+.prod-auto-item-paquete { background: #fffbeb; }
+.prod-auto-item-paquete:hover { background: #fef3c7; }
 
 .prod-auto-codigo {
   font-family: monospace;

@@ -158,6 +158,8 @@
 
 .fnv-prod-item:last-child { border-bottom: none; }
 .fnv-prod-item:hover { background: #f5f3ff; }
+.fnv-prod-item-paquete { background: #fffbeb; }
+.fnv-prod-item-paquete:hover { background: #fef3c7; }
 
 .fnv-prod-codigo {
   font-family: monospace;
