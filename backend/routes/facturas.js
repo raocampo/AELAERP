@@ -1144,7 +1144,7 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       const totalDetalles = detalles.reduce((acc, d) => {
         const cant   = parseFloat(d.cantidad) || 0;
         const precio = parseFloat(d.precioUnitario) || 0;
-        const desc   = parseFloat(d.descuento) || 0;
+        const desc   = Math.max(0, parseFloat(d.descuento) || 0);
         const base   = cant * precio - desc;
         const iva    = base * (parseFloat(d.ivaPorcentaje) || 0) / 100;
         return acc + base + iva;

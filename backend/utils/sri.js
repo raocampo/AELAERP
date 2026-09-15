@@ -310,7 +310,7 @@ function generarXMLFactura(data, config) {
   const detallesXML = detalles.map(det => {
     const cant    = parseFloat(det.cantidad) || 0;
     const precio  = parseFloat(det.precioUnitario) || 0;
-    const desc    = parseFloat(det.descuento) || 0;
+    const desc    = Math.max(0, parseFloat(det.descuento) || 0);
     const ivaPct  = parseInt(det.ivaPorcentaje) || 0; // 0, 5, 12, 15, 6 (NoObjeto), 7 (Exento)
 
     // Calcular con precisión completa para evitar drift al acumular con precios de 4+ decimales.
@@ -1455,7 +1455,7 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
     detalles.forEach((det, idx) => {
       const cant     = parseFloat(det.cantidad)       || 0;
       const prec     = parseFloat(det.precioUnitario)  || 0;
-      const desc     = parseFloat(det.descuento)      || 0;
+      const desc     = Math.max(0, parseFloat(det.descuento) || 0);
       const ivaPct   = parseInt(det.ivaPorcentaje)    || 0;
       const tot      = (cant * prec - desc);
       const descTexto = det.descripcion || '';
@@ -1896,7 +1896,7 @@ async function generarReciboPOS(factura, configSri, outputPath) {
     detalles.forEach(det => {
       const cant  = parseFloat(det.cantidad)      || 0;
       const prec  = parseFloat(det.precioUnitario) || 0;
-      const desc  = parseFloat(det.descuento)     || 0;
+      const desc  = Math.max(0, parseFloat(det.descuento) || 0);
       const tot   = (cant * prec - desc).toFixed(2);
       const descH = doc.heightOfString(det.descripcion || '', { width: C0 });
       const rowH  = Math.max(descH, 9) + 2;
@@ -2504,7 +2504,7 @@ function generarXMLLiquidacionCompra(data, config) {
   const detallesXML = detalles.map(det => {
     const cant   = parseFloat(det.cantidad) || 0;
     const precio = parseFloat(det.precioUnitario) || 0;
-    const desc   = parseFloat(det.descuento) || 0;
+    const desc   = Math.max(0, parseFloat(det.descuento) || 0);
     const ivaPct = parseInt(det.ivaPorcentaje) || 0;
 
     const subtotalLinea = parseFloat(((cant * precio) - desc).toFixed(2));
@@ -2810,7 +2810,7 @@ async function generarRIDELiquidacionCompra(liq, configSri, outputPath) {
     detalles.forEach((det, idx) => {
       const cant   = parseFloat(det.cantidad) || 0;
       const precio = parseFloat(det.precioUnitario) || 0;
-      const desc   = parseFloat(det.descuento) || 0;
+      const desc   = Math.max(0, parseFloat(det.descuento) || 0);
       const ivaPct = parseInt(det.ivaPorcentaje) || 0;
       const total  = parseFloat(((cant * precio) - desc).toFixed(2));
 

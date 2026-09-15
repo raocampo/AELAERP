@@ -47,7 +47,7 @@ function calcularTotalesDetalle(detalles) {
   detalles.forEach(d => {
     const cant   = parseFloat(d.cantidad)       || 1;
     const precio = parseFloat(d.precioUnitario) || 0;
-    const desc   = parseFloat(d.descuento)      || 0;
+    const desc   = Math.max(0, parseFloat(d.descuento) || 0);
     subtotal       += cant * precio;
     totalDescuento += desc;
   });
@@ -318,7 +318,7 @@ async function generarRIDENotaVenta(nota, configSri, outputPath) {
     detalles.forEach((det, idx) => {
       const cant  = parseFloat(det.cantidad)      || 0;
       const prec  = parseFloat(det.precioUnitario) || 0;
-      const desc  = parseFloat(det.descuento)     || 0;
+      const desc  = Math.max(0, parseFloat(det.descuento) || 0);
       const tot   = cant * prec - desc;
       const ROW_H = 13;
 
@@ -561,7 +561,7 @@ async function generarReciboNotaVenta(nota, configSri, outputPath) {
     detalles.forEach(det => {
       const cant  = parseFloat(det.cantidad)       || 0;
       const prec  = parseFloat(det.precioUnitario) || 0;
-      const desc  = parseFloat(det.descuento)      || 0;
+      const desc  = Math.max(0, parseFloat(det.descuento) || 0);
       const tot   = (cant * prec - desc).toFixed(2);
       const descH = doc.heightOfString(det.descripcion || '', { width: C0 });
       const rowH  = Math.max(descH, 9) + 2;

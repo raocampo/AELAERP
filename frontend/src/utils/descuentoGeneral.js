@@ -13,10 +13,16 @@
 // falta ningún cambio de backend: generarXMLFactura/calcularTotalesDetalle
 // ya derivan todo de ahí).
 //
-// Redondeo: cada línea (salvo la última) se redondea a 2 decimales; la
-// última línea recibe el remanente exacto — así la suma de las porciones
-// siempre cuadra exactamente con el monto general ingresado, sin
-// diferencias de centavos por acumulación de redondeos.
+// Redondeo: reparto exacto en centavos por el método del mayor remanente
+// (largest remainder). Antes cada línea (salvo la última) se redondeaba a 2
+// decimales de forma independiente y la última recibía "lo que faltaba" —
+// si el redondeo hacia arriba de las demás líneas acumulaba más de lo que
+// correspondía, esa resta podía dar negativo. Pasó en producción: el SRI
+// rechazó una factura por `descuento` = -0.01 (error 35,
+// cvc-minInclusive-valid, 2026-09-14). El método actual reparte centavos
+// enteros y nunca resta — cada línea solo puede sumar centavos, así que el
+// resultado siempre es >= 0 por construcción, y la suma exacta sigue
+// cuadrando con el monto general ingresado.
 
 /**
  * Reparte `montoGeneral` entre `detalles` a prorrata de su base
@@ -41,13 +47,24 @@ export function distribuirDescuentoGeneral(detalles, montoGeneral) {
   const sumaBase = bases.reduce((a, b) => a + b, 0);
   if (sumaBase <= 0) return detalles;
 
-  let acumulado = 0;
+  // Todo el reparto se hace en centavos enteros para que sea exacto y
+  // nunca negativo: se reparte el "piso" de cada porción y los centavos
+  // sobrantes (siempre entre 0 y detalles.length-1) van a las líneas con
+  // mayor parte fraccionaria — nunca se resta, solo se suma.
+  const totalCentavos = Math.round(dg * 100);
+  const rawCentavos = bases.map((b) => (b / sumaBase) * totalCentavos);
+  const centavosPorLinea = rawCentavos.map((v) => Math.floor(v));
+  let restante = totalCentavos - centavosPorLinea.reduce((a, b) => a + b, 0);
+
+  const ordenPorFraccion = rawCentavos
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < restante; k++) {
+    centavosPorLinea[ordenPorFraccion[k % ordenPorFraccion.length].i] += 1;
+  }
+
   return detalles.map((d, i) => {
-    const esUltimo = i === detalles.length - 1;
-    const porcion = esUltimo
-      ? Number((dg - acumulado).toFixed(2))
-      : Number(((bases[i] / sumaBase) * dg).toFixed(2));
-    if (!esUltimo) acumulado += porcion;
+    const porcion = centavosPorLinea[i] / 100;
     return { ...d, descuento: Number(((Number(d.descuento) || 0) + porcion).toFixed(2)) };
   });
 }

@@ -51,6 +51,27 @@ describe('distribuirDescuentoGeneral', () => {
     const detalles = [{ cantidad: 1, precioUnitario: 0, descuento: 0 }];
     expect(distribuirDescuentoGeneral(detalles, 10)).toBe(detalles);
   });
+
+  it('ninguna línea da negativo — regresión del caso real que el SRI rechazó (error 35, descuento -0.01)', () => {
+    // 5 líneas de igual peso y un descuento general de $0.03: el algoritmo
+    // viejo redondeaba cada una de las 4 primeras líneas hacia arriba
+    // (0.006 → 0.01) de forma independiente, acumulando 0.04 antes de
+    // llegar a la última línea, que se quedaba con 0.03 - 0.04 = -0.01 —
+    // exactamente el valor que el SRI rechazó en producción.
+    const detalles = Array.from({ length: 5 }, () => ({ cantidad: 1, precioUnitario: 20, descuento: 0 }));
+    const resultado = distribuirDescuentoGeneral(detalles, 0.03);
+    resultado.forEach((d) => expect(d.descuento).toBeGreaterThanOrEqual(0));
+    const suma = resultado.reduce((a, d) => a + d.descuento, 0);
+    expect(Number(suma.toFixed(2))).toBe(0.03);
+  });
+
+  it('el reparto en centavos nunca deja una línea negativa con muchas líneas y montos "feos"', () => {
+    const detalles = Array.from({ length: 11 }, (_, i) => ({ cantidad: 1, precioUnitario: 7 + i, descuento: 0 }));
+    const resultado = distribuirDescuentoGeneral(detalles, 3.33);
+    resultado.forEach((d) => expect(d.descuento).toBeGreaterThanOrEqual(0));
+    const suma = resultado.reduce((a, d) => a + d.descuento, 0);
+    expect(Number(suma.toFixed(2))).toBe(3.33);
+  });
 });
 
 describe('subtotalBase', () => {
