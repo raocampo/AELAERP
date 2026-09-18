@@ -176,8 +176,11 @@ function ModalAsignar({ item, productoPreseleccionado, onClose, onAsignado }) {
 
 // ─── Modal: crear producto nuevo (opt-in explícito) ──────────────────────────
 function ModalCrearProducto({ item, onClose, onCreado }) {
-  const [precioUnitario, setPrecioUnitario] = useState('0');
-  const [tarifaIva, setTarifaIva] = useState('15');
+  // Precargados desde la línea de compra que originó este ítem pendiente
+  // (costo y PVP ya calculados/editados ahí) — antes siempre arrancaba en
+  // $0.00 aunque la compra ya tuviera el precio correcto.
+  const [precioUnitario, setPrecioUnitario] = useState(String(item.precioVentaReferencial ?? '0'));
+  const [tarifaIva, setTarifaIva] = useState(String(item.porcentajeIva ?? '15'));
   const [inventariable, setInventariable] = useState(true);
   const [enviando, setEnviando] = useState(false);
 
@@ -204,6 +207,9 @@ function ModalCrearProducto({ item, onClose, onCreado }) {
         <h3>Crear producto nuevo</h3>
         <p style={{ marginTop: 0, color: '#64748b', fontSize: '0.85rem' }}>
           Código <strong>{item.codigoPrincipal}</strong> — {item.descripcion} (cantidad inicial: {Number(item.cantidad).toFixed(3)})
+          {item.costoUnitario != null && (
+            <> — costo de compra: <strong>${Number(item.costoUnitario).toFixed(4)}</strong></>
+          )}
         </p>
         <label style={{ display: 'block', marginBottom: '0.5rem' }}>
           Precio de venta (PVP)

@@ -5,6 +5,7 @@ const {
   buscarProductoCoincidente,
   buscarPosibleDuplicadoPorNombre,
   pareceMismoProductoEmpacado,
+  registrarItemCompraPendiente,
 } = require('../utils/comprasInventario');
 
 function crearTxFake() {
@@ -130,4 +131,53 @@ test('buscarPosibleDuplicadoPorNombre marca POSIBLE_DUPLICADO por marcador de em
   const resultado = await buscarPosibleDuplicadoPorNombre(tx, 1, 'SALCHICHA LONCHERA X8 EUROPEA 400GR/50');
   assert.ok(resultado);
   assert.equal(resultado.producto.id, 5);
+});
+
+test('registrarItemCompraPendiente guarda el costo/PVP/IVA ya calculados de la línea — sin esto "Crear producto nuevo" quedaba en $0.00 (caso real Comercial S&S, Coca Cola 2026-09-16)', async () => {
+  let guardado = null;
+  const tx = {
+    items_compra_pendientes: {
+      create: async ({ data }) => { guardado = data; return { id: 1, ...data }; },
+    },
+  };
+
+  await registrarItemCompraPendiente({
+    tx,
+    empresaId: 1,
+    compraId: 103,
+    detalle: {
+      codigoPrincipal: '7860094',
+      descripcion: 'COCA COLA',
+      cantidad: 24,
+      precioUnitario: 0.6522,
+      precioVentaReferencial: 0.74,
+      porcentajeIva: 15,
+    },
+    motivo: 'POSIBLE_DUPLICADO',
+    productoSugeridoId: 855,
+  });
+
+  assert.equal(guardado.costoUnitario, 0.6522);
+  assert.equal(guardado.precioVentaReferencial, 0.74);
+  assert.equal(guardado.porcentajeIva, 15);
+});
+
+test('registrarItemCompraPendiente guarda null si la línea no trae costo/PVP (no inventa un valor)', async () => {
+  let guardado = null;
+  const tx = {
+    items_compra_pendientes: {
+      create: async ({ data }) => { guardado = data; return { id: 1, ...data }; },
+    },
+  };
+
+  await registrarItemCompraPendiente({
+    tx,
+    empresaId: 1,
+    compraId: 1,
+    detalle: { codigoPrincipal: 'ABC', descripcion: 'Regalo', cantidad: 1 },
+  });
+
+  assert.equal(guardado.costoUnitario, null);
+  assert.equal(guardado.precioVentaReferencial, null);
+  assert.equal(guardado.porcentajeIva, null);
 });

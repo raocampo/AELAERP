@@ -887,6 +887,13 @@ const FIXES = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "codigos_compra_alternos_empresaId_codigo_key" ON "codigos_compra_alternos"("empresaId", "codigo")`,
   `CREATE INDEX IF NOT EXISTS "codigos_compra_alternos_empresaId_idx" ON "codigos_compra_alternos"("empresaId")`,
+  // Costo/PVP de la línea original en items_compra_pendientes (2026-09-17)
+  // — "Crear producto nuevo" desde un ítem pendiente creaba el producto en
+  // $0.00 porque esta tabla nunca guardaba el costo ni el PVP ya calculado
+  // de la línea de compra que lo originó.
+  `ALTER TABLE "items_compra_pendientes" ADD COLUMN IF NOT EXISTS "costoUnitario" DECIMAL(14,4)`,
+  `ALTER TABLE "items_compra_pendientes" ADD COLUMN IF NOT EXISTS "precioVentaReferencial" DECIMAL(14,4)`,
+  `ALTER TABLE "items_compra_pendientes" ADD COLUMN IF NOT EXISTS "porcentajeIva" INTEGER`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

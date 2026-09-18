@@ -644,6 +644,15 @@ model items_compra_pendientes {
   codigoAuxiliar         String?   @db.VarChar(50)
   descripcion            String    @db.VarChar(300)
   cantidad               Decimal   @db.Decimal(14, 3)
+  // Costo y PVP de la línea de compra original (2026-09-17) — sin esto,
+  // "Crear producto nuevo" desde este ítem no tenía forma de saber cuánto
+  // costó ni qué PVP ya se había calculado/editado para esa línea (el
+  // usuario terminaba con el producto en $0.00 aunque la compra ya
+  // mostraba el precio correcto). Nulos para ítems antiguos (backfill no
+  // posible sin volver a leer la compra original).
+  costoUnitario          Decimal?  @db.Decimal(14, 4)
+  precioVentaReferencial Decimal?  @db.Decimal(14, 4)
+  porcentajeIva          Int?
   prefijoDetectado       String?   @db.VarChar(20)
   estado                 String    @default("PENDIENTE") @db.VarChar(20)
   // PENDIENTE | RESUELTO | IGNORADO

@@ -199,13 +199,24 @@ router.post('/:id/crear-producto', async (req, res) => {
     const empresaId = req.empresa.id;
     const usuarioId = req.usuario?.id || null;
     const id = parseInt(req.params.id, 10);
-    const { precioUnitario, tarifaIva = 0, inventariable = true } = req.body || {};
+    const { precioUnitario, tarifaIva, inventariable = true } = req.body || {};
 
     const item = await prisma.items_compra_pendientes.findFirst({ where: { id, empresaId } });
     if (!item) return res.status(404).json({ success: false, mensaje: 'Ítem pendiente no encontrado' });
     if (item.estado !== 'PENDIENTE') {
       return res.status(400).json({ success: false, mensaje: 'Este ítem ya fue resuelto' });
     }
+
+    // El costo y el PVP ya se habían calculado/editado en la línea de la
+    // compra origen (ver registrarItemCompraPendiente) — si el usuario no
+    // los cambia explícitamente en el modal, se usan esos en vez de caer a
+    // $0.00. `precioUnitario`/`tarifaIva` del body siguen pudiendo
+    // sobreescribirlos.
+    const precioFinal = precioUnitario !== undefined && precioUnitario !== null && precioUnitario !== ''
+      ? Number(precioUnitario) : Number(item.precioVentaReferencial ?? 0);
+    const costoFinal = Number(item.costoUnitario ?? 0);
+    const tarifaFinal = tarifaIva !== undefined && tarifaIva !== null && tarifaIva !== ''
+      ? Number(tarifaIva) : Number(item.porcentajeIva ?? 0);
 
     const resultado = await prisma.$transaction(async (tx) => {
       const existente = await tx.productos_servicios.findFirst({
@@ -221,9 +232,9 @@ router.post('/:id/crear-producto', async (req, res) => {
           codigoPrincipal: item.codigoPrincipal,
           codigoAuxiliar: item.codigoAuxiliar || null,
           nombre: item.descripcion,
-          precioUnitario: Number(precioUnitario) || 0,
-          costoUnitario: 0,
-          tarifaIva: Number(tarifaIva) || 0,
+          precioUnitario: precioFinal,
+          costoUnitario: costoFinal,
+          tarifaIva: tarifaFinal,
           unidadMedida: 'UND',
           inventariable: Boolean(inventariable),
           stockActual: 0,

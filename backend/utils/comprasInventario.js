@@ -352,6 +352,13 @@ async function registrarItemCompraPendiente({
       codigoAuxiliar: detalle.codigoAuxiliar || null,
       descripcion: detalle.descripcion,
       cantidad: detalle.cantidad,
+      // Costo y PVP ya calculados/editados para esta línea en la compra
+      // origen — sin esto, "Crear producto nuevo" no tenía de dónde
+      // sacarlos y el producto quedaba en $0.00 (ver
+      // routes/comprasPendientes.js POST /:id/crear-producto).
+      costoUnitario: detalle.precioUnitario != null ? Number(detalle.precioUnitario) : null,
+      precioVentaReferencial: detalle.precioVentaReferencial != null ? Number(detalle.precioVentaReferencial) : null,
+      porcentajeIva: detalle.porcentajeIva != null ? parseInt(detalle.porcentajeIva, 10) : null,
       prefijoDetectado: prefijoDetectado || null,
       motivo,
       productoSugeridoId,
