@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
-import { abrirComprobanteBancario } from '../../utils/comprobantesBancos';
+import { abrirComprobanteBancario, descargarComprobanteBancario } from '../../utils/comprobantesBancos';
 
 const TIPOS_META = {
   INGRESO: {
@@ -95,20 +95,47 @@ function ModalSubtipo({ tipo, onContinuar, onCancelar }) {
 }
 
 // ─── Formulario de comprobante ────────────────────────────
-function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
+// `comprobanteExistente` (detalle completo de GET /:id) activa el modo
+// edición: precarga el formulario, exige "motivo de la corrección" y
+// guarda con PUT en vez de POST. El asiento contable nunca se edita —
+// el backend lo reversa y crea uno nuevo (ver PUT /:id en
+// routes/comprobantes-bancarios.js).
+function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGuardado }) {
   const meta = TIPOS_META[tipo];
   const planCuentas = usePlanCuentas();
   const cuentasBancarias = useCuentasBancarias();
+  const editando = Boolean(comprobanteExistente);
 
-  const [form, setForm] = useState({
-    fecha: hoyLocal(),
-    notas: '',
-    cuentaBancariaId: '',
-    proveedorId: '',
-    proveedorNombre: '',
-    proveedorRuc: '',
-    cuentas: [{ notas: '', valor: '', cuentaContableId: '' }],
-    pagos: [{ tipoPago: 'EFECTIVO', valor: '', cuentaContableId: '', notas: '' }],
+  const [form, setForm] = useState(() => {
+    if (!comprobanteExistente) {
+      return {
+        fecha: hoyLocal(),
+        notas: '',
+        cuentaBancariaId: '',
+        proveedorId: '',
+        proveedorNombre: '',
+        proveedorRuc: '',
+        cuentas: [{ notas: '', valor: '', cuentaContableId: '' }],
+        pagos: [{ tipoPago: 'EFECTIVO', valor: '', cuentaContableId: '', notas: '' }],
+        motivoEdicion: '',
+      };
+    }
+    const c = comprobanteExistente;
+    return {
+      fecha: c.fecha ? String(c.fecha).slice(0, 10) : hoyLocal(),
+      notas: c.notas || '',
+      cuentaBancariaId: c.cuentaBancariaId ? String(c.cuentaBancariaId) : '',
+      proveedorId: c.proveedorId ? String(c.proveedorId) : '',
+      proveedorNombre: c.proveedor?.razonSocial || '',
+      proveedorRuc: c.proveedor?.identificacion || '',
+      cuentas: c.cuentas?.length
+        ? c.cuentas.map((x) => ({ notas: x.notas || '', valor: String(x.valor ?? ''), cuentaContableId: x.cuentaContableId ? String(x.cuentaContableId) : '' }))
+        : [{ notas: '', valor: '', cuentaContableId: '' }],
+      pagos: c.pagos?.length
+        ? c.pagos.map((x) => ({ tipoPago: x.tipoPago, valor: String(x.valor ?? ''), cuentaContableId: x.cuentaContableId ? String(x.cuentaContableId) : '', notas: x.notas || '' }))
+        : [{ tipoPago: 'EFECTIVO', valor: '', cuentaContableId: '', notas: '' }],
+      motivoEdicion: '',
+    };
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -160,10 +187,11 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (form.cuentas.length === 0) return setError('Agregue al menos una cuenta');
+    if (editando && !form.motivoEdicion.trim()) return setError('Debes indicar el motivo de la corrección');
     setError('');
     setGuardando(true);
     try {
-      const r = await api.post('/comprobantes-bancarios', {
+      const payload = {
         tipo, subtipo,
         fecha: form.fecha,
         notas: form.notas || null,
@@ -171,8 +199,22 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
         proveedorId: form.proveedorId || null,
         cuentas: form.cuentas.map((c) => ({ notas: c.notas, valor: Number(c.valor || 0), cuentaContableId: c.cuentaContableId || null })),
         pagos: form.pagos.map((p) => ({ tipoPago: p.tipoPago, valor: Number(p.valor || 0), cuentaContableId: p.cuentaContableId || null, notas: p.notas })),
-      });
-      setCreado({ id: r.data?.data?.id, numero: r.data?.data?.numero });
+      };
+      let id, numero;
+      if (editando) {
+        await api.put(`/comprobantes-bancarios/${comprobanteExistente.id}`, { ...payload, motivoEdicion: form.motivoEdicion.trim() });
+        id = comprobanteExistente.id;
+        numero = comprobanteExistente.numero;
+      } else {
+        const r = await api.post('/comprobantes-bancarios', payload);
+        id = r.data?.data?.id;
+        numero = r.data?.data?.numero;
+      }
+      setCreado({ id, numero });
+      // Se manda a imprimir solo — abrirComprobanteBancario usa un <a>
+      // sintético con blob, no window.open, así que el navegador no lo
+      // bloquea aunque venga justo después del await de guardado.
+      abrirComprobanteBancario(id);
     } catch (err) {
       setError(err.response?.data?.mensaje || 'Error al guardar');
     } finally {
@@ -183,7 +225,7 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
   if (creado) {
     return (
       <div style={{ padding: '1.5rem', maxWidth: 900 }}>
-        <h2 style={{ margin: '0 0 0.5rem' }}>✓ Comprobante registrado</h2>
+        <h2 style={{ margin: '0 0 0.5rem' }}>✓ Comprobante {editando ? 'corregido' : 'registrado'}</h2>
         <p style={{ margin: '0 0 1rem' }}>N° <strong>{creado.numero}</strong></p>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className="btn btn-primary" onClick={() => abrirComprobanteBancario(creado.id)}>🧾 Ver / imprimir comprobante</button>
@@ -196,12 +238,32 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
   return (
     <div style={{ padding: '1.5rem', maxWidth: 900 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-        <h2 style={{ margin: 0 }}>Nuevo {meta.titulo.replace('s', '').replace('Comprobantes de ', 'Comprobante de ')}</h2>
+        <h2 style={{ margin: 0 }}>{editando ? 'Editar' : 'Nuevo'} {meta.titulo.replace('s', '').replace('Comprobantes de ', 'Comprobante de ')}</h2>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={guardando}>{guardando ? 'Guardando...' : 'Guardar'}</button>
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={guardando}>{guardando ? 'Guardando...' : editando ? 'Guardar corrección' : 'Guardar'}</button>
           <button className="btn btn-ghost" onClick={onCancelar}>Cancelar</button>
         </div>
       </div>
+
+      {editando && (
+        <div style={{ background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 8, padding: '1rem', marginBottom: '1rem' }}>
+          <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+            Motivo de la corrección *
+          </label>
+          <textarea
+            rows={2}
+            value={form.motivoEdicion}
+            onChange={(e) => setForm((f) => ({ ...f, motivoEdicion: e.target.value }))}
+            placeholder="Ej: el cliente registró el año 2023 por error, corresponde a 2026"
+            style={{ width: '100%', boxSizing: 'border-box' }}
+            required
+          />
+          <p style={{ fontSize: '0.78rem', color: '#78350f', margin: '0.4rem 0 0' }}>
+            El asiento contable anterior se reversa automáticamente y se crea uno nuevo con los datos
+            corregidos — este motivo queda guardado como historial, visible en "Ver detalle".
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         {/* ─ Información General ─ */}
@@ -352,8 +414,86 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
   );
 }
 
+// ─── Modal: ver detalle (solo lectura + historial de correcciones) ──
+function ModalDetalleComprobante({ id, onClose, onEditar }) {
+  const [data, setData] = useState(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    let ignore = false;
+    setCargando(true);
+    api.get(`/comprobantes-bancarios/${id}`)
+      .then((r) => { if (!ignore) setData(r.data?.data || null); })
+      .catch(() => { if (!ignore) alert('No se pudo cargar el comprobante'); })
+      .finally(() => { if (!ignore) setCargando(false); });
+    return () => { ignore = true; };
+  }, [id]);
+
+  return (
+    <div className="bancos-modal-overlay" onClick={onClose}>
+      <div className="bancos-modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
+        {cargando ? (
+          <p>Cargando...</p>
+        ) : !data ? (
+          <p>No se encontró el comprobante.</p>
+        ) : (
+          <>
+            <h2 style={{ margin: '0 0 0.75rem' }}>Comprobante {data.numero}</h2>
+            <p style={{ margin: '0 0 0.3rem', fontSize: '0.88rem' }}>
+              <strong>Fecha:</strong> {formatFecha(data.fecha)} &nbsp;·&nbsp; <strong>Estado:</strong> {data.estado}
+            </p>
+            {data.proveedor && (
+              <p style={{ margin: '0 0 0.3rem', fontSize: '0.88rem' }}>
+                <strong>Proveedor:</strong> {data.proveedor.razonSocial} ({data.proveedor.identificacion})
+              </p>
+            )}
+            <p style={{ margin: '0 0 0.75rem', fontSize: '0.88rem' }}><strong>Notas:</strong> {data.notas || '—'}</p>
+
+            <h3 style={{ fontSize: '0.9rem', margin: '0.75rem 0 0.4rem' }}>Cuentas</h3>
+            <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem' }}>
+              {data.cuentas.map((c) => (
+                <li key={c.id}>{c.codigo ? `${c.codigo} — ` : ''}{c.cuentaNombre || 'Sin cuenta contable'}{c.notas ? ` (${c.notas})` : ''}: ${formatMoney(c.valor)}</li>
+              ))}
+            </ul>
+
+            {data.pagos.length > 0 && (
+              <>
+                <h3 style={{ fontSize: '0.9rem', margin: '0.75rem 0 0.4rem' }}>Detalle de pagos</h3>
+                <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem' }}>
+                  {data.pagos.map((p) => (
+                    <li key={p.id}>{p.tipoPago.replace(/_/g, ' ')}: ${formatMoney(p.valor)}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            <p style={{ margin: '0.75rem 0 0', fontWeight: 700 }}>Total: ${formatMoney(data.total)}</p>
+
+            {data.historialEdiciones?.length > 0 && (
+              <div style={{ background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 8, padding: '0.6rem 0.75rem', marginTop: '0.85rem' }}>
+                <strong style={{ fontSize: '0.85rem' }}>Historial de correcciones</strong>
+                <ul style={{ margin: '0.35rem 0 0', paddingLeft: '1.2rem' }}>
+                  {data.historialEdiciones.map((h, i) => (
+                    <li key={i} style={{ fontSize: '0.8rem' }}>{formatFecha(h.fecha)} — {h.motivo}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+        <div className="modal-actions" style={{ marginTop: '1.25rem' }}>
+          <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
+          {data && data.estado !== 'ANULADO' && (
+            <button className="btn btn-primary" onClick={() => onEditar(data.id)}>✏️ Editar</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Lista de comprobantes ─────────────────────────────────
-function ListaComprobantes({ tipo, onNuevo, onVer }) {
+function ListaComprobantes({ tipo, onNuevo, onVer, onDescargar, onEditar, onVisualizar }) {
   const meta = TIPOS_META[tipo];
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -456,9 +596,14 @@ function ListaComprobantes({ tipo, onNuevo, onVer }) {
                 <tr key={item.id} style={{ opacity: item.estado === 'ANULADO' ? 0.5 : 1 }}>
                   <td>
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      <button className="btn btn-ghost btn-sm" title="Ver / imprimir comprobante" onClick={() => onVer(item.id)}>🧾</button>
+                      <button className="btn btn-ghost btn-sm" title="Visualizar" onClick={() => onVisualizar(item.id)}>👁</button>
+                      <button className="btn btn-ghost btn-sm" title="Imprimir" onClick={() => onVer(item.id)}>🖨</button>
+                      <button className="btn btn-ghost btn-sm" title="Descargar PDF" onClick={() => onDescargar(item.id, item.numero)}>⬇</button>
                       {item.estado !== 'ANULADO' && (
-                        <button className="btn btn-danger btn-sm" title="Anular" onClick={() => anular(item.id)}>✕</button>
+                        <>
+                          <button className="btn btn-ghost btn-sm" title="Editar" onClick={() => onEditar(item.id)}>✏️</button>
+                          <button className="btn btn-danger btn-sm" title="Anular" onClick={() => anular(item.id)}>✕</button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -495,17 +640,45 @@ function ListaComprobantes({ tipo, onNuevo, onVer }) {
 export default function ComprobantesView({ tipo }) {
   const [vista, setVista] = useState('lista'); // lista | subtipo | form
   const [subtipoSel, setSubtipoSel] = useState(null);
+  const [comprobanteEditar, setComprobanteEditar] = useState(null); // detalle completo (GET /:id) en modo edición
+  const [modalDetalleId, setModalDetalleId] = useState(null);
+  const [cargandoEditar, setCargandoEditar] = useState(false);
 
-  const handleNuevo = () => setVista('subtipo');
+  const handleNuevo = () => { setComprobanteEditar(null); setVista('subtipo'); };
   const handleSubtipo = (s) => { setSubtipoSel(s); setVista('form'); };
-  const handleCancelar = () => setVista('lista');
-  const handleGuardado = () => { setVista('lista'); };
+  const handleCancelar = () => { setVista('lista'); setComprobanteEditar(null); };
+  const handleGuardado = () => { setVista('lista'); setComprobanteEditar(null); };
   const handleVer = (id) => abrirComprobanteBancario(id);
+  const handleDescargar = (id, numero) => descargarComprobanteBancario(id, numero);
+  const handleVisualizar = (id) => setModalDetalleId(id);
+
+  const handleEditar = async (id) => {
+    setModalDetalleId(null);
+    setCargandoEditar(true);
+    try {
+      const r = await api.get(`/comprobantes-bancarios/${id}`);
+      const data = r.data?.data;
+      setComprobanteEditar(data);
+      setSubtipoSel(data?.subtipo || 'GENERAL');
+      setVista('form');
+    } catch {
+      alert('No se pudo cargar el comprobante para editar');
+    } finally {
+      setCargandoEditar(false);
+    }
+  };
 
   return (
     <div>
       {vista === 'lista' && (
-        <ListaComprobantes tipo={tipo} onNuevo={handleNuevo} onVer={handleVer} />
+        <ListaComprobantes
+          tipo={tipo}
+          onNuevo={handleNuevo}
+          onVer={handleVer}
+          onDescargar={handleDescargar}
+          onEditar={handleEditar}
+          onVisualizar={handleVisualizar}
+        />
       )}
 
       {vista === 'subtipo' && (
@@ -513,7 +686,23 @@ export default function ComprobantesView({ tipo }) {
       )}
 
       {vista === 'form' && (
-        <FormComprobante tipo={tipo} subtipo={subtipoSel} onCancelar={handleCancelar} onGuardado={handleGuardado} />
+        <FormComprobante
+          tipo={tipo}
+          subtipo={subtipoSel}
+          comprobanteExistente={comprobanteEditar}
+          onCancelar={handleCancelar}
+          onGuardado={handleGuardado}
+        />
+      )}
+
+      {modalDetalleId && (
+        <ModalDetalleComprobante id={modalDetalleId} onClose={() => setModalDetalleId(null)} onEditar={handleEditar} />
+      )}
+
+      {cargandoEditar && (
+        <div className="bancos-modal-overlay">
+          <div className="bancos-modal" style={{ maxWidth: 320, textAlign: 'center' }}>Cargando comprobante…</div>
+        </div>
       )}
     </div>
   );

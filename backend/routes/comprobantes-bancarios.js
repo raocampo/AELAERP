@@ -5,7 +5,7 @@ const prisma = require('../config/prisma');
 const {
   enviarComprobanteBancarioPdf, CATEGORIA_POR_TIPO_COMPROBANTE, fmtMoney,
 } = require('../utils/comprobanteBancarioPdf');
-const { crearAsientoContable } = require('../utils/contabilidad');
+const { crearAsientoContable, crearAsientoReversoComprobanteBancario } = require('../utils/contabilidad');
 
 router.use(proteger);
 router.use(soloMediumOPro);
@@ -126,6 +126,7 @@ router.get('/:id', autorizarPermiso('bancos.ver'), async (req, res) => {
         proveedor: r.prov_nombre ? { razonSocial: r.prov_nombre, identificacion: r.prov_ruc } : null,
         movimientoId: r.movimientoId ? Number(r.movimientoId) : null,
         asientoId: r.asientoId ? Number(r.asientoId) : null,
+        historialEdiciones: r.historialEdiciones || [],
         cuentas: cuentas.map((c) => ({
           id: Number(c.id), notas: c.notas, valor: parseFloat(c.valor || 0),
           cuentaContableId: c.cuentaContableId ? Number(c.cuentaContableId) : null,
@@ -222,6 +223,57 @@ router.get('/:id/pdf', autorizarPermiso('bancos.ver'), async (req, res) => {
   }
 });
 
+// Construye y crea el asiento contable de un comprobante (banco vs. cada
+// línea de "Cuentas") — usado tanto al crear (POST /) como al corregir
+// (PUT /:id), para no duplicar la lógica de débito/crédito. Requiere la
+// cuenta bancaria vinculada a una cuenta del Plan de Cuentas Y que cada
+// línea de "Cuentas" tenga su propia cuenta contable; si falta algo,
+// no se crea el asiento (el caller decide qué hacer con la advertencia).
+async function construirYCrearAsiento({ tx, empresaId, usuarioId, fecha, tipo, numero, concep, cuentaBancariaId, cuentas }) {
+  const total = cuentas.reduce((s, c) => s + Number(c.valor || 0), 0);
+  const esIngreso = ['INGRESO', 'CREDITO'].includes(tipo);
+  if (!(total > 0)) return { asientoId: null, advertenciaContable: null };
+
+  const banco = cuentaBancariaId ? await tx.bancos.findFirst({ where: { id: cuentaBancariaId, empresaId } }) : null;
+  const cuentasCompletas = cuentas.length > 0 && cuentas.every((c) => c.cuentaContableId);
+
+  if (!cuentaBancariaId) {
+    return { asientoId: null, advertenciaContable: 'No se generó el asiento contable: el comprobante no tiene cuenta bancaria asignada.' };
+  }
+  if (!banco?.cuentaContableId) {
+    return { asientoId: null, advertenciaContable: 'No se generó el asiento contable: la cuenta bancaria no tiene una cuenta contable vinculada (Bancos → editar cuenta).' };
+  }
+  if (!cuentasCompletas) {
+    return { asientoId: null, advertenciaContable: 'No se generó el asiento contable: falta la cuenta contable en una o más líneas de "Cuentas".' };
+  }
+
+  const detallesAsiento = cuentas.map((c) => ({
+    cuentaId: Number(c.cuentaContableId),
+    descripcion: c.notas || concep,
+    debe: esIngreso ? 0 : Number(c.valor || 0),
+    haber: esIngreso ? Number(c.valor || 0) : 0,
+  }));
+  detallesAsiento.push({
+    cuentaId: banco.cuentaContableId,
+    descripcion: concep,
+    debe: esIngreso ? total : 0,
+    haber: esIngreso ? 0 : total,
+  });
+
+  const asientoCreado = await crearAsientoContable({
+    empresaId,
+    fecha,
+    descripcion: `Comprobante ${tipo} ${numero}: ${concep}`,
+    tipo: 'COMPROBANTE_BANCO',
+    referencia: `COMPROBANTE-${numero}`,
+    usuarioId,
+    tx,
+    detalles: detallesAsiento,
+  });
+
+  return { asientoId: asientoCreado.id, advertenciaContable: null };
+}
+
 // ── POST / ────────────────────────────────────────────────────────
 router.post('/', autorizarPermiso('bancos.gestionar'), async (req, res) => {
   try {
@@ -291,54 +343,20 @@ router.post('/', autorizarPermiso('bancos.gestionar'), async (req, res) => {
         `;
       }
 
-      // Asiento contable automático — requiere la cuenta bancaria vinculada
-      // a una cuenta del Plan de Cuentas Y que cada línea de "Cuentas"
-      // tenga su propia cuenta contable. Si falta algo, el comprobante se
-      // crea igual (como antes) pero sin contabilizar — se avisa al
-      // usuario para que complete la configuración.
-      let asiento = false;
-      if (total > 0) {
-        const banco = cbId ? await tx.bancos.findFirst({ where: { id: cbId, empresaId } }) : null;
-        const cuentasCompletas = cuentas.length > 0 && cuentas.every((c) => c.cuentaContableId);
+      // Asiento contable automático — ver construirYCrearAsiento(). Si falta
+      // alguna cuenta contable, el comprobante se crea igual pero sin
+      // contabilizar, avisando al usuario para que complete la configuración.
+      const { asientoId, advertenciaContable: advertencia } = await construirYCrearAsiento({
+        tx, empresaId, usuarioId, fecha: fechaDate, tipo, numero, concep, cuentaBancariaId: cbId, cuentas,
+      });
+      advertenciaContable = advertencia;
 
-        if (!cbId) {
-          advertenciaContable = 'No se generó el asiento contable: el comprobante no tiene cuenta bancaria asignada.';
-        } else if (!banco?.cuentaContableId) {
-          advertenciaContable = 'No se generó el asiento contable: la cuenta bancaria no tiene una cuenta contable vinculada (Bancos → editar cuenta).';
-        } else if (!cuentasCompletas) {
-          advertenciaContable = 'No se generó el asiento contable: falta la cuenta contable en una o más líneas de "Cuentas".';
-        } else {
-          const detallesAsiento = cuentas.map((c) => ({
-            cuentaId: Number(c.cuentaContableId),
-            descripcion: c.notas || concep,
-            debe: esIngreso ? 0 : Number(c.valor || 0),
-            haber: esIngreso ? Number(c.valor || 0) : 0,
-          }));
-          detallesAsiento.push({
-            cuentaId: banco.cuentaContableId,
-            descripcion: concep,
-            debe: esIngreso ? total : 0,
-            haber: esIngreso ? 0 : total,
-          });
-
-          const asientoCreado = await crearAsientoContable({
-            empresaId,
-            fecha: fechaDate,
-            descripcion: `Comprobante ${tipo} ${numero}: ${concep}`,
-            tipo: 'COMPROBANTE_BANCO',
-            referencia: `COMPROBANTE-${compId}`,
-            usuarioId,
-            tx,
-            detalles: detallesAsiento,
-          });
-
-          await tx.$queryRaw`UPDATE "comprobantes_bancarios" SET "asientoId" = ${asientoCreado.id}, "updatedAt" = NOW() WHERE id = ${compId}`;
-          if (movId) await tx.movimientos_bancarios.update({ where: { id: movId }, data: { asientoId: asientoCreado.id } });
-          asiento = true;
-        }
+      if (asientoId) {
+        await tx.$queryRaw`UPDATE "comprobantes_bancarios" SET "asientoId" = ${asientoId}, "updatedAt" = NOW() WHERE id = ${compId}`;
+        if (movId) await tx.movimientos_bancarios.update({ where: { id: movId }, data: { asientoId } });
       }
 
-      return { comprobanteId: compId, asientoCreado: asiento };
+      return { comprobanteId: compId, asientoCreado: Boolean(asientoId) };
     });
 
     res.status(201).json({
@@ -357,31 +375,161 @@ router.post('/', autorizarPermiso('bancos.gestionar'), async (req, res) => {
 router.post('/:id/anular', autorizarPermiso('bancos.gestionar'), async (req, res) => {
   try {
     const empresaId = req.empresa.id;
+    const usuarioId = req.usuario?.id || null;
     const id = parseInt(req.params.id, 10);
 
-    const rows = await prisma.$queryRaw`
-      SELECT * FROM "comprobantes_bancarios" WHERE id = ${id} AND "empresaId" = ${empresaId}
-    `;
-    if (!rows.length) return res.status(404).json({ success: false, mensaje: 'Comprobante no encontrado' });
-    if (rows[0].estado === 'ANULADO') return res.status(400).json({ success: false, mensaje: 'Ya está anulado' });
-
-    await prisma.$queryRaw`
-      UPDATE "comprobantes_bancarios" SET estado = 'ANULADO', "updatedAt" = NOW() WHERE id = ${id}
-    `;
-
-    const movId = rows[0].movimientoId ? Number(rows[0].movimientoId) : null;
-    if (movId) {
-      await prisma.$queryRaw`
-        UPDATE "movimientos_bancarios"
-        SET concepto = CONCAT('[ANULADO] ', concepto), "updatedAt" = NOW()
-        WHERE id = ${movId}
+    await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw`
+        SELECT * FROM "comprobantes_bancarios" WHERE id = ${id} AND "empresaId" = ${empresaId}
       `;
-    }
+      if (!rows.length) throw Object.assign(new Error('Comprobante no encontrado'), { status: 404 });
+      if (rows[0].estado === 'ANULADO') throw Object.assign(new Error('Ya está anulado'), { status: 400 });
+
+      await tx.$queryRaw`
+        UPDATE "comprobantes_bancarios" SET estado = 'ANULADO', "updatedAt" = NOW() WHERE id = ${id}
+      `;
+
+      const movId = rows[0].movimientoId ? Number(rows[0].movimientoId) : null;
+      if (movId) {
+        await tx.$queryRaw`
+          UPDATE "movimientos_bancarios"
+          SET concepto = CONCAT('[ANULADO] ', concepto), "updatedAt" = NOW()
+          WHERE id = ${movId}
+        `;
+      }
+
+      // El asiento contable original nunca se toca — se reversa con uno
+      // nuevo (mismo patrón que anular una factura/nota de venta), para
+      // que el rastro de auditoría quede completo en el Diario.
+      if (rows[0].asientoId) {
+        await crearAsientoReversoComprobanteBancario({
+          asientoId: Number(rows[0].asientoId),
+          motivo: `Anulación del comprobante ${rows[0].numero}`,
+          usuarioId,
+          db: tx,
+        });
+      }
+    });
 
     res.json({ success: true, mensaje: 'Comprobante anulado' });
   } catch (error) {
     console.error('POST /comprobantes-bancarios/:id/anular:', error);
-    res.status(500).json({ success: false, mensaje: 'Error al anular comprobante' });
+    res.status(error.status || 500).json({ success: false, mensaje: error.message || 'Error al anular comprobante' });
+  }
+});
+
+// ── PUT /:id — corregir un comprobante ya guardado ────────────────
+// Nunca edita el asiento contable existente: si el comprobante ya tenía
+// uno, se reversa (crearAsientoReversoComprobanteBancario) y se crea uno
+// nuevo con los datos corregidos — mismo principio que anular. El motivo
+// de la corrección es obligatorio y queda en "historialEdiciones" para
+// que quede visible por qué se cambió (ver ModalDetalleComprobante).
+router.put('/:id', autorizarPermiso('bancos.gestionar'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const usuarioId = req.usuario?.id || null;
+    const id = parseInt(req.params.id, 10);
+    const {
+      fecha, notas, cuentaBancariaId, proveedorId, cuentas = [], pagos = [], motivoEdicion,
+    } = req.body;
+
+    if (!motivoEdicion || !motivoEdicion.trim()) {
+      return res.status(400).json({ success: false, mensaje: 'Debes indicar el motivo de la corrección' });
+    }
+    if (!fecha) return res.status(400).json({ success: false, mensaje: 'La fecha es requerida' });
+
+    const cbId  = cuentaBancariaId ? parseInt(cuentaBancariaId, 10) : null;
+    const provId = proveedorId ? parseInt(proveedorId, 10) : null;
+    const fechaDate = new Date(fecha);
+    const total = cuentas.reduce((s, c) => s + Number(c.valor || 0), 0);
+
+    let advertenciaContable = null;
+
+    await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw`
+        SELECT * FROM "comprobantes_bancarios" WHERE id = ${id} AND "empresaId" = ${empresaId}
+      `;
+      if (!rows.length) throw Object.assign(new Error('Comprobante no encontrado'), { status: 404 });
+      const actual = rows[0];
+      if (actual.estado === 'ANULADO') {
+        throw Object.assign(new Error('No se puede editar un comprobante anulado'), { status: 400 });
+      }
+
+      const concep = notas || `${actual.tipo} ${actual.numero}`;
+
+      // 1. Reversar el asiento anterior si existía — nunca se edita in situ.
+      if (actual.asientoId) {
+        await crearAsientoReversoComprobanteBancario({
+          asientoId: Number(actual.asientoId),
+          motivo: motivoEdicion.trim(),
+          usuarioId,
+          db: tx,
+        });
+      }
+
+      // 2. Reemplazar las líneas de "Cuentas" y "Detalle de pagos".
+      await tx.$queryRaw`DELETE FROM "comprobantes_bancarios_cuentas" WHERE "comprobanteId" = ${id}`;
+      await tx.$queryRaw`DELETE FROM "comprobantes_bancarios_pagos" WHERE "comprobanteId" = ${id}`;
+      for (const c of cuentas) {
+        const ccId = c.cuentaContableId ? Number(c.cuentaContableId) : null;
+        await tx.$queryRaw`
+          INSERT INTO "comprobantes_bancarios_cuentas" ("comprobanteId", notas, valor, "cuentaContableId")
+          VALUES (${id}, ${c.notas || null}, ${Number(c.valor || 0)}, ${ccId})
+        `;
+      }
+      for (const p of pagos) {
+        const pcId = p.cuentaContableId ? Number(p.cuentaContableId) : null;
+        await tx.$queryRaw`
+          INSERT INTO "comprobantes_bancarios_pagos" ("comprobanteId", "tipoPago", valor, "cuentaContableId", notas)
+          VALUES (${id}, ${p.tipoPago || 'EFECTIVO'}, ${Number(p.valor || 0)}, ${pcId}, ${p.notas || null})
+        `;
+      }
+
+      // 3. Actualizar el comprobante y su historial de ediciones.
+      await tx.$queryRaw`
+        UPDATE "comprobantes_bancarios"
+        SET fecha = ${fechaDate}, notas = ${notas || null}, "cuentaBancariaId" = ${cbId},
+            "proveedorId" = ${provId}, total = ${total}, "asientoId" = NULL, "updatedAt" = NOW(),
+            "historialEdiciones" = COALESCE("historialEdiciones", '[]'::jsonb) ||
+              jsonb_build_array(jsonb_build_object(
+                'fecha', NOW(), 'usuarioId', ${usuarioId}, 'motivo', ${motivoEdicion.trim()}
+              ))
+        WHERE id = ${id}
+      `;
+
+      // 4. El renglón del Libro de Bancos se corrige directo (no es un
+      // asiento contable, solo el registro del movimiento).
+      if (actual.movimientoId) {
+        const tipoMov = TIPO_MOV[actual.tipo];
+        const esIngreso = ['INGRESO', 'CREDITO'].includes(actual.tipo);
+        await tx.$queryRaw`
+          UPDATE "movimientos_bancarios"
+          SET fecha = ${fechaDate}, concepto = ${concep}, tipo = ${tipoMov},
+              debe = ${esIngreso ? total : 0}, haber = ${esIngreso ? 0 : total},
+              "asientoId" = NULL, "updatedAt" = NOW()
+          WHERE id = ${Number(actual.movimientoId)}
+        `;
+      }
+
+      // 5. Crear el asiento nuevo con los datos ya corregidos.
+      const { asientoId, advertenciaContable: advertencia } = await construirYCrearAsiento({
+        tx, empresaId, usuarioId, fecha: fechaDate, tipo: actual.tipo, numero: actual.numero, concep,
+        cuentaBancariaId: cbId, cuentas,
+      });
+      advertenciaContable = advertencia;
+
+      if (asientoId) {
+        await tx.$queryRaw`UPDATE "comprobantes_bancarios" SET "asientoId" = ${asientoId}, "updatedAt" = NOW() WHERE id = ${id}`;
+        if (actual.movimientoId) {
+          await tx.movimientos_bancarios.update({ where: { id: Number(actual.movimientoId) }, data: { asientoId } });
+        }
+      }
+    });
+
+    res.json({ success: true, mensaje: 'Comprobante corregido', advertenciaContable, data: { id } });
+  } catch (error) {
+    console.error('PUT /comprobantes-bancarios/:id:', error);
+    res.status(error.status || 500).json({ success: false, mensaje: error.message || 'No se pudo corregir el comprobante' });
   }
 });
 

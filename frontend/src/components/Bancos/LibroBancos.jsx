@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import { abrirComprobanteMovimiento } from '../../utils/comprobantesBancos';
+import { abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
 import './Bancos.css';
 
 function formatMoney(v) {
@@ -125,6 +126,19 @@ export default function LibroBancos() {
       alert(e.response?.data?.mensaje || 'Error al contabilizar');
     } finally {
       setContabilizando(false);
+    }
+  };
+
+  // Imprimir el Libro de Bancos del período actual — misma tabla que se ve
+  // en pantalla, con la columna "Conc." (sirve también como reporte de
+  // conciliación: no hay una pantalla separada, es el mismo listado).
+  const imprimirLibro = async () => {
+    if (!cuentaId) return;
+    const { desde, hasta } = getPeriodo();
+    try {
+      await abrirBlobEnNuevaPestana(api, `/bancos/${cuentaId}/libro/pdf`, { desde: desde || undefined, hasta: hasta || undefined });
+    } catch {
+      alert('No se pudo generar el PDF del Libro de Bancos');
     }
   };
 
@@ -285,6 +299,15 @@ export default function LibroBancos() {
             📒 Contabilizar ({pendientesSinAsiento} sin asiento)
           </button>
         )}
+        <button
+          className="btn btn-sm btn-ghost"
+          disabled={movimientos.length === 0}
+          title="Imprimir el Libro de Bancos / conciliación del período"
+          onClick={imprimirLibro}
+          style={{ marginLeft: 'auto' }}
+        >
+          🖨 Imprimir
+        </button>
       </div>
 
       {/* Tabla de movimientos */}

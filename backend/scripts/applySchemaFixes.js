@@ -899,6 +899,11 @@ const FIXES = [
   // se creaba a mano desde el Libro de Bancos con contrapartida elegida;
   // la pestaña "Comprobantes" nunca contabilizaba nada.
   `ALTER TABLE "comprobantes_bancarios" ADD COLUMN IF NOT EXISTS "asientoId" INTEGER`,
+  // Corrección de comprobantes ya guardados (2026-09-21) — el motivo de
+  // cada edición queda acá para que sea visible por qué se cambió; el
+  // asiento contable nunca se edita, se reversa (ver
+  // crearAsientoReversoComprobanteBancario en utils/contabilidad.js).
+  `ALTER TABLE "comprobantes_bancarios" ADD COLUMN IF NOT EXISTS "historialEdiciones" JSONB`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

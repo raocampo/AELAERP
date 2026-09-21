@@ -648,8 +648,12 @@ export default function BancosHub() {
 
   useEffect(() => { cargarCuentas(); }, []); // eslint-disable-line
 
+  // Clientes no encontraban que la tarjeta ya despliega los movimientos al
+  // hacer click — se agrega un chevron visible en la tarjeta (abajo) que
+  // deja explícito el toggle; clickear la misma cuenta ya seleccionada la
+  // colapsa en vez de no hacer nada.
   const handleSeleccionar = (cuenta) => {
-    setCuentaSeleccionada(cuenta);
+    setCuentaSeleccionada((actual) => (actual?.id === cuenta.id ? null : cuenta));
     setTabActivo('movimientos');
   };
 
@@ -733,6 +737,14 @@ export default function BancosHub() {
                   <div className={`banco-card-saldo ${saldoActual < 0 ? 'negativo' : ''}`}>
                     ${formatMoney(saldoActual)}
                   </div>
+                  <button
+                    type="button"
+                    className="banco-card-toggle"
+                    title={cuentaSeleccionada?.id === c.id ? 'Ocultar movimientos' : 'Ver movimientos'}
+                    onClick={(e) => { e.stopPropagation(); handleSeleccionar(c); }}
+                  >
+                    {cuentaSeleccionada?.id === c.id ? '▴ Ocultar movimientos' : '▾ Ver movimientos'}
+                  </button>
                 </div>
               );
             })}

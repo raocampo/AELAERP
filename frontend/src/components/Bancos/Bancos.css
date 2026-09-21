@@ -100,6 +100,25 @@
   opacity: 1;
 }
 
+.banco-card-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border: none;
+  border-top: 1px dashed #e2e8f0;
+  background: none;
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.banco-card-toggle:hover {
+  text-decoration: underline;
+}
+
 /* ── Tabs dentro de detalle ── */
 .bancos-tabs {
   display: flex;

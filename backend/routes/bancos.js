@@ -13,6 +13,7 @@ const { crearAsientoMovimientoBancario, siguienteNumeroGenerico } = require('../
 const {
   enviarComprobanteBancarioPdf, CATEGORIA_POR_TIPO_MOVIMIENTO, fmtMoney,
 } = require('../utils/comprobanteBancarioPdf');
+const { enviarLibroBancosPdf } = require('../utils/libroBancosPdf');
 
 // Prefijo de comprobante por categoría de movimiento — equivalente a los
 // "Comprobantes de ingreso/pago/crédito/débito" de otros ERP contables.
@@ -252,6 +253,69 @@ router.get('/:id/movimientos', autorizarPermiso('bancos.ver'), async (req, res) 
   } catch (error) {
     console.error('GET /bancos/:id/movimientos:', error);
     res.status(500).json({ success: false, mensaje: 'Error al obtener movimientos' });
+  }
+});
+
+// GET /api/bancos/:id/libro/pdf — PDF del Libro de Bancos (mismo listado que
+// LibroBancos.jsx, incluida la columna "Conc." — sirve tanto para "imprimir
+// el libro" como para la conciliación, es la misma tabla).
+router.get('/:id/libro/pdf', autorizarPermiso('bancos.ver'), async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const bancoId = parseIntSafe(req.params.id);
+    if (!bancoId) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const cuenta = await prisma.bancos.findFirst({ where: { id: bancoId, empresaId } });
+    if (!cuenta) return res.status(404).json({ success: false, mensaje: 'Cuenta bancaria no encontrada' });
+
+    const { desde, hasta } = req.query;
+    const where = { bancoId, empresaId };
+    if (desde || hasta) {
+      where.fecha = {};
+      if (desde) where.fecha.gte = new Date(desde);
+      if (hasta) {
+        const fh = new Date(hasta);
+        fh.setHours(23, 59, 59, 999);
+        where.fecha.lte = fh;
+      }
+    }
+
+    // Saldo anterior real: saldoInicial + todo lo ocurrido ANTES de "desde"
+    // (mismo cálculo que ya hacía el frontend en 2 consultas — se centraliza
+    // acá para que el PDF no dependa de que el cliente se lo pase).
+    let saldoAnterior = parseFloat(cuenta.saldoInicial);
+    if (desde) {
+      const previos = await prisma.movimientos_bancarios.aggregate({
+        where: { bancoId, empresaId, fecha: { lt: new Date(desde) } },
+        _sum: { debe: true, haber: true },
+      });
+      saldoAnterior += Number(previos._sum.debe || 0) - Number(previos._sum.haber || 0);
+    }
+
+    const movimientos = await prisma.movimientos_bancarios.findMany({
+      where,
+      orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
+    });
+
+    let saldoAcumulado = saldoAnterior;
+    const totalDebe = movimientos.reduce((s, m) => s + Number(m.debe), 0);
+    const totalHaber = movimientos.reduce((s, m) => s + Number(m.haber), 0);
+    const filas = movimientos.map((m) => {
+      saldoAcumulado += Number(m.debe) - Number(m.haber);
+      return { ...m, saldoAcumulado };
+    });
+
+    const configSri = await prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
+
+    await enviarLibroBancosPdf(res, {
+      cuenta: { nombre: cuenta.nombre, banco: cuenta.banco, tipoCuenta: cuenta.tipoCuenta, numeroCuenta: cuenta.numeroCuenta },
+      periodo: { desde: desde || null, hasta: hasta || null },
+      saldoAnterior, totalDebe, totalHaber, saldoFinal: saldoAcumulado,
+      movimientos: filas,
+    }, configSri, `Libro-de-Bancos-${cuenta.nombre.replace(/\s+/g, '-')}`);
+  } catch (error) {
+    console.error('GET /bancos/:id/libro/pdf:', error);
+    if (!res.headersSent) res.status(500).json({ success: false, mensaje: 'No se pudo generar el Libro de Bancos' });
   }
 });
 

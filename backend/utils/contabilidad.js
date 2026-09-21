@@ -848,6 +848,40 @@ async function crearAsientoReversoNotaVentaAnulada({ notaVentaId, usuarioId, fec
   return resultados;
 }
 
+// Corrección de un comprobante de Bancos ya contabilizado (2026-09-21):
+// nunca se edita el asiento original — se reversa (debe/haber invertidos,
+// mismo patrón que las demás Reverso*Anulada) y el caller crea uno nuevo
+// con los datos ya corregidos. `motivo` queda en la descripción del
+// reverso para que el porqué de la corrección sea visible en el Diario.
+async function crearAsientoReversoComprobanteBancario({ asientoId, motivo, usuarioId, fecha = new Date(), db = prisma }) {
+  const asientoIdNum = toInt(asientoId);
+  const asientoOriginal = await db.asientos_contables.findUnique({
+    where: { id: asientoIdNum },
+    include: { detalles: true },
+  });
+  if (!asientoOriginal) throw new Error('Asiento original no encontrado');
+
+  const detalles = asientoOriginal.detalles.map((d) => ({
+    cuentaId: d.cuentaId,
+    descripcion: `Reverso por corrección: ${motivo}`,
+    debe: round2(d.haber),
+    haber: round2(d.debe),
+  }));
+
+  const asiento = await crearAsientoContable({
+    empresaId: asientoOriginal.empresaId,
+    fecha,
+    descripcion: `Reverso por corrección de comprobante — ${motivo}`,
+    tipo: 'ANULACION',
+    referencia: `COMPROBANTE-REV-${asientoIdNum}-${Date.now()}`,
+    usuarioId,
+    tx: db,
+    detalles,
+  });
+
+  return asiento;
+}
+
 // ─── Movimientos bancarios manuales (depósitos, retiros, transferencias, etc.) ──
 // A diferencia de compras/ventas, un movimiento bancario manual no tiene una
 // contrapartida contable predecible (puede ser un aporte de capital, el pago de
@@ -2548,6 +2582,7 @@ module.exports = {
   crearAsientoVentaNotaVenta,
   crearAsientoCostoVentaNotaVenta,
   crearAsientoReversoNotaVentaAnulada,
+  crearAsientoReversoComprobanteBancario,
   crearAsientoMovimientoBancario,
   registrarMovimientoBancarioLigado,
   crearAsientoCobroFactura,
