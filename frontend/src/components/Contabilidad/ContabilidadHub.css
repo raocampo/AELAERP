@@ -170,6 +170,13 @@
   color: #64748b;
 }
 
+/* Desglose en línea de una cuenta dentro de la mayorización por lote */
+.conta-table-compact th,
+.conta-table-compact td {
+  padding: 5px 6px;
+  font-size: 12.5px;
+}
+
 .conta-warning {
   background: #fef9c3;
   color: #92400e;

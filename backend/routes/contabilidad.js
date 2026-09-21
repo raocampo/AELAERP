@@ -54,9 +54,20 @@ function parseIntSafe(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+// Un <input type="date"> del navegador no impide que el segmento de año
+// termine con más de 4 dígitos (tecleado de más, autocompletado raro,
+// paste) — "092026-01-21" es sintácticamente una fecha válida para
+// `new Date()` (año extendido 92026), y Prisma la serializa igual,
+// pero revienta con "Could not convert argument value" al enviarla a
+// Postgres. Cualquier filtro de fecha de Contabilidad pasa por acá —
+// se descarta (como si no se hubiera mandado el filtro) en vez de
+// dejar caer el reporte completo con un 500.
 function parseDate(value) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  if (Number.isNaN(date.getTime())) return null;
+  const anio = date.getFullYear();
+  if (anio < 1900 || anio > 2200) return null;
+  return date;
 }
 
 function startOfDay(value) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
@@ -240,6 +240,12 @@ const ContabilidadHub = () => {
   const [mayorFiltros, setMayorFiltros] = useState({ cuentaId: '', desde: '', hasta: '' });
   const [mayorDetalle, setMayorDetalle] = useState(null);
   const [mayorizacionLote, setMayorizacionLote] = useState(null);
+  // Desglose en línea de una cuenta dentro de la mayorización por lote — el
+  // usuario pidió poder ver los movimientos de la cuenta ahí mismo, sin
+  // tener que ir a "Libro Mayor" y volver a elegir la cuenta.
+  const [cuentaDesglosadaId, setCuentaDesglosadaId] = useState(null);
+  const [desgloseCuenta, setDesgloseCuenta] = useState(null);
+  const [cargandoDesglose, setCargandoDesglose] = useState(false);
   const movimientosPag = usePagina(mayorDetalle?.movimientos || []);
   const mayorizacionPag = usePagina(mayorizacionLote?.tabla || []);
 
@@ -600,6 +606,31 @@ const ContabilidadHub = () => {
       setMayorLoading(false);
     }
   }, [mayorFiltros.desde, mayorFiltros.hasta]);
+
+  const toggleDesgloseCuenta = async (row) => {
+    if (cuentaDesglosadaId === row.cuentaId) {
+      setCuentaDesglosadaId(null);
+      setDesgloseCuenta(null);
+      return;
+    }
+    setCuentaDesglosadaId(row.cuentaId);
+    setDesgloseCuenta(null);
+    setCargandoDesglose(true);
+    try {
+      const res = await api.get(`/contabilidad/mayor/${row.cuentaId}`, {
+        params: {
+          desde: mayorFiltros.desde || undefined,
+          hasta: mayorFiltros.hasta || undefined,
+        },
+      });
+      setDesgloseCuenta(res.data?.data || null);
+    } catch (error) {
+      toast.error(error.response?.data?.mensaje || 'Error al cargar el desglose de la cuenta');
+      setCuentaDesglosadaId(null);
+    } finally {
+      setCargandoDesglose(false);
+    }
+  };
 
   useEffect(() => {
     cargar();
@@ -1940,6 +1971,7 @@ const ContabilidadHub = () => {
                 <table className="conta-table">
                   <thead>
                     <tr>
+                      <th style={{ width: 28 }}></th>
                       <th>Código</th>
                       <th>Cuenta</th>
                       <th>Tipo</th>
@@ -1950,19 +1982,75 @@ const ContabilidadHub = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {mayorizacionPag.slice.map((row) => (
-                      <tr key={row.cuentaId}>
-                        <td>{row.codigo}</td>
-                        <td>{row.nombre}</td>
-                        <td>{row.tipo}</td>
-                        <td>{row.movimientos}</td>
-                        <td>{toMoney(row.totalDebe)}</td>
-                        <td>{toMoney(row.totalHaber)}</td>
-                        <td>{toMoney(row.saldo)}</td>
-                      </tr>
-                    ))}
+                    {mayorizacionPag.slice.map((row) => {
+                      const desglosada = cuentaDesglosadaId === row.cuentaId;
+                      return (
+                      <Fragment key={row.cuentaId}>
+                        <tr>
+                          <td>
+                            {row.movimientos > 0 && (
+                              <button
+                                type="button"
+                                className="btn-icon"
+                                title={desglosada ? 'Ocultar movimientos' : 'Ver movimientos de esta cuenta'}
+                                onClick={() => toggleDesgloseCuenta(row)}
+                              >
+                                {desglosada ? '▴' : '▾'}
+                              </button>
+                            )}
+                          </td>
+                          <td>{row.codigo}</td>
+                          <td>{row.nombre}</td>
+                          <td>{row.tipo}</td>
+                          <td>{row.movimientos}</td>
+                          <td>{toMoney(row.totalDebe)}</td>
+                          <td>{toMoney(row.totalHaber)}</td>
+                          <td>{toMoney(row.saldo)}</td>
+                        </tr>
+                        {desglosada && (
+                          <tr key={`${row.cuentaId}-desglose`}>
+                            <td></td>
+                            <td colSpan="7" style={{ background: '#f8fafc', padding: '.75rem 1rem' }}>
+                              {cargandoDesglose ? (
+                                <span className="conta-loading">Cargando movimientos…</span>
+                              ) : !desgloseCuenta?.movimientos?.length ? (
+                                <span className="conta-empty">Esta cuenta no tiene movimientos en el rango seleccionado.</span>
+                              ) : (
+                                <table className="conta-table conta-table-compact">
+                                  <thead>
+                                    <tr>
+                                      <th>Fecha</th>
+                                      <th>Asiento</th>
+                                      <th>Referencia</th>
+                                      <th>Descripción</th>
+                                      <th>Debe</th>
+                                      <th>Haber</th>
+                                      <th>Saldo</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {desgloseCuenta.movimientos.map((m) => (
+                                      <tr key={m.id}>
+                                        <td>{formatFechaCorta(m.fecha)}</td>
+                                        <td>{m.numero}</td>
+                                        <td>{m.referencia || '—'}</td>
+                                        <td>{m.descripcionDetalle || m.descripcionAsiento || '—'}</td>
+                                        <td>{m.debe ? toMoney(m.debe) : ''}</td>
+                                        <td>{m.haber ? toMoney(m.haber) : ''}</td>
+                                        <td>{toMoney(m.saldo)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                      );
+                    })}
                     {(mayorizacionLote.tabla || []).length === 0 && (
-                      <tr><td colSpan="7" className="conta-empty">No existen movimientos para mayorización en el rango.</td></tr>
+                      <tr><td colSpan="8" className="conta-empty">No existen movimientos para mayorización en el rango.</td></tr>
                     )}
                   </tbody>
                 </table>
