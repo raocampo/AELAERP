@@ -116,7 +116,7 @@ function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGu
         proveedorNombre: '',
         proveedorRuc: '',
         cuentas: [{ notas: '', valor: '', cuentaContableId: '' }],
-        pagos: [{ tipoPago: 'EFECTIVO', valor: '', cuentaContableId: '', notas: '' }],
+        pagos: [{ tipoPago: 'EFECTIVO', valor: '', cuentaContableId: '', notas: '', referencia: '' }],
         motivoEdicion: '',
       };
     }
@@ -132,8 +132,8 @@ function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGu
         ? c.cuentas.map((x) => ({ notas: x.notas || '', valor: String(x.valor ?? ''), cuentaContableId: x.cuentaContableId ? String(x.cuentaContableId) : '' }))
         : [{ notas: '', valor: '', cuentaContableId: '' }],
       pagos: c.pagos?.length
-        ? c.pagos.map((x) => ({ tipoPago: x.tipoPago, valor: String(x.valor ?? ''), cuentaContableId: x.cuentaContableId ? String(x.cuentaContableId) : '', notas: x.notas || '' }))
-        : [{ tipoPago: 'EFECTIVO', valor: '', cuentaContableId: '', notas: '' }],
+        ? c.pagos.map((x) => ({ tipoPago: x.tipoPago, valor: String(x.valor ?? ''), cuentaContableId: x.cuentaContableId ? String(x.cuentaContableId) : '', notas: x.notas || '', referencia: x.referencia || '' }))
+        : [{ tipoPago: 'EFECTIVO', valor: '', cuentaContableId: '', notas: '', referencia: '' }],
       motivoEdicion: '',
     };
   });
@@ -163,7 +163,7 @@ function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGu
   const quitarCuenta = (i) => setForm((f) => ({ ...f, cuentas: f.cuentas.filter((_, idx) => idx !== i) }));
   const cambiarCuenta = (i, k, v) => setForm((f) => ({ ...f, cuentas: f.cuentas.map((c, idx) => idx === i ? { ...c, [k]: v } : c) }));
 
-  const agregarPago = () => setForm((f) => ({ ...f, pagos: [...f.pagos, { tipoPago: 'EFECTIVO', valor: '', cuentaContableId: '', notas: '' }] }));
+  const agregarPago = () => setForm((f) => ({ ...f, pagos: [...f.pagos, { tipoPago: 'EFECTIVO', valor: '', cuentaContableId: '', notas: '', referencia: '' }] }));
   const quitarPago = (i) => setForm((f) => ({ ...f, pagos: f.pagos.filter((_, idx) => idx !== i) }));
   const cambiarPago = (i, k, v) => setForm((f) => ({ ...f, pagos: f.pagos.map((p, idx) => idx === i ? { ...p, [k]: v } : p) }));
 
@@ -198,7 +198,7 @@ function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGu
         cuentaBancariaId: form.cuentaBancariaId || null,
         proveedorId: form.proveedorId || null,
         cuentas: form.cuentas.map((c) => ({ notas: c.notas, valor: Number(c.valor || 0), cuentaContableId: c.cuentaContableId || null })),
-        pagos: form.pagos.map((p) => ({ tipoPago: p.tipoPago, valor: Number(p.valor || 0), cuentaContableId: p.cuentaContableId || null, notas: p.notas })),
+        pagos: form.pagos.map((p) => ({ tipoPago: p.tipoPago, valor: Number(p.valor || 0), cuentaContableId: p.cuentaContableId || null, notas: p.notas, referencia: p.referencia || null })),
       };
       let id, numero;
       if (editando) {
@@ -364,12 +364,15 @@ function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGu
                     <th style={{ width: 30 }}></th>
                     <th>Tipo de pago</th>
                     <th style={{ width: 140 }}>Valor</th>
+                    <th>N° referencia</th>
                     <th>Cuenta contable</th>
                     <th>Notas</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {form.pagos.map((p, i) => (
+                  {form.pagos.map((p, i) => {
+                    const requiereReferencia = p.tipoPago === 'CHEQUE' || p.tipoPago === 'TRANSFERENCIA';
+                    return (
                     <tr key={i}>
                       <td>
                         <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-danger)' }} onClick={() => quitarPago(i)}>✕</button>
@@ -381,6 +384,17 @@ function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGu
                       </td>
                       <td><input type="number" step="0.01" value={p.valor} onChange={(e) => cambiarPago(i, 'valor', e.target.value)} /></td>
                       <td>
+                        {requiereReferencia ? (
+                          <input
+                            value={p.referencia}
+                            onChange={(e) => cambiarPago(i, 'referencia', e.target.value)}
+                            placeholder={p.tipoPago === 'CHEQUE' ? 'N° de cheque' : 'N° de transferencia'}
+                          />
+                        ) : (
+                          <span style={{ color: 'var(--color-text-muted, #94a3b8)', fontSize: '0.8rem' }}>—</span>
+                        )}
+                      </td>
+                      <td>
                         <select value={p.cuentaContableId} onChange={(e) => cambiarPago(i, 'cuentaContableId', e.target.value)}>
                           <option value="">— Sin cuenta —</option>
                           {planCuentas.map((pc) => <option key={pc.id} value={pc.id}>{pc.codigo} {pc.nombre}</option>)}
@@ -388,13 +402,14 @@ function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGu
                       </td>
                       <td><input value={p.notas} onChange={(e) => cambiarPago(i, 'notas', e.target.value)} /></td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr>
                     <td colSpan={2} style={{ textAlign: 'right', fontWeight: 600 }}>Total pagos</td>
                     <td style={{ fontWeight: 700 }}>${formatMoney(totalPagos)}</td>
-                    <td colSpan={2}></td>
+                    <td colSpan={3}></td>
                   </tr>
                 </tfoot>
               </table>
@@ -461,7 +476,7 @@ function ModalDetalleComprobante({ id, onClose, onEditar }) {
                 <h3 style={{ fontSize: '0.9rem', margin: '0.75rem 0 0.4rem' }}>Detalle de pagos</h3>
                 <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem' }}>
                   {data.pagos.map((p) => (
-                    <li key={p.id}>{p.tipoPago.replace(/_/g, ' ')}: ${formatMoney(p.valor)}</li>
+                    <li key={p.id}>{p.tipoPago.replace(/_/g, ' ')}{p.referencia ? ` (Ref. ${p.referencia})` : ''}: ${formatMoney(p.valor)}</li>
                   ))}
                 </ul>
               </>

@@ -135,7 +135,7 @@ router.get('/:id', autorizarPermiso('bancos.ver'), async (req, res) => {
         pagos: pagos.map((p) => ({
           id: Number(p.id), tipoPago: p.tipoPago, valor: parseFloat(p.valor || 0),
           cuentaContableId: p.cuentaContableId ? Number(p.cuentaContableId) : null,
-          codigo: p.codigo, cuentaNombre: p.cuenta_nombre, notas: p.notas,
+          codigo: p.codigo, cuentaNombre: p.cuenta_nombre, notas: p.notas, referencia: p.referencia || null,
         })),
       },
     });
@@ -166,7 +166,7 @@ router.get('/:id/pdf', autorizarPermiso('bancos.ver'), async (req, res) => {
         LEFT JOIN "plan_cuentas" pc ON pc.id = cbc."cuentaContableId"
         WHERE cbc."comprobanteId" = ${id} ORDER BY cbc.id`,
       prisma.$queryRaw`
-        SELECT cbp."tipoPago", cbp.valor, cbp.notas, pc.codigo, pc.nombre AS cuenta_nombre
+        SELECT cbp."tipoPago", cbp.valor, cbp.notas, cbp.referencia, pc.codigo, pc.nombre AS cuenta_nombre
         FROM "comprobantes_bancarios_pagos" cbp
         LEFT JOIN "plan_cuentas" pc ON pc.id = cbp."cuentaContableId"
         WHERE cbp."comprobanteId" = ${id} ORDER BY cbp.id`,
@@ -207,7 +207,8 @@ router.get('/:id/pdf', autorizarPermiso('bancos.ver'), async (req, res) => {
         columnas: [{ titulo: 'Forma', ancho: 90 }, { titulo: 'Cuenta / Nota' }, { titulo: 'Valor', ancho: 80, alinear: 'right' }],
         filas: pagos.map((p) => [
           etiquetaPago[p.tipoPago] || p.tipoPago,
-          [p.codigo ? `${p.codigo} ${p.cuenta_nombre || ''}`.trim() : '', p.notas].filter(Boolean).join(' — '),
+          [p.codigo ? `${p.codigo} ${p.cuenta_nombre || ''}`.trim() : '', p.referencia ? `Ref. ${p.referencia}` : null, p.notas]
+            .filter(Boolean).join(' — '),
           fmtMoney(p.valor),
         ]),
       },
@@ -319,8 +320,8 @@ router.post('/', autorizarPermiso('bancos.gestionar'), async (req, res) => {
       for (const p of pagos) {
         const pcId = p.cuentaContableId ? Number(p.cuentaContableId) : null;
         await tx.$queryRaw`
-          INSERT INTO "comprobantes_bancarios_pagos" ("comprobanteId", "tipoPago", valor, "cuentaContableId", notas)
-          VALUES (${compId}, ${p.tipoPago || 'EFECTIVO'}, ${Number(p.valor || 0)}, ${pcId}, ${p.notas || null})
+          INSERT INTO "comprobantes_bancarios_pagos" ("comprobanteId", "tipoPago", valor, "cuentaContableId", notas, referencia)
+          VALUES (${compId}, ${p.tipoPago || 'EFECTIVO'}, ${Number(p.valor || 0)}, ${pcId}, ${p.notas || null}, ${p.referencia || null})
         `;
       }
 
@@ -480,8 +481,8 @@ router.put('/:id', autorizarPermiso('bancos.gestionar'), async (req, res) => {
       for (const p of pagos) {
         const pcId = p.cuentaContableId ? Number(p.cuentaContableId) : null;
         await tx.$queryRaw`
-          INSERT INTO "comprobantes_bancarios_pagos" ("comprobanteId", "tipoPago", valor, "cuentaContableId", notas)
-          VALUES (${id}, ${p.tipoPago || 'EFECTIVO'}, ${Number(p.valor || 0)}, ${pcId}, ${p.notas || null})
+          INSERT INTO "comprobantes_bancarios_pagos" ("comprobanteId", "tipoPago", valor, "cuentaContableId", notas, referencia)
+          VALUES (${id}, ${p.tipoPago || 'EFECTIVO'}, ${Number(p.valor || 0)}, ${pcId}, ${p.notas || null}, ${p.referencia || null})
         `;
       }
 

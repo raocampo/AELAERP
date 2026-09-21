@@ -904,6 +904,11 @@ const FIXES = [
   // asiento contable nunca se edita, se reversa (ver
   // crearAsientoReversoComprobanteBancario en utils/contabilidad.js).
   `ALTER TABLE "comprobantes_bancarios" ADD COLUMN IF NOT EXISTS "historialEdiciones" JSONB`,
+  // Número de cheque/transferencia por línea de pago (2026-09-21) — antes
+  // solo había "notas" genérico; se pedía explícitamente un campo propio
+  // para el número de referencia cuando el tipo de pago es CHEQUE o
+  // TRANSFERENCIA.
+  `ALTER TABLE "comprobantes_bancarios_pagos" ADD COLUMN IF NOT EXISTS "referencia" VARCHAR(50)`,
 ];
 
 async function applyFixesToDb(connectionString, label) {
