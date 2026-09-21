@@ -207,7 +207,7 @@ function ModalMovimiento({ bancoId, onClose, onSaved }) {
             </div>
             <div className="form-group full-col">
               <label>Concepto *</label>
-              <input name="concepto" value={form.concepto} onChange={handleChange} placeholder="Descripción del movimiento" required />
+              <textarea rows={2} name="concepto" value={form.concepto} onChange={handleChange} placeholder="Descripción del movimiento — a qué corresponde" required />
             </div>
             <div className="form-group">
               <label>Referencia</label>
@@ -223,7 +223,7 @@ function ModalMovimiento({ bancoId, onClose, onSaved }) {
             </div>
             <div className="form-group full-col">
               <label>Observaciones</label>
-              <input name="observaciones" value={form.observaciones} onChange={handleChange} />
+              <textarea rows={2} name="observaciones" value={form.observaciones} onChange={handleChange} />
             </div>
             <div className="form-group full-col">
               <label>Cuenta contrapartida (opcional)</label>
@@ -312,7 +312,7 @@ function ModalCheque({ bancoId, onClose, onSaved }) {
             </div>
             <div className="form-group full-col">
               <label>Concepto / detalle</label>
-              <input name="concepto" value={form.concepto} onChange={handleChange} placeholder="Pago factura #..." />
+              <textarea rows={2} name="concepto" value={form.concepto} onChange={handleChange} placeholder="Pago factura #..." />
             </div>
             <div className="form-group full-col">
               <label>Proveedor (opcional)</label>

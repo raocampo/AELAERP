@@ -894,6 +894,11 @@ const FIXES = [
   `ALTER TABLE "items_compra_pendientes" ADD COLUMN IF NOT EXISTS "costoUnitario" DECIMAL(14,4)`,
   `ALTER TABLE "items_compra_pendientes" ADD COLUMN IF NOT EXISTS "precioVentaReferencial" DECIMAL(14,4)`,
   `ALTER TABLE "items_compra_pendientes" ADD COLUMN IF NOT EXISTS "porcentajeIva" INTEGER`,
+  // Asiento contable automático al crear un comprobante de Bancos
+  // (2026-09-21) — antes solo se generaba el asiento cuando el movimiento
+  // se creaba a mano desde el Libro de Bancos con contrapartida elegida;
+  // la pestaña "Comprobantes" nunca contabilizaba nada.
+  `ALTER TABLE "comprobantes_bancarios" ADD COLUMN IF NOT EXISTS "asientoId" INTEGER`,
 ];
 
 async function applyFixesToDb(connectionString, label) {

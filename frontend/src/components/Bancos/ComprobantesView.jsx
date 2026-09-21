@@ -140,6 +140,23 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
   const quitarPago = (i) => setForm((f) => ({ ...f, pagos: f.pagos.filter((_, idx) => idx !== i) }));
   const cambiarPago = (i, k, v) => setForm((f) => ({ ...f, pagos: f.pagos.map((p, idx) => idx === i ? { ...p, [k]: v } : p) }));
 
+  // Caso simple (1 cuenta + 1 pago, el más común): el valor y la nota de
+  // "Cuentas" se reflejan solos en "Detalle de pagos" mientras el usuario no
+  // haya escrito nada ahí — así solo falta elegir tipo/forma y cuenta
+  // contable del pago, sin volver a teclear el mismo monto.
+  useEffect(() => {
+    if (form.cuentas.length !== 1 || form.pagos.length !== 1) return;
+    const cuenta = form.cuentas[0];
+    const pago = form.pagos[0];
+    const pagoValorVacio = pago.valor === '' || Number(pago.valor) === 0;
+    const pagoNotasVacias = !pago.notas;
+    const nuevoValor = pagoValorVacio ? cuenta.valor : pago.valor;
+    const nuevasNotas = pagoNotasVacias ? (cuenta.notas || form.notas) : pago.notas;
+    if (nuevoValor === pago.valor && nuevasNotas === pago.notas) return;
+    setForm((f) => ({ ...f, pagos: [{ ...f.pagos[0], valor: nuevoValor, notas: nuevasNotas }] }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.cuentas, form.notas]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (form.cuentas.length === 0) return setError('Agregue al menos una cuenta');
@@ -204,7 +221,7 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
             </div>
             <div className="form-group full-col">
               <label>Notas *</label>
-              <input value={form.notas} onChange={(e) => setForm((f) => ({ ...f, notas: e.target.value }))} placeholder="Descripción del comprobante" required />
+              <textarea rows={3} value={form.notas} onChange={(e) => setForm((f) => ({ ...f, notas: e.target.value }))} placeholder="Descripción del comprobante — a qué corresponde este ingreso/egreso" required />
             </div>
           </div>
         </fieldset>
@@ -358,6 +375,10 @@ function ListaComprobantes({ tipo, onNuevo, onVer }) {
       setTotal(Number(r.data?.data?.total || 0));
     } catch (e) {
       console.error(e);
+      // Antes fallaba en silencio: el listado quedaba en 0 sin avisar que la
+      // consulta realmente reventó (bug real: parámetro NULL sin tipo en el
+      // filtro — ver fix en routes/comprobantes-bancarios.js).
+      alert(e.response?.data?.mensaje || 'No se pudo cargar el listado de comprobantes');
     } finally {
       setCargando(false);
     }

@@ -483,8 +483,8 @@ router.get('/tarjetas/:id/movimientos', autorizarPermiso('cxp.ver'), async (req,
     const rows = await db.$queryRaw`
       SELECT m.* FROM "movimientos_tarjeta" m
       WHERE m."tarjetaId" = ${tarjetaId} AND m."empresaId" = ${empresaId}
-        AND (${desde ?? null} IS NULL OR m.fecha >= ${desde ? new Date(desde) : new Date(0)})
-        AND (${hasta ?? null} IS NULL OR m.fecha <= ${hasta ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
+        AND (${desde ?? null}::text IS NULL OR m.fecha >= ${desde ? new Date(desde) : new Date(0)})
+        AND (${hasta ?? null}::text IS NULL OR m.fecha <= ${hasta ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
       ORDER BY m.fecha DESC, m.id DESC
     `;
     res.json({
@@ -549,10 +549,10 @@ router.get('/libro-tarjetas', autorizarPermiso('cxp.ver'), async (req, res) => {
       FROM "movimientos_tarjeta" m
       JOIN "tarjetas_credito" t ON t.id = m."tarjetaId"
       WHERE m."empresaId" = ${empresaId}
-        AND (${tarId ?? null} IS NULL OR m."tarjetaId" = ${tarId ?? 0})
-        AND (${tipo ?? null} IS NULL OR m.tipo = ${tipo ?? ''})
-        AND (${desde ?? null} IS NULL OR m.fecha >= ${desde ? new Date(desde) : new Date(0)})
-        AND (${hasta ?? null} IS NULL OR m.fecha <= ${hasta ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
+        AND (${tarId ?? null}::text IS NULL OR m."tarjetaId" = ${tarId ?? 0})
+        AND (${tipo ?? null}::text IS NULL OR m.tipo = ${tipo ?? ''})
+        AND (${desde ?? null}::text IS NULL OR m.fecha >= ${desde ? new Date(desde) : new Date(0)})
+        AND (${hasta ?? null}::text IS NULL OR m.fecha <= ${hasta ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
       ORDER BY m.fecha DESC, m.id DESC
       LIMIT 500
     `;

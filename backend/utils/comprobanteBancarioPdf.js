@@ -66,7 +66,10 @@ const fmtMoney = (v) => `$${Number(v || 0).toFixed(2)}`;
 function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
   return new Promise((resolve, reject) => {
     const estilo = ESTILOS[datos.categoria] || ESTILOS.AJUSTE;
-    const doc = new PDFDocument({ size: 'A4', margins: { top: 40, bottom: 40, left: 48, right: 48 }, autoFirstPage: true });
+    // Media hoja A4 (mismo ancho, mitad de alto) — un comprobante no
+    // necesita una hoja completa; si el contenido no alcanza, se agrega
+    // otra media página (asegurarEspacio ya usa doc.page.height).
+    const doc = new PDFDocument({ size: [595.28, 420.94], margins: { top: 32, bottom: 32, left: 48, right: 48 }, autoFirstPage: true });
     registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
@@ -76,7 +79,7 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
     const W = doc.page.width - ML * 2;
     const logo = resolverLogo(empresa.logoUrl);
     const anchoTexto = W - (logo ? 130 : 0);
-    let y = 40;
+    let y = 32;
 
     if (logo) {
       try { doc.image(logo, ML, y, { fit: [120, 55] }); } catch { /* logo inválido */ }
@@ -86,23 +89,31 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
     doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(`RUC: ${empresa.ruc || ''}`, { width: anchoTexto });
     if (empresa.dirMatriz) doc.text(empresa.dirMatriz, { width: anchoTexto });
     if (empresa.telefono) doc.text(`Telf.: ${empresa.telefono}`, { width: anchoTexto });
-    y = Math.max(doc.y, y + 55) + 16;
+    // El piso de "y+55" solo aplica si hay logo (reserva su alto) — sin
+    // logo, no hay que reservar ese espacio de más (media hoja A4: cada
+    // punto cuenta).
+    y = Math.max(doc.y, logo ? y + 55 : 0) + 10;
 
     doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(1).stroke(LINEA);
-    y += 20;
+    y += 14;
 
     doc.fontSize(16).font('Helvetica-Bold').fillColor(NEGRO).text(estilo.titulo, ML, y, { width: W, align: 'center' });
-    y += 22;
+    y += 18;
     doc.fontSize(11).font('Helvetica-Bold').fillColor(estilo.color).text(`No. ${datos.numero || '—'}`, ML, y, { width: W, align: 'center' });
-    y += 20;
+    y += 16;
     if (datos.anulado) {
       doc.fontSize(12).font('Helvetica-Bold').fillColor('#EF4444').text('*** ANULADO ***', ML, y, { width: W, align: 'center' });
-      y += 18;
+      y += 16;
     }
-    y += 6;
+    y += 4;
 
+    // El margen de reserva bajo el contenido es proporcional al alto de
+    // página, no un valor fijo — en la media hoja A4 (420.94pt) un buffer
+    // fijo de 60pt (pensado para A4 completo) se comía ~14% de la página y
+    // forzaba una segunda media página con contenido de sobra.
+    const RESERVA_INFERIOR = Math.round(doc.page.height * 0.095);
     const asegurarEspacio = (alto) => {
-      if (y + alto > doc.page.height - 60) { doc.addPage(); y = 40; }
+      if (y + alto > doc.page.height - RESERVA_INFERIOR) { doc.addPage(); y = 32; }
     };
 
     for (const [label, valor, negrita] of [['Fecha:', fmtFecha(datos.fecha)], ...(datos.filas || [])]) {
@@ -110,13 +121,16 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
       asegurarEspacio(20);
       doc.fontSize(9).font('Helvetica-Bold').fillColor(GRIS).text(label, ML, y, { width: 140 });
       doc.fontSize(9).font(negrita ? 'Helvetica-Bold' : 'Helvetica').fillColor(NEGRO).text(String(valor), ML + 140, y, { width: W - 140 });
-      y = Math.max(y + 16, doc.y + 4);
+      y = Math.max(y + 14, doc.y + 3);
     }
 
     for (const tabla of datos.tablas || []) {
       if (!tabla.filas?.length) continue;
       y += 8;
-      asegurarEspacio(50);
+      // Solo reserva espacio para el título — el encabezado y cada fila ya
+      // piden su propio espacio real más abajo (dibujarFila); un margen más
+      // grande acá cortaba a una media página nueva antes de tiempo.
+      asegurarEspacio(18);
       doc.fontSize(9).font('Helvetica-Bold').fillColor(NEGRO).text(tabla.titulo, ML, y, { width: W });
       y = doc.y + 4;
       const fijo = tabla.columnas.reduce((s, c) => s + (c.ancho || 0), 0);
@@ -140,22 +154,27 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
       tabla.filas.forEach((f) => dibujarFila(f, false));
     }
 
-    y += 16;
-    asegurarEspacio(70);
-    doc.roundedRect(ML, y, W, 44, 6).fillAndStroke(estilo.fondo, estilo.borde);
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(GRIS).text(estilo.etiquetaMonto, ML + 16, y + 10);
-    doc.fontSize(16).font('Helvetica-Bold').fillColor(estilo.color).text(fmtMoney(datos.monto), ML, y + 8, { width: W - 16, align: 'right' });
-    y += 60;
+    y += 12;
+    asegurarEspacio(44);
+    doc.roundedRect(ML, y, W, 40, 6).fillAndStroke(estilo.fondo, estilo.borde);
+    doc.fontSize(10).font('Helvetica-Bold').fillColor(GRIS).text(estilo.etiquetaMonto, ML + 16, y + 8);
+    doc.fontSize(15).font('Helvetica-Bold').fillColor(estilo.color).text(fmtMoney(datos.monto), ML, y + 7, { width: W - 16, align: 'right' });
+    y += 50;
 
     if (datos.observaciones) {
-      asegurarEspacio(40);
+      asegurarEspacio(30);
       doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(`Observaciones: ${datos.observaciones}`, ML, y, { width: W });
-      y = doc.y + 16;
+      y = doc.y + 10;
     }
 
-    // Firmas: al pie de la página en que quedó el contenido.
-    asegurarEspacio(60);
-    y = Math.max(y + 20, doc.page.height - 130);
+    // Firmas: ancladas cerca del pie de la página (no siguen el flujo
+    // normal como el resto — si el contenido ya llegó tan abajo que ni la
+    // línea+etiqueta de la firma entran antes del margen real, recién ahí
+    // se agrega una página nueva; si no, se paran en su posición ideal
+    // aunque quede espacio libre debajo (por diseño, no es un error).
+    const NECESARIO_FIRMA = 18;
+    if (y + 16 + NECESARIO_FIRMA > doc.page.height - 32) { doc.addPage(); y = 32; }
+    y = Math.max(y + 16, doc.page.height - Math.round(doc.page.height * 0.145));
     const firmas = estilo.firmas;
     const anchoFirma = W / firmas.length;
     firmas.forEach((texto, i) => {

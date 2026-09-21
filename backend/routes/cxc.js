@@ -609,10 +609,10 @@ router.get('/cheques', autorizarPermiso('cxc.ver'), async (req, res) => {
       FROM "cheques_recibidos" cr
       LEFT JOIN "clientes" cl ON cl.id = cr."clienteId" AND cl."empresaId" = ${empresaId}
       WHERE cr."empresaId" = ${empresaId}
-        AND (${estado ?? null} IS NULL OR cr.estado = ${estado ?? ''})
-        AND (${desde  ?? null} IS NULL OR cr.fecha >= ${desde  ? new Date(desde)  : new Date(0)})
-        AND (${hasta  ?? null} IS NULL OR cr.fecha <= ${hasta  ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
-        AND (${q ?? null} IS NULL OR cr.numero ILIKE ${'%' + (q ?? '') + '%'} OR cr.banco ILIKE ${'%' + (q ?? '') + '%'} OR cr."clienteNombre" ILIKE ${'%' + (q ?? '') + '%'})
+        AND (${estado ?? null}::text IS NULL OR cr.estado = ${estado ?? ''})
+        AND (${desde  ?? null}::text IS NULL OR cr.fecha >= ${desde  ? new Date(desde)  : new Date(0)})
+        AND (${hasta  ?? null}::text IS NULL OR cr.fecha <= ${hasta  ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
+        AND (${q ?? null}::text IS NULL OR cr.numero ILIKE ${'%' + (q ?? '') + '%'} OR cr.banco ILIKE ${'%' + (q ?? '') + '%'} OR cr."clienteNombre" ILIKE ${'%' + (q ?? '') + '%'})
       ORDER BY cr.fecha DESC, cr.id DESC
       LIMIT 200
     `;

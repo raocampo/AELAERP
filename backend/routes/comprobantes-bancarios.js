@@ -5,6 +5,7 @@ const prisma = require('../config/prisma');
 const {
   enviarComprobanteBancarioPdf, CATEGORIA_POR_TIPO_COMPROBANTE, fmtMoney,
 } = require('../utils/comprobanteBancarioPdf');
+const { crearAsientoContable } = require('../utils/contabilidad');
 
 router.use(proteger);
 router.use(soloMediumOPro);
@@ -44,16 +45,16 @@ router.get('/', autorizarPermiso('bancos.ver'), async (req, res) => {
     rows = await prisma.$queryRaw`
       SELECT
         cb.id, cb.numero, cb.tipo, cb.subtipo, cb.fecha, cb.notas, cb.estado,
-        cb.total, cb."empresaId", cb."cuentaBancariaId", cb."proveedorId", cb."movimientoId",
+        cb.total, cb."empresaId", cb."cuentaBancariaId", cb."proveedorId", cb."movimientoId", cb."asientoId",
         p."razonSocial" AS prov_nombre, p.identificacion AS prov_ruc
       FROM "comprobantes_bancarios" cb
       LEFT JOIN "proveedores" p ON p.id = cb."proveedorId" AND p."empresaId" = ${empresaId}
       WHERE cb."empresaId" = ${empresaId}
-        AND (${tipo   ?? null} IS NULL OR cb.tipo   = ${tipo   ?? ''})
-        AND (${estado ?? null} IS NULL OR cb.estado = ${estado ?? ''})
-        AND (${desde  ?? null} IS NULL OR cb.fecha >= ${desde  ? new Date(desde)  : new Date(0)})
-        AND (${hasta  ?? null} IS NULL OR cb.fecha <= ${hasta  ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
-        AND (${q      ?? null} IS NULL OR cb.numero ILIKE ${'%' + (q ?? '') + '%'} OR cb.notas ILIKE ${'%' + (q ?? '') + '%'})
+        AND (${tipo   ?? null}::text IS NULL OR cb.tipo   = ${tipo   ?? ''})
+        AND (${estado ?? null}::text IS NULL OR cb.estado = ${estado ?? ''})
+        AND (${desde  ?? null}::text IS NULL OR cb.fecha >= ${desde  ? new Date(desde)  : new Date(0)})
+        AND (${hasta  ?? null}::text IS NULL OR cb.fecha <= ${hasta  ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
+        AND (${q      ?? null}::text IS NULL OR cb.numero ILIKE ${'%' + (q ?? '') + '%'} OR cb.notas ILIKE ${'%' + (q ?? '') + '%'})
       ORDER BY cb.fecha DESC, cb.id DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
@@ -61,10 +62,10 @@ router.get('/', autorizarPermiso('bancos.ver'), async (req, res) => {
     conteo = await prisma.$queryRaw`
       SELECT COUNT(*) AS total FROM "comprobantes_bancarios"
       WHERE "empresaId" = ${empresaId}
-        AND (${tipo   ?? null} IS NULL OR tipo   = ${tipo   ?? ''})
-        AND (${estado ?? null} IS NULL OR estado = ${estado ?? ''})
-        AND (${desde  ?? null} IS NULL OR fecha >= ${desde  ? new Date(desde)  : new Date(0)})
-        AND (${hasta  ?? null} IS NULL OR fecha <= ${hasta  ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
+        AND (${tipo   ?? null}::text IS NULL OR tipo   = ${tipo   ?? ''})
+        AND (${estado ?? null}::text IS NULL OR estado = ${estado ?? ''})
+        AND (${desde  ?? null}::text IS NULL OR fecha >= ${desde  ? new Date(desde)  : new Date(0)})
+        AND (${hasta  ?? null}::text IS NULL OR fecha <= ${hasta  ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
     `;
 
     const total = Number(conteo[0]?.total || 0);
@@ -75,6 +76,7 @@ router.get('/', autorizarPermiso('bancos.ver'), async (req, res) => {
       cuentaBancariaId: r.cuentaBancariaId ? Number(r.cuentaBancariaId) : null,
       proveedor: r.prov_nombre ? { razonSocial: r.prov_nombre, identificacion: r.prov_ruc } : null,
       movimientoId: r.movimientoId ? Number(r.movimientoId) : null,
+      asientoId: r.asientoId ? Number(r.asientoId) : null,
     }));
 
     res.json({ success: true, data: { items: datos, total, limit, offset } });
@@ -123,6 +125,7 @@ router.get('/:id', autorizarPermiso('bancos.ver'), async (req, res) => {
         proveedorId: r.proveedorId ? Number(r.proveedorId) : null,
         proveedor: r.prov_nombre ? { razonSocial: r.prov_nombre, identificacion: r.prov_ruc } : null,
         movimientoId: r.movimientoId ? Number(r.movimientoId) : null,
+        asientoId: r.asientoId ? Number(r.asientoId) : null,
         cuentas: cuentas.map((c) => ({
           id: Number(c.id), notas: c.notas, valor: parseFloat(c.valor || 0),
           cuentaContableId: c.cuentaContableId ? Number(c.cuentaContableId) : null,
@@ -155,7 +158,7 @@ router.get('/:id/pdf', autorizarPermiso('bancos.ver'), async (req, res) => {
     if (!rows.length) return res.status(404).json({ success: false, mensaje: 'Comprobante no encontrado' });
     const cb = rows[0];
 
-    const [cuentas, pagos, banco, proveedor, configSri] = await Promise.all([
+    const [cuentas, pagos, banco, proveedor, configSri, asiento] = await Promise.all([
       prisma.$queryRaw`
         SELECT cbc.notas, cbc.valor, pc.codigo, pc.nombre AS cuenta_nombre
         FROM "comprobantes_bancarios_cuentas" cbc
@@ -173,6 +176,12 @@ router.get('/:id/pdf', autorizarPermiso('bancos.ver'), async (req, res) => {
         ? prisma.proveedores.findFirst({ where: { id: Number(cb.proveedorId), empresaId }, select: { razonSocial: true, identificacion: true } })
         : null,
       prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } }),
+      cb.asientoId
+        ? prisma.asientos_contables.findFirst({
+          where: { id: Number(cb.asientoId), empresaId },
+          select: { numero: true, detalles: { select: { debe: true, haber: true, cuenta: { select: { codigo: true, nombre: true } } } } },
+        })
+        : null,
     ]);
 
     const categoria = CATEGORIA_POR_TIPO_COMPROBANTE[cb.tipo] || 'AJUSTE';
@@ -183,6 +192,7 @@ router.get('/:id/pdf', autorizarPermiso('bancos.ver'), async (req, res) => {
       ['Cuenta bancaria:', banco ? `${banco.banco} — ${banco.tipoCuenta} ${banco.numeroCuenta}` : null],
       ['Subtipo:', cb.subtipo && cb.subtipo !== 'GENERAL' ? String(cb.subtipo).replace(/_/g, ' ') : null],
       ['Concepto:', cb.notas],
+      ['Asiento contable:', asiento?.numero],
     ];
     const etiquetaPago = { EFECTIVO: 'Efectivo', CHEQUE: 'Cheque', TRANSFERENCIA: 'Transferencia', TARJETA: 'Tarjeta' };
     const tablas = [
@@ -229,54 +239,114 @@ router.post('/', autorizarPermiso('bancos.gestionar'), async (req, res) => {
     const fechaDate = new Date(fecha);
     const cbId      = cuentaBancariaId ? parseInt(cuentaBancariaId, 10) : null;
     const provId    = proveedorId      ? parseInt(proveedorId, 10)      : null;
+    const esIngreso = ['INGRESO', 'CREDITO'].includes(tipo);
+    const concep    = notas || `${tipo} ${numero}`;
 
-    const result = await prisma.$queryRaw`
-      INSERT INTO "comprobantes_bancarios"
-        (numero, tipo, subtipo, fecha, notas, estado, total, "empresaId", "cuentaBancariaId", "proveedorId", "creadoPorId", "createdAt", "updatedAt")
-      VALUES (
-        ${numero}, ${tipo}, ${subtipo}, ${fechaDate}, ${notas || null},
-        'ARCHIVADO', ${total}, ${empresaId}, ${cbId}, ${provId}, ${usuarioId}, NOW(), NOW()
-      )
-      RETURNING id
-    `;
-    const comprobanteId = Number(result[0].id);
+    let advertenciaContable = null;
 
-    for (const c of cuentas) {
-      const ccId = c.cuentaContableId ? Number(c.cuentaContableId) : null;
-      await prisma.$queryRaw`
-        INSERT INTO "comprobantes_bancarios_cuentas" ("comprobanteId", notas, valor, "cuentaContableId")
-        VALUES (${comprobanteId}, ${c.notas || null}, ${Number(c.valor || 0)}, ${ccId})
-      `;
-    }
-
-    for (const p of pagos) {
-      const pcId = p.cuentaContableId ? Number(p.cuentaContableId) : null;
-      await prisma.$queryRaw`
-        INSERT INTO "comprobantes_bancarios_pagos" ("comprobanteId", "tipoPago", valor, "cuentaContableId", notas)
-        VALUES (${comprobanteId}, ${p.tipoPago || 'EFECTIVO'}, ${Number(p.valor || 0)}, ${pcId}, ${p.notas || null})
-      `;
-    }
-
-    // Crear movimiento bancario si hay cuenta bancaria
-    if (cbId) {
-      const tipoMov = TIPO_MOV[tipo];
-      const debe    = ['INGRESO', 'CREDITO'].includes(tipo) ? total : 0;
-      const haber   = ['PAGO', 'DEBITO'].includes(tipo)    ? total : 0;
-      const concep  = notas || `${tipo} ${numero}`;
-
-      const movRows = await prisma.$queryRaw`
-        INSERT INTO "movimientos_bancarios"
-          ("bancoId", "empresaId", fecha, tipo, concepto, referencia, debe, haber, "createdAt", "updatedAt")
-        VALUES (${cbId}, ${empresaId}, ${fechaDate}, ${tipoMov}, ${concep}, ${numero}, ${debe}, ${haber}, NOW(), NOW())
+    const { comprobanteId, asientoCreado } = await prisma.$transaction(async (tx) => {
+      const result = await tx.$queryRaw`
+        INSERT INTO "comprobantes_bancarios"
+          (numero, tipo, subtipo, fecha, notas, estado, total, "empresaId", "cuentaBancariaId", "proveedorId", "creadoPorId", "createdAt", "updatedAt")
+        VALUES (
+          ${numero}, ${tipo}, ${subtipo}, ${fechaDate}, ${notas || null},
+          'ARCHIVADO', ${total}, ${empresaId}, ${cbId}, ${provId}, ${usuarioId}, NOW(), NOW()
+        )
         RETURNING id
       `;
-      const movId = Number(movRows[0].id);
-      await prisma.$queryRaw`
-        UPDATE "comprobantes_bancarios" SET "movimientoId" = ${movId}, "updatedAt" = NOW() WHERE id = ${comprobanteId}
-      `;
-    }
+      const compId = Number(result[0].id);
 
-    res.status(201).json({ success: true, mensaje: 'Comprobante creado', data: { id: comprobanteId, numero } });
+      for (const c of cuentas) {
+        const ccId = c.cuentaContableId ? Number(c.cuentaContableId) : null;
+        await tx.$queryRaw`
+          INSERT INTO "comprobantes_bancarios_cuentas" ("comprobanteId", notas, valor, "cuentaContableId")
+          VALUES (${compId}, ${c.notas || null}, ${Number(c.valor || 0)}, ${ccId})
+        `;
+      }
+
+      for (const p of pagos) {
+        const pcId = p.cuentaContableId ? Number(p.cuentaContableId) : null;
+        await tx.$queryRaw`
+          INSERT INTO "comprobantes_bancarios_pagos" ("comprobanteId", "tipoPago", valor, "cuentaContableId", notas)
+          VALUES (${compId}, ${p.tipoPago || 'EFECTIVO'}, ${Number(p.valor || 0)}, ${pcId}, ${p.notas || null})
+        `;
+      }
+
+      // Crear movimiento bancario si hay cuenta bancaria
+      let movId = null;
+      if (cbId) {
+        const tipoMov = TIPO_MOV[tipo];
+        const debe    = esIngreso ? total : 0;
+        const haber   = !esIngreso ? total : 0;
+
+        const movRows = await tx.$queryRaw`
+          INSERT INTO "movimientos_bancarios"
+            ("bancoId", "empresaId", fecha, tipo, concepto, referencia, debe, haber, "createdAt", "updatedAt")
+          VALUES (${cbId}, ${empresaId}, ${fechaDate}, ${tipoMov}, ${concep}, ${numero}, ${debe}, ${haber}, NOW(), NOW())
+          RETURNING id
+        `;
+        movId = Number(movRows[0].id);
+        await tx.$queryRaw`
+          UPDATE "comprobantes_bancarios" SET "movimientoId" = ${movId}, "updatedAt" = NOW() WHERE id = ${compId}
+        `;
+      }
+
+      // Asiento contable automático — requiere la cuenta bancaria vinculada
+      // a una cuenta del Plan de Cuentas Y que cada línea de "Cuentas"
+      // tenga su propia cuenta contable. Si falta algo, el comprobante se
+      // crea igual (como antes) pero sin contabilizar — se avisa al
+      // usuario para que complete la configuración.
+      let asiento = false;
+      if (total > 0) {
+        const banco = cbId ? await tx.bancos.findFirst({ where: { id: cbId, empresaId } }) : null;
+        const cuentasCompletas = cuentas.length > 0 && cuentas.every((c) => c.cuentaContableId);
+
+        if (!cbId) {
+          advertenciaContable = 'No se generó el asiento contable: el comprobante no tiene cuenta bancaria asignada.';
+        } else if (!banco?.cuentaContableId) {
+          advertenciaContable = 'No se generó el asiento contable: la cuenta bancaria no tiene una cuenta contable vinculada (Bancos → editar cuenta).';
+        } else if (!cuentasCompletas) {
+          advertenciaContable = 'No se generó el asiento contable: falta la cuenta contable en una o más líneas de "Cuentas".';
+        } else {
+          const detallesAsiento = cuentas.map((c) => ({
+            cuentaId: Number(c.cuentaContableId),
+            descripcion: c.notas || concep,
+            debe: esIngreso ? 0 : Number(c.valor || 0),
+            haber: esIngreso ? Number(c.valor || 0) : 0,
+          }));
+          detallesAsiento.push({
+            cuentaId: banco.cuentaContableId,
+            descripcion: concep,
+            debe: esIngreso ? total : 0,
+            haber: esIngreso ? 0 : total,
+          });
+
+          const asientoCreado = await crearAsientoContable({
+            empresaId,
+            fecha: fechaDate,
+            descripcion: `Comprobante ${tipo} ${numero}: ${concep}`,
+            tipo: 'COMPROBANTE_BANCO',
+            referencia: `COMPROBANTE-${compId}`,
+            usuarioId,
+            tx,
+            detalles: detallesAsiento,
+          });
+
+          await tx.$queryRaw`UPDATE "comprobantes_bancarios" SET "asientoId" = ${asientoCreado.id}, "updatedAt" = NOW() WHERE id = ${compId}`;
+          if (movId) await tx.movimientos_bancarios.update({ where: { id: movId }, data: { asientoId: asientoCreado.id } });
+          asiento = true;
+        }
+      }
+
+      return { comprobanteId: compId, asientoCreado: asiento };
+    });
+
+    res.status(201).json({
+      success: true,
+      mensaje: asientoCreado ? 'Comprobante creado y contabilizado' : 'Comprobante creado',
+      advertenciaContable,
+      data: { id: comprobanteId, numero },
+    });
   } catch (error) {
     console.error('POST /comprobantes-bancarios:', error);
     res.status(500).json({ success: false, mensaje: error.message || 'Error al crear comprobante' });
