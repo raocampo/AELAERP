@@ -154,12 +154,12 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
       tabla.filas.forEach((f) => dibujarFila(f, false));
     }
 
-    y += 12;
-    asegurarEspacio(44);
+    y += 8;
+    asegurarEspacio(40);
     doc.roundedRect(ML, y, W, 40, 6).fillAndStroke(estilo.fondo, estilo.borde);
     doc.fontSize(10).font('Helvetica-Bold').fillColor(GRIS).text(estilo.etiquetaMonto, ML + 16, y + 8);
     doc.fontSize(15).font('Helvetica-Bold').fillColor(estilo.color).text(fmtMoney(datos.monto), ML, y + 7, { width: W - 16, align: 'right' });
-    y += 50;
+    y += 44;
 
     if (datos.observaciones) {
       asegurarEspacio(30);
@@ -172,15 +172,31 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
     // línea+etiqueta de la firma entran antes del margen real, recién ahí
     // se agrega una página nueva; si no, se paran en su posición ideal
     // aunque quede espacio libre debajo (por diseño, no es un error).
-    const NECESARIO_FIRMA = 18;
-    if (y + 16 + NECESARIO_FIRMA > doc.page.height - 32) { doc.addPage(); y = 32; }
-    y = Math.max(y + 16, doc.page.height - Math.round(doc.page.height * 0.145));
+    //
+    // El alto real de "línea + etiqueta" se mide con heightOfString en vez
+    // de una constante adivinada — un valor adivinado (18) por debajo del
+    // real dejaba pasar el chequeo y luego PDFKit auto-paginaba DENTRO del
+    // propio .text() de la firma (su motor de texto no permite que una
+    // línea quede recortada por el margen inferior), generando una página
+    // extra en blanco por cada firma restante del arreglo (bug real: un
+    // comprobante de egreso con 3 firmas terminó en 4 páginas). El chequeo
+    // también debe incluir `holguraPreFirma` — antes se comparaba el `y`
+    // SIN ese colchón contra el límite, pero el colchón sí se suma al `y`
+    // final donde en verdad se dibuja.
     const firmas = estilo.firmas;
     const anchoFirma = W / firmas.length;
+    const altoTextoFirma = Math.max(
+      ...firmas.map((texto) => doc.fontSize(8).font('Helvetica').heightOfString(texto, { width: anchoFirma })),
+    );
+    const GAP_LINEA_TEXTO = 5;
+    const NECESARIO_FIRMA = GAP_LINEA_TEXTO + altoTextoFirma + 1;
+    const holguraPreFirma = 6;
+    if (y + holguraPreFirma + NECESARIO_FIRMA > doc.page.height - 32) { doc.addPage(); y = 32; }
+    y = Math.max(y + holguraPreFirma, doc.page.height - Math.round(doc.page.height * 0.145));
     firmas.forEach((texto, i) => {
       const x = ML + anchoFirma * i;
       doc.moveTo(x + 12, y).lineTo(x + anchoFirma - 12, y).lineWidth(0.75).stroke('#94a3b8');
-      doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(texto, x, y + 6, { width: anchoFirma, align: 'center' });
+      doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(texto, x, y + GAP_LINEA_TEXTO, { width: anchoFirma, align: 'center' });
     });
 
     doc.end();
