@@ -4,6 +4,7 @@ import api from '../../services/api';
 import ComprobantesView from './ComprobantesView';
 import LibroBancos from './LibroBancos';
 import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
+import { abrirComprobanteMovimiento } from '../../utils/comprobantesBancos';
 import './Bancos.css';
 
 const TIPOS_CUENTA = ['CORRIENTE', 'AHORROS'];
@@ -149,6 +150,8 @@ function ModalMovimiento({ bancoId, onClose, onSaved }) {
   const cuentasContables = useCuentasContables();
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  // Movimiento ya guardado: se muestra el panel de éxito con "Imprimir comprobante".
+  const [creado, setCreado] = useState(null);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -157,14 +160,34 @@ function ModalMovimiento({ bancoId, onClose, onSaved }) {
     setError('');
     setGuardando(true);
     try {
-      await api.post(`/bancos/${bancoId}/movimientos`, form);
-      onSaved();
+      const r = await api.post(`/bancos/${bancoId}/movimientos`, form);
+      setCreado({ id: r.data?.data?.id, numero: r.data?.data?.numero, advertencia: r.data?.advertenciaContable });
     } catch (err) {
       setError(err.response?.data?.mensaje || 'Error al registrar');
     } finally {
       setGuardando(false);
     }
   };
+
+  if (creado) {
+    return (
+      <div className="bancos-modal-overlay">
+        <div className="bancos-modal">
+          <h2>✓ Movimiento registrado</h2>
+          <p style={{ margin: '0.5rem 0' }}>Comprobante <strong>{creado.numero}</strong></p>
+          {creado.advertencia && (
+            <p style={{ color: '#b45309', fontSize: '0.82rem' }}>{creado.advertencia}</p>
+          )}
+          <div className="modal-actions">
+            <button type="button" className="btn btn-primary" onClick={() => abrirComprobanteMovimiento(creado.id)}>
+              🧾 Ver / imprimir comprobante
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={onSaved}>Cerrar</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bancos-modal-overlay" >
@@ -441,7 +464,16 @@ function TabMovimientos({ cuenta, initialTipo = '' }) {
             <tbody>
               {movimientos.map((m) => (
                 <tr key={m.id}>
-                  <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{m.numero || '—'}</td>
+                  <td style={{ fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {m.numero || '—'}
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ marginLeft: 6, padding: '0 6px' }}
+                      title="Ver / imprimir comprobante"
+                      onClick={() => abrirComprobanteMovimiento(m.id)}
+                    >🧾</button>
+                  </td>
                   <td>{formatDate(m.fecha)}</td>
                   <td>
                     <span className={`tipo-badge tipo-${m.tipo}`}>{m.tipo.replace(/_/g, ' ')}</span>

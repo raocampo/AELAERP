@@ -10,6 +10,9 @@ const { soloMediumOPro } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
 const { tienePermiso } = require('../utils/roles');
 const { crearAsientoMovimientoBancario, siguienteNumeroGenerico } = require('../utils/contabilidad');
+const {
+  enviarComprobanteBancarioPdf, CATEGORIA_POR_TIPO_MOVIMIENTO, fmtMoney,
+} = require('../utils/comprobanteBancarioPdf');
 
 // Prefijo de comprobante por categoría de movimiento — equivalente a los
 // "Comprobantes de ingreso/pago/crédito/débito" de otros ERP contables.
@@ -249,6 +252,83 @@ router.get('/:id/movimientos', autorizarPermiso('bancos.ver'), async (req, res) 
   } catch (error) {
     console.error('GET /bancos/:id/movimientos:', error);
     res.status(500).json({ success: false, mensaje: 'Error al obtener movimientos' });
+  }
+});
+
+// GET /api/bancos/movimientos/:movId/comprobante — PDF imprimible del comprobante
+// (ingreso / egreso / nota de crédito / nota de débito / ajuste) de un movimiento
+// del Libro de Bancos. Mismo diseño que el Recibo de Cobro de CxC.
+router.get('/movimientos/:movId/comprobante', autorizarPermiso('bancos.ver'), async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const movId = parseIntSafe(req.params.movId);
+    if (!movId) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const mov = await prisma.movimientos_bancarios.findFirst({
+      where: { id: movId, empresaId },
+      include: {
+        banco: { select: { nombre: true, banco: true, tipoCuenta: true, numeroCuenta: true } },
+        cheque: { select: { numero: true, beneficiario: true } },
+        pagoProveedor: { select: { numero: true, proveedorId: true, metodoPago: true } },
+        asiento: {
+          select: {
+            numero: true,
+            detalles: { select: { debe: true, haber: true, cuenta: { select: { codigo: true, nombre: true } } } },
+          },
+        },
+      },
+    });
+    if (!mov) return res.status(404).json({ success: false, mensaje: 'Movimiento no encontrado' });
+
+    const proveedor = mov.pagoProveedor?.proveedorId
+      ? await prisma.proveedores.findFirst({
+        where: { id: mov.pagoProveedor.proveedorId, empresaId },
+        select: { razonSocial: true, identificacion: true },
+      })
+      : null;
+
+    const categoria = CATEGORIA_POR_TIPO_MOVIMIENTO[mov.tipo] || 'AJUSTE';
+    const anulado = /^\[ANULADO\]/i.test(mov.concepto || '');
+    const monto = Number(mov.debe) > 0 ? Number(mov.debe) : Number(mov.haber);
+    const esIngreso = Number(mov.debe) > 0;
+
+    const nombreTercero = proveedor?.razonSocial || mov.cheque?.beneficiario || null;
+    const filas = [
+      [esIngreso ? 'Recibido de:' : 'Pagado a:', nombreTercero
+        ? `${nombreTercero}${proveedor?.identificacion ? ` (${proveedor.identificacion})` : ''}`
+        : null, true],
+      ['Cuenta bancaria:', mov.banco
+        ? `${mov.banco.banco} — ${mov.banco.tipoCuenta} ${mov.banco.numeroCuenta}` : null],
+      ['Tipo de movimiento:', mov.tipo.replace(/_/g, ' ')],
+      ['Concepto:', String(mov.concepto || '').replace(/^\[ANULADO\]\s*/i, '')],
+      ['Cheque Nº:', mov.cheque?.numero],
+      ['Referencia:', mov.referencia],
+      ['Pago a proveedor:', mov.pagoProveedor?.numero],
+      ['Asiento contable:', mov.asiento?.numero],
+    ];
+
+    const tablas = mov.asiento?.detalles?.length ? [{
+      titulo: 'Distribución contable',
+      columnas: [
+        { titulo: 'Código', ancho: 80 },
+        { titulo: 'Cuenta' },
+        { titulo: 'Debe', ancho: 70, alinear: 'right' },
+        { titulo: 'Haber', ancho: 70, alinear: 'right' },
+      ],
+      filas: mov.asiento.detalles.map((d) => [
+        d.cuenta.codigo, d.cuenta.nombre,
+        Number(d.debe) ? fmtMoney(d.debe) : '', Number(d.haber) ? fmtMoney(d.haber) : '',
+      ]),
+    }] : [];
+
+    const configSri = await prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
+    await enviarComprobanteBancarioPdf(res, {
+      categoria, numero: mov.numero || `MOV-${mov.id}`, fecha: mov.fecha, anulado, monto,
+      filas, tablas, observaciones: mov.observaciones,
+    }, configSri, `Comprobante-${mov.numero || mov.id}`);
+  } catch (error) {
+    console.error('GET /bancos/movimientos/:movId/comprobante:', error);
+    if (!res.headersSent) res.status(500).json({ success: false, mensaje: 'No se pudo generar el comprobante' });
   }
 });
 

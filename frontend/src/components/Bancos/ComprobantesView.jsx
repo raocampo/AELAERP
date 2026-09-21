@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
+import { abrirComprobanteBancario } from '../../utils/comprobantesBancos';
 
 const TIPOS_META = {
   INGRESO: {
@@ -112,6 +113,8 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const [buscandoProv, setBuscandoProv] = useState(false);
+  // Comprobante ya guardado: se muestra el panel de éxito con "Imprimir".
+  const [creado, setCreado] = useState(null);
 
   // Buscar proveedor por RUC
   const buscarProveedor = async () => {
@@ -143,7 +146,7 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
     setError('');
     setGuardando(true);
     try {
-      await api.post('/comprobantes-bancarios', {
+      const r = await api.post('/comprobantes-bancarios', {
         tipo, subtipo,
         fecha: form.fecha,
         notas: form.notas || null,
@@ -152,13 +155,26 @@ function FormComprobante({ tipo, subtipo, onCancelar, onGuardado }) {
         cuentas: form.cuentas.map((c) => ({ notas: c.notas, valor: Number(c.valor || 0), cuentaContableId: c.cuentaContableId || null })),
         pagos: form.pagos.map((p) => ({ tipoPago: p.tipoPago, valor: Number(p.valor || 0), cuentaContableId: p.cuentaContableId || null, notas: p.notas })),
       });
-      onGuardado();
+      setCreado({ id: r.data?.data?.id, numero: r.data?.data?.numero });
     } catch (err) {
       setError(err.response?.data?.mensaje || 'Error al guardar');
     } finally {
       setGuardando(false);
     }
   };
+
+  if (creado) {
+    return (
+      <div style={{ padding: '1.5rem', maxWidth: 900 }}>
+        <h2 style={{ margin: '0 0 0.5rem' }}>✓ Comprobante registrado</h2>
+        <p style={{ margin: '0 0 1rem' }}>N° <strong>{creado.numero}</strong></p>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="btn btn-primary" onClick={() => abrirComprobanteBancario(creado.id)}>🧾 Ver / imprimir comprobante</button>
+          <button className="btn btn-ghost" onClick={onGuardado}>Volver a la lista</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '1.5rem', maxWidth: 900 }}>
@@ -419,7 +435,7 @@ function ListaComprobantes({ tipo, onNuevo, onVer }) {
                 <tr key={item.id} style={{ opacity: item.estado === 'ANULADO' ? 0.5 : 1 }}>
                   <td>
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      <button className="btn btn-ghost btn-sm" title="Ver" onClick={() => onVer(item.id)}>👁</button>
+                      <button className="btn btn-ghost btn-sm" title="Ver / imprimir comprobante" onClick={() => onVer(item.id)}>🧾</button>
                       {item.estado !== 'ANULADO' && (
                         <button className="btn btn-danger btn-sm" title="Anular" onClick={() => anular(item.id)}>✕</button>
                       )}
@@ -458,15 +474,12 @@ function ListaComprobantes({ tipo, onNuevo, onVer }) {
 export default function ComprobantesView({ tipo }) {
   const [vista, setVista] = useState('lista'); // lista | subtipo | form
   const [subtipoSel, setSubtipoSel] = useState(null);
-  const [detalle, setDetalle] = useState(null);
 
   const handleNuevo = () => setVista('subtipo');
   const handleSubtipo = (s) => { setSubtipoSel(s); setVista('form'); };
   const handleCancelar = () => setVista('lista');
   const handleGuardado = () => { setVista('lista'); };
-  const handleVer = (id) => setDetalle(id); // placeholder — podría abrir un modal de detalle
-
-  const meta = TIPOS_META[tipo] || {};
+  const handleVer = (id) => abrirComprobanteBancario(id);
 
   return (
     <div>

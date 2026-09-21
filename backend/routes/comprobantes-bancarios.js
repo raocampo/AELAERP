@@ -2,6 +2,9 @@ const router = require('express').Router();
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
 const prisma = require('../config/prisma');
+const {
+  enviarComprobanteBancarioPdf, CATEGORIA_POR_TIPO_COMPROBANTE, fmtMoney,
+} = require('../utils/comprobanteBancarioPdf');
 
 router.use(proteger);
 router.use(soloMediumOPro);
@@ -135,6 +138,77 @@ router.get('/:id', autorizarPermiso('bancos.ver'), async (req, res) => {
   } catch (error) {
     console.error('GET /comprobantes-bancarios/:id:', error);
     res.status(500).json({ success: false, mensaje: 'Error al obtener comprobante' });
+  }
+});
+
+// ── GET /:id/pdf ──────────────────────────────────────────────────
+// Comprobante imprimible (mismo diseño que el Recibo de Cobro de CxC).
+router.get('/:id/pdf', autorizarPermiso('bancos.ver'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const rows = await prisma.$queryRaw`
+      SELECT * FROM "comprobantes_bancarios" WHERE id = ${id} AND "empresaId" = ${empresaId}
+    `;
+    if (!rows.length) return res.status(404).json({ success: false, mensaje: 'Comprobante no encontrado' });
+    const cb = rows[0];
+
+    const [cuentas, pagos, banco, proveedor, configSri] = await Promise.all([
+      prisma.$queryRaw`
+        SELECT cbc.notas, cbc.valor, pc.codigo, pc.nombre AS cuenta_nombre
+        FROM "comprobantes_bancarios_cuentas" cbc
+        LEFT JOIN "plan_cuentas" pc ON pc.id = cbc."cuentaContableId"
+        WHERE cbc."comprobanteId" = ${id} ORDER BY cbc.id`,
+      prisma.$queryRaw`
+        SELECT cbp."tipoPago", cbp.valor, cbp.notas, pc.codigo, pc.nombre AS cuenta_nombre
+        FROM "comprobantes_bancarios_pagos" cbp
+        LEFT JOIN "plan_cuentas" pc ON pc.id = cbp."cuentaContableId"
+        WHERE cbp."comprobanteId" = ${id} ORDER BY cbp.id`,
+      cb.cuentaBancariaId
+        ? prisma.bancos.findFirst({ where: { id: Number(cb.cuentaBancariaId), empresaId }, select: { banco: true, tipoCuenta: true, numeroCuenta: true } })
+        : null,
+      cb.proveedorId
+        ? prisma.proveedores.findFirst({ where: { id: Number(cb.proveedorId), empresaId }, select: { razonSocial: true, identificacion: true } })
+        : null,
+      prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } }),
+    ]);
+
+    const categoria = CATEGORIA_POR_TIPO_COMPROBANTE[cb.tipo] || 'AJUSTE';
+    const esIngreso = categoria === 'INGRESO' || categoria === 'CREDITO';
+    const filas = [
+      [esIngreso ? 'Recibido de:' : 'Pagado a:', proveedor
+        ? `${proveedor.razonSocial}${proveedor.identificacion ? ` (${proveedor.identificacion})` : ''}` : null, true],
+      ['Cuenta bancaria:', banco ? `${banco.banco} — ${banco.tipoCuenta} ${banco.numeroCuenta}` : null],
+      ['Subtipo:', cb.subtipo && cb.subtipo !== 'GENERAL' ? String(cb.subtipo).replace(/_/g, ' ') : null],
+      ['Concepto:', cb.notas],
+    ];
+    const etiquetaPago = { EFECTIVO: 'Efectivo', CHEQUE: 'Cheque', TRANSFERENCIA: 'Transferencia', TARJETA: 'Tarjeta' };
+    const tablas = [
+      {
+        titulo: 'Detalle',
+        columnas: [{ titulo: 'Código', ancho: 80 }, { titulo: 'Cuenta / Nota' }, { titulo: 'Valor', ancho: 80, alinear: 'right' }],
+        filas: cuentas.map((c) => [c.codigo || '', [c.cuenta_nombre, c.notas].filter(Boolean).join(' — '), fmtMoney(c.valor)]),
+      },
+      {
+        titulo: 'Formas de pago',
+        columnas: [{ titulo: 'Forma', ancho: 90 }, { titulo: 'Cuenta / Nota' }, { titulo: 'Valor', ancho: 80, alinear: 'right' }],
+        filas: pagos.map((p) => [
+          etiquetaPago[p.tipoPago] || p.tipoPago,
+          [p.codigo ? `${p.codigo} ${p.cuenta_nombre || ''}`.trim() : '', p.notas].filter(Boolean).join(' — '),
+          fmtMoney(p.valor),
+        ]),
+      },
+    ];
+
+    await enviarComprobanteBancarioPdf(res, {
+      categoria, numero: cb.numero, fecha: cb.fecha, anulado: cb.estado === 'ANULADO',
+      monto: Number(cb.total || 0), filas, tablas,
+    }, configSri, `Comprobante-${cb.numero}`);
+  } catch (error) {
+    console.error('GET /comprobantes-bancarios/:id/pdf:', error);
+    if (!res.headersSent) res.status(500).json({ success: false, mensaje: 'No se pudo generar el comprobante' });
   }
 });
 

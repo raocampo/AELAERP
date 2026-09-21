@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
+import { abrirComprobanteMovimiento } from '../../utils/comprobantesBancos';
 import './Bancos.css';
 
 function formatMoney(v) {
@@ -334,7 +335,16 @@ export default function LibroBancos() {
                       ? <span style={{ color: '#16a34a', fontSize: '0.9rem' }}>📒</span>
                       : <span style={{ color: '#f59e0b', fontSize: '0.9rem' }} title="Sin asiento — usa Contabilizar">⚠</span>}
                   </td>
-                  <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{m.numero || '—'}</td>
+                  <td style={{ fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {m.numero || '—'}
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ marginLeft: 6, padding: '0 6px' }}
+                      title="Ver / imprimir comprobante"
+                      onClick={() => abrirComprobanteMovimiento(m.id)}
+                    >🧾</button>
+                  </td>
                   <td>{formatFechaCorta(m.fecha)}</td>
                   <td>
                     <span className={`tipo-badge tipo-${m.tipo}`}>{m.tipo.replace(/_/g, ' ')}</span>
