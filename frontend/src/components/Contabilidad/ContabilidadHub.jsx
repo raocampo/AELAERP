@@ -1992,6 +1992,7 @@ const ContabilidadHub = () => {
                               <button
                                 type="button"
                                 className="btn-icon"
+                                style={{ fontSize: '18px', fontWeight: 700 }}
                                 title={desglosada ? 'Ocultar movimientos' : 'Ver movimientos de esta cuenta'}
                                 onClick={() => toggleDesgloseCuenta(row)}
                               >

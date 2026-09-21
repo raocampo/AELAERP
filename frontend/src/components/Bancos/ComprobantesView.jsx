@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import { abrirComprobanteBancario, descargarComprobanteBancario } from '../../utils/comprobantesBancos';
+import { IcVer, IcPDF, IcDescargar, IcEditar, IcAnular } from '../../utils/icons';
 
 const TIPOS_META = {
   INGRESO: {
@@ -621,14 +622,14 @@ function ListaComprobantes({ tipo, onNuevo, onVer, onDescargar, onEditar, onVisu
               {items.map((item) => (
                 <tr key={item.id} style={{ opacity: item.estado === 'ANULADO' ? 0.5 : 1 }}>
                   <td>
-                    <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      <button className="btn btn-ghost btn-sm" title="Visualizar" onClick={() => onVisualizar(item.id)}>👁</button>
-                      <button className="btn btn-ghost btn-sm" title="Imprimir" onClick={() => onVer(item.id)}>🖨</button>
-                      <button className="btn btn-ghost btn-sm" title="Descargar PDF" onClick={() => onDescargar(item.id, item.numero)}>⬇</button>
+                    <div className="tbl-acciones">
+                      <button className="btn-icon ic-ver" title="Visualizar" onClick={() => onVisualizar(item.id)}><IcVer /></button>
+                      <button className="btn-icon ic-pdf" title="Imprimir" onClick={() => onVer(item.id)}><IcPDF /></button>
+                      <button className="btn-icon ic-descargar" title="Descargar PDF" onClick={() => onDescargar(item.id, item.numero)}><IcDescargar /></button>
                       {item.estado !== 'ANULADO' && (
                         <>
-                          <button className="btn btn-ghost btn-sm" title="Editar" onClick={() => onEditar(item.id)}>✏️</button>
-                          <button className="btn btn-danger btn-sm" title="Anular" onClick={() => anular(item.id)}>✕</button>
+                          <button className="btn-icon ic-editar" title="Editar" onClick={() => onEditar(item.id)}><IcEditar /></button>
+                          <button className="btn-icon ic-anular" title="Anular" onClick={() => anular(item.id)}><IcAnular /></button>
                         </>
                       )}
                     </div>

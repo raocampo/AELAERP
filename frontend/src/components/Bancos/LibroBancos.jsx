@@ -299,12 +299,19 @@ export default function LibroBancos() {
             📒 Contabilizar ({pendientesSinAsiento} sin asiento)
           </button>
         )}
+      </div>
+
+      {/* Imprimir en su propia fila, bien visible — antes quedaba perdido al
+          final de la fila de conciliación (botón "ghost" chico + empujado a
+          la derecha con margin-left:auto, casi invisible con varios botones
+          antes envolviendo línea). */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
         <button
-          className="btn btn-sm btn-ghost"
+          className="btn btn-primary"
           disabled={movimientos.length === 0}
           title="Imprimir el Libro de Bancos / conciliación del período"
           onClick={imprimirLibro}
-          style={{ marginLeft: 'auto' }}
+          style={{ fontSize: '14px', fontWeight: 700 }}
         >
           🖨 Imprimir
         </button>

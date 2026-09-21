@@ -101,22 +101,25 @@
 }
 
 .banco-card-toggle {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   width: 100%;
   margin-top: 0.75rem;
-  padding-top: 0.6rem;
+  padding: 8px 6px;
   border: none;
   border-top: 1px dashed #e2e8f0;
   background: none;
   color: var(--color-primary);
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-align: left;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-align: center;
   cursor: pointer;
 }
 
 .banco-card-toggle:hover {
-  text-decoration: underline;
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
 /* ── Tabs dentro de detalle ── */
