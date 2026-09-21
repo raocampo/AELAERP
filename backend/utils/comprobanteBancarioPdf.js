@@ -154,12 +154,19 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
       tabla.filas.forEach((f) => dibujarFila(f, false));
     }
 
-    y += 8;
-    asegurarEspacio(40);
-    doc.roundedRect(ML, y, W, 40, 6).fillAndStroke(estilo.fondo, estilo.borde);
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(GRIS).text(estilo.etiquetaMonto, ML + 16, y + 8);
-    doc.fontSize(15).font('Helvetica-Bold').fillColor(estilo.color).text(fmtMoney(datos.monto), ML, y + 7, { width: W - 16, align: 'right' });
-    y += 44;
+    // Caja de monto: antes ocupaba 40pt de alto con letra de 15pt — mucho
+    // más protagonismo del que necesita un dato que ya se repite en el
+    // detalle/formas de pago, y le quitaba espacio real a las firmas
+    // (queja del cliente: "ocupa mucho espacio... para que donde se firme
+    // tenga el espacio"). Se mantiene el recuadro de color (referencia
+    // visual rápida) pero más angosto y con letra en negrita más discreta.
+    y += 6;
+    const ALTO_BOX_MONTO = 26;
+    asegurarEspacio(ALTO_BOX_MONTO);
+    doc.roundedRect(ML, y, W, ALTO_BOX_MONTO, 5).fillAndStroke(estilo.fondo, estilo.borde);
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(GRIS).text(estilo.etiquetaMonto, ML + 12, y + 8);
+    doc.fontSize(12).font('Helvetica-Bold').fillColor(estilo.color).text(fmtMoney(datos.monto), ML, y + 6, { width: W - 12, align: 'right' });
+    y += ALTO_BOX_MONTO + 6;
 
     if (datos.observaciones) {
       asegurarEspacio(30);
