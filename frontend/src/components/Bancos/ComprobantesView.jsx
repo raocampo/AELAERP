@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import { abrirComprobanteBancario, descargarComprobanteBancario } from '../../utils/comprobantesBancos';
@@ -169,16 +169,27 @@ function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGu
 
   // Caso simple (1 cuenta + 1 pago, el más común): el valor y la nota de
   // "Cuentas" se reflejan solos en "Detalle de pagos" mientras el usuario no
-  // haya escrito nada ahí — así solo falta elegir tipo/forma y cuenta
-  // contable del pago, sin volver a teclear el mismo monto.
+  // haya escrito algo DISTINTO ahí — así solo falta elegir tipo/forma y
+  // cuenta contable del pago, sin volver a teclear el mismo monto.
+  //
+  // "¿el usuario ya lo tocó?" no puede ser "¿está vacío o en 0?" — después
+  // del primer auto-completado el valor deja de estar vacío, así que un
+  // 2do dígito escrito en "Cuentas" (120 → 12, luego 120) dejaba de
+  // propagarse (bug real: cuentas $120 vs pagos $1). Se recuerda en un ref
+  // cuál fue el último valor que ESTE efecto escribió — si el campo sigue
+  // siendo igual a eso, todavía es "nuestro" y se puede seguir actualizando.
+  const ultimoAutoValor = useRef(null);
+  const ultimaAutoNota = useRef(null);
   useEffect(() => {
     if (form.cuentas.length !== 1 || form.pagos.length !== 1) return;
     const cuenta = form.cuentas[0];
     const pago = form.pagos[0];
-    const pagoValorVacio = pago.valor === '' || Number(pago.valor) === 0;
-    const pagoNotasVacias = !pago.notas;
-    const nuevoValor = pagoValorVacio ? cuenta.valor : pago.valor;
-    const nuevasNotas = pagoNotasVacias ? (cuenta.notas || form.notas) : pago.notas;
+    const valorEsAuto = pago.valor === '' || pago.valor === ultimoAutoValor.current;
+    const notaEsAuto = !pago.notas || pago.notas === ultimaAutoNota.current;
+    const nuevoValor = valorEsAuto ? cuenta.valor : pago.valor;
+    const nuevasNotas = notaEsAuto ? (cuenta.notas || form.notas) : pago.notas;
+    ultimoAutoValor.current = nuevoValor;
+    ultimaAutoNota.current = nuevasNotas;
     if (nuevoValor === pago.valor && nuevasNotas === pago.notas) return;
     setForm((f) => ({ ...f, pagos: [{ ...f.pagos[0], valor: nuevoValor, notas: nuevasNotas }] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps

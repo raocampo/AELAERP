@@ -1532,9 +1532,12 @@ const ContabilidadHub = () => {
             </div>
           )}
 
-          {/* Modal: formulario de asiento (nuevo / ver / editar) */}
+          {/* Modal: formulario de asiento (nuevo / ver / editar). Sin cierre
+              al clickear el overlay: un asiento puede tener varias líneas de
+              debe/haber ya escritas — un click accidental afuera no debe
+              perderlas. Se cierra solo con "✕" o "Cancelar". */}
           {modalAsientoAbierto && (
-            <div className="conta-modal-overlay" onClick={limpiarAsientoForm}>
+            <div className="conta-modal-overlay">
               <div className="conta-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="conta-modal-header">
                   <h3>
