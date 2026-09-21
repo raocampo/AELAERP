@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
 const prisma = require('../config/prisma');
+const ExcelJS = require('exceljs');
 const {
   enviarComprobanteBancarioPdf, CATEGORIA_POR_TIPO_COMPROBANTE, fmtMoney,
 } = require('../utils/comprobanteBancarioPdf');
@@ -13,6 +14,16 @@ router.use(soloMediumOPro);
 const TIPOS_VALIDOS = ['INGRESO', 'PAGO', 'CREDITO', 'DEBITO'];
 const PREFIJOS = { INGRESO: 'ING', PAGO: 'PAG', CREDITO: 'CRE', DEBITO: 'DEB' };
 const TIPO_MOV  = { INGRESO: 'DEPOSITO', PAGO: 'RETIRO', CREDITO: 'NOTA_CREDITO', DEBITO: 'NOTA_DEBITO' };
+const TITULOS_TIPO = { INGRESO: 'Ingreso', PAGO: 'Pago', CREDITO: 'Nota de Crédito', DEBITO: 'Nota de Débito' };
+
+// Mismo patrón de estilo ya usado en reportes de Contabilidad (routes/contabilidad.js)
+// — exceljs sí persiste estilos reales de celda al reabrir el archivo.
+const FORMATO_MONEDA_XLSX = '"$"#,##0.00';
+const ESTILO_ENCABEZADO_XLSX = {
+  font: { bold: true, color: { argb: 'FF1E293B' } },
+  fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } },
+  border: { bottom: { style: 'thin', color: { argb: 'FF94A3B8' } } },
+};
 
 async function generarNumero(tipo, empresaId, fecha) {
   const d = new Date(fecha);
@@ -83,6 +94,85 @@ router.get('/', autorizarPermiso('bancos.ver'), async (req, res) => {
   } catch (error) {
     console.error('GET /comprobantes-bancarios:', error);
     res.status(500).json({ success: false, mensaje: 'Error al obtener comprobantes' });
+  }
+});
+
+// ── GET /export/excel ────────────────────────────────────────────
+// Exporta el listado de comprobantes (mismos filtros que GET /, sin
+// paginar) a Excel — para que el cliente analice o corrobore sus
+// registros de ingreso/pago fuera del sistema.
+router.get('/export/excel', autorizarPermiso('bancos.ver'), async (req, res) => {
+  try {
+    const empresaId = req.empresa.id;
+    const { tipo, estado, desde, hasta, q } = req.query;
+
+    const rows = await prisma.$queryRaw`
+      SELECT
+        cb.numero, cb.tipo, cb.subtipo, cb.fecha, cb.notas, cb.estado, cb.total,
+        p."razonSocial" AS prov_nombre, p.identificacion AS prov_ruc
+      FROM "comprobantes_bancarios" cb
+      LEFT JOIN "proveedores" p ON p.id = cb."proveedorId" AND p."empresaId" = ${empresaId}
+      WHERE cb."empresaId" = ${empresaId}
+        AND (${tipo   ?? null}::text IS NULL OR cb.tipo   = ${tipo   ?? ''})
+        AND (${estado ?? null}::text IS NULL OR cb.estado = ${estado ?? ''})
+        AND (${desde  ?? null}::text IS NULL OR cb.fecha >= ${desde  ? new Date(desde)  : new Date(0)})
+        AND (${hasta  ?? null}::text IS NULL OR cb.fecha <= ${hasta  ? new Date(new Date(hasta).setHours(23,59,59)) : new Date()})
+        AND (${q      ?? null}::text IS NULL OR cb.numero ILIKE ${'%' + (q ?? '') + '%'} OR cb.notas ILIKE ${'%' + (q ?? '') + '%'})
+      ORDER BY cb.fecha ASC, cb.id ASC
+    `;
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'AELA ERP';
+    workbook.created = new Date();
+    const ws = workbook.addWorksheet('Comprobantes');
+    ws.columns = [
+      { width: 16 }, { width: 12 }, { width: 14 }, { width: 12 },
+      { width: 16 }, { width: 30 }, { width: 40 }, { width: 12 }, { width: 14 },
+    ];
+
+    const titulo = tipo ? `Comprobantes de ${TITULOS_TIPO[tipo] || tipo}` : 'Comprobantes bancarios';
+    const filaTitulo = ws.addRow([titulo]);
+    ws.mergeCells(filaTitulo.number, 1, filaTitulo.number, 9);
+    filaTitulo.getCell(1).font = { bold: true, size: 12 };
+
+    const filaFiltros = ws.addRow([
+      `Período: ${desde || '(inicio)'} a ${hasta || '(hoy)'}  ·  Estado: ${estado || 'todos'}  ·  ${rows.length} registro(s)`,
+    ]);
+    ws.mergeCells(filaFiltros.number, 1, filaFiltros.number, 9);
+    filaFiltros.getCell(1).font = { italic: true, color: { argb: 'FF64748B' } };
+
+    ws.addRow([]);
+
+    const filaEncabezado = ws.addRow(['Número', 'Fecha', 'Tipo', 'Subtipo', 'Identificación', 'Nombre/Razón social', 'Notas', 'Estado', 'Valor']);
+    filaEncabezado.eachCell((cell) => Object.assign(cell, ESTILO_ENCABEZADO_XLSX));
+
+    let totalGeneral = 0;
+    rows.forEach((r) => {
+      const valor = parseFloat(r.total || 0);
+      totalGeneral += valor;
+      const fila = ws.addRow([
+        r.numero, new Date(r.fecha), r.tipo, r.subtipo || '', r.prov_ruc || '', r.prov_nombre || '',
+        r.notas || '', r.estado, valor,
+      ]);
+      fila.getCell(2).numFmt = 'dd/mm/yyyy';
+      fila.getCell(9).numFmt = FORMATO_MONEDA_XLSX;
+    });
+
+    const filaTotal = ws.addRow(['', '', '', '', '', '', '', 'TOTAL', totalGeneral]);
+    filaTotal.getCell(8).font = { bold: true };
+    filaTotal.getCell(9).font = { bold: true };
+    filaTotal.getCell(9).numFmt = FORMATO_MONEDA_XLSX;
+
+    ws.views = [{ state: 'frozen', ySplit: filaEncabezado.number }];
+
+    const nombreArchivo = `comprobantes-${(tipo || 'bancarios').toLowerCase()}-${new Date().toISOString().slice(0, 10)}`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}.xlsx"`);
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (error) {
+    console.error('GET /comprobantes-bancarios/export/excel:', error);
+    if (!res.headersSent) res.status(500).json({ success: false, mensaje: 'Error al exportar a Excel' });
   }
 });
 

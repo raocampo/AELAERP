@@ -5,6 +5,7 @@
  */
 const express = require('express');
 const prisma = require('../config/prisma');
+const ExcelJS = require('exceljs');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloMediumOPro } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
@@ -14,6 +15,15 @@ const {
   enviarComprobanteBancarioPdf, CATEGORIA_POR_TIPO_MOVIMIENTO, fmtMoney,
 } = require('../utils/comprobanteBancarioPdf');
 const { enviarLibroBancosPdf } = require('../utils/libroBancosPdf');
+
+// Mismo patrón de estilo ya usado en reportes de Contabilidad (routes/contabilidad.js)
+// — exceljs sí persiste estilos reales de celda al reabrir el archivo.
+const FORMATO_MONEDA_XLSX = '"$"#,##0.00';
+const ESTILO_ENCABEZADO_XLSX = {
+  font: { bold: true, color: { argb: 'FF1E293B' } },
+  fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } },
+  border: { bottom: { style: 'thin', color: { argb: 'FF94A3B8' } } },
+};
 
 // Prefijo de comprobante por categoría de movimiento — equivalente a los
 // "Comprobantes de ingreso/pago/crédito/débito" de otros ERP contables.
@@ -259,63 +269,148 @@ router.get('/:id/movimientos', autorizarPermiso('bancos.ver'), async (req, res) 
 // GET /api/bancos/:id/libro/pdf — PDF del Libro de Bancos (mismo listado que
 // LibroBancos.jsx, incluida la columna "Conc." — sirve tanto para "imprimir
 // el libro" como para la conciliación, es la misma tabla).
+// Datos del Libro de Bancos de una cuenta en un período — compartido entre
+// el PDF y el Excel para que ambos muestren exactamente los mismos números.
+async function obtenerDatosLibroBancos(empresaId, bancoId, query) {
+  const cuenta = await prisma.bancos.findFirst({ where: { id: bancoId, empresaId } });
+  if (!cuenta) return null;
+
+  const { desde, hasta } = query;
+  const where = { bancoId, empresaId };
+  if (desde || hasta) {
+    where.fecha = {};
+    if (desde) where.fecha.gte = new Date(desde);
+    if (hasta) {
+      const fh = new Date(hasta);
+      fh.setHours(23, 59, 59, 999);
+      where.fecha.lte = fh;
+    }
+  }
+
+  // Saldo anterior real: saldoInicial + todo lo ocurrido ANTES de "desde"
+  // (mismo cálculo que ya hacía el frontend en 2 consultas — se centraliza
+  // acá para que el reporte no dependa de que el cliente se lo pase).
+  let saldoAnterior = parseFloat(cuenta.saldoInicial);
+  if (desde) {
+    const previos = await prisma.movimientos_bancarios.aggregate({
+      where: { bancoId, empresaId, fecha: { lt: new Date(desde) } },
+      _sum: { debe: true, haber: true },
+    });
+    saldoAnterior += Number(previos._sum.debe || 0) - Number(previos._sum.haber || 0);
+  }
+
+  const movimientos = await prisma.movimientos_bancarios.findMany({
+    where,
+    orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
+  });
+
+  let saldoAcumulado = saldoAnterior;
+  const totalDebe = movimientos.reduce((s, m) => s + Number(m.debe), 0);
+  const totalHaber = movimientos.reduce((s, m) => s + Number(m.haber), 0);
+  const filas = movimientos.map((m) => {
+    saldoAcumulado += Number(m.debe) - Number(m.haber);
+    return { ...m, saldoAcumulado };
+  });
+
+  return { cuenta, saldoAnterior, totalDebe, totalHaber, saldoFinal: saldoAcumulado, movimientos: filas };
+}
+
 router.get('/:id/libro/pdf', autorizarPermiso('bancos.ver'), async (req, res) => {
   try {
     const empresaId = obtenerEmpresaId(req);
     const bancoId = parseIntSafe(req.params.id);
     if (!bancoId) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
 
-    const cuenta = await prisma.bancos.findFirst({ where: { id: bancoId, empresaId } });
-    if (!cuenta) return res.status(404).json({ success: false, mensaje: 'Cuenta bancaria no encontrada' });
-
+    const datos = await obtenerDatosLibroBancos(empresaId, bancoId, req.query);
+    if (!datos) return res.status(404).json({ success: false, mensaje: 'Cuenta bancaria no encontrada' });
+    const { cuenta, saldoAnterior, totalDebe, totalHaber, saldoFinal, movimientos } = datos;
     const { desde, hasta } = req.query;
-    const where = { bancoId, empresaId };
-    if (desde || hasta) {
-      where.fecha = {};
-      if (desde) where.fecha.gte = new Date(desde);
-      if (hasta) {
-        const fh = new Date(hasta);
-        fh.setHours(23, 59, 59, 999);
-        where.fecha.lte = fh;
-      }
-    }
-
-    // Saldo anterior real: saldoInicial + todo lo ocurrido ANTES de "desde"
-    // (mismo cálculo que ya hacía el frontend en 2 consultas — se centraliza
-    // acá para que el PDF no dependa de que el cliente se lo pase).
-    let saldoAnterior = parseFloat(cuenta.saldoInicial);
-    if (desde) {
-      const previos = await prisma.movimientos_bancarios.aggregate({
-        where: { bancoId, empresaId, fecha: { lt: new Date(desde) } },
-        _sum: { debe: true, haber: true },
-      });
-      saldoAnterior += Number(previos._sum.debe || 0) - Number(previos._sum.haber || 0);
-    }
-
-    const movimientos = await prisma.movimientos_bancarios.findMany({
-      where,
-      orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
-    });
-
-    let saldoAcumulado = saldoAnterior;
-    const totalDebe = movimientos.reduce((s, m) => s + Number(m.debe), 0);
-    const totalHaber = movimientos.reduce((s, m) => s + Number(m.haber), 0);
-    const filas = movimientos.map((m) => {
-      saldoAcumulado += Number(m.debe) - Number(m.haber);
-      return { ...m, saldoAcumulado };
-    });
 
     const configSri = await prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
 
     await enviarLibroBancosPdf(res, {
       cuenta: { nombre: cuenta.nombre, banco: cuenta.banco, tipoCuenta: cuenta.tipoCuenta, numeroCuenta: cuenta.numeroCuenta },
       periodo: { desde: desde || null, hasta: hasta || null },
-      saldoAnterior, totalDebe, totalHaber, saldoFinal: saldoAcumulado,
-      movimientos: filas,
+      saldoAnterior, totalDebe, totalHaber, saldoFinal,
+      movimientos,
     }, configSri, `Libro-de-Bancos-${cuenta.nombre.replace(/\s+/g, '-')}`);
   } catch (error) {
     console.error('GET /bancos/:id/libro/pdf:', error);
     if (!res.headersSent) res.status(500).json({ success: false, mensaje: 'No se pudo generar el Libro de Bancos' });
+  }
+});
+
+// GET /api/bancos/:id/libro/excel — mismo Libro de Bancos/conciliación en
+// Excel, para que el cliente analice o corrobore los movimientos fuera del
+// sistema (filtrar, sumar, cruzar contra su propio extracto bancario).
+router.get('/:id/libro/excel', autorizarPermiso('bancos.ver'), async (req, res) => {
+  try {
+    const empresaId = obtenerEmpresaId(req);
+    const bancoId = parseIntSafe(req.params.id);
+    if (!bancoId) return res.status(400).json({ success: false, mensaje: 'ID inválido' });
+
+    const datos = await obtenerDatosLibroBancos(empresaId, bancoId, req.query);
+    if (!datos) return res.status(404).json({ success: false, mensaje: 'Cuenta bancaria no encontrada' });
+    const { cuenta, saldoAnterior, totalDebe, totalHaber, saldoFinal, movimientos } = datos;
+    const { desde, hasta } = req.query;
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'AELA ERP';
+    workbook.created = new Date();
+    const ws = workbook.addWorksheet('Libro de Bancos');
+    ws.columns = [
+      { width: 12 }, { width: 16 }, { width: 16 }, { width: 40 }, { width: 16 },
+      { width: 14 }, { width: 14 }, { width: 14 }, { width: 8 },
+    ];
+
+    const filaTitulo = ws.addRow([`Libro de Bancos — ${cuenta.nombre}${cuenta.banco ? ` (${cuenta.banco})` : ''}`]);
+    ws.mergeCells(filaTitulo.number, 1, filaTitulo.number, 9);
+    filaTitulo.getCell(1).font = { bold: true, size: 12 };
+
+    const filaPeriodo = ws.addRow([`Período: ${desde || '(inicio)'} a ${hasta || '(hoy)'}`]);
+    ws.mergeCells(filaPeriodo.number, 1, filaPeriodo.number, 9);
+    filaPeriodo.getCell(1).font = { italic: true, color: { argb: 'FF64748B' } };
+
+    const filaResumen = ws.addRow([
+      `Saldo anterior $${saldoAnterior.toFixed(2)}  ·  Total ingresos $${totalDebe.toFixed(2)}  ·  ` +
+      `Total egresos $${totalHaber.toFixed(2)}  ·  Saldo al cierre $${saldoFinal.toFixed(2)}`,
+    ]);
+    ws.mergeCells(filaResumen.number, 1, filaResumen.number, 9);
+    filaResumen.getCell(1).font = { italic: true, color: { argb: 'FF64748B' } };
+
+    ws.addRow([]);
+
+    const filaEncabezado = ws.addRow(['Fecha', 'N°', 'Tipo', 'Concepto', 'Referencia', 'Debe', 'Haber', 'Saldo', 'Conc.']);
+    filaEncabezado.eachCell((cell) => Object.assign(cell, ESTILO_ENCABEZADO_XLSX));
+
+    movimientos.forEach((m) => {
+      const fila = ws.addRow([
+        new Date(m.fecha), m.numero || '', String(m.tipo || '').replace(/_/g, ' '), m.concepto || '', m.referencia || '',
+        Number(m.debe || 0), Number(m.haber || 0), Number(m.saldoAcumulado || 0),
+        m.conciliado ? 'SI' : '',
+      ]);
+      fila.getCell(1).numFmt = 'dd/mm/yyyy';
+      fila.getCell(6).numFmt = FORMATO_MONEDA_XLSX;
+      fila.getCell(7).numFmt = FORMATO_MONEDA_XLSX;
+      fila.getCell(8).numFmt = FORMATO_MONEDA_XLSX;
+    });
+
+    const filaTotal = ws.addRow(['', '', '', '', 'TOTALES', totalDebe, totalHaber, saldoFinal, '']);
+    filaTotal.font = { bold: true };
+    filaTotal.getCell(6).numFmt = FORMATO_MONEDA_XLSX;
+    filaTotal.getCell(7).numFmt = FORMATO_MONEDA_XLSX;
+    filaTotal.getCell(8).numFmt = FORMATO_MONEDA_XLSX;
+
+    ws.views = [{ state: 'frozen', ySplit: filaEncabezado.number }];
+
+    const nombreArchivo = `Libro-de-Bancos-${cuenta.nombre.replace(/\s+/g, '-')}`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}.xlsx"`);
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (error) {
+    console.error('GET /bancos/:id/libro/excel:', error);
+    if (!res.headersSent) res.status(500).json({ success: false, mensaje: 'No se pudo generar el Excel del Libro de Bancos' });
   }
 });
 

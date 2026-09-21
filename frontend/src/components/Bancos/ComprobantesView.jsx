@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import { abrirComprobanteBancario, descargarComprobanteBancario } from '../../utils/comprobantesBancos';
+import { descargarExcel } from '../../utils/exportCsv';
 import { IcVer, IcPDF, IcDescargar, IcEditar, IcAnular } from '../../utils/icons';
 
 const TIPOS_META = {
@@ -563,6 +564,21 @@ function ListaComprobantes({ tipo, onNuevo, onVer, onDescargar, onEditar, onVisu
     }
   };
 
+  // Excel del listado completo (mismos filtros aplicados en pantalla, sin
+  // paginar) — para análisis/corroboración fuera del sistema.
+  const exportarExcel = async () => {
+    try {
+      const params = { tipo };
+      if (filtros.desde) params.desde = filtros.desde;
+      if (filtros.hasta) params.hasta = filtros.hasta;
+      if (filtros.q)     params.q = filtros.q;
+      if (filtros.estado) params.estado = filtros.estado;
+      await descargarExcel(api, '/comprobantes-bancarios/export/excel', params, `comprobantes-${tipo.toLowerCase()}.xlsx`);
+    } catch {
+      alert('No se pudo generar el Excel del listado');
+    }
+  };
+
   return (
     <div>
       {/* Filtros */}
@@ -593,7 +609,12 @@ function ListaComprobantes({ tipo, onNuevo, onVer, onDescargar, onEditar, onVisu
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
         <span style={{ fontWeight: 600, color: '#0f766e' }}>{meta.icono} {meta.titulo} ({total})</span>
-        <button className="btn btn-primary btn-sm" onClick={onNuevo}>+ Nuevo</button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="btn btn-ghost btn-sm" onClick={exportarExcel} disabled={items.length === 0} title="Exportar el listado a Excel">
+            📊 Exportar Excel
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={onNuevo}>+ Nuevo</button>
+        </div>
       </div>
 
       {cargando ? (

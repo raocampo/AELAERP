@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
 import { abrirComprobanteMovimiento } from '../../utils/comprobantesBancos';
-import { abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
+import { abrirBlobEnNuevaPestana, descargarExcel } from '../../utils/exportCsv';
 import './Bancos.css';
 
 function formatMoney(v) {
@@ -139,6 +139,25 @@ export default function LibroBancos() {
       await abrirBlobEnNuevaPestana(api, `/bancos/${cuentaId}/libro/pdf`, { desde: desde || undefined, hasta: hasta || undefined });
     } catch {
       alert('No se pudo generar el PDF del Libro de Bancos');
+    }
+  };
+
+  // Excel del mismo Libro de Bancos/conciliación — para que el cliente
+  // analice o corrobore los movimientos (filtrar, sumar, cruzar contra su
+  // propio extracto) fuera del sistema.
+  const exportarExcel = async () => {
+    if (!cuentaId) return;
+    const { desde, hasta } = getPeriodo();
+    const cuenta = cuentas.find((c) => String(c.id) === cuentaId);
+    try {
+      await descargarExcel(
+        api,
+        `/bancos/${cuentaId}/libro/excel`,
+        { desde: desde || undefined, hasta: hasta || undefined },
+        `Libro-de-Bancos-${(cuenta?.nombre || 'cuenta').replace(/\s+/g, '-')}.xlsx`,
+      );
+    } catch {
+      alert('No se pudo generar el Excel del Libro de Bancos');
     }
   };
 
@@ -305,7 +324,16 @@ export default function LibroBancos() {
           final de la fila de conciliación (botón "ghost" chico + empujado a
           la derecha con margin-left:auto, casi invisible con varios botones
           antes envolviendo línea). */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '1rem' }}>
+        <button
+          className="btn btn-primary"
+          disabled={movimientos.length === 0}
+          title="Exportar el Libro de Bancos / conciliación del período a Excel"
+          onClick={exportarExcel}
+          style={{ fontSize: '14px', fontWeight: 700 }}
+        >
+          📊 Exportar Excel
+        </button>
         <button
           className="btn btn-primary"
           disabled={movimientos.length === 0}
