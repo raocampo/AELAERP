@@ -43,8 +43,12 @@ const fechaECOffset = (diasOffset = 0) =>
  * fecha "solo-fecha" se ancla a medianoche UTC; reinterpretada en
  * America/Guayaquil cae en el día ANTERIOR). Solo para timestamps reales
  * (con hora) tiene sentido pasar por el Date + timeZone.
+ *
+ * Sin argumento devuelve HOY en Ecuador. Antes `new Date(undefined)` daba
+ * "Invalid Date" y rompía a todos los llamadores sin argumento (Flujo de
+ * Efectivo, Cambios en el Patrimonio, mesAnioActualEC, Estadísticas...).
  */
-const diaCalendarioEC = (valor) => {
+const diaCalendarioEC = (valor = new Date()) => {
   const s = String(valor ?? '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   return new Date(valor).toLocaleDateString('en-CA', { timeZone: TZ_EC });
