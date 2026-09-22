@@ -174,10 +174,10 @@ function enviarCsv(res, filename, headers, rows) {
   res.send(`\uFEFF${lineas.join('\n')}`);
 }
 
-function crearDocumentoPdf(res, filename) {
+function crearDocumentoPdf(res, filename, opciones = {}) {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  const doc = new PDFDocument({ size: 'A4', margin: 36 });
+  const doc = new PDFDocument({ size: opciones.size || 'A4', margin: opciones.margin ?? 36 });
   registrarFuentesPdf(doc);
   doc.pipe(res);
   return doc;
@@ -2297,19 +2297,43 @@ router.get('/asientos/:id/pdf', async (req, res) => {
     const config = await prisma.configuracion_sri.findFirst({ where: { empresaId } });
     const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
-    const doc = crearDocumentoPdf(res, `asiento_${asiento.numero}.pdf`);
+    // Un asiento imprimible es casi siempre un par de líneas (cabecera +
+    // 1-3 cuentas) — la página A4 completa dejaba casi todo el alto en
+    // blanco (un bloque corto y ancho "flotando" arriba de una hoja vacía,
+    // percibido como "sale horizontal y no ocupa ni la mitad"). Misma media
+    // hoja A4 vertical que ya usa el comprobante bancario; si el asiento
+    // tuviera muchas líneas, dibujarTablaPdf sigue paginando solo, ahora en
+    // páginas más cortas.
+    const doc = crearDocumentoPdf(res, `asiento_${asiento.numero}.pdf`, { size: [595.28, 420.94], margin: 28 });
     dibujarEncabezadoContable(doc, config, `Comprobante Contable ${asiento.numero}`);
 
-    doc.fontSize(9);
-    doc.font('Helvetica-Bold').text('Fecha: ', { continued: true }).font('Helvetica').text(formatDateOnly(asiento.fecha));
-    doc.font('Helvetica-Bold').text('Tipo: ', { continued: true }).font('Helvetica').text(asiento.tipo);
-    if (asiento.referencia) {
-      doc.font('Helvetica-Bold').text('Referencia: ', { continued: true }).font('Helvetica').text(asiento.referencia);
-    }
-    doc.font('Helvetica-Bold').text('Descripción: ', { continued: true }).font('Helvetica').text(asiento.descripcion);
-    doc.font('Helvetica-Bold').text('Estado: ', { continued: true }).font('Helvetica').text(
-      [asiento.cerrado ? 'Cerrado' : 'Abierto', asiento.bloqueado ? 'Bloqueado' : null].filter(Boolean).join(' · ')
-    );
+    // Un label en negrita seguido del valor con `{ continued: true }` deja
+    // el valor con un baseline distinto al de la etiqueta apenas el texto
+    // envuelve a 2 líneas (PDFKit calcula el alto de línea con la métrica
+    // de la fuente activa EN CADA segmento, no de la línea completa) —
+    // "Descripción:"/"Estado:" quedaban visiblemente descuadrados del
+    // valor. Mismo patrón label/valor en columnas fijas que ya usa
+    // comprobanteBancarioPdf.js, que no tiene ese problema.
+    const MLCampos = doc.page.margins.left;
+    const WCampos = doc.page.width - MLCampos - doc.page.margins.right;
+    const ANCHO_LABEL = 78;
+    const dibujarCampoAsiento = (label, valor) => {
+      if (valor === null || valor === undefined || valor === '') return;
+      const y = doc.y;
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
+      const altoLabel = doc.heightOfString(label, { width: ANCHO_LABEL });
+      doc.text(label, MLCampos, y, { width: ANCHO_LABEL });
+      doc.fontSize(9).font('Helvetica');
+      const altoValor = doc.heightOfString(String(valor), { width: WCampos - ANCHO_LABEL });
+      doc.text(String(valor), MLCampos + ANCHO_LABEL, y, { width: WCampos - ANCHO_LABEL });
+      doc.y = y + Math.max(altoLabel, altoValor) + 2;
+    };
+    dibujarCampoAsiento('Fecha:', formatDateOnly(asiento.fecha));
+    dibujarCampoAsiento('Tipo:', asiento.tipo);
+    dibujarCampoAsiento('Referencia:', asiento.referencia);
+    dibujarCampoAsiento('Descripción:', asiento.descripcion);
+    dibujarCampoAsiento('Estado:', [asiento.cerrado ? 'Cerrado' : 'Abierto', asiento.bloqueado ? 'Bloqueado' : null].filter(Boolean).join(' · '));
+    doc.font('Helvetica').fillColor('#000000');
     doc.moveDown(0.5);
 
     const anchoTablaAsiento = 195 + 65 + 115 + 65 + 65;
