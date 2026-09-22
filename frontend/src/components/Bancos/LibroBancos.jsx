@@ -1,9 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { formatFechaCorta } from '../../utils/fecha';
-import { abrirComprobanteMovimiento } from '../../utils/comprobantesBancos';
+import { abrirComprobanteMovimiento, descargarComprobanteBancario } from '../../utils/comprobantesBancos';
 import { abrirBlobEnNuevaPestana, descargarExcel } from '../../utils/exportCsv';
+import { IcVer, IcDescargar, IcEditar, IcAnular, IcEliminar } from '../../utils/icons';
 import './Bancos.css';
+
+// Tipo del comprobante bancario → slug de la URL de Bancos (?tab=...) donde
+// vive su formulario de edición (ver BancosHub.jsx).
+const TAB_POR_TIPO_COMPROBANTE = { INGRESO: 'ingreso', PAGO: 'pago', CREDITO: 'credito', DEBITO: 'debito' };
 
 function formatMoney(v) {
   return parseFloat(v || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -20,6 +26,7 @@ function useCuentasContables() {
 }
 
 export default function LibroBancos() {
+  const navigate = useNavigate();
   const [cuentas, setCuentas] = useState([]);
   const [cuentaId, setCuentaId] = useState('');
   const [modoFecha, setModoFecha] = useState('mes');
@@ -158,6 +165,38 @@ export default function LibroBancos() {
       );
     } catch {
       alert('No se pudo generar el Excel del Libro de Bancos');
+    }
+  };
+
+  // Acciones por fila — "Editar"/"Anular" solo tienen sentido cuando el
+  // movimiento viene de un Comprobante de Ingreso/Pago/NC/ND (m.comprobante):
+  // se redirige a esa pantalla en vez de reinventar la edición acá, para
+  // reusar el mismo flujo seguro (reversa el asiento, nunca lo edita in
+  // situ) que ya existe en Comprobantes. Un movimiento SIN comprobante
+  // (registrado manual o de un cheque) solo puede eliminarse directo si
+  // todavía no tiene asiento ni cheque (mismo resguardo del backend).
+  const editarComprobante = (comprobante) => {
+    const tab = TAB_POR_TIPO_COMPROBANTE[comprobante.tipo] || 'ingreso';
+    navigate(`/bancos?tab=${tab}&editar=${comprobante.id}`);
+  };
+
+  const anularComprobante = async (comprobante) => {
+    if (!window.confirm(`¿Anular el comprobante ${comprobante.numero}? Esto reversa su asiento contable.`)) return;
+    try {
+      await api.post(`/comprobantes-bancarios/${comprobante.id}/anular`);
+      await cargar();
+    } catch (e) {
+      alert(e.response?.data?.mensaje || 'Error al anular el comprobante');
+    }
+  };
+
+  const eliminarMovimiento = async (mov) => {
+    if (!window.confirm('¿Eliminar este movimiento? No se puede deshacer.')) return;
+    try {
+      await api.delete(`/bancos/movimientos/${mov.id}`);
+      await cargar();
+    } catch (e) {
+      alert(e.response?.data?.mensaje || 'No se pudo eliminar el movimiento');
     }
   };
 
@@ -375,6 +414,7 @@ export default function LibroBancos() {
                 <th style={{ textAlign: 'right' }}>Debe (+)</th>
                 <th style={{ textAlign: 'right' }}>Haber (−)</th>
                 <th style={{ textAlign: 'right' }}>Saldo</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -393,16 +433,7 @@ export default function LibroBancos() {
                       ? <span style={{ color: '#16a34a', fontSize: '0.9rem' }}>📒</span>
                       : <span style={{ color: '#f59e0b', fontSize: '0.9rem' }} title="Sin asiento — usa Contabilizar">⚠</span>}
                   </td>
-                  <td style={{ fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    {m.numero || '—'}
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      style={{ marginLeft: 6, padding: '0 6px' }}
-                      title="Ver / imprimir comprobante"
-                      onClick={() => abrirComprobanteMovimiento(m.id)}
-                    >🧾</button>
-                  </td>
+                  <td style={{ fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{m.numero || '—'}</td>
                   <td>{formatFechaCorta(m.fecha)}</td>
                   <td>
                     <span className={`tipo-badge tipo-${m.tipo}`}>{m.tipo.replace(/_/g, ' ')}</span>
@@ -420,6 +451,23 @@ export default function LibroBancos() {
                       ${formatMoney(m.saldoAcumulado)}
                     </span>
                   </td>
+                  <td>
+                    <div className="tbl-acciones">
+                      <button className="btn-icon ic-ver" title="Ver / imprimir comprobante" onClick={() => abrirComprobanteMovimiento(m.id)}><IcVer /></button>
+                      {m.comprobante && (
+                        <button className="btn-icon ic-descargar" title="Descargar PDF" onClick={() => descargarComprobanteBancario(m.comprobante.id, m.comprobante.numero)}><IcDescargar /></button>
+                      )}
+                      {m.comprobante && m.comprobante.estado !== 'ANULADO' && (
+                        <>
+                          <button className="btn-icon ic-editar" title="Editar comprobante" onClick={() => editarComprobante(m.comprobante)}><IcEditar /></button>
+                          <button className="btn-icon ic-anular" title="Anular comprobante" onClick={() => anularComprobante(m.comprobante)}><IcAnular /></button>
+                        </>
+                      )}
+                      {!m.comprobante && !m.asientoId && !m.chequeId && (
+                        <button className="btn-icon ic-eliminar" title="Eliminar movimiento" onClick={() => eliminarMovimiento(m)}><IcEliminar /></button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -431,6 +479,7 @@ export default function LibroBancos() {
                 <td style={{ textAlign: 'right', padding: '0.5rem 0.75rem' }} className={saldoFinal !== null && saldoFinal < 0 ? 'saldo-negativo' : 'saldo-positivo'}>
                   {saldoFinal !== null ? `$${formatMoney(saldoFinal)}` : ''}
                 </td>
+                <td></td>
               </tr>
             </tfoot>
           </table>

@@ -678,9 +678,13 @@ export default function BancosHub() {
   // Comprobantes bancarios van en su propia vista
   const tipoComprobante = { ingreso: 'INGRESO', pago: 'PAGO', credito: 'CREDITO', debito: 'DEBITO' }[urlTab];
   if (tipoComprobante) {
+    // ?editar=<id> — llega desde el botón "Editar" de un movimiento en el
+    // Libro de Bancos (LibroBancos.jsx navega acá con el tipo y el id de
+    // SU comprobante) para abrir directo el formulario de edición.
+    const editarId = new URLSearchParams(location.search).get('editar');
     return (
       <div style={{ padding: '1.5rem' }}>
-        <ComprobantesView tipo={tipoComprobante} key={urlTab} />
+        <ComprobantesView tipo={tipoComprobante} key={urlTab} autoEditarId={editarId} />
       </div>
     );
   }

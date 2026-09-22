@@ -700,7 +700,11 @@ function ListaComprobantes({ tipo, onNuevo, onVer, onDescargar, onEditar, onVisu
 }
 
 // ─── ComprobantesView — componente principal ──────────────
-export default function ComprobantesView({ tipo }) {
+// `autoEditarId` llega desde Libro de Bancos (BancosHub lee ?editar=<id> de
+// la URL) — el usuario hizo click en "Editar" sobre un movimiento del Libro
+// y hay que abrir directo el formulario de edición de SU comprobante, sin
+// pasar primero por la lista.
+export default function ComprobantesView({ tipo, autoEditarId }) {
   const [vista, setVista] = useState('lista'); // lista | subtipo | form
   const [subtipoSel, setSubtipoSel] = useState(null);
   const [comprobanteEditar, setComprobanteEditar] = useState(null); // detalle completo (GET /:id) en modo edición
@@ -730,6 +734,10 @@ export default function ComprobantesView({ tipo }) {
       setCargandoEditar(false);
     }
   };
+
+  useEffect(() => {
+    if (autoEditarId) handleEditar(autoEditarId);
+  }, [autoEditarId]);
 
   return (
     <div>

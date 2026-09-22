@@ -248,15 +248,35 @@ router.get('/:id/movimientos', autorizarPermiso('bancos.ver'), async (req, res) 
       }),
     ]);
 
+    // Comprobante bancario que generó cada movimiento (si vino de uno) — el
+    // frontend lo usa para las acciones Editar/Anular del Libro de Bancos,
+    // que redirigen al mismo flujo seguro de Comprobantes (reversa el
+    // asiento, nunca lo edita in situ) en vez de reinventarlo acá.
+    const movIds = movimientos.map((m) => m.id);
+    const comprobantesLigados = movIds.length
+      ? await prisma.$queryRaw`
+          SELECT id, numero, tipo, estado, "movimientoId"
+          FROM "comprobantes_bancarios"
+          WHERE "movimientoId" = ANY(${movIds}::int[]) AND "empresaId" = ${empresaId}
+        `
+      : [];
+    const comprobantePorMov = new Map(comprobantesLigados.map((c) => [Number(c.movimientoId), c]));
+
     // Calcular saldo acumulado desde saldoInicial
     let saldoAcumulado = parseFloat(cuenta.saldoInicial);
     const movimientosConSaldo = movimientos.map((m) => {
       saldoAcumulado += parseFloat(m.debe) - parseFloat(m.haber);
+      const comp = comprobantePorMov.get(m.id);
       // Movimientos creados antes de este fix guardaron el N° de
       // comprobante en "referencia" en vez de "numero" (bug real, ver
       // POST/PUT /comprobantes-bancarios) — se completa acá para no
       // depender de un backfill sobre datos reales.
-      return { ...m, numero: m.numero || m.referencia, saldoAcumulado };
+      return {
+        ...m,
+        numero: m.numero || m.referencia,
+        saldoAcumulado,
+        comprobante: comp ? { id: Number(comp.id), numero: comp.numero, tipo: comp.tipo, estado: comp.estado } : null,
+      };
     });
 
     res.json({
