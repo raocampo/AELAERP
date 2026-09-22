@@ -12,6 +12,7 @@ function crearTxFake({ asientoOriginal }) {
     asientos_contables: {
       findUnique: async ({ where }) => (where.id === asientoOriginal.id ? asientoOriginal : null),
       findFirst: async () => null, // sin asientos previos este mes -> numero empieza en 1
+      findMany: async () => [], // sin asientos previos este mes -> numero empieza en 1
       create: async ({ data }) => {
         const asiento = { id: 999, ...data, detalles: data.detalles.create };
         creados.push(asiento);

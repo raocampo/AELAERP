@@ -31,16 +31,21 @@ async function siguienteNumeroAsiento({ empresaId, fecha = diaCalendarioEC(), tx
 
   const inicio = startOfMonth(fecha);
   const fin = endOfMonth(fecha);
-  const ultimo = await tx.asientos_contables.findFirst({
-    where: {
-      empresaId: empresaIdNum,
-      fecha: { gte: inicio, lte: fin },
-    },
-    orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+  // El consecutivo debe ser el MÁXIMO realmente usado en el período, no el
+  // del asiento con la fecha más reciente ni el creado más recientemente
+  // por separado — un asiento correctivo con fecha atrasada (ej. una
+  // corrección de 2026 para un comprobante de enero/2024) se crea DESPUÉS
+  // en el tiempo real pero con una fecha contable ANTERIOR a otros
+  // asientos del mismo mes, así que "el de fecha más reciente" podía tener
+  // un consecutivo menor y producir un número YA USADO (bug real: 2
+  // correcciones seguidas del mismo mes generaron el mismo "202401-0007").
+  const asientosDelPeriodo = await tx.asientos_contables.findMany({
+    where: { empresaId: empresaIdNum, fecha: { gte: inicio, lte: fin } },
     select: { numero: true },
   });
+  const maxSecuencia = asientosDelPeriodo.reduce((max, a) => Math.max(max, extractSequence(a.numero)), 0);
 
-  const consecutivo = extractSequence(ultimo?.numero) + 1;
+  const consecutivo = maxSecuencia + 1;
   const date = new Date(fecha);
   const periodo = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
   return `${periodo}-${String(consecutivo).padStart(4, '0')}`;
@@ -56,17 +61,21 @@ async function siguienteNumeroGenerico({ modelo, prefijo, empresaId, fecha = dia
 
   const inicio = startOfMonth(fecha);
   const fin = endOfMonth(fecha);
-  const ultimo = await tx[modelo].findFirst({
+  // Mismo fix que siguienteNumeroAsiento: el consecutivo debe ser el MÁXIMO
+  // realmente usado en el período, no el del registro con la fecha más
+  // reciente (un registro con fecha atrasada creado después en el tiempo
+  // real podía calcular un consecutivo ya usado por otro).
+  const registrosDelPeriodo = await tx[modelo].findMany({
     where: {
       empresaId: empresaIdNum,
       fecha: { gte: inicio, lte: fin },
       numero: { startsWith: `${prefijo}-` },
     },
-    orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
     select: { numero: true },
   });
+  const maxSecuencia = registrosDelPeriodo.reduce((max, r) => Math.max(max, extractSequence(r.numero)), 0);
 
-  const consecutivo = extractSequence(ultimo?.numero) + 1;
+  const consecutivo = maxSecuencia + 1;
   const date = new Date(fecha);
   const periodo = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
   return `${prefijo}-${periodo}-${String(consecutivo).padStart(4, '0')}`;
