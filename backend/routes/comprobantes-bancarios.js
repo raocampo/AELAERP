@@ -320,23 +320,46 @@ router.get('/:id/pdf', autorizarPermiso('bancos.ver'), async (req, res) => {
 // cuenta bancaria vinculada a una cuenta del Plan de Cuentas Y que cada
 // línea de "Cuentas" tenga su propia cuenta contable; si falta algo,
 // no se crea el asiento (el caller decide qué hacer con la advertencia).
-async function construirYCrearAsiento({ tx, empresaId, usuarioId, fecha, tipo, numero, concep, cuentaBancariaId, cuentas }) {
+// Valida (sin escribir nada) si con estos datos SÍ se puede armar el
+// asiento — separado de construirYCrearAsiento para poder chequearlo
+// ANTES de reversar el asiento anterior al editar un comprobante (ver
+// PUT /:id): si no se valida antes, un comprobante que YA estaba
+// contabilizado podía quedar reversado y SIN reemplazo cuando los datos
+// nuevos no alcanzaban para el asiento — el original se perdía y el
+// aviso de "no se generó" solo se mandaba al frontend, que nunca lo
+// mostraba (bug real reportado: "anuló el asiento pero no generó el
+// nuevo", tenant LSAC/Loja Radio Club).
+async function evaluarDatosAsiento({ tx, empresaId, cuentaBancariaId, cuentas }) {
   const total = cuentas.reduce((s, c) => s + Number(c.valor || 0), 0);
-  const esIngreso = ['INGRESO', 'CREDITO'].includes(tipo);
-  if (!(total > 0)) return { asientoId: null, advertenciaContable: null };
-
-  const banco = cuentaBancariaId ? await tx.bancos.findFirst({ where: { id: cuentaBancariaId, empresaId } }) : null;
-  const cuentasCompletas = cuentas.length > 0 && cuentas.every((c) => c.cuentaContableId);
-
+  if (!(total > 0)) {
+    return { ok: false, silencioso: true, motivo: 'el total del comprobante debe ser mayor a cero' };
+  }
   if (!cuentaBancariaId) {
-    return { asientoId: null, advertenciaContable: 'No se generó el asiento contable: el comprobante no tiene cuenta bancaria asignada.' };
+    return { ok: false, silencioso: false, motivo: 'el comprobante no tiene cuenta bancaria asignada' };
   }
+  const banco = await tx.bancos.findFirst({ where: { id: cuentaBancariaId, empresaId } });
   if (!banco?.cuentaContableId) {
-    return { asientoId: null, advertenciaContable: 'No se generó el asiento contable: la cuenta bancaria no tiene una cuenta contable vinculada (Bancos → editar cuenta).' };
+    return { ok: false, silencioso: false, motivo: 'la cuenta bancaria no tiene una cuenta contable vinculada (Bancos → editar cuenta)' };
   }
+  const cuentasCompletas = cuentas.length > 0 && cuentas.every((c) => c.cuentaContableId);
   if (!cuentasCompletas) {
-    return { asientoId: null, advertenciaContable: 'No se generó el asiento contable: falta la cuenta contable en una o más líneas de "Cuentas".' };
+    return { ok: false, silencioso: false, motivo: 'falta la cuenta contable en una o más líneas de "Cuentas"' };
   }
+  return { ok: true, banco };
+}
+
+async function construirYCrearAsiento({ tx, empresaId, usuarioId, fecha, tipo, numero, concep, cuentaBancariaId, cuentas }) {
+  const esIngreso = ['INGRESO', 'CREDITO'].includes(tipo);
+  const total = cuentas.reduce((s, c) => s + Number(c.valor || 0), 0);
+
+  const evaluacion = await evaluarDatosAsiento({ tx, empresaId, cuentaBancariaId, cuentas });
+  if (!evaluacion.ok) {
+    return {
+      asientoId: null,
+      advertenciaContable: evaluacion.silencioso ? null : `No se generó el asiento contable: ${evaluacion.motivo}.`,
+    };
+  }
+  const { banco } = evaluacion;
 
   const detallesAsiento = cuentas.map((c) => ({
     cuentaId: Number(c.cuentaContableId),
@@ -547,6 +570,24 @@ router.put('/:id', autorizarPermiso('bancos.gestionar'), async (req, res) => {
       }
 
       const concep = notas || `${actual.tipo} ${actual.numero}`;
+
+      // 0. Si el comprobante YA estaba contabilizado, los datos corregidos
+      // deben alcanzar para armar el asiento nuevo ANTES de reversar el
+      // anterior — si no, se reversaba el asiento real y la corrección
+      // se guardaba igual, dejando el comprobante SIN NINGÚN asiento y sin
+      // que nadie se enterara (el aviso solo viajaba en la respuesta HTTP,
+      // que el frontend no llegaba a mostrar). Con este chequeo, si faltan
+      // datos la edición se rechaza completa (nada se toca, el asiento
+      // original queda intacto) en vez de perder la contabilización.
+      if (actual.asientoId) {
+        const evaluacion = await evaluarDatosAsiento({ tx, empresaId, cuentaBancariaId: cbId, cuentas });
+        if (!evaluacion.ok) {
+          throw Object.assign(
+            new Error(`No se puede guardar: ${evaluacion.motivo}. El asiento contable actual se mantiene sin cambios hasta que completes esos datos.`),
+            { status: 400 },
+          );
+        }
+      }
 
       // 1. Reversar el asiento anterior si existía — nunca se edita in situ.
       if (actual.asientoId) {

@@ -213,17 +213,24 @@ function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGu
         cuentas: form.cuentas.map((c) => ({ notas: c.notas, valor: Number(c.valor || 0), cuentaContableId: c.cuentaContableId || null })),
         pagos: form.pagos.map((p) => ({ tipoPago: p.tipoPago, valor: Number(p.valor || 0), cuentaContableId: p.cuentaContableId || null, notas: p.notas, referencia: p.referencia || null })),
       };
-      let id, numero;
+      let id, numero, advertenciaContable;
       if (editando) {
-        await api.put(`/comprobantes-bancarios/${comprobanteExistente.id}`, { ...payload, motivoEdicion: form.motivoEdicion.trim() });
+        const r = await api.put(`/comprobantes-bancarios/${comprobanteExistente.id}`, { ...payload, motivoEdicion: form.motivoEdicion.trim() });
         id = comprobanteExistente.id;
         numero = comprobanteExistente.numero;
+        advertenciaContable = r.data?.advertenciaContable;
       } else {
         const r = await api.post('/comprobantes-bancarios', payload);
         id = r.data?.data?.id;
         numero = r.data?.data?.numero;
+        advertenciaContable = r.data?.advertenciaContable;
       }
       setCreado({ id, numero });
+      // El backend puede guardar el comprobante SIN generar el asiento
+      // contable (falta cuenta bancaria/cuenta contable configurada) — antes
+      // ese aviso viajaba en la respuesta pero nadie lo mostraba, así que el
+      // comprobante quedaba sin contabilizar sin que el usuario se enterara.
+      if (advertenciaContable) alert(advertenciaContable);
       // Se manda a imprimir solo — abrirComprobanteBancario usa un <a>
       // sintético con blob, no window.open, así que el navegador no lo
       // bloquea aunque venga justo después del await de guardado.
