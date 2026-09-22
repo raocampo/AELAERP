@@ -2297,14 +2297,14 @@ router.get('/asientos/:id/pdf', async (req, res) => {
     const config = await prisma.configuracion_sri.findFirst({ where: { empresaId } });
     const money = (v) => `$${Number(v || 0).toFixed(2)}`;
 
-    // Un asiento imprimible es casi siempre un par de líneas (cabecera +
-    // 1-3 cuentas) — la página A4 completa dejaba casi todo el alto en
-    // blanco (un bloque corto y ancho "flotando" arriba de una hoja vacía,
-    // percibido como "sale horizontal y no ocupa ni la mitad"). Misma media
-    // hoja A4 vertical que ya usa el comprobante bancario; si el asiento
-    // tuviera muchas líneas, dibujarTablaPdf sigue paginando solo, ahora en
-    // páginas más cortas.
-    const doc = crearDocumentoPdf(res, `asiento_${asiento.numero}.pdf`, { size: [595.28, 420.94], margin: 28 });
+    // A4 completa vertical — se probó una "media hoja A4" (mismo ancho,
+    // mitad de alto: 595x420pt), pero esas dimensiones son MÁS ANCHAS que
+    // altas, así que varios visores/impresoras la detectan como horizontal
+    // por el solo hecho de ver ancho > alto, aunque el contenido esté
+    // pensado para la mitad superior de una hoja vertical ("se imprime y
+    // visualiza mal", reporte real del cliente). A4 completa evita la
+    // ambigüedad: ancho < alto, retrato inequívoco.
+    const doc = crearDocumentoPdf(res, `asiento_${asiento.numero}.pdf`);
     dibujarEncabezadoContable(doc, config, `Comprobante Contable ${asiento.numero}`);
 
     // Un label en negrita seguido del valor con `{ continued: true }` deja

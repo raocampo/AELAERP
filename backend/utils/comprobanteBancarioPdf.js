@@ -66,10 +66,15 @@ const fmtMoney = (v) => `$${Number(v || 0).toFixed(2)}`;
 function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
   return new Promise((resolve, reject) => {
     const estilo = ESTILOS[datos.categoria] || ESTILOS.AJUSTE;
-    // Media hoja A4 (mismo ancho, mitad de alto) — un comprobante no
-    // necesita una hoja completa; si el contenido no alcanza, se agrega
-    // otra media página (asegurarEspacio ya usa doc.page.height).
-    const doc = new PDFDocument({ size: [595.28, 420.94], margins: { top: 32, bottom: 32, left: 48, right: 48 }, autoFirstPage: true });
+    // A4 completa, vertical (retrato) — se probó una "media hoja A4" (mismo
+    // ancho, mitad de alto: 595x420pt) pero esas dimensiones son MÁS ANCHAS
+    // que altas, así que muchos visores/impresoras la detectan como
+    // horizontal por el solo hecho de ver ancho > alto (aunque el contenido
+    // esté pensado para leerse en la mitad superior de una hoja vertical) —
+    // "se imprime y visualiza mal" fue el reporte real. A4 completa evita
+    // la ambigüedad: ancho < alto, retrato inequívoco para cualquier
+    // impresora/visor.
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 32, bottom: 32, left: 48, right: 48 }, autoFirstPage: true });
     registrarFuentesPdf(doc);
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
@@ -174,11 +179,11 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
       y = doc.y + 10;
     }
 
-    // Firmas: ancladas cerca del pie de la página (no siguen el flujo
-    // normal como el resto — si el contenido ya llegó tan abajo que ni la
-    // línea+etiqueta de la firma entran antes del margen real, recién ahí
-    // se agrega una página nueva; si no, se paran en su posición ideal
-    // aunque quede espacio libre debajo (por diseño, no es un error).
+    // Firmas: siguen el flujo normal, justo debajo del contenido — con
+    // media hoja A4 (formato anterior) tenía sentido "anclarlas" cerca del
+    // pie fijo de la página, pero en A4 completa eso dejaba un hueco enorme
+    // entre la caja de monto y la firma (media página en blanco). Solo se
+    // agrega una página nueva si de verdad no entran antes del margen real.
     //
     // El alto real de "línea + etiqueta" se mide con heightOfString en vez
     // de una constante adivinada — un valor adivinado (18) por debajo del
@@ -186,10 +191,7 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
     // propio .text() de la firma (su motor de texto no permite que una
     // línea quede recortada por el margen inferior), generando una página
     // extra en blanco por cada firma restante del arreglo (bug real: un
-    // comprobante de egreso con 3 firmas terminó en 4 páginas). El chequeo
-    // también debe incluir `holguraPreFirma` — antes se comparaba el `y`
-    // SIN ese colchón contra el límite, pero el colchón sí se suma al `y`
-    // final donde en verdad se dibuja.
+    // comprobante de egreso con 3 firmas terminó en 4 páginas).
     const firmas = estilo.firmas;
     const anchoFirma = W / firmas.length;
     const altoTextoFirma = Math.max(
@@ -197,9 +199,9 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
     );
     const GAP_LINEA_TEXTO = 5;
     const NECESARIO_FIRMA = GAP_LINEA_TEXTO + altoTextoFirma + 1;
-    const holguraPreFirma = 6;
+    const holguraPreFirma = 24;
     if (y + holguraPreFirma + NECESARIO_FIRMA > doc.page.height - 32) { doc.addPage(); y = 32; }
-    y = Math.max(y + holguraPreFirma, doc.page.height - Math.round(doc.page.height * 0.145));
+    else { y += holguraPreFirma; }
     firmas.forEach((texto, i) => {
       const x = ML + anchoFirma * i;
       doc.moveTo(x + 12, y).lineTo(x + anchoFirma - 12, y).lineWidth(0.75).stroke('#94a3b8');
