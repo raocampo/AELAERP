@@ -359,6 +359,23 @@ async function evaluarDatosAsiento({ tx, empresaId, cuentaBancariaId, cuentas })
   if (!cuentasCompletas) {
     return { ok: false, silencioso: false, motivo: 'falta la cuenta contable en una o más líneas de "Cuentas"' };
   }
+  // La cuenta bancaria se agrega SOLA como la contrapartida del asiento
+  // (débito o crédito según el tipo) — si además se elige esa MISMA cuenta
+  // en una línea de "Cuentas", la cuenta bancaria queda debitada y
+  // acreditada por el mismo monto en el mismo asiento: se anulan entre sí
+  // y el Mayor de esa cuenta muestra 2 líneas "duplicadas" que no mueven
+  // el saldo real (bug real reportado por la contadora del cliente, 3
+  // comprobantes de ingreso de enero/2024, tenant LSAC/Loja Radio Club —
+  // "1.1.02.001.01" elegida también como cuenta de "Cuentas" en vez de la
+  // cuenta real de origen del depósito, ej. "Depósitos no identificados").
+  const cuentaDuplicada = cuentas.find((c) => Number(c.cuentaContableId) === Number(banco.cuentaContableId));
+  if (cuentaDuplicada) {
+    return {
+      ok: false,
+      silencioso: false,
+      motivo: 'la cuenta contable elegida en "Cuentas" es la MISMA que la cuenta bancaria — eso anula el asiento (queda debitada y acreditada por el mismo valor); usa la cuenta real de origen/destino del dinero, no la cuenta bancaria',
+    };
+  }
   return { ok: true, banco };
 }
 

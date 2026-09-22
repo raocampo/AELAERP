@@ -201,6 +201,15 @@ function FormComprobante({ tipo, subtipo, comprobanteExistente, onCancelar, onGu
     e.preventDefault();
     if (form.cuentas.length === 0) return setError('Agregue al menos una cuenta');
     if (editando && !form.motivoEdicion.trim()) return setError('Debes indicar el motivo de la corrección');
+    // La cuenta bancaria ya se agrega sola como contrapartida del asiento —
+    // si además se elige esa MISMA cuenta contable en "Cuentas", el asiento
+    // queda debitado y acreditado por el mismo valor y se anula (bug real
+    // detectado por la contadora del cliente: 3 comprobantes de ingreso con
+    // la cuenta del banco duplicada en el Mayor).
+    const cuentaBanco = cuentasBancarias.find((c) => String(c.id) === form.cuentaBancariaId);
+    if (cuentaBanco?.cuentaContableId && form.cuentas.some((c) => c.cuentaContableId && Number(c.cuentaContableId) === Number(cuentaBanco.cuentaContableId))) {
+      return setError('La cuenta contable elegida en "Cuentas" es la misma que la cuenta bancaria — eso anula el asiento. Elige la cuenta real de origen/destino del dinero (ej. Depósitos no identificados), no la cuenta del banco.');
+    }
     setError('');
     setGuardando(true);
     try {
