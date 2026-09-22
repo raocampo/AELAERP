@@ -2356,19 +2356,34 @@ router.get('/asientos/:id/pdf', async (req, res) => {
     // Línea separadora + totales alineados al ancho real de la tabla (antes
     // el texto de totales heredaba el x/y donde había quedado la última
     // celda dibujada, así que se montaba sobre la última fila).
+    //
+    // "Línea + totales + pie" se reserva como UN bloque antes de dibujar
+    // cualquiera de los tres — un asiento con muchas líneas de detalle
+    // (ej. una liquidación con 9 cuentas) podía llenar la página completa
+    // y dejar el resumen de totales solo, en una página nueva casi vacía:
+    // nada chequeaba el espacio antes de dibujar, así que PDFKit auto-
+    // paginaba DENTRO del propio `.text()` en cuanto `doc.y` ya había
+    // pasado el margen inferior (mismo bug ya corregido en
+    // comprobanteBancarioPdf.js — measure con heightOfString, no adivinar).
+    const textoTotales = `Total Debe: ${money(asiento.totalDebe)}    Total Haber: ${money(asiento.totalHaber)}`;
+    const textoPie = `Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}` +
+      (asiento.usuario?.nombre ? `  ·  Elaborado por: ${asiento.usuario.nombre}` : '') +
+      `  ·  Creado: ${formatDateOnly(asiento.createdAt)}`;
+    const altoTotales = doc.fontSize(9).font('Helvetica-Bold').heightOfString(textoTotales, { width: anchoTablaAsiento });
+    const altoPie = doc.fontSize(7).font('Helvetica').heightOfString(textoPie, { width: WCampos });
+    const necesarioCierre = 10 + altoTotales + 8 + altoPie;
+    if (doc.y + necesarioCierre > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+    }
+
     doc.moveTo(mlAsiento, doc.y).lineTo(mlAsiento + anchoTablaAsiento, doc.y).lineWidth(0.5).stroke('#cbd5e1');
     doc.moveDown(0.35);
     doc.fontSize(9).font('Helvetica-Bold')
-      .text(`Total Debe: ${money(asiento.totalDebe)}    Total Haber: ${money(asiento.totalHaber)}`,
-        mlAsiento, doc.y, { width: anchoTablaAsiento, align: 'right' });
+      .text(textoTotales, mlAsiento, doc.y, { width: anchoTablaAsiento, align: 'right' });
     doc.font('Helvetica').fillColor('#000000');
     doc.moveDown(0.8);
 
-    doc.fontSize(7).font('Helvetica').fillColor('#94a3b8').text(
-      `Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}` +
-      (asiento.usuario?.nombre ? `  ·  Elaborado por: ${asiento.usuario.nombre}` : '') +
-      `  ·  Creado: ${formatDateOnly(asiento.createdAt)}`
-    ).fillColor('#000000');
+    doc.fontSize(7).font('Helvetica').fillColor('#94a3b8').text(textoPie).fillColor('#000000');
 
     doc.end();
   } catch (error) {
