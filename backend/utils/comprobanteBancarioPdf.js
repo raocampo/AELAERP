@@ -10,6 +10,7 @@ const os = require('os');
 const path = require('path');
 const PDFDocument = require('pdfkit');
 const { registrarFuentesPdf } = require('./pdfFonts');
+const { dibujarEncabezadoReporte } = require('./pdfEncabezado');
 
 const NEGRO = '#1e293b';
 const GRIS = '#64748b';
@@ -32,15 +33,6 @@ const CATEGORIA_POR_TIPO_MOVIMIENTO = {
 };
 // ...y a partir del tipo de la tabla comprobantes_bancarios (INGRESO/PAGO/CREDITO/DEBITO).
 const CATEGORIA_POR_TIPO_COMPROBANTE = { INGRESO: 'INGRESO', PAGO: 'EGRESO', CREDITO: 'CREDITO', DEBITO: 'DEBITO' };
-
-function resolverLogo(logoUrl) {
-  if (!logoUrl) return null;
-  if (logoUrl.startsWith('data:')) {
-    try { return Buffer.from(logoUrl.replace(/^data:image\/\w+;base64,/, ''), 'base64'); } catch { return null; }
-  }
-  const logoPath = path.join(__dirname, '..', logoUrl.replace(/^\//, ''));
-  return fs.existsSync(logoPath) ? logoPath : null;
-}
 
 // Las fechas "solo-fecha" se guardan como medianoche UTC exacta y se muestran
 // en UTC para no correr el día; un timestamp real (movimientos generados por
@@ -82,28 +74,14 @@ function generarComprobanteBancarioPdf(datos, cfg, outputPath) {
     const empresa = cfg || {};
     const ML = 48;
     const W = doc.page.width - ML * 2;
-    const logo = resolverLogo(empresa.logoUrl);
-    const anchoTexto = W - (logo ? 130 : 0);
-    let y = 32;
 
-    if (logo) {
-      try { doc.image(logo, ML, y, { fit: [120, 55] }); } catch { /* logo inválido */ }
-    }
-    doc.fontSize(9).font('Helvetica-Bold').fillColor(NEGRO)
-      .text((empresa.razonSocial || '').toUpperCase(), ML + (logo ? 130 : 0), y, { width: anchoTexto });
-    doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(`RUC: ${empresa.ruc || ''}`, { width: anchoTexto });
-    if (empresa.dirMatriz) doc.text(empresa.dirMatriz, { width: anchoTexto });
-    if (empresa.telefono) doc.text(`Telf.: ${empresa.telefono}`, { width: anchoTexto });
-    // El piso de "y+55" solo aplica si hay logo (reserva su alto) — sin
-    // logo, no hay que reservar ese espacio de más (media hoja A4: cada
-    // punto cuenta).
-    y = Math.max(doc.y, logo ? y + 55 : 0) + 10;
+    // Mismo encabezado (logo, tipografía, línea morada de marca) que el
+    // resto de reportes de Contabilidad/Bancos — antes cada PDF tenía su
+    // propio diseño (línea gris, logo más grande, texto sin centrar), lo
+    // que hacía que se vieran de sistemas distintos.
+    dibujarEncabezadoReporte(doc, empresa, estilo.titulo);
+    let y = doc.y + 2;
 
-    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(1).stroke(LINEA);
-    y += 14;
-
-    doc.fontSize(16).font('Helvetica-Bold').fillColor(NEGRO).text(estilo.titulo, ML, y, { width: W, align: 'center' });
-    y += 18;
     doc.fontSize(11).font('Helvetica-Bold').fillColor(estilo.color).text(`No. ${datos.numero || '—'}`, ML, y, { width: W, align: 'center' });
     y += 16;
     if (datos.anulado) {

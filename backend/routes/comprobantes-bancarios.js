@@ -121,47 +121,61 @@ router.get('/export/excel', autorizarPermiso('bancos.ver'), async (req, res) => 
       ORDER BY cb.fecha ASC, cb.id ASC
     `;
 
+    // Identificación/Nombre (del proveedor) solo aplican a Pago y Nota de
+    // Débito — un ingreso o nota de crédito no tiene "proveedor" (es dinero
+    // que ENTRA, no un pago a alguien), así que esas 2 columnas quedaban
+    // siempre vacías y confundían al cliente ("¿a qué se refiere y por qué
+    // está vacío?"). Mismo criterio que TIPOS_META.conProveedor en el
+    // frontend (ComprobantesView.jsx) — se omiten del todo cuando no aplica.
+    const conProveedor = ['PAGO', 'DEBITO'].includes(tipo);
+
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'AELA ERP';
     workbook.created = new Date();
     const ws = workbook.addWorksheet('Comprobantes');
-    ws.columns = [
-      { width: 16 }, { width: 12 }, { width: 14 }, { width: 12 },
-      { width: 16 }, { width: 30 }, { width: 40 }, { width: 12 }, { width: 14 },
-    ];
+    const columnasBase = conProveedor
+      ? [{ width: 16 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 16 }, { width: 30 }, { width: 40 }, { width: 12 }, { width: 14 }]
+      : [{ width: 16 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 40 }, { width: 12 }, { width: 14 }];
+    ws.columns = columnasBase;
+    const totalColumnas = columnasBase.length;
 
     const titulo = tipo ? `Comprobantes de ${TITULOS_TIPO[tipo] || tipo}` : 'Comprobantes bancarios';
     const filaTitulo = ws.addRow([titulo]);
-    ws.mergeCells(filaTitulo.number, 1, filaTitulo.number, 9);
+    ws.mergeCells(filaTitulo.number, 1, filaTitulo.number, totalColumnas);
     filaTitulo.getCell(1).font = { bold: true, size: 12 };
 
     const filaFiltros = ws.addRow([
       `Período: ${desde || '(inicio)'} a ${hasta || '(hoy)'}  ·  Estado: ${estado || 'todos'}  ·  ${rows.length} registro(s)`,
     ]);
-    ws.mergeCells(filaFiltros.number, 1, filaFiltros.number, 9);
+    ws.mergeCells(filaFiltros.number, 1, filaFiltros.number, totalColumnas);
     filaFiltros.getCell(1).font = { italic: true, color: { argb: 'FF64748B' } };
 
     ws.addRow([]);
 
-    const filaEncabezado = ws.addRow(['Número', 'Fecha', 'Tipo', 'Subtipo', 'Identificación', 'Nombre/Razón social', 'Notas', 'Estado', 'Valor']);
+    const encabezados = conProveedor
+      ? ['Número', 'Fecha', 'Tipo', 'Subtipo', 'Identificación', 'Nombre/Razón social', 'Notas', 'Estado', 'Valor']
+      : ['Número', 'Fecha', 'Tipo', 'Subtipo', 'Notas', 'Estado', 'Valor'];
+    const filaEncabezado = ws.addRow(encabezados);
     filaEncabezado.eachCell((cell) => Object.assign(cell, ESTILO_ENCABEZADO_XLSX));
 
+    const colValor = totalColumnas;
+    const colEstado = totalColumnas - 1;
     let totalGeneral = 0;
     rows.forEach((r) => {
       const valor = parseFloat(r.total || 0);
       totalGeneral += valor;
-      const fila = ws.addRow([
-        r.numero, new Date(r.fecha), r.tipo, r.subtipo || '', r.prov_ruc || '', r.prov_nombre || '',
-        r.notas || '', r.estado, valor,
-      ]);
+      const valores = conProveedor
+        ? [r.numero, new Date(r.fecha), r.tipo, r.subtipo || '', r.prov_ruc || '', r.prov_nombre || '', r.notas || '', r.estado, valor]
+        : [r.numero, new Date(r.fecha), r.tipo, r.subtipo || '', r.notas || '', r.estado, valor];
+      const fila = ws.addRow(valores);
       fila.getCell(2).numFmt = 'dd/mm/yyyy';
-      fila.getCell(9).numFmt = FORMATO_MONEDA_XLSX;
+      fila.getCell(colValor).numFmt = FORMATO_MONEDA_XLSX;
     });
 
-    const filaTotal = ws.addRow(['', '', '', '', '', '', '', 'TOTAL', totalGeneral]);
-    filaTotal.getCell(8).font = { bold: true };
-    filaTotal.getCell(9).font = { bold: true };
-    filaTotal.getCell(9).numFmt = FORMATO_MONEDA_XLSX;
+    const filaTotal = ws.addRow([...Array(colEstado - 1).fill(''), 'TOTAL', totalGeneral]);
+    filaTotal.getCell(colEstado).font = { bold: true };
+    filaTotal.getCell(colValor).font = { bold: true };
+    filaTotal.getCell(colValor).numFmt = FORMATO_MONEDA_XLSX;
 
     ws.views = [{ state: 'frozen', ySplit: filaEncabezado.number }];
 
@@ -444,11 +458,17 @@ router.post('/', autorizarPermiso('bancos.gestionar'), async (req, res) => {
         const tipoMov = TIPO_MOV[tipo];
         const debe    = esIngreso ? total : 0;
         const haber   = !esIngreso ? total : 0;
+        // "numero" es el N° de comprobante (ING-.../EGR-...) — antes se
+        // guardaba por error en "referencia" (pensado para # de cheque o
+        // transferencia), dejando "numero" siempre NULL: la columna "N°
+        // Comprobante" del Libro de Bancos, y su PDF/Excel, salían vacíos
+        // (bug real reportado, tenant LSAC/Loja Radio Club).
+        const referenciaPago = pagos.find((p) => p.referencia)?.referencia || null;
 
         const movRows = await tx.$queryRaw`
           INSERT INTO "movimientos_bancarios"
-            ("bancoId", "empresaId", fecha, tipo, concepto, referencia, debe, haber, "createdAt", "updatedAt")
-          VALUES (${cbId}, ${empresaId}, ${fechaDate}, ${tipoMov}, ${concep}, ${numero}, ${debe}, ${haber}, NOW(), NOW())
+            ("bancoId", "empresaId", fecha, tipo, numero, concepto, referencia, debe, haber, "createdAt", "updatedAt")
+          VALUES (${cbId}, ${empresaId}, ${fechaDate}, ${tipoMov}, ${numero}, ${concep}, ${referenciaPago}, ${debe}, ${haber}, NOW(), NOW())
           RETURNING id
         `;
         movId = Number(movRows[0].id);
@@ -634,9 +654,11 @@ router.put('/:id', autorizarPermiso('bancos.gestionar'), async (req, res) => {
       if (actual.movimientoId) {
         const tipoMov = TIPO_MOV[actual.tipo];
         const esIngreso = ['INGRESO', 'CREDITO'].includes(actual.tipo);
+        const referenciaPago = pagos.find((p) => p.referencia)?.referencia || null;
         await tx.$queryRaw`
           UPDATE "movimientos_bancarios"
           SET fecha = ${fechaDate}, concepto = ${concep}, tipo = ${tipoMov},
+              numero = ${actual.numero}, referencia = ${referenciaPago},
               debe = ${esIngreso ? total : 0}, haber = ${esIngreso ? 0 : total},
               "asientoId" = NULL, "updatedAt" = NOW()
           WHERE id = ${Number(actual.movimientoId)}

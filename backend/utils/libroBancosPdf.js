@@ -10,21 +10,13 @@ const os = require('os');
 const path = require('path');
 const PDFDocument = require('pdfkit');
 const { registrarFuentesPdf } = require('./pdfFonts');
+const { dibujarEncabezadoReporte } = require('./pdfEncabezado');
 
 const NEGRO = '#1e293b';
 const GRIS = '#64748b';
 const LINEA = '#e2e8f0';
 const VERDE = '#16a34a';
 const ROJO = '#dc2626';
-
-function resolverLogo(logoUrl) {
-  if (!logoUrl) return null;
-  if (logoUrl.startsWith('data:')) {
-    try { return Buffer.from(logoUrl.replace(/^data:image\/\w+;base64,/, ''), 'base64'); } catch { return null; }
-  }
-  const logoPath = path.join(__dirname, '..', logoUrl.replace(/^\//, ''));
-  return fs.existsSync(logoPath) ? logoPath : null;
-}
 
 const fmtFecha = (d) => {
   if (!d) return '—';
@@ -50,21 +42,11 @@ function generarLibroBancosPdf(datos, cfg, outputPath) {
     const empresa = cfg || {};
     const ML = 40;
     const W = doc.page.width - ML * 2;
-    const logo = resolverLogo(empresa.logoUrl);
-    let y = 36;
 
-    if (logo) {
-      try { doc.image(logo, ML, y, { fit: [90, 40] }); } catch { /* logo inválido */ }
-    }
-    doc.fontSize(11).font('Helvetica-Bold').fillColor(NEGRO).text((empresa.razonSocial || '').toUpperCase(), ML + (logo ? 100 : 0), y, { width: W - (logo ? 100 : 0) });
-    doc.fontSize(8).font('Helvetica').fillColor(GRIS).text(`RUC: ${empresa.ruc || ''}`, { width: W - (logo ? 100 : 0) });
-    y = Math.max(doc.y, y + 40) + 10;
-
-    doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(1).stroke(LINEA);
-    y += 14;
-
-    doc.fontSize(14).font('Helvetica-Bold').fillColor(NEGRO).text('LIBRO DE BANCOS', ML, y, { width: W, align: 'center' });
-    y += 18;
+    // Mismo encabezado (logo, tipografía, línea morada de marca) que el
+    // resto de reportes de Contabilidad/Bancos.
+    dibujarEncabezadoReporte(doc, empresa, 'LIBRO DE BANCOS');
+    let y = doc.y + 4;
     const c = datos.cuenta || {};
     doc.fontSize(9).font('Helvetica').fillColor(GRIS)
       .text(`${c.nombre || ''} — ${c.banco || ''} · ${c.tipoCuenta || ''} ${c.numeroCuenta || ''}`, ML, y, { width: W, align: 'center' });

@@ -3,8 +3,6 @@ const multer  = require('multer');
 const PDFDocument = require('pdfkit');
 const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const ExcelJS = require('exceljs');
-const fs   = require('fs');
-const path = require('path');
 const prisma = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
@@ -183,52 +181,11 @@ function crearDocumentoPdf(res, filename, opciones = {}) {
   return doc;
 }
 
-// Resuelve el logo de configuracion_sri para PDFKit — soporta data URI
-// base64 (formato actual) y ruta de archivo legado. Mismo helper que ya usa
-// utils/sri.js (_resolverLogo) para el RIDE de factura, copiado localmente
-// porque allá está sin exportar.
-function _resolverLogoContable(logoUrl) {
-  if (!logoUrl) return { logoData: null, tieneLogo: false };
-  if (logoUrl.startsWith('data:')) {
-    try {
-      const b64 = logoUrl.replace(/^data:image\/\w+;base64,/, '');
-      return { logoData: Buffer.from(b64, 'base64'), tieneLogo: true };
-    } catch { return { logoData: null, tieneLogo: false }; }
-  }
-  const logoPath = path.join(__dirname, '..', logoUrl.replace(/^\//, ''));
-  const existe = fs.existsSync(logoPath);
-  return { logoData: existe ? logoPath : null, tieneLogo: existe };
-}
-
-// Encabezado corporativo reutilizable para los PDFs de contabilidad — logo
-// (si la empresa tiene uno cargado en Configuración SRI) a la izquierda,
-// razón social/RUC/dirección centrados, título del reporte debajo. Mismo
-// dato que ya usa el recibo POS (config.razonSocial/ruc/dirMatriz).
-function dibujarEncabezadoContable(doc, config, titulo) {
-  const ML = doc.page.margins.left;
-  const W  = doc.page.width - ML - doc.page.margins.right;
-  const { logoData, tieneLogo } = _resolverLogoContable(config?.logoUrl);
-  let y = doc.y;
-
-  if (tieneLogo) {
-    try { doc.image(logoData, ML, y, { fit: [70, 45] }); } catch { /* logo corrupto → omitir */ }
-  }
-
-  doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000')
-    .text((config?.razonSocial || 'Empresa').toUpperCase(), ML, y, { width: W, align: 'center' });
-  doc.fontSize(8).font('Helvetica').fillColor('#475569')
-    .text([config?.ruc, config?.dirMatriz, config?.telefono].filter(Boolean).join('  ·  '), { width: W, align: 'center' });
-  doc.moveDown(0.4);
-
-  doc.fontSize(13).font('Helvetica-Bold').fillColor('#000000')
-    .text(titulo, { width: W, align: 'center' });
-  doc.font('Helvetica').fillColor('#000000');
-  doc.moveDown(0.3);
-
-  const lineY = doc.y;
-  doc.moveTo(ML, lineY).lineTo(ML + W, lineY).lineWidth(1).stroke('#7C3AED');
-  doc.moveDown(0.4);
-}
+// Encabezado corporativo reutilizable para los PDFs de contabilidad — ahora
+// vive en utils/pdfEncabezado.js para que Bancos (comprobantes, Libro de
+// Bancos) use exactamente el mismo diseño (logo, tipografía, color de línea)
+// en vez de cada reporte con su propio encabezado.
+const { dibujarEncabezadoReporte: dibujarEncabezadoContable } = require('../utils/pdfEncabezado');
 
 function escribirLineaPdf(doc, texto = '', opts = {}) {
   if (doc.y > 760) doc.addPage();
@@ -2748,11 +2705,16 @@ router.get('/reportes/diario', async (req, res) => {
       return res.end();
     }
 
+    // Mismo encabezado (logo, tipografía, línea morada de marca) que el
+    // resto de reportes de Contabilidad — antes este PDF era el único con
+    // un encabezado plano sin razón social/RUC/logo.
+    const configDiario = await prisma.configuracion_sri.findFirst({ where: { empresaId } });
     const doc = crearDocumentoPdf(res, `libro_diario_${formatDateOnly(new Date())}.pdf`);
-    doc.fontSize(14).text('Libro Diario', { align: 'left' });
-    doc.moveDown(0.3);
-    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`);
-    doc.text(`Filtros: periodo=${req.query.periodo || '-'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} tipo=${req.query.tipo || '-'}`);
+    dibujarEncabezadoContable(doc, configDiario, 'Libro Diario');
+    doc.fontSize(9).fillColor('#94a3b8')
+      .text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}` +
+        `  ·  Filtros: periodo=${req.query.periodo || '-'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} tipo=${req.query.tipo || '-'}`)
+      .fillColor('#000000');
     doc.moveDown(0.5);
 
     asientos.forEach((asiento) => {
@@ -3104,11 +3066,14 @@ router.get('/reportes/estados', async (req, res) => {
       );
     }
 
+    // Mismo encabezado que el resto de reportes de Contabilidad.
+    const configEstados = await prisma.configuracion_sri.findFirst({ where: { empresaId } });
     const doc = crearDocumentoPdf(res, `estados_financieros_${formatDateOnly(new Date())}.pdf`);
-    doc.fontSize(14).text('Estados Financieros', { align: 'left' });
-    doc.moveDown(0.3);
-    doc.fontSize(9).text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}`);
-    doc.text(`Filtros: periodo=${req.query.periodo || '-'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} fechaBalance=${req.query.fechaBalance || '-'}`);
+    dibujarEncabezadoContable(doc, configEstados, 'Estados Financieros');
+    doc.fontSize(9).fillColor('#94a3b8')
+      .text(`Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}` +
+        `  ·  Filtros: periodo=${req.query.periodo || '-'} desde=${req.query.desde || '-'} hasta=${req.query.hasta || '-'} fechaBalance=${req.query.fechaBalance || '-'}`)
+      .fillColor('#000000');
     doc.moveDown(0.5);
 
     doc.fontSize(11).text('Balance de Comprobación');

@@ -252,7 +252,11 @@ router.get('/:id/movimientos', autorizarPermiso('bancos.ver'), async (req, res) 
     let saldoAcumulado = parseFloat(cuenta.saldoInicial);
     const movimientosConSaldo = movimientos.map((m) => {
       saldoAcumulado += parseFloat(m.debe) - parseFloat(m.haber);
-      return { ...m, saldoAcumulado };
+      // Movimientos creados antes de este fix guardaron el N° de
+      // comprobante en "referencia" en vez de "numero" (bug real, ver
+      // POST/PUT /comprobantes-bancarios) — se completa acá para no
+      // depender de un backfill sobre datos reales.
+      return { ...m, numero: m.numero || m.referencia, saldoAcumulado };
     });
 
     res.json({
@@ -309,7 +313,10 @@ async function obtenerDatosLibroBancos(empresaId, bancoId, query) {
   const totalHaber = movimientos.reduce((s, m) => s + Number(m.haber), 0);
   const filas = movimientos.map((m) => {
     saldoAcumulado += Number(m.debe) - Number(m.haber);
-    return { ...m, saldoAcumulado };
+    // Ver comentario equivalente en GET /:id/movimientos — movimientos
+    // creados antes del fix tienen el N° de comprobante en "referencia"
+    // en vez de "numero".
+    return { ...m, numero: m.numero || m.referencia, saldoAcumulado };
   });
 
   return { cuenta, saldoAnterior, totalDebe, totalHaber, saldoFinal: saldoAcumulado, movimientos: filas };

@@ -638,8 +638,12 @@ function ListaComprobantes({ tipo, onNuevo, onVer, onDescargar, onEditar, onVisu
               <tr>
                 <th>Acciones</th>
                 <th>Fecha</th>
-                <th>Identificación</th>
-                <th>Nombre</th>
+                {meta.conProveedor && (
+                  <>
+                    <th>Identificación</th>
+                    <th>Nombre</th>
+                  </>
+                )}
                 <th>Número</th>
                 <th>Notas</th>
                 <th>Estado</th>
@@ -663,8 +667,12 @@ function ListaComprobantes({ tipo, onNuevo, onVer, onDescargar, onEditar, onVisu
                     </div>
                   </td>
                   <td>{formatFecha(item.fecha)}</td>
-                  <td style={{ fontSize: '0.82rem' }}>{item.proveedor?.identificacion || '—'}</td>
-                  <td>{item.proveedor?.razonSocial || '—'}</td>
+                  {meta.conProveedor && (
+                    <>
+                      <td style={{ fontSize: '0.82rem' }}>{item.proveedor?.identificacion || '—'}</td>
+                      <td>{item.proveedor?.razonSocial || '—'}</td>
+                    </>
+                  )}
                   <td style={{ fontWeight: 600, fontSize: '0.85rem' }}>{item.numero}</td>
                   <td style={{ fontSize: '0.82rem', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.notas}</td>
                   <td>
