@@ -414,6 +414,12 @@ const ConfiguracionSRI = () => {
 
   if (loading) return <div className="loading">Cargando configuración SRI...</div>;
 
+  // Enlace público (sin login) para que los clientes descarguen de nuevo su
+  // factura — el slug solo aplica en instancias SaaS multi-tenant, en
+  // monoinstancia (Railway dedicado) el segmento va vacío.
+  const tenantSlugActual = localStorage.getItem('aela_tenant_slug');
+  const enlacePublicoComprobantes = `${window.location.origin}/comprobante${tenantSlugActual ? `/${tenantSlugActual}` : ''}`;
+
   return (
     <>
     <div className="sri-config-container">
@@ -445,6 +451,30 @@ const ConfiguracionSRI = () => {
         {form.ambiente === '1'
           ? '⚠️ MODO PRUEBAS — Las facturas NO tienen validez tributaria real.'
           : '✅ MODO PRODUCCIÓN — Las facturas tienen plena validez legal y tributaria.'}
+      </div>
+
+      {/* Backup de facturas para tus clientes — página pública (sin login)
+          donde pueden volver a descargar su PDF/XML con su RUC/cédula y el
+          número de factura, sin depender del portal del SRI. Compártelo
+          impreso en el recibo, en tu web, o por WhatsApp. */}
+      <div className="sri-section" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+        <h2>🧾 Backup de facturas para tus clientes</h2>
+        <p style={{ fontSize: '0.85rem', color: '#166534', margin: '0 0 10px' }}>
+          Comparte este enlace con tus clientes: pueden descargar de nuevo su factura (PDF y XML)
+          ingresando su RUC/cédula y el número de factura, sin depender del portal del SRI.
+        </p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <code style={{ background: '#ffffff', border: '1px solid #bbf7d0', borderRadius: 6, padding: '6px 10px', fontSize: '0.85rem' }}>
+            {enlacePublicoComprobantes}
+          </code>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => { navigator.clipboard?.writeText(enlacePublicoComprobantes); toast.success('Enlace copiado'); }}
+          >
+            📋 Copiar
+          </button>
+        </div>
       </div>
 
       <form onSubmit={handleGuardar} className="sri-config-form">

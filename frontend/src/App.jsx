@@ -77,6 +77,7 @@ const ComandaMesa = lazy(() => import('./components/Restaurante/ComandaMesa'));
 const VistaCocina = lazy(() => import('./components/Restaurante/VistaCocina'));
 const ReportesRestaurante = lazy(() => import('./components/Restaurante/ReportesRestaurante'));
 const MenuPublico = lazy(() => import('./components/Restaurante/MenuPublico'));
+const ComprobantePublico = lazy(() => import('./components/Facturacion/ComprobantePublico'));
 const ConfiguracionSistema = lazy(() => import('./components/Sistema/ConfiguracionSistema'));
 const TablaUtilidades      = lazy(() => import('./components/Configuracion/TablaUtilidades'));
 const Sucursales           = lazy(() => import('./components/Configuracion/Sucursales'));
@@ -203,6 +204,11 @@ function App() {
                   eso el segmento es opcional en vez de exigirlo en la ruta. */}
               <Route path="/menu/:empresaId" element={<MenuPublico />} />
               <Route path="/menu/:slug/:empresaId" element={<MenuPublico />} />
+              {/* Descarga pública de facturas para el cliente final — no
+                  necesita empresaId (busca por identificación + N° factura
+                  dentro del tenant), solo el slug opcional (monoinstancia). */}
+              <Route path="/comprobante" element={<ComprobantePublico />} />
+              <Route path="/comprobante/:slug" element={<ComprobantePublico />} />
 
               {/* Protegidas dentro del Layout */}
               <Route path="/" element={
