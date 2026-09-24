@@ -2131,7 +2131,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
           },
         });
       }
-    });
+    }, { timeout: 20000 }); // una factura con muchas líneas (decenas) puede tardar más que el default de Prisma (5s)
 
     const partes = [];
     if (movimientosRegistrados > 0) partes.push(`${movimientosRegistrados} movimiento(s) de inventario registrado(s)`);

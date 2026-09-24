@@ -19,6 +19,20 @@ function limpiarCodigo(valor) {
   return String(valor || '').trim().toUpperCase();
 }
 
+// "0" es el valor que el XML del SRI (o un formulario manual) deja en
+// codigoAuxiliar cuando el proveedor no tiene un código auxiliar/barcode
+// real para ese ítem — NO es un código válido, es un placeholder de "no
+// tengo dato". Usarlo para buscar coincidencias es una mina: cualquier otro
+// producto que TAMPOCO tenga código auxiliar real comparte el mismo "0", así
+// que la primera línea de una factura que llegue con codigoAuxiliar="0"
+// puede terminar sumando su stock a un producto sin ninguna relación (bug
+// real: 3 líneas de wafers/sopa Maggi de Comercial S&S quedaron asignadas a
+// "fósforos" y "Nutella" solo porque ambos productos también tenían "0").
+function esCodigoAuxiliarValido(valor) {
+  const limpio = String(valor || '').trim();
+  return limpio !== '' && limpio !== '0';
+}
+
 // El código de una línea de compra puede venir de un XML del proveedor
 // (Buzón SRI) o de un formulario donde alguien pegó un barcode copiado de
 // una hoja de Excel — si ese Excel de origen no le dio formato de Texto a la
@@ -153,7 +167,7 @@ async function buscarProductoCoincidente(tx, empresaId, detalle) {
     if (porCodigo) return porCodigo;
   }
 
-  if (detalle.codigoAuxiliar) {
+  if (esCodigoAuxiliarValido(detalle.codigoAuxiliar)) {
     const porAuxiliar = await tx.productos_servicios.findFirst({
       where: { empresaId, codigoAuxiliar: detalle.codigoAuxiliar, activo: true },
     });
@@ -166,7 +180,7 @@ async function buscarProductoCoincidente(tx, empresaId, detalle) {
   // producto real. Se devuelve con `unidadesPorPaquete` sobreescrito en
   // memoria (nunca se persiste) por el factor del alias, para que los
   // call-sites que ya leen ese campo apliquen la conversión sin cambios.
-  const codigosAlias = [detalle.codigoPrincipal, detalle.codigoAuxiliar].filter(Boolean);
+  const codigosAlias = [detalle.codigoPrincipal, esCodigoAuxiliarValido(detalle.codigoAuxiliar) ? detalle.codigoAuxiliar : null].filter(Boolean);
   if (codigosAlias.length > 0) {
     const alias = await tx.codigos_compra_alternos.findFirst({
       where: { empresaId, codigo: { in: codigosAlias } },
@@ -196,7 +210,7 @@ async function resolverProductoCompra({
 
   if (!producto) {
     const codigoSaneado = sanearCodigoCompra(detalle.codigoPrincipal, detalle.descripcion);
-    const auxiliarSaneado = pareceNotacionCientifica(detalle.codigoAuxiliar) ? null : (detalle.codigoAuxiliar || null);
+    const auxiliarSaneado = (pareceNotacionCientifica(detalle.codigoAuxiliar) || !esCodigoAuxiliarValido(detalle.codigoAuxiliar)) ? null : detalle.codigoAuxiliar;
     producto = await tx.productos_servicios.create({
       data: {
         empresaId,
@@ -312,7 +326,7 @@ async function resolverOMarcarPendiente({
     }
 
     const codigoSaneado = sanearCodigoCompra(detalle.codigoPrincipal, detalle.descripcion);
-    const auxiliarSaneado = pareceNotacionCientifica(detalle.codigoAuxiliar) ? null : (detalle.codigoAuxiliar || null);
+    const auxiliarSaneado = (pareceNotacionCientifica(detalle.codigoAuxiliar) || !esCodigoAuxiliarValido(detalle.codigoAuxiliar)) ? null : detalle.codigoAuxiliar;
     const creado = await tx.productos_servicios.create({
       data: {
         empresaId,
