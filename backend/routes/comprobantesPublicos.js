@@ -107,7 +107,8 @@ router.get('/pdf', rateLimitBasico, async (req, res) => {
     if (!factura) return res.status(404).json({ success: false, mensaje: 'Factura no encontrada' });
 
     const config = await getConfigSRI(factura.empresaId, db);
-    await sri.generarRIDEFactura(factura, config || {}, outPath);
+    const enlacePublico = sri.construirEnlacePublicoFactura({ tenantSlug: req.tenant?.slug, numeroFactura: factura.numeroFactura });
+    await sri.generarRIDEFactura(factura, config || {}, outPath, { enlacePublico });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="factura-${factura.numeroFactura}.pdf"`);

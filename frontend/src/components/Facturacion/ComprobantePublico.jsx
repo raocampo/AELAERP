@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import './ComprobantePublico.css';
 
@@ -13,10 +13,14 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5600/api';
 // identifica por el slug de la URL, no por login.
 export default function ComprobantePublico() {
   const { slug } = useParams();
+  const [searchParams] = useSearchParams();
   const headers = slug ? { 'X-Tenant-Slug': slug } : {};
 
+  // El link impreso en el RIDE/recibo ya trae el N° de factura (?factura=...)
+  // — el cliente solo tiene que escribir su RUC/cédula, no copiar el número
+  // exacto a mano.
   const [identificacion, setIdentificacion] = useState('');
-  const [numeroFactura, setNumeroFactura] = useState('');
+  const [numeroFactura, setNumeroFactura] = useState(searchParams.get('factura') || '');
   const [buscando, setBuscando] = useState(false);
   const [error, setError] = useState('');
   const [factura, setFactura] = useState(null);

@@ -1210,6 +1210,18 @@ async function autorizarComprobanteSRI(claveAcceso, ambiente) {
   };
 }
 
+// Enlace público de backup (routes/comprobantesPublicos.js) para imprimir en
+// el RIDE y en el recibo POS — el cliente lo usa para volver a descargar su
+// factura sin el portal del SRI. `tenantSlug` viene de `req.tenant?.slug`
+// (resolverTenant ya lo resolvió en el request actual) — null en despliegues
+// monoinstancia (Railway dedicado por cliente), donde no hace falta.
+function construirEnlacePublicoFactura({ tenantSlug, numeroFactura }) {
+  const base = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
+  if (!base || !numeroFactura) return null;
+  const ruta = tenantSlug ? `/comprobante/${tenantSlug}` : '/comprobante';
+  return `${base}${ruta}?factura=${encodeURIComponent(numeroFactura)}`;
+}
+
 // ─── 5. RIDE (PDF de la factura) ─────────────────────────────────────────────
 
 /**
@@ -1220,7 +1232,7 @@ async function autorizarComprobanteSRI(claveAcceso, ambiente) {
  *   - Tabla de detalles (10 columnas SRI)
  *   - Footer: información adicional + forma de pago (izq) | caja totales SRI completa (der)
  */
-async function generarRIDEFactura(factura, configSri, outputPath) {
+async function generarRIDEFactura(factura, configSri, outputPath, opciones = {}) {
   // Generar código de barras Code128 con la clave de acceso (estándar SRI Ecuador)
   const claveAcceso = factura.claveAcceso || '0'.repeat(49);
   let barcodeBuffer = null;
@@ -1653,6 +1665,14 @@ async function generarRIDEFactura(factura, configSri, outputPath) {
          'Este documento es una Representación Impresa de un Comprobante Electrónico — SRI Ecuador',
          ML, bottomY, { width: W, align: 'center' }
        );
+    // Backup de la factura fuera del portal del SRI (pedido real del
+    // cliente): si el caller conoce el enlace público (ver
+    // routes/comprobantesPublicos.js), se imprime debajo del aviso legal
+    // para que quien reciba el papel/PDF sepa dónde volver a descargarlo.
+    if (opciones.enlacePublico) {
+      doc.fontSize(6).font('Helvetica-Bold').fillColor('#555555')
+         .text(`Descarga tu factura en: ${opciones.enlacePublico}`, ML, bottomY + 9, { width: W, align: 'center' });
+    }
 
     doc.end();
     stream.on('finish', () => resolve(outputPath));
@@ -1806,7 +1826,7 @@ async function generarRIDENotaDebito(nd, configSri, outputPath) {
  * @param {string} outputPath - Ruta de salida del PDF
  * @returns {Promise<string>} ruta del archivo generado
  */
-async function generarReciboPOS(factura, configSri, outputPath) {
+async function generarReciboPOS(factura, configSri, outputPath, opciones = {}) {
   return new Promise((resolve, reject) => {
     // 80 mm de rollo → ~227 pt; zona imprimible ≈204 pt (72 mm)
     const POS_W = 204;
@@ -1968,6 +1988,14 @@ async function generarReciboPOS(factura, configSri, outputPath) {
     y += 11;
     doc.fontSize(5.5).font('Helvetica').fillColor('#888888')
        .text('Representación impresa de comprobante electrónico — SRI Ecuador', ML, y, { width: W, align: 'center' });
+
+    // Backup de la factura fuera del portal del SRI — mismo criterio que el
+    // RIDE completo (ver generarRIDEFactura).
+    if (opciones.enlacePublico) {
+      y += 9;
+      doc.fontSize(5.5).font('Helvetica-Bold').fillColor('#555555')
+         .text(`Descarga tu factura: ${opciones.enlacePublico}`, ML, y, { width: W, align: 'center' });
+    }
 
     doc.end();
     stream.on('finish', () => resolve(outputPath));
@@ -3007,6 +3035,7 @@ function generarXMLGuiaRemision(data, config) {
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
+  construirEnlacePublicoFactura,
   calcularDigitoVerificador,
   generarClaveAcceso,
   formatearNumeroFactura,

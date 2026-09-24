@@ -169,7 +169,7 @@ async function enriquecerClienteDesdeFactura(empresaId, facturaId, datos) {
 }
 
 // ─── Helper: ejecutar flujo SRI completo ────────────────────────────────────
-async function procesarFacturaEnSRI(facturaId, xmlGenerado, config) {
+async function procesarFacturaEnSRI(facturaId, xmlGenerado, config, tenantSlug = null) {
   try {
     // Si usa token físico, el usuario firma manualmente — no procesar aquí
     if (config.tipoCertificado === 'token') {
@@ -215,10 +215,12 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config) {
     if (autorizacion.autorizado) {
       // Generar RIDE PDF
       const pdfPath = path.join(DIR_FACTURAS, `factura-${facturaId}.pdf`);
+      const enlacePublico = sri.construirEnlacePublicoFactura({ tenantSlug, numeroFactura: factura.numeroFactura });
       await sri.generarRIDEFactura(
         { ...factura, xmlAutorizado: autorizacion.xmlAutorizado },
         config,
-        pdfPath
+        pdfPath,
+        { enlacePublico }
       );
       const pdfUrl = `/uploads/facturas/factura-${facturaId}.pdf`;
 
@@ -1353,7 +1355,7 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
     });
 
     // Procesar en SRI y enriquecer cliente — ambos en background
-    procesarFacturaEnSRI(factura.id, xml, config).catch(err => console.error('SRI background:', err));
+    procesarFacturaEnSRI(factura.id, xml, config, req.tenant?.slug).catch(err => console.error('SRI background:', err));
     enriquecerClienteDesdeFactura(req.empresa.id, factura.id, {
       clienteId:         clienteId ? parseInt(clienteId, 10) : null,
       tipoIdentificacion:tipoIdentificacionComprador,
@@ -1410,7 +1412,7 @@ router.post('/:id/reenviar', permitirEmitirFacturacion, async (req, res) => {
     const config = await getConfigSRI(req.empresa.id);
     if (!config) return res.status(400).json({ ok: false, error: 'Sin configuración SRI' });
 
-    await procesarFacturaEnSRI(factura.id, factura.xmlGenerado || factura.xmlFirmado, config);
+    await procesarFacturaEnSRI(factura.id, factura.xmlGenerado || factura.xmlFirmado, config, req.tenant?.slug);
     const updated = await prisma.facturas.findUnique({ where: { id: factura.id } });
     const msj = updated.mensajesSri;
     const errDetalle = (() => {
@@ -1682,7 +1684,8 @@ router.get('/:id/pdf', permitirVerFacturacion, async (req, res) => {
     const pdfPath = path.join(DIR_FACTURAS, `factura-${factura.id}.pdf`);
 
     // Siempre regenerar: el logo o el estado de autorización pueden haber cambiado
-    await sri.generarRIDEFactura(factura, config || {}, pdfPath);
+    const enlacePublico = sri.construirEnlacePublicoFactura({ tenantSlug: req.tenant?.slug, numeroFactura: factura.numeroFactura });
+    await sri.generarRIDEFactura(factura, config || {}, pdfPath, { enlacePublico });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename=factura-${factura.numeroFactura}.pdf`);
@@ -1704,7 +1707,8 @@ router.get('/:id/recibo', permitirVerFacturacion, async (req, res) => {
     const pdfPath = path.join(DIR_FACTURAS, `recibo-${factura.id}.pdf`);
 
     // Siempre regenerar (el recibo es pequeño y cambia si se autoriza)
-    await sri.generarReciboPOS(factura, config || {}, pdfPath);
+    const enlacePublico = sri.construirEnlacePublicoFactura({ tenantSlug: req.tenant?.slug, numeroFactura: factura.numeroFactura });
+    await sri.generarReciboPOS(factura, config || {}, pdfPath, { enlacePublico });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename=recibo-${factura.numeroFactura}.pdf`);
