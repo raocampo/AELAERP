@@ -16,6 +16,7 @@ const QRCode     = require('qrcode');
 const https      = require('https');
 const PDFDocument = require('pdfkit');
 const { registrarFuentesPdf } = require('./pdfFonts');
+const { FORMA_PAGO_DESC, etiquetaPago } = require('./formasPago');
 const fs         = require('fs');
 const path       = require('path');
 const bwipjs     = require('bwip-js');
@@ -1538,20 +1539,12 @@ async function generarRIDEFactura(factura, configSri, outputPath, opciones = {})
     const TOT_ROWS_N = 10; // filas fijas de la caja de totales SRI
     const TOT_BOX_H  = TOT_ROWS_N * TR_H + 4;
 
-    const formaPagoDesc = {
-      '01': '01 - EFECTIVO', '02': '02 - CHEQUE PROPIO', '03': '03 - DÉBITO BANCARIO',
-      '15': '15 - COMPENSACIÓN DE DEUDAS', '16': '16 - TARJETA DE CRÉDITO',
-      '17': '17 - TARJETA DE DÉBITO', '18': '18 - DINERO ELECTRÓNICO',
-      '19': '19 - TARJETA PREPAGO', '20': '20 - OTROS CON UTILIZACION DEL SISTEMA FINANCIERO',
-      '21': '21 - ENDOSO DE TÍTULOS',
-    };
-
     // Alto dinámico por fila (igual patrón que iaRows): la descripción de
     // "Otros con utilización del sistema financiero" no cabe en una sola
     // línea en la columna angosta y antes desbordaba la caja de la fila.
     doc.fontSize(6.5).font('Helvetica');
     const pagoRows = pagos.map((p) => {
-      const fpLabel = formaPagoDesc[p.formaPago] || p.formaPago || 'Efectivo';
+      const fpLabel = FORMA_PAGO_DESC[p.formaPago] || p.formaPago || 'Efectivo';
       return {
         fpLabel,
         total: p.total,
@@ -1857,14 +1850,14 @@ async function generarReciboPOS(factura, configSri, outputPath, opciones = {}) {
        .text((config.razonSocial || '').toUpperCase(), ML, y, { width: W, align: 'center' });
     y += 12;
     if (config.nombreComercial) {
-      doc.fontSize(7).font('Helvetica').fillColor('#333333')
+      doc.fontSize(7).font('Helvetica').fillColor('#000000')
          .text(config.nombreComercial, ML, y, { width: W, align: 'center' });
       y += 10;
     }
-    doc.fontSize(7).font('Helvetica').fillColor('#333333')
+    doc.fontSize(7).font('Helvetica').fillColor('#000000')
        .text(`RUC: ${config.ruc || ''}`, ML, y, { width: W, align: 'center' });
     y += 10;
-    doc.fontSize(6.5).font('Helvetica').fillColor('#555555')
+    doc.fontSize(6.5).font('Helvetica').fillColor('#000000')
        .text(config.dirMatriz || '', ML, y, { width: W, align: 'center' });
     y += 10;
 
@@ -1877,10 +1870,10 @@ async function generarReciboPOS(factura, configSri, outputPath, opciones = {}) {
     const fEm = factura.fechaEmision
       ? new Date(factura.fechaEmision).toLocaleDateString('es-EC')
       : '';
-    doc.fontSize(6.5).font('Helvetica').fillColor('#555555')
+    doc.fontSize(6.5).font('Helvetica').fillColor('#000000')
        .text(`Fecha: ${fEm}`, ML, y, { width: W, align: 'center' });
     y += 10;
-    doc.fontSize(6).font('Helvetica').fillColor('#777777')
+    doc.fontSize(6).font('Helvetica').fillColor('#000000')
        .text(`Ambiente: ${config.ambiente === 2 ? 'PRODUCCIÓN' : 'PRUEBAS'}`, ML, y, { width: W, align: 'center' });
     y += 10;
 
@@ -1889,10 +1882,10 @@ async function generarReciboPOS(factura, configSri, outputPath, opciones = {}) {
     // ── Cliente ──────────────────────────────────────────────────────────────
     doc.fontSize(6.5).font('Helvetica-Bold').fillColor('#000000').text('CLIENTE:', ML, y);
     y += 10;
-    doc.fontSize(6.5).font('Helvetica').fillColor('#333333')
+    doc.fontSize(6.5).font('Helvetica').fillColor('#000000')
        .text(factura.razonSocialComprador || '', ML, y, { width: W });
     y += 9;
-    doc.fontSize(6.5).font('Helvetica').fillColor('#333333')
+    doc.fontSize(6.5).font('Helvetica').fillColor('#000000')
        .text(`CI/RUC: ${factura.identificacionComprador || ''}`, ML, y, { width: W });
     y += 10;
 
@@ -1962,8 +1955,8 @@ async function generarReciboPOS(factura, configSri, outputPath, opciones = {}) {
        .text('FORMA DE PAGO:', ML, y);
     y += 10;
     pagos.forEach(p => {
-      doc.fontSize(6.5).font('Helvetica').fillColor('#333333')
-         .text(`${p.formaPago || 'Efectivo'}:`, ML, y, { width: W * 0.65, lineBreak: false });
+      doc.fontSize(6.5).font('Helvetica').fillColor('#000000')
+         .text(`${etiquetaPago(p)}:`, ML, y, { width: W * 0.65, lineBreak: false });
       doc.text(`$${parseFloat(p.total).toFixed(2)}`, ML + W * 0.65, y, { width: W * 0.35, align: 'right', lineBreak: false });
       y += 9;
     });
@@ -1971,12 +1964,15 @@ async function generarReciboPOS(factura, configSri, outputPath, opciones = {}) {
     linea();
 
     // ── Autorización y clave ──────────────────────────────────────────────────
+    // Texto en negro sólido (no gris claro): en impresoras térmicas de 80mm
+    // los grises se traman mal y quedan ilegibles — la jerarquía visual se
+    // logra con tamaño de letra, no con color, en todo este recibo.
     if (factura.numeroAutorizacion) {
-      doc.fontSize(5.5).font('Helvetica').fillColor('#555555')
+      doc.fontSize(5.5).font('Helvetica').fillColor('#000000')
          .text(`Auth: ${factura.numeroAutorizacion}`, ML, y, { width: W, align: 'center' });
       y += 9;
     }
-    doc.fontSize(5).font('Helvetica').fillColor('#888888')
+    doc.fontSize(5).font('Helvetica').fillColor('#000000')
        .text(`Clave: ${factura.claveAcceso || ''}`, ML, y, { width: W, align: 'center' });
     y += 9;
 
@@ -1986,14 +1982,14 @@ async function generarReciboPOS(factura, configSri, outputPath, opciones = {}) {
     doc.fontSize(7).font('Helvetica-Bold').fillColor('#000000')
        .text('¡Gracias por su preferencia!', ML, y, { width: W, align: 'center' });
     y += 11;
-    doc.fontSize(5.5).font('Helvetica').fillColor('#888888')
+    doc.fontSize(5.5).font('Helvetica').fillColor('#000000')
        .text('Representación impresa de comprobante electrónico — SRI Ecuador', ML, y, { width: W, align: 'center' });
 
     // Backup de la factura fuera del portal del SRI — mismo criterio que el
     // RIDE completo (ver generarRIDEFactura).
     if (opciones.enlacePublico) {
       y += 9;
-      doc.fontSize(5.5).font('Helvetica-Bold').fillColor('#555555')
+      doc.fontSize(5.5).font('Helvetica-Bold').fillColor('#000000')
          .text(`Descarga tu factura: ${opciones.enlacePublico}`, ML, y, { width: W, align: 'center' });
     }
 

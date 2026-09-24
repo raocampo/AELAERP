@@ -20,4 +20,31 @@ const REQUIERE_BANCO = new Set(['TRANSFERENCIA', 'TARJETA', 'APP']);
 const requiereBanco = (pago) => REQUIERE_BANCO.has(categoriaFormaPago(pago));
 const esEfectivo = (pago) => categoriaFormaPago(pago) === 'EFECTIVO';
 
-module.exports = { categoriaFormaPago, requiereBanco, esEfectivo };
+// Descripción oficial del catálogo SRI de formas de pago (usada tal cual en
+// el RIDE, que por norma debe mostrar "código - DESCRIPCIÓN").
+const FORMA_PAGO_DESC = {
+  '01': '01 - EFECTIVO', '02': '02 - CHEQUE PROPIO', '03': '03 - DÉBITO BANCARIO',
+  '15': '15 - COMPENSACIÓN DE DEUDAS', '16': '16 - TARJETA DE CRÉDITO',
+  '17': '17 - TARJETA DE DÉBITO', '18': '18 - DINERO ELECTRÓNICO',
+  '19': '19 - TARJETA PREPAGO', '20': '20 - OTROS CON UTILIZACION DEL SISTEMA FINANCIERO',
+  '21': '21 - ENDOSO DE TÍTULOS',
+};
+
+// Etiqueta corta y amigable para el recibo POS (no el RIDE formal) — usa el
+// `uid` original del formulario cuando existe (el código SRI por sí solo no
+// distingue transferencia de cheque: ambos se guardan como "20"), y si no,
+// cae a la descripción oficial o al valor recibido tal cual (las notas de
+// venta ya guardan texto plano como "Efectivo"/"Transferencia").
+const ETIQUETAS_CORTAS = {
+  '01': 'Efectivo', '16': 'Tarjeta débito', '19': 'Tarjeta crédito',
+  '17': 'App (Ahorita/De Una)', TRF: 'Transferencia / Depósito', CHQ: 'Cheque',
+  APP: 'App (Ahorita/De Una)',
+};
+
+function etiquetaPago(pago) {
+  const clave = String(pago?.uid ?? pago?.formaPago ?? '').trim();
+  if (!clave) return 'Efectivo';
+  return ETIQUETAS_CORTAS[clave] || FORMA_PAGO_DESC[clave] || clave;
+}
+
+module.exports = { categoriaFormaPago, requiereBanco, esEfectivo, FORMA_PAGO_DESC, etiquetaPago };
