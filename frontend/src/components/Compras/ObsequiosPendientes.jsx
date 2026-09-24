@@ -24,6 +24,7 @@ const MOTIVOS = [
   { value: 'TODOS', label: 'Todos los motivos' },
   { value: 'POSIBLE_DUPLICADO', label: '⚠️ Posibles duplicados' },
   { value: 'REGALO', label: '🎁 Obsequios/combos' },
+  { value: 'SIN_COINCIDENCIA', label: '❓ Sin coincidencia en catálogo' },
 ];
 
 // ─── Modal: asignar a un producto existente ──────────────────────────────────
@@ -354,6 +355,10 @@ export default function ObsequiosPendientes() {
                             </div>
                           )}
                         </div>
+                      ) : item.motivo === 'SIN_COINCIDENCIA' ? (
+                        <span style={{ color: '#0369a1', fontWeight: 600 }} title="No es un ítem de costo $0 — no se encontró ningún producto del catálogo con este código">
+                          ❓ Sin coincidencia en catálogo
+                        </span>
                       ) : item.prefijoDetectado ? (
                         <span title="Prefijo detectado">🎁 Prefijo {item.prefijoDetectado}</span>
                       ) : (

@@ -1953,16 +1953,24 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
         let prod = null;
         let esRegaloMatcheado = false;
 
+        // Ya venía resuelto a un producto (ej. match exacto de código al
+        // crear la compra) — pero eso NO garantiza que su movimiento de
+        // inventario se haya aplicado: si "registrar inventario" estaba
+        // apagado en ese momento, el producto quedó asignado sin nunca
+        // sumar el stock. Se sigue de largo hasta el chequeo de abajo en
+        // vez de saltarse la línea entera.
         if (det.productoId) {
-          // Ya venía resuelto a un producto (ej. match exacto de código al
-          // crear la compra) — pero eso NO garantiza que su movimiento de
-          // inventario se haya aplicado: si "registrar inventario" estaba
-          // apagado en ese momento, el producto quedó asignado sin nunca
-          // sumar el stock. Se sigue de largo hasta el chequeo de abajo en
-          // vez de saltarse la línea entera.
           prod = await tx.productos_servicios.findFirst({ where: { id: det.productoId, empresaId } });
-          if (!prod) continue; // el producto fue eliminado después — nada que hacer
-        } else {
+        }
+
+        if (!prod) {
+          // Sin producto resuelto — porque nunca lo tuvo, o porque el que
+          // tenía (det.productoId) fue eliminado después (ej. al fusionar
+          // productos duplicados). Antes, un productoId "fantasma" cortaba
+          // la línea acá mismo sin más intento ("nada que hacer") — ahora
+          // se reintenta resolver por código, igual que una línea que nunca
+          // tuvo producto asignado. Bug real detectado en Comercial S&S
+          // (factura 001-001-000341896): 3 líneas quedaron huérfanas así.
           if (!det.codigoPrincipal) continue;
 
           // Si esta línea ya pasó antes por "Ítems por revisar" (en

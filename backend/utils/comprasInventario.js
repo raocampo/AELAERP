@@ -337,7 +337,20 @@ async function resolverOMarcarPendiente({
     return { producto: creado, creado: true, actualizado: false, esRegaloMatcheado: false, pendiente: false, prefijoDetectado: null };
   }
 
-  return { producto: null, creado: false, actualizado: false, esRegaloMatcheado: false, pendiente: false, prefijoDetectado: null };
+  // Ítem con costo real (no $0/regalo) que no coincidió con ningún producto
+  // existente y "crear productos automáticamente" estaba apagado — antes se
+  // devolvía `pendiente: false` con `producto: null`, así que el caller
+  // (buzon.js / routes/compras.js) simplemente seguía de largo sin marcar
+  // nada: la línea desaparecía sin dejar rastro (ni error, ni "Ítems por
+  // revisar"), y su cantidad nunca sumaba al inventario ni con "Registrar
+  // inventario" más tarde. Bug real detectado en Comercial S&S (factura
+  // 001-001-000341896): 2 líneas de costo real se perdieron así. Ahora,
+  // como cualquier otro caso sin resolver, cae a "Ítems por revisar" para
+  // que el usuario lo resuelva a mano.
+  return {
+    producto: null, creado: false, actualizado: false, esRegaloMatcheado: false,
+    pendiente: true, prefijoDetectado: null, motivo: 'SIN_COINCIDENCIA',
+  };
 }
 
 async function registrarItemCompraPendiente({
