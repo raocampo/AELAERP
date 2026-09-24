@@ -47,22 +47,58 @@ function rateLimitBasico(req, res, next) {
   next();
 }
 
-// Busca la factura que coincide EXACTO con identificación + número — usado
-// tanto por /buscar (mostrar los datos antes de descargar) como por
-// /pdf y /xml (hay que re-verificar en cada descarga, no solo confiar en
-// el :id de la URL, o cualquiera podría enumerar facturas ajenas).
+// Los clientes casi nunca escriben el número completo con guiones
+// (establecimiento-puntoEmisión-secuencial, ej. 002-001-000000234) — la
+// mayoría solo pone el secuencial ("234"). Si el texto trae 3 grupos
+// numéricos separados por guion, se arma el número completo (con ceros a
+// la izquierda) para el match exacto; en cualquier otro caso se toma como
+// "solo secuencial" y se busca por sufijo más abajo.
+function normalizarNumeroFactura(numeroRaw) {
+  const raw = String(numeroRaw || '').trim();
+  if (!raw) return { exacto: null, secuencialPadded: null };
+
+  const partes = raw.split('-').map((p) => p.trim()).filter(Boolean);
+  if (partes.length === 3 && partes.every((p) => /^\d+$/.test(p))) {
+    const [estab, punto, sec] = partes;
+    return {
+      exacto: `${estab.padStart(3, '0')}-${punto.padStart(3, '0')}-${sec.padStart(9, '0')}`,
+      secuencialPadded: sec.padStart(9, '0').slice(-9),
+    };
+  }
+
+  const soloDigitos = raw.replace(/\D/g, '');
+  if (!soloDigitos) return { exacto: null, secuencialPadded: null };
+  return { exacto: null, secuencialPadded: soloDigitos.padStart(9, '0').slice(-9) };
+}
+
+// Busca la factura que coincide con identificación + número — usado tanto
+// por /buscar (mostrar los datos antes de descargar) como por /pdf y /xml
+// (hay que re-verificar en cada descarga, no solo confiar en el :id de la
+// URL, o cualquiera podría enumerar facturas ajenas).
+// Devuelve { factura } si hay una única coincidencia, o { ambiguo: true }
+// si el secuencial suelto (sin establecimiento/punto de emisión) coincide
+// con más de una factura del mismo cliente — nunca se adivina cuál mostrar.
 async function buscarFacturaPublica(db, { identificacion, numeroFactura }) {
   const idNorm = String(identificacion || '').trim();
-  const numNorm = String(numeroFactura || '').trim();
-  if (!idNorm || !numNorm) return null;
-  return db.facturas.findFirst({
-    where: {
-      identificacionComprador: idNorm,
-      numeroFactura: numNorm,
-      estadoSri: 'AUTORIZADO',
-      anulada: false,
-    },
-  });
+  if (!idNorm || !numeroFactura) return { factura: null };
+
+  const { exacto, secuencialPadded } = normalizarNumeroFactura(numeroFactura);
+  const whereBase = { identificacionComprador: idNorm, estadoSri: 'AUTORIZADO', anulada: false };
+
+  if (exacto) {
+    const factura = await db.facturas.findFirst({ where: { ...whereBase, numeroFactura: exacto } });
+    if (factura) return { factura };
+  }
+
+  if (secuencialPadded) {
+    const candidatas = await db.facturas.findMany({
+      where: { ...whereBase, numeroFactura: { endsWith: secuencialPadded } },
+    });
+    if (candidatas.length === 1) return { factura: candidatas[0] };
+    if (candidatas.length > 1) return { factura: null, ambiguo: true };
+  }
+
+  return { factura: null };
 }
 
 // POST /api/comprobantes-publicos/buscar
@@ -74,11 +110,17 @@ router.post('/buscar', rateLimitBasico, async (req, res) => {
       return res.status(400).json({ success: false, mensaje: 'Ingresa tu RUC/cédula y el número de factura' });
     }
 
-    const factura = await buscarFacturaPublica(db, { identificacion, numeroFactura });
+    const { factura, ambiguo } = await buscarFacturaPublica(db, { identificacion, numeroFactura });
+    if (ambiguo) {
+      return res.status(409).json({
+        success: false,
+        mensaje: 'Encontramos más de una factura con ese número. Ingresa el número completo con establecimiento y punto de emisión (ej. 002-001-000000234).',
+      });
+    }
     if (!factura) {
       return res.status(404).json({
         success: false,
-        mensaje: 'No encontramos ninguna factura autorizada con esos datos. Verifica el RUC/cédula del comprador y el número exacto (ej. 001-001-000123456).',
+        mensaje: 'No encontramos ninguna factura autorizada con esos datos. Verifica el RUC/cédula del comprador y el número de factura (puedes escribir solo el secuencial, ej. 234, o el número completo 001-001-000123456).',
       });
     }
 
@@ -103,7 +145,8 @@ router.get('/pdf', rateLimitBasico, async (req, res) => {
   const outPath = path.join(os.tmpdir(), `factura-publica-${Date.now()}-${Math.round(Math.random() * 1e6)}.pdf`);
   try {
     const db = req.prisma || prisma;
-    const factura = await buscarFacturaPublica(db, req.query);
+    const { factura, ambiguo } = await buscarFacturaPublica(db, req.query);
+    if (ambiguo) return res.status(409).json({ success: false, mensaje: 'Número ambiguo, ingresa el número completo (ej. 002-001-000000234)' });
     if (!factura) return res.status(404).json({ success: false, mensaje: 'Factura no encontrada' });
 
     const config = await getConfigSRI(factura.empresaId, db);
@@ -130,7 +173,8 @@ router.get('/pdf', rateLimitBasico, async (req, res) => {
 router.get('/xml', rateLimitBasico, async (req, res) => {
   try {
     const db = req.prisma || prisma;
-    const factura = await buscarFacturaPublica(db, req.query);
+    const { factura, ambiguo } = await buscarFacturaPublica(db, req.query);
+    if (ambiguo) return res.status(409).json({ success: false, mensaje: 'Número ambiguo, ingresa el número completo (ej. 002-001-000000234)' });
     if (!factura) return res.status(404).json({ success: false, mensaje: 'Factura no encontrada' });
 
     const xml = factura.xmlAutorizado || factura.xmlFirmado || factura.xmlGenerado;

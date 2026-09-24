@@ -71,7 +71,8 @@ export default function ComprobantePublico() {
         <h1>🧾 Descarga tu factura</h1>
         <p className="cp-subtitulo">
           Ingresa tu RUC o cédula (el mismo con el que te facturaron) y el número
-          de factura para descargar tu comprobante en PDF o XML.
+          de factura (basta con el secuencial, ej. 234) para descargar tu
+          comprobante en PDF o XML.
         </p>
 
         <form onSubmit={buscar} className="cp-form">
@@ -89,7 +90,7 @@ export default function ComprobantePublico() {
             <input
               value={numeroFactura}
               onChange={(e) => setNumeroFactura(e.target.value)}
-              placeholder="001-001-000123456"
+              placeholder="Ej. 234 o 001-001-000123456"
               required
             />
           </label>
