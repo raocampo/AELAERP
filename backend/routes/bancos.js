@@ -1,7 +1,11 @@
 /**
  * AELA — Módulo de Bancos
  * Gestión de cuentas bancarias de la empresa, movimientos y cheques.
- * Requiere plan Medium o Pro.
+ * El CRUD de cuentas bancarias (abajo) está disponible en cualquier plan —
+ * lo necesita cualquier tenant que cobre en POS con transferencia/tarjeta/
+ * app, tenga o no el módulo contable de Bancos. El resto (movimientos,
+ * libro, conciliación, cheques) sí requiere plan Medium/Pro + módulo
+ * 'bancosHabilitado' — ver el segundo bloque de `router.use` más abajo.
  */
 const express = require('express');
 const prisma = require('../config/prisma');
@@ -36,8 +40,6 @@ const PREFIJO_COMPROBANTE = {
 const router = express.Router();
 
 router.use(proteger);
-router.use(soloMediumOPro);
-router.use(requiereModulo('bancosHabilitado'));
 
 // ============================================================
 // HELPERS
@@ -204,6 +206,18 @@ router.delete('/:id', autorizarPermiso('bancos.gestionar'), async (req, res) => 
     res.status(500).json({ success: false, mensaje: 'Error al eliminar cuenta bancaria' });
   }
 });
+
+// ============================================================
+// A partir de aquí: funcionalidad contable completa de Bancos (libro,
+// conciliación, cheques, contabilización) — SÍ requiere plan Medium/Pro y
+// el módulo 'bancosHabilitado'. El CRUD de cuentas bancarias de arriba
+// queda disponible para cualquier plan (incluido Lite): un tenant que solo
+// tiene Facturación/POS igual necesita poder dar de alta una cuenta para
+// asociarla a pagos con transferencia/tarjeta/app, sin que eso le active
+// Libro de Bancos, conciliación ni cheques.
+// ============================================================
+router.use(soloMediumOPro);
+router.use(requiereModulo('bancosHabilitado'));
 
 // ============================================================
 // MOVIMIENTOS BANCARIOS

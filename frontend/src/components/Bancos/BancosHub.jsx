@@ -5,6 +5,7 @@ import ComprobantesView from './ComprobantesView';
 import LibroBancos from './LibroBancos';
 import { formatFechaCorta, hoyLocal } from '../../utils/fecha';
 import { abrirComprobanteMovimiento } from '../../utils/comprobantesBancos';
+import { useAuth } from '../../context/useAuth';
 import './Bancos.css';
 
 const TIPOS_CUENTA = ['CORRIENTE', 'AHORROS'];
@@ -22,23 +23,27 @@ function formatDate(d) {
 
 // Cuentas del Plan de Cuentas que aceptan movimiento — usado por los selectores
 // de "cuenta contable" (ModalCuenta) y "cuenta contrapartida" (Movimiento/Cheque).
-function useCuentasContables() {
+function useCuentasContables(habilitado = true) {
   const [cuentas, setCuentas] = useState([]);
   useEffect(() => {
+    if (!habilitado) return;
     api.get('/contabilidad/plan-cuentas', { params: { activo: true, soloMovimiento: true } })
       .then((r) => setCuentas(r.data?.data?.flat || []))
       .catch((err) => console.error('No se pudo cargar el plan de cuentas:', err.response?.data?.mensaje || err.message));
-  }, []);
+  }, [habilitado]);
   return cuentas;
 }
 
 // ─── Modal Cuenta ───────────────────────────────────────────
-function ModalCuenta({ cuenta, onClose, onSaved }) {
+// `bancosCompleto=false` (tenant sin el módulo contable de Bancos, ej. plan
+// Lite) oculta el vínculo a Plan de Cuentas — ese tenant no tiene
+// Contabilidad, así que el campo no tendría nada que mostrar ni sentido.
+function ModalCuenta({ cuenta, onClose, onSaved, bancosCompleto = true }) {
   const [form, setForm] = useState({
     nombre: '', banco: '', tipoCuenta: 'CORRIENTE',
     numeroCuenta: '', titular: '', saldoInicial: '0', cuentaContableId: '',
   });
-  const cuentasContables = useCuentasContables();
+  const cuentasContables = useCuentasContables(bancosCompleto);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
 
@@ -113,20 +118,22 @@ function ModalCuenta({ cuenta, onClose, onSaved }) {
                 </small>
               )}
             </div>
-            <div className="form-group full-col">
-              <label>Cuenta contable (Plan de Cuentas)</label>
-              <select name="cuentaContableId" value={form.cuentaContableId} onChange={handleChange}>
-                <option value="">— Sin vincular —</option>
-                {cuentasContables.map((c) => (
-                  <option key={c.id} value={c.id}>{c.codigo} — {c.nombre}</option>
-                ))}
-              </select>
-              <small style={{ color: 'var(--color-text-muted, #64748b)', fontSize: '0.78rem' }}>
-                {cuentasContables.length === 0
-                  ? 'No hay cuentas disponibles que acepten movimiento. Crea primero la cuenta del banco en Contabilidad → Plan de Cuentas.'
-                  : 'Enlaza esta cuenta bancaria con su cuenta contable en el Plan de Cuentas para que los movimientos y conciliaciones se reflejen correctamente en la contabilidad.'}
-              </small>
-            </div>
+            {bancosCompleto && (
+              <div className="form-group full-col">
+                <label>Cuenta contable (Plan de Cuentas)</label>
+                <select name="cuentaContableId" value={form.cuentaContableId} onChange={handleChange}>
+                  <option value="">— Sin vincular —</option>
+                  {cuentasContables.map((c) => (
+                    <option key={c.id} value={c.id}>{c.codigo} — {c.nombre}</option>
+                  ))}
+                </select>
+                <small style={{ color: 'var(--color-text-muted, #64748b)', fontSize: '0.78rem' }}>
+                  {cuentasContables.length === 0
+                    ? 'No hay cuentas disponibles que acepten movimiento. Crea primero la cuenta del banco en Contabilidad → Plan de Cuentas.'
+                    : 'Enlaza esta cuenta bancaria con su cuenta contable en el Plan de Cuentas para que los movimientos y conciliaciones se reflejen correctamente en la contabilidad.'}
+                </small>
+              </div>
+            )}
           </div>
           {error && <p className="form-error" style={{ color: 'var(--color-danger)', fontSize: '0.85rem', marginTop: '0.75rem' }}>{error}</p>}
           <div className="modal-actions">
@@ -605,7 +612,15 @@ function TabCheques({ cuenta }) {
 }
 
 // ─── BancosHub — componente principal ────────────────────────
+// Un tenant sin el módulo contable de Bancos (ej. plan Lite, solo
+// Facturación/POS/Compras/Inventario) igual necesita poder dar de alta una
+// cuenta bancaria simple para asociarla a pagos con transferencia/tarjeta/
+// app en POS — el backend (routes/bancos.js) ya permite el CRUD de cuentas
+// en cualquier plan; aquí solo se oculta lo que sí requiere el módulo
+// completo (saldo calculado, movimientos/libro mayor, cheques).
 export default function BancosHub() {
+  const { sistema } = useAuth();
+  const bancosCompleto = Boolean(sistema?.bancosHabilitado);
   const location = useLocation();
   const urlTab = new URLSearchParams(location.search).get('tab') || 'cuentas';
   const movTipoFiltro = TAB_TIPO_MOV[urlTab] || '';
@@ -625,26 +640,30 @@ export default function BancosHub() {
       const r = await api.get('/bancos');
       const lista = r.data?.data || [];
       setCuentas(lista);
-      // Cargar saldos en paralelo
-      const saldosResult = await Promise.allSettled(
-        lista.map((c) => api.get(`/bancos/${c.id}/saldo`))
-      );
-      const saldosMap = {};
-      saldosResult.forEach((res, i) => {
-        if (res.status === 'fulfilled') {
-          saldosMap[lista[i].id] = res.value.data?.data?.saldoActual ?? lista[i].saldoInicial;
+      // Saldo calculado y selección de detalle solo tienen sentido con el
+      // módulo completo (movimientos/libro) — sin él, /saldo ni siquiera
+      // está disponible para este tenant.
+      if (bancosCompleto) {
+        const saldosResult = await Promise.allSettled(
+          lista.map((c) => api.get(`/bancos/${c.id}/saldo`))
+        );
+        const saldosMap = {};
+        saldosResult.forEach((res, i) => {
+          if (res.status === 'fulfilled') {
+            saldosMap[lista[i].id] = res.value.data?.data?.saldoActual ?? lista[i].saldoInicial;
+          }
+        });
+        setSaldos(saldosMap);
+        if (lista.length > 0 && !cuentaSeleccionada) {
+          setCuentaSeleccionada(lista[0]);
         }
-      });
-      setSaldos(saldosMap);
-      if (lista.length > 0 && !cuentaSeleccionada) {
-        setCuentaSeleccionada(lista[0]);
       }
     } catch (e) {
       console.error(e);
     } finally {
       setCargando(false);
     }
-  }, [cuentaSeleccionada]);
+  }, [cuentaSeleccionada, bancosCompleto]);
 
   useEffect(() => { cargarCuentas(); }, []); // eslint-disable-line
 
@@ -662,6 +681,25 @@ export default function BancosHub() {
     setCuentaEditar(cuenta);
     setModalCuenta(true);
   };
+
+  // Libro de Bancos, comprobantes, conciliación, cheques: requieren el
+  // módulo completo de Bancos. Los ítems del menú que llevan a estas
+  // pestañas ya quedan ocultos para un tenant sin el módulo (Layout.jsx),
+  // pero si de todos modos llega por URL directa se le explica por qué no
+  // ve nada en vez de mostrarle un error crudo del backend (403).
+  if (!bancosCompleto && (urlTab === 'libro' || ['ingreso', 'pago', 'credito', 'debito'].includes(urlTab))) {
+    return (
+      <div style={{ padding: '1.5rem' }}>
+        <div className="bancos-empty">
+          <div className="bancos-empty-icon">🔒</div>
+          <p>Esta función requiere el módulo completo de Bancos (plan Medium o superior).</p>
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)' }}>
+            Tu plan actual solo incluye el registro básico de cuentas bancarias, para asociarlas a pagos con transferencia/tarjeta/app en el POS.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Libro de Bancos
   if (urlTab === 'libro') {
@@ -697,6 +735,11 @@ export default function BancosHub() {
           + Nueva Cuenta
         </button>
       </div>
+      {!bancosCompleto && (
+        <p style={{ margin: '-0.5rem 0 1.25rem', fontSize: '0.85rem', color: 'var(--color-text-muted, #64748b)' }}>
+          Registro básico de cuentas bancarias — para llevar el Libro de Bancos, conciliación y cheques, actualiza al plan Medium o superior.
+        </p>
+      )}
 
       {cargando ? (
         <p style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-text-muted, #64748b)' }}>Cargando cuentas bancarias...</p>
@@ -729,7 +772,7 @@ export default function BancosHub() {
                   </div>
                   <div className="banco-card-info">{c.banco} · {c.numeroCuenta}</div>
                   {c.titular && <div className="banco-card-info" style={{ fontSize: '0.78rem' }}>{c.titular}</div>}
-                  {c.cuentaContable ? (
+                  {bancosCompleto && (c.cuentaContable ? (
                     <div className="banco-card-info" style={{ fontSize: '0.75rem', opacity: 0.8 }}>
                       📎 {c.cuentaContable.codigo} — {c.cuentaContable.nombre}
                     </div>
@@ -737,25 +780,29 @@ export default function BancosHub() {
                     <div className="banco-card-info" style={{ fontSize: '0.75rem', color: 'var(--color-warning, #b45309)' }}>
                       ⚠ Sin cuenta contable vinculada
                     </div>
+                  ))}
+                  {bancosCompleto && (
+                    <>
+                      <div className={`banco-card-saldo ${saldoActual < 0 ? 'negativo' : ''}`}>
+                        ${formatMoney(saldoActual)}
+                      </div>
+                      <button
+                        type="button"
+                        className="banco-card-toggle"
+                        title={cuentaSeleccionada?.id === c.id ? 'Ocultar movimientos' : 'Ver movimientos'}
+                        onClick={(e) => { e.stopPropagation(); handleSeleccionar(c); }}
+                      >
+                        {cuentaSeleccionada?.id === c.id ? '▴ Ocultar movimientos' : '▾ Ver movimientos'}
+                      </button>
+                    </>
                   )}
-                  <div className={`banco-card-saldo ${saldoActual < 0 ? 'negativo' : ''}`}>
-                    ${formatMoney(saldoActual)}
-                  </div>
-                  <button
-                    type="button"
-                    className="banco-card-toggle"
-                    title={cuentaSeleccionada?.id === c.id ? 'Ocultar movimientos' : 'Ver movimientos'}
-                    onClick={(e) => { e.stopPropagation(); handleSeleccionar(c); }}
-                  >
-                    {cuentaSeleccionada?.id === c.id ? '▴ Ocultar movimientos' : '▾ Ver movimientos'}
-                  </button>
                 </div>
               );
             })}
           </div>
 
-          {/* Detalle de cuenta seleccionada */}
-          {cuentaSeleccionada && (
+          {/* Detalle de cuenta seleccionada — solo con el módulo completo */}
+          {bancosCompleto && cuentaSeleccionada && (
             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1.25rem' }}>
               <div style={{ marginBottom: '0.5rem' }}>
                 <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>{cuentaSeleccionada.nombre}</h2>
@@ -788,6 +835,7 @@ export default function BancosHub() {
       {modalCuenta && (
         <ModalCuenta
           cuenta={cuentaEditar}
+          bancosCompleto={bancosCompleto}
           onClose={() => setModalCuenta(false)}
           onSaved={() => { setModalCuenta(false); setCuentaEditar(null); cargarCuentas(); }}
         />

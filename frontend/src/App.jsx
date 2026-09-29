@@ -302,7 +302,12 @@ function App() {
 
                 {/* Contabilidad — solo Pro */}
                 <Route path="contabilidad" element={<ProRoute><ModuleRoute moduleKey="contabilidad"><PermissionRoute permission="contabilidad.ver"><ContabilidadHub /></PermissionRoute></ModuleRoute></ProRoute>} />
-                <Route path="bancos" element={<MediumRoute><ModuleRoute moduleKey="bancos"><PermissionRoute permission="bancos.ver"><BancosHub /></PermissionRoute></ModuleRoute></MediumRoute>} />
+                {/* Sin MediumRoute/ModuleRoute: el CRUD básico de cuentas
+                    bancarias está disponible en cualquier plan (lo necesita
+                    cualquier tenant que cobre en POS con transferencia/
+                    tarjeta/app); BancosHub.jsx muestra la versión reducida
+                    cuando el tenant no tiene el módulo contable completo. */}
+                <Route path="bancos" element={<PermissionRoute permission="bancos.ver"><BancosHub /></PermissionRoute>} />
                 <Route path="cuentas-por-cobrar" element={<MediumRoute><ModuleRoute moduleKey="contabilidad"><PermissionRoute permission="cxc.ver"><CuentasPorCobrarHub /></PermissionRoute></ModuleRoute></MediumRoute>} />
                 <Route path="cuentas-por-pagar" element={<MediumRoute><ModuleRoute moduleKey="contabilidad"><PermissionRoute permission="cxp.ver"><CuentasPorPagarHub /></PermissionRoute></ModuleRoute></MediumRoute>} />
                 <Route path="caja-chica" element={<MediumRoute><ModuleRoute moduleKey="contabilidad"><PermissionRoute permission="cajaChica.ver"><CajaChicaHub /></PermissionRoute></ModuleRoute></MediumRoute>} />

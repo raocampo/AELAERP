@@ -178,7 +178,12 @@ const GRUPOS_MENU = [
     icon: '🏦',
     label: 'Bancos',
     items: [
-      { to: '/bancos',             icon: '🏦', label: 'Cuentas Bancarias',       planMin: 'medium', permiso: 'bancos.ver', modulo: 'bancosHabilitado' },
+      // Sin planMin/modulo: el registro básico de cuentas bancarias está
+      // disponible en cualquier plan (incluido Lite) — lo necesita
+      // cualquier tenant que cobre en POS con transferencia/tarjeta/app,
+      // tenga o no el módulo contable completo de Bancos. BancosHub.jsx
+      // muestra una versión reducida cuando 'bancosHabilitado' está apagado.
+      { to: '/bancos',             icon: '🏦', label: 'Cuentas Bancarias',       permiso: 'bancos.ver' },
       { to: '/bancos?tab=libro',   icon: '📋', label: 'Libro de Bancos',         planMin: 'medium', permiso: 'bancos.ver', modulo: 'bancosHabilitado' },
       { to: '/bancos?tab=ingreso', icon: '⬇️', label: 'Comprobantes de Ingreso', planMin: 'medium', permiso: 'bancos.gestionar', modulo: 'bancosHabilitado' },
       { to: '/bancos?tab=pago',    icon: '⬆️', label: 'Comprobantes de Pago',    planMin: 'medium', permiso: 'bancos.gestionar', modulo: 'bancosHabilitado' },
