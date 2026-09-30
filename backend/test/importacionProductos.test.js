@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const XLSX = require('xlsx');
-const { mapearFilaProducto, leerFilasDesdeExcel, desambiguarCodigosDuplicados, pareceNotacionCientifica, parsearFacturaCompraDesdeXml } = require('../utils/importacionProductos');
+const { mapearFilaProducto, leerFilasDesdeExcel, desambiguarCodigosDuplicados, pareceNotacionCientifica, parsearFacturaCompraDesdeXml, obtenerXmlDesdeAutorizacion } = require('../utils/importacionProductos');
+const sri = require('../utils/sri');
 
 function detalleXml({ codigo, descripcion, cantidad, precioUnitario, codigoPorcentaje, tarifa, valorIva }) {
   return `
@@ -187,4 +188,72 @@ test('parsearFacturaCompraDesdeXml separa 5% y 12% en sus propios campos — ant
   assert.equal(totales.subtotal12, 50);
   assert.equal(totales.subtotal15, 0);
   assert.equal(totales.totalIva, 8);
+});
+
+// ─── obtenerXmlDesdeAutorizacion — reintento ante fallo transitorio del SRI ──
+// Reproducido en vivo 2026-09-29: la misma clave real dio HTTP 302
+// (redirección — problema de infra del SRI) en un intento y respondió bien
+// ~30s después. sri.autorizarComprobanteSRI se sustituye temporalmente
+// (mismo patrón del resto del repo: sin librería de mocking, se reemplaza
+// la función exportada y se restaura en el finally) — nunca toca la red.
+
+function errorRedirectSri() {
+  const err = new Error('El SRI respondió con una redirección (HTTP 302) — problema temporal de su infraestructura');
+  err.code = 'SRI_REDIRECT';
+  return err;
+}
+
+test('obtenerXmlDesdeAutorizacion reintenta el mismo ambiente ante un error transitorio y recupera', async () => {
+  let llamadas = 0;
+  const original = sri.autorizarComprobanteSRI;
+  sri.autorizarComprobanteSRI = async (clave, ambiente) => {
+    llamadas++;
+    if (ambiente === 2 && llamadas === 1) throw errorRedirectSri();
+    return { estado: 'AUTORIZADO', numeroAutorizacion: 'AUT-1', xmlAutorizado: '<factura>ok</factura>' };
+  };
+  try {
+    const r = await obtenerXmlDesdeAutorizacion('1'.repeat(49));
+    assert.equal(r.xml, '<factura>ok</factura>');
+    assert.equal(r.ambiente, 2);
+    assert.equal(llamadas, 2, 'debe reintentar una vez en producción antes de caer a pruebas');
+  } finally {
+    sri.autorizarComprobanteSRI = original;
+  }
+});
+
+test('obtenerXmlDesdeAutorizacion marca esProblemaConectividadSri cuando el SRI nunca responde en ningún ambiente', async () => {
+  const original = sri.autorizarComprobanteSRI;
+  sri.autorizarComprobanteSRI = async () => { throw errorRedirectSri(); };
+  try {
+    await assert.rejects(
+      () => obtenerXmlDesdeAutorizacion('2'.repeat(49)),
+      (err) => { assert.equal(err.esProblemaConectividadSri, true); return true; },
+    );
+  } finally {
+    sri.autorizarComprobanteSRI = original;
+  }
+});
+
+test('obtenerXmlDesdeAutorizacion NO marca conectividad si el SRI sí respondió (comprobante realmente no encontrado)', async () => {
+  // Producción falla por conectividad (agota reintento), pero pruebas SÍ
+  // contesta con una respuesta real (aunque sea "no encontrado") — antes
+  // GET /buzon/consultar detectaba "servicio caído" con una regex sobre el
+  // texto del mensaje, que confundía este caso con uno de conectividad real.
+  const original = sri.autorizarComprobanteSRI;
+  sri.autorizarComprobanteSRI = async (clave, ambiente) => {
+    if (ambiente === 2) throw errorRedirectSri();
+    return { estado: 'NO_AUTORIZADO', numeroAutorizacion: null, xmlAutorizado: null, mensajes: [] };
+  };
+  try {
+    await assert.rejects(
+      () => obtenerXmlDesdeAutorizacion('3'.repeat(49)),
+      (err) => {
+        assert.equal(err.esProblemaConectividadSri, false);
+        assert.match(err.message, /Comprobante no encontrado en el SRI/);
+        return true;
+      },
+    );
+  } finally {
+    sri.autorizarComprobanteSRI = original;
+  }
 });

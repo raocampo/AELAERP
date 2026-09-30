@@ -2,6 +2,7 @@ const XLSX = require('xlsx');
 const { XMLParser } = require('fast-xml-parser');
 const sri = require('./sri');
 const { aplicarMovimientoInventario } = require('./inventario');
+const { esErrorConectividad } = require('./colaSRI');
 
 const XML_OPTIONS = {
   ignoreAttributes: false,
@@ -538,6 +539,29 @@ function parsearFacturaCompraDesdeXml(xmlString) {
   };
 }
 
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// El WS de autorización del SRI falla de forma intermitente con una
+// redirección HTTP (302 a una IP cruda) o HTML en vez de SOAP — problema de
+// SU infraestructura, no del comprobante (ver soapRequest en utils/sri.js).
+// Reproducido en vivo 2026-09-29: la misma clave real dio 302 en un intento
+// y respondió bien 30s después. Antes, un solo fallo transitorio en el
+// ambiente de producción hacía caer directo al de pruebas (que NUNCA va a
+// encontrar un comprobante real) y el usuario veía "no encontrado" — cuando
+// en realidad el SRI solo tuvo un tropiezo momentáneo. Reintenta 1 vez el
+// MISMO ambiente antes de darse por vencido con él, solo para errores
+// clasificados como conectividad (esErrorConectividad, mismo criterio que
+// ya usa la cola de envío de facturas).
+async function _autorizarConReintento(clave, ambiente) {
+  try {
+    return await sri.autorizarComprobanteSRI(clave, ambiente);
+  } catch (err) {
+    if (!esErrorConectividad(err)) throw err;
+    await esperar(1500);
+    return sri.autorizarComprobanteSRI(clave, ambiente);
+  }
+}
+
 async function obtenerXmlDesdeAutorizacion(claveAcceso) {
   const clave = limpiarTexto(claveAcceso);
   if (!clave) throw new Error('La autorización o clave de acceso es requerida');
@@ -549,7 +573,7 @@ async function obtenerXmlDesdeAutorizacion(claveAcceso) {
 
   for (const ambiente of ambientes) {
     try {
-      const respuesta = await sri.autorizarComprobanteSRI(clave, ambiente);
+      const respuesta = await _autorizarConReintento(clave, ambiente);
 
       if (respuesta?.xmlAutorizado) {
         return {
@@ -589,11 +613,21 @@ async function obtenerXmlDesdeAutorizacion(claveAcceso) {
     detalle = ` — ${ultimoError.message}`;
   }
 
-  throw new Error(
+  const error = new Error(
     textosMensajes.length > 0
       ? `SRI: ${textosMensajes.join('; ')}`
       : `Comprobante no encontrado en el SRI${detalle}. Verifica que la clave sea correcta y que el portal esté disponible.`
   );
+  // sriEstado === null significa que NINGÚN ambiente devolvió una respuesta
+  // real (ni encontrado ni "no autorizado") — el SRI nunca contestó de
+  // verdad, así que es un problema de conectividad, no un comprobante
+  // inexistente. Si sriEstado tiene algo (aunque sea 'NO_AUTORIZADO'), el
+  // SRI SÍ respondió — el mensaje puede mencionar "SRI"/"disponible" de
+  // pura casualidad y no debe disparar el aviso de servicio caído (antes se
+  // detectaba con una regex sobre el texto del mensaje, que confundía
+  // ambos casos — ver GET /buzon/consultar).
+  error.esProblemaConectividadSri = !sriEstado && !!ultimoError && esErrorConectividad(ultimoError);
+  throw error;
 }
 
 function normalizarNombreComparacion(nombre) {

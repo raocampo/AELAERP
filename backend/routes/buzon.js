@@ -303,11 +303,20 @@ router.post('/consultar', async (req, res) => {
           // El XML no se devuelve al cliente por tamaño; se re-consultará al importar
         });
       } catch (err) {
-        resultados.push({ clave, estado: 'error', tipo: tipo.nombre, error: err.message || 'No se pudo obtener el XML del SRI' });
+        resultados.push({
+          clave, estado: 'error', tipo: tipo.nombre,
+          error: err.message || 'No se pudo obtener el XML del SRI',
+          conectividad: !!err.esProblemaConectividadSri,
+        });
       }
     }
 
-    // Detectar fallo masivo del servicio SRI (todas las claves nuevas dieron error de red/servicio)
+    // Detectar fallo masivo del servicio SRI (todas las claves nuevas dieron error de
+    // CONECTIVIDAD real — el SRI nunca contestó, ver esProblemaConectividadSri en
+    // obtenerXmlDesdeAutorizacion). Antes se adivinaba con una regex sobre el texto
+    // del mensaje ("sri|servicio|...|disponible"), que también matcheaba el mensaje
+    // genérico de "comprobante no encontrado" (SÍ hubo respuesta del SRI, solo que
+    // negativa) y mostraba el aviso de "servicio caído" aunque el servicio funcionara.
     const nuevas  = resultados.filter((r) => r.estado !== 'existe');
     const errores = nuevas.filter((r) => r.estado === 'error');
     const todosFueraDeRango = errores.length > 0 &&
@@ -316,7 +325,7 @@ router.post('/consultar', async (req, res) => {
       ? null
       : todosFueraDeRango
         ? 'El servicio de autorización en línea del SRI solo permite consultar documentos recientes. Para comprobantes antiguos, descarga los XML desde srienlinea.sri.gob.ec y usa "Importar XML" o "Importar ZIP".'
-        : errores.every((r) => /sri|servicio|timeout|red|http|disponible/i.test(r.error || ''))
+        : errores.every((r) => r.conectividad)
           ? 'El servicio de autorización del SRI no está disponible en este momento. Intenta más tarde o usa "Importar ZIP" con los XMLs descargados de srienlinea.sri.gob.ec.'
           : null;
 
