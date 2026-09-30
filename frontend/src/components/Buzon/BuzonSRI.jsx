@@ -1,4 +1,4 @@
-import { useState, useCallback, useContext } from 'react';
+import { useState, useCallback, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
@@ -43,6 +43,30 @@ const TIPOS_COMP_SRI = [
   { value: '05',                      label: 'Notas de débito' },
   { value: '07',                      label: 'Comprobantes de retención' },
 ];
+
+// Segundos de espera antes del reintento automático — el problema real del
+// SRI (redirección HTTP a una IP cruda) se observó en producción como una
+// racha sostenida de 25-30s+ seguidos fallando, no un tropiezo de 1-2s: un
+// reintento inmediato (dentro de la misma petición) casi nunca lo alcanza a
+// cubrir. Reintentar como una petición NUEVA, separada por más tiempo real,
+// sí le da margen a que la racha mala del SRI ya haya pasado — sin bloquear
+// el navegador ni arriesgar un timeout del proxy en un lote grande.
+const SEGUNDOS_REINTENTO_AUTO_SRI = 45;
+
+// Vuelve a consultar SOLO las claves que fallaron por conectividad (nunca
+// las que ya se resolvieron como 'nuevo'/'existe', ni un rechazo real del
+// SRI) y fusiona el resultado nuevo en el arreglo original, preservando el
+// orden. Compartido por el flujo de "Importar TXT" y el de "Por claves de
+// acceso" — mismo endpoint, mismo criterio de qué reintentar.
+async function reintentarConectividad(resultadosActuales) {
+  const pendientes = resultadosActuales.filter((r) => r.estado === 'error' && r.conectividad);
+  if (pendientes.length === 0) return { actualizados: resultadosActuales, aviso: null, reintentadas: 0 };
+  const claves = pendientes.map((r) => r.clave);
+  const { data } = await api.post('/buzon/consultar', { claves });
+  const nuevosPorClave = new Map((data?.resultados || []).map((r) => [r.clave, r]));
+  const actualizados = resultadosActuales.map((r) => nuevosPorClave.get(r.clave) || r);
+  return { actualizados, aviso: data?.avisoSri || null, reintentadas: claves.length };
+}
 
 function esErrorCredencialesSri(err) {
   const msg = err.response?.data?.mensaje || err.message || '';
@@ -165,6 +189,8 @@ export default function BuzonSRI() {
   const [txtImportando,   setTxtImportando]   = useState(false);
   const [txtResumen,      setTxtResumen]      = useState(null);
   const [txtAvisoSri,     setTxtAvisoSri]     = useState(null);
+  const [txtReintentando, setTxtReintentando] = useState(false);
+  const [txtAutoReintentoHecho, setTxtAutoReintentoHecho] = useState(false);
 
   const [historial, setHistorial]             = useState(null);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
@@ -199,6 +225,7 @@ export default function BuzonSRI() {
     if (!txtInfo?.claves?.length) return;
     setTxtConsultando(true);
     setTxtAvisoSri(null);
+    setTxtAutoReintentoHecho(false);
     const claves = txtInfo.claves;
     const BATCH  = 50;
     const total  = Math.ceil(claves.length / BATCH);
@@ -230,6 +257,50 @@ export default function BuzonSRI() {
       setTxtProgreso('');
     }
   };
+
+  // Reintenta SOLO las claves que fallaron por un problema de conectividad
+  // del SRI (no las que ya se resolvieron, ni un rechazo real) — manual
+  // (botón) o disparado una sola vez automáticamente, ver useEffect abajo.
+  const handleReintentarTxt = async () => {
+    setTxtReintentando(true);
+    try {
+      const { actualizados, aviso } = await reintentarConectividad(txtResultados);
+      setTxtResultados(actualizados);
+      setTxtSeleccionados((prev) => {
+        const s = new Set(prev);
+        actualizados.filter((r) => r.estado === 'nuevo').forEach((r) => s.add(r.clave));
+        return s;
+      });
+      setTxtAvisoSri(aviso);
+      const siguenFallando = actualizados.filter((r) => r.estado === 'error' && r.conectividad).length;
+      const recuperadas = txtResultados.filter((r) => r.estado === 'error' && r.conectividad).length - siguenFallando;
+      if (recuperadas > 0) toast.success(`${recuperadas} documento(s) recuperado(s) tras el reintento`);
+      else if (siguenFallando > 0) toast('El SRI sigue sin responder para esos documentos. Puedes reintentar de nuevo.', { icon: '🔄' });
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al reintentar');
+    } finally {
+      setTxtReintentando(false);
+    }
+  };
+
+  // Reintento automático ÚNICO, 45s después de la consulta inicial — el
+  // problema real del SRI observado en producción dura rachas de 25-30s+,
+  // así que darle ese margen antes de reintentar (como petición nueva, no
+  // bloqueando la consulta original) recupera la mayoría de los casos sin
+  // que el usuario tenga que hacer nada. Si tras ese intento automático
+  // siguen fallando, se deja el botón manual (sin más reintentos automáticos
+  // para no sorprender al usuario con actividad en segundo plano indefinida).
+  useEffect(() => {
+    if (txtPaso !== 2 || txtAutoReintentoHecho) return;
+    const hayConectividad = txtResultados.some((r) => r.estado === 'error' && r.conectividad);
+    if (!hayConectividad) return;
+    const t = setTimeout(() => {
+      setTxtAutoReintentoHecho(true);
+      handleReintentarTxt();
+    }, SEGUNDOS_REINTENTO_AUTO_SRI * 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [txtPaso, txtResultados, txtAutoReintentoHecho]);
 
   const txtToggle      = (c) => setTxtSeleccionados((p) => { const s = new Set(p); s.has(c) ? s.delete(c) : s.add(c); return s; });
   const txtToggleTodos = () => {
@@ -288,12 +359,15 @@ export default function BuzonSRI() {
     .filter((c) => c.length === 49);
 
   const [avisoSri, setAvisoSri] = useState(null);
+  const [reintentando, setReintentando] = useState(false);
+  const [autoReintentoHecho, setAutoReintentoHecho] = useState(false);
 
   const consultarClaves = async () => {
     const claves = parsearClaves();
     if (claves.length === 0) { toast.error('Ingresa al menos una clave de acceso válida (49 dígitos)'); return; }
     setConsultando(true);
     setAvisoSri(null);
+    setAutoReintentoHecho(false);
     const BATCH = 50;
     const total = Math.ceil(claves.length / BATCH);
     const todos = [];
@@ -315,6 +389,41 @@ export default function BuzonSRI() {
       setConsultando(false);
     }
   };
+
+  const handleReintentar = async () => {
+    setReintentando(true);
+    try {
+      const { actualizados, aviso } = await reintentarConectividad(resultadosConsulta);
+      setResultadosConsulta(actualizados);
+      setSeleccionados((prev) => {
+        const s = new Set(prev);
+        actualizados.filter((r) => r.estado === 'nuevo').forEach((r) => s.add(r.clave));
+        return s;
+      });
+      setAvisoSri(aviso);
+      const siguenFallando = actualizados.filter((r) => r.estado === 'error' && r.conectividad).length;
+      const recuperadas = resultadosConsulta.filter((r) => r.estado === 'error' && r.conectividad).length - siguenFallando;
+      if (recuperadas > 0) toast.success(`${recuperadas} documento(s) recuperado(s) tras el reintento`);
+      else if (siguenFallando > 0) toast('El SRI sigue sin responder para esos documentos. Puedes reintentar de nuevo.', { icon: '🔄' });
+    } catch (err) {
+      toast.error(err.response?.data?.mensaje || 'Error al reintentar');
+    } finally {
+      setReintentando(false);
+    }
+  };
+
+  // Mismo criterio que en el flujo "Importar TXT" — ver SEGUNDOS_REINTENTO_AUTO_SRI.
+  useEffect(() => {
+    if (paso !== 2 || autoReintentoHecho) return;
+    const hayConectividad = resultadosConsulta.some((r) => r.estado === 'error' && r.conectividad);
+    if (!hayConectividad) return;
+    const t = setTimeout(() => {
+      setAutoReintentoHecho(true);
+      handleReintentar();
+    }, SEGUNDOS_REINTENTO_AUTO_SRI * 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paso, resultadosConsulta, autoReintentoHecho]);
 
   const toggleSeleccion = (clave) => {
     setSeleccionados((prev) => { const s = new Set(prev); s.has(clave) ? s.delete(clave) : s.add(clave); return s; });
@@ -902,6 +1011,24 @@ export default function BuzonSRI() {
                 </div>
               )}
 
+              {(() => {
+                const conConectividad = resultadosConsulta.filter((r) => r.estado === 'error' && r.conectividad);
+                if (conConectividad.length === 0) return null;
+                return (
+                  <div className="buzon-alerta-warning" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                    <span>
+                      🔄 <strong>{conConectividad.length} documento(s)</strong> no se pudieron consultar por un problema
+                      temporal del SRI (no es un error de la clave). {!autoReintentoHecho && !reintentando && (
+                        <>Se reintentarán automáticamente en {SEGUNDOS_REINTENTO_AUTO_SRI}s.</>
+                      )}
+                    </span>
+                    <button className="btn-secondary" onClick={handleReintentar} disabled={reintentando}>
+                      {reintentando ? '⏳ Reintentando...' : '🔄 Reintentar ahora'}
+                    </button>
+                  </div>
+                );
+              })()}
+
               {resultadosConsulta.some((r) => r.tipoCod === '01' || r.tipoCod === '03') && (
                 <div className="buzon-opciones">
                   <strong>Opciones para facturas:</strong>
@@ -936,8 +1063,10 @@ export default function BuzonSRI() {
                           <td>{formatFechaEc(r.preview?.fecha)}</td>
                           <td className="buzon-total">{r.preview?.total != null ? `$${Number(r.preview.total).toFixed(2)}` : '—'}</td>
                           <td>
-                            <span className={`buzon-estado-chip ${estadoInfo.cls}`}>{estadoInfo.label}</span>
-                            {r.error && <small className="buzon-error-msg"> {r.error}</small>}
+                            <span className={`buzon-estado-chip ${estadoInfo.cls}`}>
+                              {r.conectividad ? '🔄 SRI no disponible' : estadoInfo.label}
+                            </span>
+                            {r.error && !r.conectividad && <small className="buzon-error-msg"> {r.error}</small>}
                           </td>
                         </tr>
                       );
@@ -1079,6 +1208,24 @@ export default function BuzonSRI() {
                 </div>
               )}
 
+              {(() => {
+                const conConectividad = txtResultados.filter((r) => r.estado === 'error' && r.conectividad);
+                if (conConectividad.length === 0) return null;
+                return (
+                  <div className="buzon-alerta-warning" style={{ margin: '.75rem 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                    <span>
+                      🔄 <strong>{conConectividad.length} documento(s)</strong> no se pudieron consultar por un problema
+                      temporal del SRI (no es un error de la clave). {!txtAutoReintentoHecho && !txtReintentando && (
+                        <>Se reintentarán automáticamente en {SEGUNDOS_REINTENTO_AUTO_SRI}s.</>
+                      )}
+                    </span>
+                    <button className="btn-secondary" onClick={handleReintentarTxt} disabled={txtReintentando}>
+                      {txtReintentando ? '⏳ Reintentando...' : '🔄 Reintentar ahora'}
+                    </button>
+                  </div>
+                );
+              })()}
+
               {txtResultados.some((r) => r.tipoCod === '01' || r.tipoCod === '03') && (
                 <div className="buzon-opciones">
                   <strong>Opciones para facturas:</strong>
@@ -1120,8 +1267,10 @@ export default function BuzonSRI() {
                           <td>{formatFechaEc(r.preview?.fecha)}</td>
                           <td className="buzon-total">{r.preview?.total != null ? `$${Number(r.preview.total).toFixed(2)}` : '—'}</td>
                           <td>
-                            <span className={`buzon-estado-chip ${estadoInfo.cls}`}>{estadoInfo.label}</span>
-                            {r.error && <small className="buzon-error-msg"> {r.error}</small>}
+                            <span className={`buzon-estado-chip ${estadoInfo.cls}`}>
+                              {r.conectividad ? '🔄 SRI no disponible' : estadoInfo.label}
+                            </span>
+                            {r.error && !r.conectividad && <small className="buzon-error-msg"> {r.error}</small>}
                           </td>
                         </tr>
                       );
