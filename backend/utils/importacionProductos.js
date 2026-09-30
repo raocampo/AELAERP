@@ -548,18 +548,32 @@ const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // y respondió bien 30s después. Antes, un solo fallo transitorio en el
 // ambiente de producción hacía caer directo al de pruebas (que NUNCA va a
 // encontrar un comprobante real) y el usuario veía "no encontrado" — cuando
-// en realidad el SRI solo tuvo un tropiezo momentáneo. Reintenta 1 vez el
-// MISMO ambiente antes de darse por vencido con él, solo para errores
-// clasificados como conectividad (esErrorConectividad, mismo criterio que
-// ya usa la cola de envío de facturas).
+// en realidad el SRI solo tuvo un tropiezo momentáneo.
+//
+// Subido de 1 a 2 reintentos el 2026-09-30: un lote real (26 claves) volvió
+// a fallar masivo (21/26) el mismo día que se desplegó el fix de 1
+// reintento — sondeando el WS real en vivo (sin pasar por nuestro código)
+// se confirmó que el 302 es intermitente pero MÁS frecuente/sostenido de lo
+// que un solo reintento a 1.5s alcanza a cubrir (7 sondeos en 30s, 1 de
+// ellos ya en 302 pese a que la mayoría respondía sano) — exactamente el
+// caso ya anticipado en la sesión anterior ("si el usuario sigue viendo
+// fallos masivos, subir a 2 reintentos"). Solo para errores clasificados
+// como conectividad (esErrorConectividad, mismo criterio que ya usa la cola
+// de envío de facturas) — un rechazo real del SRI nunca entra a este loop.
+const REINTENTOS_SRI_MS = [1500, 3000];
+
 async function _autorizarConReintento(clave, ambiente) {
-  try {
-    return await sri.autorizarComprobanteSRI(clave, ambiente);
-  } catch (err) {
-    if (!esErrorConectividad(err)) throw err;
-    await esperar(1500);
-    return sri.autorizarComprobanteSRI(clave, ambiente);
+  let ultimoError;
+  for (let intento = 0; intento <= REINTENTOS_SRI_MS.length; intento++) {
+    try {
+      return await sri.autorizarComprobanteSRI(clave, ambiente);
+    } catch (err) {
+      if (!esErrorConectividad(err)) throw err;
+      ultimoError = err;
+      if (intento < REINTENTOS_SRI_MS.length) await esperar(REINTENTOS_SRI_MS[intento]);
+    }
   }
+  throw ultimoError;
 }
 
 async function obtenerXmlDesdeAutorizacion(claveAcceso) {

@@ -221,6 +221,23 @@ test('obtenerXmlDesdeAutorizacion reintenta el mismo ambiente ante un error tran
   }
 });
 
+test('obtenerXmlDesdeAutorizacion soporta 2 fallos transitorios seguidos antes de recuperar (subido de 1 a 2 reintentos 2026-09-30)', async () => {
+  let llamadas = 0;
+  const original = sri.autorizarComprobanteSRI;
+  sri.autorizarComprobanteSRI = async (clave, ambiente) => {
+    llamadas++;
+    if (ambiente === 2 && llamadas <= 2) throw errorRedirectSri();
+    return { estado: 'AUTORIZADO', numeroAutorizacion: 'AUT-2', xmlAutorizado: '<factura>ok2</factura>' };
+  };
+  try {
+    const r = await obtenerXmlDesdeAutorizacion('4'.repeat(49));
+    assert.equal(r.xml, '<factura>ok2</factura>');
+    assert.equal(llamadas, 3, 'debe intentar 3 veces en total (1 inicial + 2 reintentos) antes de caer a pruebas');
+  } finally {
+    sri.autorizarComprobanteSRI = original;
+  }
+});
+
 test('obtenerXmlDesdeAutorizacion marca esProblemaConectividadSri cuando el SRI nunca responde en ningún ambiente', async () => {
   const original = sri.autorizarComprobanteSRI;
   sri.autorizarComprobanteSRI = async () => { throw errorRedirectSri(); };
