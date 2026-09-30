@@ -453,7 +453,7 @@ export default function BuzonSRI() {
   const reiniciar = () => { setTextareaClaves(''); setResultadosConsulta([]); setSeleccionados(new Set()); setResumenImport(null); setAvisoSri(null); setPaso(1); };
 
   const importarZip = async () => {
-    if (!archivoZip) { toast.error('Selecciona un archivo ZIP'); return; }
+    if (!archivoZip) { toast.error('Selecciona un archivo ZIP o RAR'); return; }
     setImportandoZip(true);
     setProgresoZip('Subiendo archivo...');
     try {
@@ -465,9 +465,9 @@ export default function BuzonSRI() {
         ? await esperarJob(inicio.jobId, setProgresoZip, 200) // máx ~10 min
         : { data: inicio };
       setResumenZip(data);
-      toast.success(`${data.resumen?.creados || 0} documento(s) importado(s) desde ZIP`);
+      toast.success(`${data.resumen?.creados || 0} documento(s) importado(s)`);
     } catch (err) {
-      toast.error(err.response?.data?.mensaje || 'Error al procesar el ZIP');
+      toast.error(err.response?.data?.mensaje || 'Error al procesar el archivo');
     } finally {
       setImportandoZip(false);
       setProgresoZip('');
@@ -1324,13 +1324,13 @@ export default function BuzonSRI() {
       {tab === 'zip' && (
         <div className="buzon-card">
           <div className="buzon-step">
-            <h2 className="buzon-step-title">Importar desde ZIP</h2>
-            <p className="buzon-step-hint">Sube un archivo <strong>.zip</strong> con los XMLs descargados del portal SRI. Sin límite práctico de archivos — se procesan en background.</p>
+            <h2 className="buzon-step-title">Importar desde ZIP o RAR</h2>
+            <p className="buzon-step-hint">Sube un archivo <strong>.zip</strong> o <strong>.rar</strong> con los XMLs descargados del portal SRI. Sin límite práctico de archivos — se procesan en background.</p>
             <DropZone
-              accept=".zip"
+              accept=".zip,.rar"
               icon="🗜️"
-              label="Arrastra o selecciona el archivo ZIP"
-              sublabel="Acepta .zip con XMLs del portal SRI"
+              label="Arrastra o selecciona el archivo ZIP o RAR"
+              sublabel="Acepta .zip o .rar con XMLs del portal SRI"
               files={archivoZip ? [archivoZip] : []}
               onChange={([f]) => { setArchivoZip(f || null); setResumenZip(null); }}
             />
@@ -1345,7 +1345,7 @@ export default function BuzonSRI() {
             )}
             <div className="buzon-step-actions">
               <button className="btn-primary" onClick={importarZip} disabled={importandoZip || !archivoZip}>
-                {importandoZip ? `⏳ ${progresoZip || 'Procesando ZIP...'}` : 'Importar ZIP'}
+                {importandoZip ? `⏳ ${progresoZip || 'Procesando archivo...'}` : 'Importar archivo'}
               </button>
             </div>
             {resumenZip && (

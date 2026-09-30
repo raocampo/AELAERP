@@ -4,7 +4,7 @@
 //
 //  POST /api/buzon/consultar             → preview de N claves
 //  POST /api/buzon/importar              → importación confirmada
-//  POST /api/buzon/importar-zip          → ZIP de XMLs
+//  POST /api/buzon/importar-zip          → ZIP o RAR de XMLs
 //  POST /api/buzon/sri-portal/consultar  → portal REST (API móvil)
 //  POST /api/buzon/sri-scraper/consultar → portal via Puppeteer
 //  POST /api/buzon/sri-scraper/importar  → scraper + importar directo
@@ -12,7 +12,7 @@
 
 const express = require('express');
 const multer  = require('multer');
-const AdmZip  = require('adm-zip');
+const { extraerEntradasXml } = require('../utils/archivoComprimido');
 const prisma  = require('../config/prisma');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
@@ -530,9 +530,10 @@ async function _generarAsientoSiAplicaDb(resultado, usuarioId, db) {
 }
 
 // ─── POST /importar-zip ──────────────────────────────────────
-// Responde de inmediato con { jobId } y procesa el ZIP en background para no
-// depender del timeout de 60 s del proxy de Railway, sin importar cuántos
-// archivos traiga (solo lectura local del ZIP + escritura en BD, sin SRI).
+// Acepta ZIP o RAR de XMLs (ver extraerEntradasXml). Responde de inmediato
+// con { jobId } y procesa en background para no depender del timeout de
+// 60 s del proxy de Railway, sin importar cuántos archivos traiga (solo
+// lectura local del archivo + escritura en BD, sin SRI).
 router.post('/importar-zip', upload.single('archivo'), async (req, res) => {
   try {
     if (!req.file) {
@@ -545,22 +546,20 @@ router.post('/importar-zip', upload.single('archivo'), async (req, res) => {
 
     if (!await _validarEmpresaActiva(req, res)) return;
 
-    let zip;
+    let archivos;
     try {
-      zip = new AdmZip(req.file.buffer);
-    } catch {
-      return res.status(400).json({ success: false, mensaje: 'El archivo no es un ZIP válido' });
+      archivos = await extraerEntradasXml(req.file.buffer);
+    } catch (err) {
+      return res.status(400).json({ success: false, mensaje: err.message });
     }
 
-    const entries = zip.getEntries().filter((e) => !e.isDirectory && e.name.toLowerCase().endsWith('.xml'));
-    if (entries.length === 0) {
-      return res.status(400).json({ success: false, mensaje: 'El ZIP no contiene archivos XML' });
+    if (archivos.length === 0) {
+      return res.status(400).json({ success: false, mensaje: 'El archivo no contiene archivos XML' });
     }
-    if (entries.length > MAX_ARCHIVOS_LOCAL) {
-      return res.status(400).json({ success: false, mensaje: `El ZIP contiene ${entries.length} archivos. Máximo ${MAX_ARCHIVOS_LOCAL} por lote.` });
+    if (archivos.length > MAX_ARCHIVOS_LOCAL) {
+      return res.status(400).json({ success: false, mensaje: `El archivo contiene ${archivos.length} documentos. Máximo ${MAX_ARCHIVOS_LOCAL} por lote.` });
     }
 
-    const archivos = entries.map((e) => ({ filename: e.name, xmlString: e.getData().toString('utf8') }));
     const db = req.prisma || prisma;
 
     const jobId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -570,11 +569,11 @@ router.post('/importar-zip', upload.single('archivo'), async (req, res) => {
 
     _procesarArchivosXmlEnBackground({ jobId, archivos, empresaId, usuarioId, opciones, db }).catch((err) => {
       console.error('Error en background de /buzon/importar-zip:', err);
-      SCRAPER_JOBS.set(jobId, { status: 'error', error: 'Error al procesar el archivo ZIP' });
+      SCRAPER_JOBS.set(jobId, { status: 'error', error: 'Error al procesar el archivo' });
     });
   } catch (error) {
     console.error('Error en /buzon/importar-zip:', error);
-    res.status(500).json({ success: false, mensaje: 'Error al procesar el archivo ZIP' });
+    res.status(500).json({ success: false, mensaje: 'Error al procesar el archivo' });
   }
 });
 
