@@ -1894,6 +1894,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
     let productosCreados = 0;
     let itemsPendientes = 0;
     let yaEnRevision = 0; // líneas que ya están en Ítems por revisar (PENDIENTE) de una corrida anterior — este endpoint no las puede resolver, esperan al usuario en esa otra pantalla
+    let ignoradosPrevios = 0; // líneas que el usuario ya descartó explícitamente en Ítems por revisar (IGNORADO) — no se reintentan solas, pero antes desaparecían del mensaje sin explicación
     const errores = [];
     const detallesActualizados = detalles.map((d) => ({ ...d }));
 
@@ -1948,7 +1949,16 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
         // esto, la segunda línea se daba por aplicada solo porque YA
         // existía un movimiento de ese producto en esta factura (de la
         // primera línea), y su cantidad se perdía en silencio.
-        if (det.movimientoAplicado) continue;
+        // Requiere TAMBIÉN productoId: una línea con movimientoAplicado=true
+        // pero sin productoId es un estado inconsistente (ej. residuo de una
+        // corrección manual de datos que limpió el producto asignado pero no
+        // esta bandera) — la UI la sigue mostrando "Sin integrar" (depende
+        // solo de productoId, ver DetalleCompra.jsx), así que saltarla acá
+        // dejaba al usuario sin ninguna vía para resolverla: ni aparecía como
+        // pendiente, ni se reintentaba. Se deja caer al flujo normal de abajo
+        // para que se re-resuelva — `reclamarMovimientoLegado` más abajo ya
+        // evita duplicar el movimiento si en realidad sí se había aplicado.
+        if (det.movimientoAplicado && det.productoId) continue;
 
         let prod = null;
         let esRegaloMatcheado = false;
@@ -2004,6 +2014,15 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
               // en realidad SÍ había algo pendiente, solo que en otra
               // pantalla.
               yaEnRevision++;
+            } else if (itemPrevio.estado === 'IGNORADO') {
+              // El usuario ya decidió explícitamente no integrar esta línea
+              // (botón "Ignorar" en Ítems por revisar) — se respeta esa
+              // decisión y no se reintenta sola, pero antes esto desaparecía
+              // del mensaje sin ninguna explicación: la línea seguía
+              // mostrando "Sin integrar" en la compra para siempre y el
+              // usuario no tenía forma de saber por qué "Integrar al
+              // inventario" decía que no había nada pendiente.
+              ignoradosPrevios++;
             }
             continue;
           }
@@ -2133,26 +2152,38 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
       }
     }, { timeout: 20000 }); // una factura con muchas líneas (decenas) puede tardar más que el default de Prisma (5s)
 
-    const partes = [];
-    if (movimientosRegistrados > 0) partes.push(`${movimientosRegistrados} movimiento(s) de inventario registrado(s)`);
-    if (productosCreados > 0) partes.push(`${productosCreados} producto(s) creado(s) en catálogo`);
-    if (itemsPendientes > 0) partes.push(`${itemsPendientes} ítem(s) enviado(s) a Ítems por revisar (regalo/combo o posible duplicado)`);
+    const partesExito = [];
+    if (movimientosRegistrados > 0) partesExito.push(`${movimientosRegistrados} movimiento(s) de inventario registrado(s)`);
+    if (productosCreados > 0) partesExito.push(`${productosCreados} producto(s) creado(s) en catálogo`);
+    if (itemsPendientes > 0) partesExito.push(`${itemsPendientes} ítem(s) enviado(s) a Ítems por revisar (regalo/combo o posible duplicado)`);
 
-    // Distinguir 3 escenarios que antes caían todos en el mismo mensaje
+    // Distinguir los escenarios que antes caían todos en el mismo mensaje
     // genérico "no había nada pendiente" (un callejón sin salida que no
     // explicaba qué pasó de verdad):
     //  1. Líneas que ya están esperando en Ítems por revisar de una
     //     corrida anterior — este botón no las puede resolver, hay que ir
     //     a esa otra pantalla y confirmar/crear el producto ahí.
-    //  2. Líneas que no matchearon ningún producto y no se creó ninguno —
+    //  2. Líneas que el usuario ya descartó explícitamente (IGNORADO) —
+    //     se respeta la decisión, pero se avisa en vez de desaparecer.
+    //  3. Líneas que no matchearon ningún producto y no se creó ninguno —
     //     casi siempre porque "Crear productos no encontrados" estaba
     //     desmarcado.
-    //  3. Genuinamente no había nada que hacer.
+    //  4. Genuinamente no había nada que hacer.
+    const partesCaveat = [];
+    if (yaEnRevision > 0) {
+      partesCaveat.push(`${yaEnRevision} línea(s) esperando tu confirmación en Compras → Ítems por revisar`);
+    }
+    if (ignoradosPrevios > 0) {
+      partesCaveat.push(`${ignoradosPrevios} línea(s) descartada(s) anteriormente (ignoradas) — ve a Ítems por revisar si quieres reconsiderarlas`);
+    }
+
     let mensaje;
-    if (partes.length > 0) {
-      mensaje = partes.join(' y ');
-    } else if (yaEnRevision > 0) {
-      mensaje = `${yaEnRevision} línea(s) ya están esperando tu confirmación en Compras → Ítems por revisar — resuélvelas ahí (o descártalas) antes de volver a integrar.`;
+    if (partesExito.length > 0 && partesCaveat.length > 0) {
+      mensaje = `${partesExito.join(' y ')}. Además: ${partesCaveat.join('; ')}.`;
+    } else if (partesExito.length > 0) {
+      mensaje = partesExito.join(' y ');
+    } else if (partesCaveat.length > 0) {
+      mensaje = partesCaveat.join('; ');
     } else if (errores.length > 0) {
       mensaje = `${errores.length} línea(s) no coinciden con ningún producto del catálogo y no se creó ninguno — marca "Crear productos no encontrados en el catálogo" e inténtalo de nuevo.`;
     } else {
@@ -2165,6 +2196,7 @@ router.post('/:id/registrar-inventario', autorizarPermiso('compras.gestionar'), 
       productosCreados,
       itemsPendientes,
       yaEnRevision,
+      ignoradosPrevios,
       errores,
       mensaje,
     });

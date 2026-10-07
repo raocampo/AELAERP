@@ -62,7 +62,11 @@ router.post('/:id/asignar', async (req, res) => {
 
     const item = await prisma.items_compra_pendientes.findFirst({ where: { id, empresaId } });
     if (!item) return res.status(404).json({ success: false, mensaje: 'Ítem pendiente no encontrado' });
-    if (item.estado !== 'PENDIENTE') {
+    // PENDIENTE (nunca resuelto) o IGNORADO (el usuario lo descartó antes,
+    // pero puede reconsiderarlo — no hay otra forma de "des-ignorar" un
+    // ítem hoy). RESUELTO sí queda bloqueado: ya tiene un producto/
+    // movimiento aplicado, volver a asignarlo duplicaría el stock.
+    if (item.estado === 'RESUELTO') {
       return res.status(400).json({ success: false, mensaje: 'Este ítem ya fue resuelto' });
     }
 
@@ -203,7 +207,9 @@ router.post('/:id/crear-producto', async (req, res) => {
 
     const item = await prisma.items_compra_pendientes.findFirst({ where: { id, empresaId } });
     if (!item) return res.status(404).json({ success: false, mensaje: 'Ítem pendiente no encontrado' });
-    if (item.estado !== 'PENDIENTE') {
+    // Mismo criterio que /asignar: PENDIENTE o IGNORADO (reconsiderado) sí,
+    // RESUELTO no (ya tiene producto/movimiento aplicado).
+    if (item.estado === 'RESUELTO') {
       return res.status(400).json({ success: false, mensaje: 'Este ítem ya fue resuelto' });
     }
 

@@ -366,8 +366,11 @@ export default function ObsequiosPendientes() {
                       )}
                     </td>
                     <td data-label="Acciones">
-                      {item.estado === 'PENDIENTE' ? (
-                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {item.estado === 'PENDIENTE' || item.estado === 'IGNORADO' ? (
+                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                          {item.estado === 'IGNORADO' && (
+                            <span className="compras-muted" title="Puedes reconsiderarlo con los botones de al lado">🚫 Ignorado —</span>
+                          )}
                           {item.productoSugerido && (
                             <button className="btn-primary" onClick={() => usarSugerido(item)}>
                               Sí, es el mismo
@@ -375,14 +378,14 @@ export default function ObsequiosPendientes() {
                           )}
                           <button className="btn-secondary" onClick={() => setModalAsignar(item)}>Asignar</button>
                           <button className="btn-secondary" onClick={() => setModalCrear(item)}>Crear producto</button>
-                          <button className="btn-secondary" onClick={() => ignorar(item)}>Ignorar</button>
+                          {item.estado === 'PENDIENTE' && (
+                            <button className="btn-secondary" onClick={() => ignorar(item)}>Ignorar</button>
+                          )}
                         </div>
-                      ) : item.estado === 'RESUELTO' ? (
+                      ) : (
                         <span title="Resuelto">
                           ✅ {item.productoAsignado ? `→ ${item.productoAsignado.codigoPrincipal}` : ''}
                         </span>
-                      ) : (
-                        <span title="Ignorado">🚫 Ignorado</span>
                       )}
                     </td>
                   </tr>
