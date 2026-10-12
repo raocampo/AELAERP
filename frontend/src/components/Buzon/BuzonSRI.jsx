@@ -68,6 +68,52 @@ async function reintentarConectividad(resultadosActuales) {
   return { actualizados, aviso: data?.avisoSri || null, reintentadas: claves.length };
 }
 
+// Debe coincidir con MAX_CLAVES_LOTE en backend/routes/buzon.js —
+// POST /buzon/importar re-consulta el SRI documento por documento (no es
+// una lectura local como /importar-zip), así que el backend limita cada
+// petición a 50 para no arriesgar un timeout del proxy en un lote grande.
+// La consulta (Paso 2) ya se hacía en lotes automáticos de 50; la
+// importación (Paso 3) mandaba TODO lo seleccionado de una sola vez y el
+// backend la rechazaba entera por encima de 50 — "no cortar la carga" es
+// justo lo que pide este helper: la misma pelea client-side por lotes que
+// ya usan consultarClavesTxt/consultarClaves, pero para importar.
+const BATCH_IMPORTAR_SRI = 50;
+
+// Importa `items` (ya resueltos como 'nuevo' en la consulta) en lotes de
+// BATCH_IMPORTAR_SRI, fusionando resumen y resultados de cada lote en uno
+// solo — mismo contrato de respuesta que si todo hubiera cabido en una
+// sola llamada. Compartido por "Importar TXT" y "Por claves de acceso".
+async function importarEnLotes(items, opciones, onProgreso) {
+  const total = Math.ceil(items.length / BATCH_IMPORTAR_SRI) || 1;
+  const resultados = [];
+  let creados = 0, omitidos = 0, errores = 0;
+
+  for (let i = 0; i < total; i++) {
+    if (onProgreso) {
+      onProgreso(total > 1 ? `Importando lote ${i + 1} de ${total}...` : 'Importando...');
+    }
+    const lote = items.slice(i * BATCH_IMPORTAR_SRI, (i + 1) * BATCH_IMPORTAR_SRI);
+    try {
+      const { data } = await api.post('/buzon/importar', { items: lote, opciones });
+      resultados.push(...(data?.resultados || []));
+      creados  += data?.resumen?.creados  || 0;
+      omitidos += data?.resumen?.omitidos || 0;
+      errores  += data?.resumen?.errores  || 0;
+    } catch (err) {
+      // No perder los lotes YA importados con éxito por un fallo puntual
+      // (ej. timeout de red) en uno intermedio — se reporta ese lote como
+      // error por clave y se sigue con el resto. Reintentar más tarde con
+      // la misma selección es seguro: los ya importados vuelven como
+      // 'omitido' (ya existen), no se duplican.
+      const mensaje = err.response?.data?.mensaje || 'Error al importar este lote';
+      lote.forEach((item) => resultados.push({ clave: item.clave, estado: 'error', error: mensaje }));
+      errores += lote.length;
+    }
+  }
+
+  return { success: true, resumen: { creados, omitidos, errores }, resultados };
+}
+
 function esErrorCredencialesSri(err) {
   const msg = err.response?.data?.mensaje || err.message || '';
   return /credenciales|contraseña|password|clave.*incorrect/i.test(msg);
@@ -165,6 +211,7 @@ export default function BuzonSRI() {
   });
 
   const [importando, setImportando] = useState(false);
+  const [progresoImport, setProgresoImport] = useState('');
   const [resumenImport, setResumenImport] = useState(null);
 
   const [archivoZip, setArchivoZip] = useState(null);
@@ -313,14 +360,15 @@ export default function BuzonSRI() {
     if (items.length === 0) { toast.error('Selecciona al menos un documento'); return; }
     setTxtImportando(true);
     try {
-      const res = await api.post('/buzon/importar', { items, opciones });
-      setTxtResumen(res.data);
+      const data = await importarEnLotes(items, opciones, setTxtProgreso);
+      setTxtResumen(data);
       setTxtPaso(3);
-      toast.success(`${res.data.resumen?.creados || 0} documento(s) importado(s)`);
+      toast.success(`${data.resumen.creados} documento(s) importado(s)`);
     } catch (err) {
       toast.error(err.response?.data?.mensaje || 'Error al importar');
     } finally {
       setTxtImportando(false);
+      setTxtProgreso('');
     }
   };
 
@@ -439,14 +487,15 @@ export default function BuzonSRI() {
     if (items.length === 0) { toast.error('Selecciona al menos un documento'); return; }
     setImportando(true);
     try {
-      const res = await api.post('/buzon/importar', { items, opciones });
-      setResumenImport(res.data);
+      const data = await importarEnLotes(items, opciones, setProgresoImport);
+      setResumenImport(data);
       setPaso(3);
-      toast.success(`${res.data.resumen?.creados || 0} documento(s) importado(s)`);
+      toast.success(`${data.resumen.creados} documento(s) importado(s)`);
     } catch (err) {
       toast.error(err.response?.data?.mensaje || 'Error al importar');
     } finally {
       setImportando(false);
+      setProgresoImport('');
     }
   };
 
@@ -1079,7 +1128,7 @@ export default function BuzonSRI() {
                 <button className="btn-secondary" onClick={reiniciar}>← Volver</button>
                 <span className="buzon-count-hint">{seleccionados.size} seleccionado(s)</span>
                 <button className="btn-primary" onClick={importarSeleccionados} disabled={importando || seleccionados.size === 0}>
-                  {importando ? 'Importando...' : `Importar ${seleccionados.size} documento(s)`}
+                  {importando ? `⏳ ${progresoImport || 'Importando...'}` : `Importar ${seleccionados.size} documento(s)`}
                 </button>
               </div>
             </div>
@@ -1287,7 +1336,7 @@ export default function BuzonSRI() {
                   onClick={importarSeleccionadosTxt}
                   disabled={txtImportando || txtSeleccionados.size === 0}
                 >
-                  {txtImportando ? 'Importando...' : `Importar ${txtSeleccionados.size} documento(s)`}
+                  {txtImportando ? `⏳ ${txtProgreso || 'Importando...'}` : `Importar ${txtSeleccionados.size} documento(s)`}
                 </button>
               </div>
             </div>
