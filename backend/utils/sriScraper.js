@@ -869,6 +869,23 @@ async function _lanzarNavegador() {
     '--disable-translate',
     '--mute-audio',
     '--window-size=1280,800',
+    // CRÍTICO — sin esto, cualquier page.goto() al portal SRI agota el
+    // timeout de navegación y nunca llega a cargar nada (diagnosticado en
+    // vivo 2026-10-12, con credenciales reales, aislando variable por
+    // variable: Chromium lanza bien y navega a cualquier otro sitio en
+    // <1s, pero srienlinea.sri.gob.ec específicamente cuelga 20s con el
+    // User-Agent por defecto). El WAF del SRI (F5 BIG-IP — cookies
+    // TS0*/BIGipServer* ya presentes en el resto del flujo) bloquea
+    // cualquier request cuyo User-Agent contenga el string
+    // "HeadlessChrome", que es exactamente el default de Puppeteer. Se
+    // pasa como flag de arranque (en vez de page.setUserAgent() por
+    // página) para que aplique a TODO navegador que salga de esta
+    // función, sin depender de que cada call site se acuerde de pedirlo
+    // — se perdía en `scraperSriRecibidos`, que lanza su propio browser
+    // aparte del de `scraperSriLogin`. Sin ningún otro cambio (Chromium
+    // sigue siendo el real, sin flags para "esconder" la automatización),
+    // confirmado: pasa de timeout a succeeded en ~1s.
+    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
   ];
 
   // Nivel 1: @sparticuz/chromium (optimizado para Railway/Lambda/serverless)
@@ -1465,7 +1482,17 @@ async function obtenerRecibidosScraper({
 
   // ── Intento 2: Puppeteer con @sparticuz/chromium (disponible en Railway) ──
   console.log('[SRI] Intentando scraper Puppeteer (fallback)...');
-  const TIMEOUT_TOTAL_MS = 3 * 60 * 1000;
+  // POST /sri/consultar (routes/buzon.js) ya corre todo esto en background y
+  // el frontend espera hasta 4 min por polling (esperarJob(jobId, cb, 80) —
+  // 80 intentos × 3s, ver BuzonSRI.jsx) — no hay timeout de proxy HTTP que
+  // cuidar acá. Antes este límite interno (3 min) cortaba ANTES que el
+  // frontend se cansara de esperar, desperdiciando el margen ya aprobado —
+  // confirmado en vivo 2026-10-12: un rango de 10 meses (10 iteraciones de
+  // _consultarMesJsf, una navegación real por mes) agotó justo los 3 min.
+  // Subido a 3:30 min, dejando ~30s de margen contra los 4 min del
+  // frontend para la parte de fetch-based que ya corrió antes de llegar
+  // acá (ver Intento 1 arriba).
+  const TIMEOUT_TOTAL_MS = 3.5 * 60 * 1000;
 
   const scraperPromise = (async () => {
     const session = await scraperSriLogin(identificacion, password);
