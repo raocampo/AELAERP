@@ -99,6 +99,27 @@ function parseNumero(num) {
 
 function r2(v) { return Math.round(parseFloat(v || 0) * 100) / 100; }
 
+// El catálogo "tipo de identificación" que se guarda en todo el sistema
+// (facturas.tipoIdentificacionComprador, compras.tipoIdentificacionProveedor,
+// etc. — 04=RUC, 05=Cédula, 06=Pasaporte, 07=Consumidor Final) es el de
+// COMPROBANTES ELECTRÓNICOS del SRI. El ATS usa un catálogo DISTINTO para
+// identificar al PROVEEDOR en <compras> (Tabla 2 de la Ficha Técnica oficial,
+// pág. 10 y 62: "Solo se podrán utilizar códigos relacionados con el
+// secuencial de transacción COMPRA (códigos 01, 02 y 03)" — 01=RUC,
+// 02=Cédula, 03=Pasaporte). Confirmado en vivo con el validador DIMM del SRI
+// (2026-10-12): reportar "04" (el código de comprobantes para RUC) como
+// tpIdProv rechaza TODA la línea con "no es un valor permitido para
+// COMPRAS". Importante: esto NO aplica al lado de <ventas> (tpIdCliente) —
+// ahí la MISMA Tabla 2 reutiliza 04/05/06/07 para VENTA con el mismo
+// significado que el catálogo de comprobantes electrónicos, así que ese lado
+// no necesita conversión (ver acumularVenta más abajo, sin cambios).
+const MAPA_TIPO_ID_COMPROBANTES_A_ATS_COMPRA = { '04': '01', '05': '02', '06': '03' };
+function tipoIdProveedorAts(codigoComprobantes) {
+  const codigo = String(codigoComprobantes || '').trim();
+  if (['01', '02', '03'].includes(codigo)) return codigo; // ya viene en el catálogo del ATS
+  return MAPA_TIPO_ID_COMPROBANTES_A_ATS_COMPRA[codigo] || '01'; // default seguro: RUC
+}
+
 async function getConfigSRI(empresaId) {
   const config = await prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
   if (!config) throw new Error('No hay configuración SRI configurada.');
@@ -437,7 +458,7 @@ router.get('/exportar', async (req, res) => {
     compras.forEach(compra => {
       const { estab, pto, sec } = parseNumero(compra.numeroFactura);
       const auth = compra.numeroAutorizacion || compra.claveAcceso || '';
-      const tpId = compra.tipoIdentificacionProveedor || '04';
+      const tpId = tipoIdProveedorAts(compra.tipoIdentificacionProveedor);
 
       const retList = compra.retenciones || [];
       // Tomar la primera retención autorizada para datos de cabecera
@@ -495,6 +516,22 @@ router.get('/exportar', async (req, res) => {
       // Importación (DIM, antes DAU).
       const tipoComprobanteAts = esNotaVenta ? '02' : (esImportacion ? '20' : '01');
 
+      // formaPago (Tabla 13) es CONDICIONAL: solo obligatorio cuando la suma
+      // de bases imponibles + ICE + IVA supera USD 1000 (confirmado en Ficha
+      // Técnica oficial pág. 7 y en el error de DIMM "...exceden los USD.
+      // 1000.00"). compra.pagos ya se guarda con los códigos reales de la
+      // Tabla 13 (mismo catálogo, ver backend/utils/formasPago.js), así que
+      // no requiere conversión — solo deduplicar por código.
+      const totalBaseEImpuestos = r2(baseNoObjeto + base0 + baseGravada + baseExenta + r2(compra.valorIce || 0) + r2(compra.totalIva));
+      let formaPagoXML = '';
+      if (totalBaseEImpuestos > 1000) {
+        const pagosArr = Array.isArray(compra.pagos) ? compra.pagos
+          : (typeof compra.pagos === 'string' ? JSON.parse(compra.pagos || '[]') : []);
+        const codigosFormaPago = [...new Set(pagosArr.map(p => String(p.formaPago || '').trim()).filter(Boolean))];
+        formaPagoXML = codigosFormaPago.map(cod => `
+      <formaPago>${cod}</formaPago>`).join('');
+      }
+
       comprasXML += `
     <detalleCompras>
       <codSustento>${codSustento}</codSustento>
@@ -502,7 +539,7 @@ router.get('/exportar', async (req, res) => {
       <idProv>${compra.identificacionProveedor}</idProv>
       <tipoComprobante>${tipoComprobanteAts}</tipoComprobante>
       <parteRel>NO</parteRel>
-      <fechaRegistro>${fmtFecha(compra.createdAt || compra.fechaEmision)}</fechaRegistro>
+      <fechaRegistro>${fmtFecha(compra.fechaEmision)}</fechaRegistro>
       <establecimiento>${estab}</establecimiento>
       <puntoEmision>${pto}</puntoEmision>
       <secuencial>${sec}</secuencial>
@@ -521,6 +558,7 @@ router.get('/exportar', async (req, res) => {
       <valorRetServicios>${retIva.valorRetServicios.toFixed(2)}</valorRetServicios>
       <valRetServ100>${retIva.valRetServ100.toFixed(2)}</valRetServ100>
       <totbasesImpReemb>0.00</totbasesImpReemb>
+      <pagoLocExt>01</pagoLocExt>${formaPagoXML}
       <air>${airXML}
       </air>${retPrincipal ? (() => {
         const rp = parseNumero(retPrincipal.numeroRetencion);
@@ -549,11 +587,11 @@ router.get('/exportar', async (req, res) => {
       comprasXML += `
     <detalleCompras>
       <codSustento>01</codSustento>
-      <tpIdProv>04</tpIdProv>
+      <tpIdProv>01</tpIdProv>
       <idProv>${nc.rucEmisor}</idProv>
       <tipoComprobante>04</tipoComprobante>
       <parteRel>NO</parteRel>
-      <fechaRegistro>${fmtFecha(nc.createdAt || nc.fechaEmision)}</fechaRegistro>
+      <fechaRegistro>${fmtFecha(nc.fechaEmision)}</fechaRegistro>
       <establecimiento>${p.estab}</establecimiento>
       <puntoEmision>${p.ptoEmi}</puntoEmision>
       <secuencial>${p.secuencial}</secuencial>
@@ -572,6 +610,7 @@ router.get('/exportar', async (req, res) => {
       <valorRetServicios>0.00</valorRetServicios>
       <valRetServ100>0.00</valRetServ100>
       <totbasesImpReemb>0.00</totbasesImpReemb>
+      <pagoLocExt>01</pagoLocExt>
       <docModificado>${p.codDocModificado}</docModificado>
       <estabModificado>${modif.estab}</estabModificado>
       <ptoEmiModificado>${modif.pto}</ptoEmiModificado>
@@ -1087,3 +1126,4 @@ router.get('/exportar/pdf', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.tipoIdProveedorAts = tipoIdProveedorAts;
