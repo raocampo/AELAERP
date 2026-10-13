@@ -620,14 +620,18 @@ router.get('/exportar', async (req, res) => {
       const pagoExteriorXML = construirPagoExteriorXML(esImportacion ? '02' : '01');
 
       // formaPago (Tabla 13) es CONDICIONAL: solo obligatorio cuando la suma
-      // de bases imponibles + ICE + IVA supera USD 1000 (confirmado en Ficha
-      // Técnica oficial pág. 7 y en el error de DIMM "...exceden los USD.
-      // 1000.00"). compra.pagos ya se guarda con los códigos reales de la
-      // Tabla 13 (mismo catálogo, ver backend/utils/formasPago.js), así que
-      // no requiere conversión — solo deduplicar por código.
+      // de bases imponibles + ICE + IVA supera USD 500 — el umbral real es
+      // $500, NO $1000 (ese número venía de un error de DIMM leído de pasada
+      // en una ronda anterior que resultó ser otra cosa). Confirmado en vivo
+      // 2026-10-13: DIMM rechazó 4 líneas reales con "exceden los USD.
+      // 500.00" cuyo total (base+IVA) estaba entre $580 y $821 — por debajo
+      // de $1000, por eso el fix anterior no las cubría. compra.pagos ya se
+      // guarda con los códigos reales de la Tabla 13 (mismo catálogo, ver
+      // backend/utils/formasPago.js), así que no requiere conversión — solo
+      // deduplicar por código.
       const totalBaseEImpuestos = r2(baseNoObjeto + base0 + baseGravada + baseExenta + r2(compra.valorIce || 0) + r2(compra.totalIva));
       let formasDePagoXML = '';
-      if (totalBaseEImpuestos > 1000) {
+      if (totalBaseEImpuestos > 500) {
         const pagosArr = Array.isArray(compra.pagos) ? compra.pagos
           : (typeof compra.pagos === 'string' ? JSON.parse(compra.pagos || '[]') : []);
         const codigosFormaPago = [...new Set(pagosArr.map(p => String(p.formaPago || '').trim()).filter(Boolean))];
