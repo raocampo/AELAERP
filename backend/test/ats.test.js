@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { XMLParser, XMLValidator } = require('fast-xml-parser');
-const { tipoIdProveedorAts, construirPagoExteriorXML, construirFormasDePagoXML } = require('../routes/ats');
+const { tipoIdProveedorAts, construirPagoExteriorXML, construirFormasDePagoXML, construirVentasEstablecimientoXML } = require('../routes/ats');
 
 test('tipoIdProveedorAts convierte el catálogo de comprobantes (04/05/06) al de ATS-compras (01/02/03)', () => {
   assert.equal(tipoIdProveedorAts('04'), '01'); // RUC
@@ -63,4 +63,26 @@ test('construirFormasDePagoXML anida cada código dentro de <formasDePago><forma
 test('ambos fragmentos combinados siguen produciendo XML bien formado (regresión del bug real reportado)', () => {
   const fragmento = construirPagoExteriorXML('01') + construirFormasDePagoXML(['20']);
   parsearFragmento(fragmento); // lanza si no está bien formado
+});
+
+// ─── construirVentasEstablecimientoXML ────────────────────────────────────────
+// Regresión del error real de DIMM: "Cuando existan detalles de Ventas debe
+// exitir Ventas Establecimiento" (sic) — faltaba el bloque por completo.
+test('construirVentasEstablecimientoXML devuelve vacío sin ítems (DIMM solo lo exige si hay detalleVentas)', () => {
+  assert.equal(construirVentasEstablecimientoXML([]), '');
+  assert.equal(construirVentasEstablecimientoXML(null), '');
+  assert.equal(construirVentasEstablecimientoXML(undefined), '');
+});
+
+test('construirVentasEstablecimientoXML genera un <ventaEst> por establecimiento con codEstab/ventasEstab/ivaComp', () => {
+  const parser = new XMLParser({ parseTagValue: false, isArray: (name) => name === 'ventaEst' });
+  const xml = construirVentasEstablecimientoXML([
+    { codEstab: '001', total: 1234.56, iva: 160.65 },
+    { codEstab: '031', total: 111.16, iva: 16.67 },
+  ]);
+  const parsed = parser.parse(`<root>${xml}</root>`).root;
+  assert.deepEqual(parsed.ventasEstablecimiento.ventaEst, [
+    { codEstab: '001', ventasEstab: '1234.56', ivaComp: '160.65' },
+    { codEstab: '031', ventasEstab: '111.16', ivaComp: '16.67' },
+  ]);
 });

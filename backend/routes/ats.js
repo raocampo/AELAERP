@@ -153,6 +153,28 @@ function construirFormasDePagoXML(codigosFormaPago) {
       </formasDePago>`;
 }
 
+// ─── <ventasEstablecimiento> (hijo de ivaType, hermano de <ventas>) ──────────
+// CORREGIDO 2026-10-12 (2da vuelta): DIMM rechaza con el error real "Cuando
+// existan detalles de Ventas debe exitir Ventas Establecimiento" (sic, typo
+// del propio SRI) — el bloque es opcional en el XSD (minOccurs=0) pero DIMM
+// lo exige como regla de negocio en cuanto hay al menos un <detalleVentas>.
+// ventasEstablecimientoType: 1+ <ventaEst> con codEstab (3 dígitos) +
+// ventasEstab (total de ventas de ese establecimiento) + ivaComp (IVA
+// generado, opcional). `items` ya viene agrupado por establecimiento desde
+// el caller — esta función solo arma el XML.
+function construirVentasEstablecimientoXML(items) {
+  if (!items || !items.length) return '';
+  const filas = items.map(({ codEstab, total, iva }) => `
+    <ventaEst>
+      <codEstab>${codEstab}</codEstab>
+      <ventasEstab>${Number(total || 0).toFixed(2)}</ventasEstab>
+      <ivaComp>${Number(iva || 0).toFixed(2)}</ivaComp>
+    </ventaEst>`).join('');
+  return `
+  <ventasEstablecimiento>${filas}
+  </ventasEstablecimiento>`;
+}
+
 async function getConfigSRI(empresaId) {
   const config = await prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
   if (!config) throw new Error('No hay configuración SRI configurada.');
@@ -486,6 +508,34 @@ router.get('/exportar', async (req, res) => {
     </detalleVentas>`;
     });
 
+    // ── <ventasEstablecimiento> — ventas totales + IVA por establecimiento ────
+    // Regla de negocio de DIMM (no es un simple chequeo de XSD, el XSD marca
+    // ventasEstablecimiento como opcional — minOccurs=0 — pero DIMM exige el
+    // bloque igual): "Cuando existan detalles de Ventas debe exitir Ventas
+    // Establecimiento" (error real reportado, confirmado contra
+    // ventasEstablecimientoType del XSD oficial: 1+ <ventaEst> con codEstab +
+    // ventasEstab + ivaComp opcional). Los 4 modelos de venta ya guardan
+    // `establecimiento` como columna propia (no hace falta parsear el número
+    // de comprobante como si hace falta en compras).
+    const ventasEstabMap = new Map();
+    const acumularVentaEstab = (establecimiento, total, iva) => {
+      const estab = String(establecimiento || '001').padStart(3, '0');
+      if (!ventasEstabMap.has(estab)) ventasEstabMap.set(estab, { total: 0, iva: 0 });
+      const e = ventasEstabMap.get(estab);
+      e.total = r2(e.total + Number(total || 0));
+      e.iva   = r2(e.iva   + Number(iva   || 0));
+    };
+    facturas.forEach(f => acumularVentaEstab(f.establecimiento, f.importeTotal, f.totalIva));
+    liquidaciones.forEach(l => acumularVentaEstab(l.establecimiento, l.importeTotal, l.totalIva));
+    notasVenta.forEach(n => acumularVentaEstab(n.establecimiento, n.total, 0));
+    // Nota de crédito: mismo criterio de "siempre positivo" que el resto del
+    // ATS (ver comentario arriba, monedaType exige minInclusive 0.0).
+    ncs.forEach(n => acumularVentaEstab(n.establecimiento, n.importeTotal, n.totalIva));
+
+    const ventasEstablecimientoXML = construirVentasEstablecimientoXML(
+      [...ventasEstabMap.entries()].map(([codEstab, v]) => ({ codEstab, total: v.total, iva: v.iva }))
+    );
+
     // ── <compras> — una entrada por factura_compra ────────────────────────────
     let comprasXML = '';
     compras.forEach(compra => {
@@ -684,7 +734,7 @@ router.get('/exportar', async (req, res) => {
   <compras>${comprasXML}
   </compras>
   <ventas>${ventasXML}
-  </ventas>
+  </ventas>${ventasEstablecimientoXML}
   <anulados>${anuladosXML}
   </anulados>
 </iva>`;
@@ -1164,3 +1214,4 @@ module.exports = router;
 module.exports.tipoIdProveedorAts = tipoIdProveedorAts;
 module.exports.construirPagoExteriorXML = construirPagoExteriorXML;
 module.exports.construirFormasDePagoXML = construirFormasDePagoXML;
+module.exports.construirVentasEstablecimientoXML = construirVentasEstablecimientoXML;
