@@ -120,6 +120,39 @@ function tipoIdProveedorAts(codigoComprobantes) {
   return MAPA_TIPO_ID_COMPROBANTES_A_ATS_COMPRA[codigo] || '01'; // default seguro: RUC
 }
 
+// ─── <pagoExterior> y <formasDePago> de detalleComprasType ───────────────────
+// CORREGIDO 2026-10-12: el fix anterior (commit 5f51031) emitía <pagoLocExt>
+// y <formaPago> SUELTOS, directo bajo <detalleCompras> — DIMM los rechazaba
+// como "XML mal formado" en TODA línea. Verificado descargando y leyendo el
+// XSD oficial real (https://descargas.sri.gob.ec/download/anexos/ats/ats.xsd,
+// no solo la Ficha Técnica en PDF) y validando con él (lxml XMLSchema):
+// ninguno de los dos existe como hijo directo de detalleComprasType. El XSD
+// real los define anidados:
+//   pagoExterior (opcional) → pagoLocExt + aplicConvDobTrib(SI/NO/NA)
+//     + pagExtSujRetNorLeg(SI/NO/NA) — estos 2 SÍ son obligatorios DENTRO de
+//     pagoExterior si se incluye el bloque, aunque pagoExterior en sí sea
+//     opcional en detalleCompras.
+//   formasDePago (opcional) → formaPago (1 o más)
+// Como AELA no registra convenio de doble tributación ni retención por pago
+// al exterior, se reportan "NA" (No Aplica) en esos 2 subcampos — coincide
+// con el warning de "doble tributación" que había quedado sin explicar.
+function construirPagoExteriorXML(pagoLocExt) {
+  return `
+      <pagoExterior>
+        <pagoLocExt>${pagoLocExt}</pagoLocExt>
+        <aplicConvDobTrib>NA</aplicConvDobTrib>
+        <pagExtSujRetNorLeg>NA</pagExtSujRetNorLeg>
+      </pagoExterior>`;
+}
+
+function construirFormasDePagoXML(codigosFormaPago) {
+  if (!codigosFormaPago || !codigosFormaPago.length) return '';
+  return `
+      <formasDePago>${codigosFormaPago.map(cod => `
+        <formaPago>${cod}</formaPago>`).join('')}
+      </formasDePago>`;
+}
+
 async function getConfigSRI(empresaId) {
   const config = await prisma.configuracion_sri.findFirst({ where: { empresaId, activo: true } });
   if (!config) throw new Error('No hay configuración SRI configurada.');
@@ -516,6 +549,11 @@ router.get('/exportar', async (req, res) => {
       // Importación (DIM, antes DAU).
       const tipoComprobanteAts = esNotaVenta ? '02' : (esImportacion ? '20' : '01');
 
+      // pagoLocExt usa esImportacion (ya calculado arriba) para distinguir
+      // pago local (01, el caso normal) de pago al exterior (02, compras
+      // de importación) — el fix anterior lo dejaba fijo en "01" siempre.
+      const pagoExteriorXML = construirPagoExteriorXML(esImportacion ? '02' : '01');
+
       // formaPago (Tabla 13) es CONDICIONAL: solo obligatorio cuando la suma
       // de bases imponibles + ICE + IVA supera USD 1000 (confirmado en Ficha
       // Técnica oficial pág. 7 y en el error de DIMM "...exceden los USD.
@@ -523,13 +561,12 @@ router.get('/exportar', async (req, res) => {
       // Tabla 13 (mismo catálogo, ver backend/utils/formasPago.js), así que
       // no requiere conversión — solo deduplicar por código.
       const totalBaseEImpuestos = r2(baseNoObjeto + base0 + baseGravada + baseExenta + r2(compra.valorIce || 0) + r2(compra.totalIva));
-      let formaPagoXML = '';
+      let formasDePagoXML = '';
       if (totalBaseEImpuestos > 1000) {
         const pagosArr = Array.isArray(compra.pagos) ? compra.pagos
           : (typeof compra.pagos === 'string' ? JSON.parse(compra.pagos || '[]') : []);
         const codigosFormaPago = [...new Set(pagosArr.map(p => String(p.formaPago || '').trim()).filter(Boolean))];
-        formaPagoXML = codigosFormaPago.map(cod => `
-      <formaPago>${cod}</formaPago>`).join('');
+        formasDePagoXML = construirFormasDePagoXML(codigosFormaPago);
       }
 
       comprasXML += `
@@ -557,8 +594,7 @@ router.get('/exportar', async (req, res) => {
       <valRetServ50>${retIva.valRetServ50.toFixed(2)}</valRetServ50>
       <valorRetServicios>${retIva.valorRetServicios.toFixed(2)}</valorRetServicios>
       <valRetServ100>${retIva.valRetServ100.toFixed(2)}</valRetServ100>
-      <totbasesImpReemb>0.00</totbasesImpReemb>
-      <pagoLocExt>01</pagoLocExt>${formaPagoXML}
+      <totbasesImpReemb>0.00</totbasesImpReemb>${pagoExteriorXML}${formasDePagoXML}
       <air>${airXML}
       </air>${retPrincipal ? (() => {
         const rp = parseNumero(retPrincipal.numeroRetencion);
@@ -609,8 +645,7 @@ router.get('/exportar', async (req, res) => {
       <valRetServ50>0.00</valRetServ50>
       <valorRetServicios>0.00</valorRetServicios>
       <valRetServ100>0.00</valRetServ100>
-      <totbasesImpReemb>0.00</totbasesImpReemb>
-      <pagoLocExt>01</pagoLocExt>
+      <totbasesImpReemb>0.00</totbasesImpReemb>${construirPagoExteriorXML('01')}
       <docModificado>${p.codDocModificado}</docModificado>
       <estabModificado>${modif.estab}</estabModificado>
       <ptoEmiModificado>${modif.pto}</ptoEmiModificado>
@@ -1127,3 +1162,5 @@ router.get('/exportar/pdf', async (req, res) => {
 
 module.exports = router;
 module.exports.tipoIdProveedorAts = tipoIdProveedorAts;
+module.exports.construirPagoExteriorXML = construirPagoExteriorXML;
+module.exports.construirFormasDePagoXML = construirFormasDePagoXML;
