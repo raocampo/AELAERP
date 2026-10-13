@@ -50,7 +50,7 @@ router.get('/exportar/xlsx', async (req, res) => {
       orderBy: { fechaEmision: 'desc' },
       take: 5000,
       select: {
-        claveAcceso: true, rucAgente: true, razonSocialAgente: true,
+        claveAcceso: true, numeroAutorizacion: true, rucAgente: true, razonSocialAgente: true,
         fechaEmision: true, numDocSustento: true,
         totalRetencionIva: true, totalRetencionRenta: true, anulada: true,
       },
@@ -73,6 +73,7 @@ router.get('/exportar/xlsx', async (req, res) => {
       { header: 'Agente (Cliente)',  key: 'agente',      width: 36 },
       { header: 'RUC Agente',        key: 'rucAgente',   width: 14 },
       { header: 'Doc. Sustento',     key: 'docSustento', width: 22 },
+      { header: 'Autorización',      key: 'autorizacion', width: 50 },
       { header: 'Ret. IVA',          key: 'retIva',      width: 10 },
       { header: 'Ret. Renta',        key: 'retRenta',    width: 10 },
       { header: 'Total',             key: 'total',       width: 10 },
@@ -92,12 +93,19 @@ router.get('/exportar/xlsx', async (req, res) => {
         agente: r.razonSocialAgente,
         rucAgente: r.rucAgente,
         docSustento: r.numDocSustento || '',
+        // numeroAutorizacion suele ser igual a la clave de acceso (49 dígitos)
+        // una vez autorizado el comprobante — algunas retenciones importadas
+        // desde Excel histórico no lo traen, se usa claveAcceso como respaldo.
+        autorizacion: r.numeroAutorizacion || r.claveAcceso || '',
         retIva: Number(r.totalRetencionIva || 0),
         retRenta: Number(r.totalRetencionRenta || 0),
         total: totRet,
         anulada: r.anulada ? 'Si' : 'No',
       });
       fila.getCell('fecha').numFmt = 'dd/mm/yyyy';
+      // Texto explícito: una clave de 49 dígitos como número perdería ceros a
+      // la izquierda o se vería en notación científica en Excel.
+      fila.getCell('autorizacion').numFmt = '@';
       ['retIva', 'retRenta', 'total'].forEach((k) => { fila.getCell(k).numFmt = '"$"#,##0.00'; });
     });
     ws.views = [{ state: 'frozen', ySplit: 1 }];
