@@ -532,6 +532,21 @@ router.get('/exportar', async (req, res) => {
     // ATS (ver comentario arriba, monedaType exige minInclusive 0.0).
     ncs.forEach(n => acumularVentaEstab(n.establecimiento, n.importeTotal, n.totalIva));
 
+    // CORREGIDO 2026-10-12 (2da vuelta, mismo error): el primer intento
+    // asumió la regla literal del mensaje de DIMM ("Cuando EXISTAN detalles
+    // de Ventas...") — pero se confirmó con el XML real del usuario que
+    // DIMM sigue exigiendo el bloque aunque <ventas> esté completamente
+    // vacío (período con compras pero cero ventas electrónicas ese mes).
+    // En ese caso se reporta el establecimiento principal de la empresa
+    // (numEstabRuc, ya usado más abajo para el mismo campo) con $0 — es la
+    // realidad: ese establecimiento no facturó nada ese período, no un
+    // dato inventado. Solo se agrega el fallback si hay ALGO que reportar
+    // en el anexo (compras o ventas) — un período totalmente vacío no
+    // debería ni declararse.
+    if (!ventasEstabMap.size && (compras.length || facturas.length || liquidaciones.length)) {
+      ventasEstabMap.set(String(config.establecimiento || '001').padStart(3, '0'), { total: 0, iva: 0 });
+    }
+
     const ventasEstablecimientoXML = construirVentasEstablecimientoXML(
       [...ventasEstabMap.entries()].map(([codEstab, v]) => ({ codEstab, total: v.total, iva: v.iva }))
     );

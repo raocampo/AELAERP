@@ -67,8 +67,14 @@ test('ambos fragmentos combinados siguen produciendo XML bien formado (regresió
 
 // ─── construirVentasEstablecimientoXML ────────────────────────────────────────
 // Regresión del error real de DIMM: "Cuando existan detalles de Ventas debe
-// exitir Ventas Establecimiento" (sic) — faltaba el bloque por completo.
-test('construirVentasEstablecimientoXML devuelve vacío sin ítems (DIMM solo lo exige si hay detalleVentas)', () => {
+// exitir Ventas Establecimiento" (sic) — faltaba el bloque por completo. La
+// función solo arma el XML a partir de los ítems que recibe; la DECISIÓN de
+// si hay que incluir un fallback (establecimiento principal en $0 cuando hay
+// compras pero cero ventas en el período — confirmado con un XML real del
+// usuario que DIMM seguía rechazando con este mismo error incluso con
+// <ventas></ventas> completamente vacío, contradiciendo la lectura literal
+// del mensaje) vive en el caller (GET /exportar), no acá.
+test('construirVentasEstablecimientoXML devuelve vacío sin ítems', () => {
   assert.equal(construirVentasEstablecimientoXML([]), '');
   assert.equal(construirVentasEstablecimientoXML(null), '');
   assert.equal(construirVentasEstablecimientoXML(undefined), '');
