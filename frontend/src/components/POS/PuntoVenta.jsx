@@ -11,6 +11,8 @@ import { distribuirDescuentoGeneral, subtotalBase } from '../../utils/descuentoG
 import { requiereBanco } from '../../utils/formasPago';
 import { useBancos } from '../../hooks/useBancos';
 import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
+import SelectorIvaFactura from '../shared/SelectorIvaFactura';
+import { errorIvaFactura } from '../../utils/ivaFactura';
 import './PuntoVenta.css';
 
 const TIPOS_ID = [
@@ -30,15 +32,6 @@ const FORMAS_FACTURA = [
 ];
 
 const FORMAS_NOTA = ['Efectivo', 'Transferencia', 'Tarjeta débito', 'Tarjeta crédito', 'Cheque', 'Aplicaciones (Ahorita/De Una)'];
-
-const IVA_OPCIONES = [
-  { valor: 0,  label: '0%' },
-  { valor: 5,  label: '5%' },
-  { valor: 12, label: '12%' },
-  { valor: 15, label: '15%' },
-  { valor: 6,  label: 'No Objeto IVA' },
-  { valor: 7,  label: 'Exento IVA' },
-];
 
 export default function PuntoVenta() {
   const navigate = useNavigate();
@@ -283,6 +276,7 @@ export default function PuntoVenta() {
 
   // Total a cobrar: con IVA para facturas, sin IVA para notas de venta (RIMPE)
   const total = tipoDocumento === 'factura' ? totalConIva : subtotal;
+  const errorIva = tipoDocumento === 'factura' ? errorIvaFactura(carrito, fechaEmision) : '';
 
   // Con una sola línea de pago, autocompletar el monto con el total (mismo
   // comportamiento de siempre — el cajero no tiene que escribirlo). Con 2+
@@ -486,6 +480,7 @@ export default function PuntoVenta() {
   };
 
   const emitirDocumento = async () => {
+    if (errorIva) return toast.error(errorIva);
     if (carrito.length === 0) {
       toast.error('Agrega al menos un producto al carrito');
       return;
@@ -903,6 +898,7 @@ export default function PuntoVenta() {
           </div>
 
           <div className="pos-table-wrap">
+            {errorIva && <p role="alert" className="iva-factura-aviso">{errorIva}</p>}
             <table className="pos-table">
               <thead>
                 <tr>
@@ -944,9 +940,8 @@ export default function PuntoVenta() {
                     </td>
                     {tipoDocumento === 'factura' && (
                       <td>
-                        <select value={item.ivaPorcentaje} onChange={(e) => actualizarLinea(item.uid, 'ivaPorcentaje', Number(e.target.value))}>
-                          {IVA_OPCIONES.map((o) => <option key={o.valor} value={o.valor}>{o.label}</option>)}
-                        </select>
+                        <SelectorIvaFactura value={item.ivaPorcentaje} fechaEmision={fechaEmision}
+                          onChange={(e) => actualizarLinea(item.uid, 'ivaPorcentaje', Number(e.target.value))} />
                       </td>
                     )}
                     <td>

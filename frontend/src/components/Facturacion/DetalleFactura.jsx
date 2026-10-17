@@ -9,6 +9,7 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { formatFechaLarga, formatFechaHora } from '../../utils/fecha';
 import { abrirBlobEnNuevaPestana, descargarXml } from '../../utils/exportCsv';
+import { errorIvaFactura } from '../../utils/ivaFactura';
 import './DetalleFactura.css';
 // ─── Timeline de estado SRI ───────────────────────────────────────────────────
 const PASOS_SRI = [
@@ -164,6 +165,8 @@ const DetalleFactura = () => {
   if (!factura) return <div className="error">Factura no encontrada</div>;
 
   const detalles = typeof factura.detalles === 'string' ? JSON.parse(factura.detalles) : factura.detalles;
+  const errorIva = !factura.anulada && !['AUTORIZADO', 'ANULADO', 'HISTORICO'].includes(factura.estadoSri)
+    ? errorIvaFactura(detalles || [], factura.fechaEmision) : '';
   const pagos    = typeof factura.pagos    === 'string' ? JSON.parse(factura.pagos)    : factura.pagos;
   const mensajes = factura.mensajesSri;
   const mensajesReales = mensajes?.mensajes || mensajes?.recepcion?.mensajes;
@@ -197,7 +200,7 @@ const DetalleFactura = () => {
           <button className="btn-secondary" onClick={descargarPDF}>📄 RIDE PDF</button>
           <button className="btn-secondary" onClick={imprimirRecibo}>🖨️ Recibo POS</button>
           <button className="btn-secondary" onClick={descargarXML}>📥 XML</button>
-          {['PENDIENTE_FIRMA', 'RECHAZADO', 'ERROR', 'FIRMADO_PENDIENTE_ENVIO'].includes(factura.estadoSri) && !factura.anulada && (
+          {['PENDIENTE_FIRMA', 'RECHAZADO', 'ERROR', 'FIRMADO_PENDIENTE_ENVIO'].includes(factura.estadoSri) && !factura.anulada && !errorIva && (
             <button className="btn-secondary" onClick={reenviar}>🔄 Reenviar SRI</button>
           )}
           {!factura.anulada && factura.estadoSri !== 'ANULADO' && !bloqueadoConsumidorFinal && (
@@ -225,6 +228,14 @@ const DetalleFactura = () => {
       <div className="det-card">
         <h2>Estado SRI</h2>
         <TimelineSRI estado={factura.estadoSri} />
+        {errorIva && (
+          <div role="alert" className="det-errores">
+            <strong>La factura contiene una tarifa de IVA inválida.</strong>
+            <p>{errorIva}</p>
+            <p>Anula localmente esta factura no autorizada y emite una nueva con los datos correctos.
+              Reenviar el mismo XML repetirá el rechazo.</p>
+          </div>
+        )}
         {factura.numeroAutorizacion && (
           <div className="det-autorizacion">
             <span className="det-label">N° Autorización:</span>

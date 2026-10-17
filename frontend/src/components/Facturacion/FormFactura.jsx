@@ -13,6 +13,8 @@ import { distribuirDescuentoGeneral, subtotalBase } from '../../utils/descuentoG
 import { requiereBanco } from '../../utils/formasPago';
 import { useBancos } from '../../hooks/useBancos';
 import SelectorPuntoVenta from '../shared/SelectorPuntoVenta';
+import SelectorIvaFactura from '../shared/SelectorIvaFactura';
+import { errorIvaFactura } from '../../utils/ivaFactura';
 import './FormFactura.css';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -40,15 +42,6 @@ const FORMAS_PAGO_SRI = [
 
 const UNIDADES_TIEMPO = ['dias', 'meses', 'años'];
 
-const IVA_OPCIONES = [
-  { valor: 0,  label: '0%' },
-  { valor: 5,  label: '5%' },
-  { valor: 12, label: '12%' },
-  { valor: 15, label: '15%' },
-  { valor: 6,  label: 'No Objeto IVA' },
-  { valor: 7,  label: 'Exento IVA' },
-];
-
 const DETALLE_VACIO = {
   codigoPrincipal: '',
   codigoAuxiliar:  '',
@@ -60,14 +53,9 @@ const DETALLE_VACIO = {
 };
 
 // ─── Mapeador IVA producto → factura ─────────────────────────────────────────
-const mapearIva = (tarifaIva) => {
-  if (tarifaIva === 15) return 15;
-  if (tarifaIva === 12 || tarifaIva === 14) return 12;
-  if (tarifaIva === 5)  return 5;
-  if (tarifaIva === 6)  return 6; // No Objeto de IVA
-  if (tarifaIva === 7)  return 7; // Exento de IVA
-  return 0;
-};
+// Conservar la tarifa del catálogo para señalarla si no es válida, sin
+// convertir un 14% a 12% ni otra tarifa desconocida a 0% silenciosamente.
+const mapearIva = (tarifaIva) => Number(tarifaIva ?? 0);
 
 // ─── Cálculo de totales ───────────────────────────────────────────────────────
 // Acumulamos con precisión completa (precios hasta 4 dec) y solo redondeamos al final.
@@ -336,6 +324,7 @@ const FormFactura = () => {
   const subtotalAntesDescGeneral = subtotalBase(detalles);
   const detallesConDescGeneral = distribuirDescuentoGeneral(detalles, descuentoGeneral);
   const totales = calcularTotales(detallesConDescGeneral);
+  const errorIva = errorIvaFactura(detalles, fechaEmision);
 
   // ── Pre-llenado desde Proforma (location.state.proforma) ────────────────
   useEffect(() => {
@@ -586,6 +575,7 @@ const FormFactura = () => {
     e.preventDefault();
     if (!idComprador || !razonSocial) return toast.error('Faltan datos del cliente');
     if (detalles.length === 0) return toast.error('Agrega al menos un ítem a la factura');
+    if (errorIva) return toast.error(errorIva);
     if (detalles.some(d => !d.descripcion || !d.precioUnitario)) {
       return toast.error('Completa la descripción y precio de todos los ítems');
     }
@@ -820,6 +810,7 @@ const FormFactura = () => {
           </div>
 
           {/* Tabla de ítems — envuelto en fact-tabla-outer para contener el scroll horizontal */}
+          {errorIva && <p role="alert" className="iva-factura-aviso">{errorIva}</p>}
           <div className="fact-tabla-outer">
           <div className="fact-detalles-wrap">
             {/* Encabezado */}
@@ -866,10 +857,8 @@ const FormFactura = () => {
                       value={det.precioUnitario}
                       onChange={e => actualizarDetalle(idx, 'precioUnitario', e.target.value)}
                       placeholder="0.0000" required />
-                    <select style={{ flex: '0 0 46px' }} value={det.ivaPorcentaje}
-                      onChange={e => actualizarDetalle(idx, 'ivaPorcentaje', parseInt(e.target.value))}>
-                      {IVA_OPCIONES.map(o => <option key={o.valor} value={o.valor}>{o.label}</option>)}
-                    </select>
+                    <SelectorIvaFactura style={{ flex: '0 0 46px' }} value={det.ivaPorcentaje} fechaEmision={fechaEmision}
+                      onChange={e => actualizarDetalle(idx, 'ivaPorcentaje', parseInt(e.target.value))} />
                     <input type="number" min="0" step="0.01"
                       style={{ flex: '0 0 48px', textAlign: 'right' }}
                       value={det.descuento}

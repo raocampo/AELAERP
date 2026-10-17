@@ -140,3 +140,47 @@ test('generarXMLFactura usa el código de porcentaje real (no "0") en el detalle
   const detalle = xml.match(/<detalle>([\s\S]*?)<\/detalle>/)[1];
   assert.match(detalle, /<codigoPorcentaje>6<\/codigoPorcentaje>/);
 });
+
+function datosFacturaConIva(ivaPorcentaje, fechaEmision = '2026-10-16') {
+  return {
+    fechaEmision,
+    tipoIdentificacionComprador: '07',
+    identificacionComprador: '9999999999999',
+    razonSocialComprador: 'CONSUMIDOR FINAL',
+    detalles: [{ codigoPrincipal: 'PRUEBA', descripcion: 'Producto', cantidad: 1, precioUnitario: 100, descuento: 0, ivaPorcentaje }],
+  };
+}
+
+test('regresión SRI 52: no genera una factura del 16/10/2026 con IVA 12% (código 2)', () => {
+  assert.throws(() => sri.generarXMLFactura(datosFacturaConIva(12), CONFIG_BASE), (err) => {
+    assert.equal(err.status, 400);
+    assert.equal(err.code, 'IVA_FACTURA_INVALIDO');
+    assert.match(err.message, /PRUEBA.*IVA 12%.*no vigente.*2026-10-16/);
+    return true;
+  });
+});
+
+test('el corte de IVA 12% conserva el XML histórico del 31/03/2024 y bloquea desde el 01/04/2024', () => {
+  const { xml, totales } = sri.generarXMLFactura(datosFacturaConIva(12, '2024-03-31'), CONFIG_BASE);
+  assert.equal(totales.subtotal12, 100);
+  assert.equal(totales.totalIva, 12);
+  assert.equal(totales.importeTotal, 112);
+  assert.match(xml, /<codigoPorcentaje>2<\/codigoPorcentaje>/);
+  assert.match(xml, /<tarifa>12\.00<\/tarifa>/);
+  for (const fecha of ['2024-04-01', new Date('2024-04-01T00:00:00.000Z')]) {
+    assert.throws(() => sri.generarXMLFactura(datosFacturaConIva('12', fecha), CONFIG_BASE), /IVA 12%.*no vigente/);
+  }
+});
+
+test('la factura actual con IVA 15% usa código 4 en cabecera y detalle y totaliza correctamente', () => {
+  const { xml, totales } = sri.generarXMLFactura(datosFacturaConIva(15), CONFIG_BASE);
+  assert.equal(totales.subtotal15, 100);
+  assert.equal(totales.totalIva, 15);
+  assert.equal(totales.importeTotal, 115);
+  assert.equal((xml.match(/<codigoPorcentaje>4<\/codigoPorcentaje>/g) || []).length, 2);
+  assert.doesNotMatch(xml, /<codigoPorcentaje>2<\/codigoPorcentaje>/);
+});
+
+test('una tarifa desconocida del catálogo no se convierte silenciosamente en IVA 0%', () => {
+  assert.throws(() => sri.generarXMLFactura(datosFacturaConIva(14), CONFIG_BASE), /IVA no soportada/);
+});

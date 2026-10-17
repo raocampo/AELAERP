@@ -17,6 +17,7 @@ const https      = require('https');
 const PDFDocument = require('pdfkit');
 const { registrarFuentesPdf } = require('./pdfFonts');
 const { FORMA_PAGO_DESC, etiquetaPago } = require('./formasPago');
+const { validarIvaFactura } = require('./ivaFactura');
 const fs         = require('fs');
 const path       = require('path');
 const bwipjs     = require('bwip-js');
@@ -273,6 +274,7 @@ function _agregarInfoAdicional(root, camposAd = []) {
  * Genera el XML de una Factura según el esquema SRI versión 1.1.0
  */
 function generarXMLFactura(data, config) {
+  validarIvaFactura(data.detalles, data.fechaEmision);
   const {
     claveAcceso,
     secuencial,

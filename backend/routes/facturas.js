@@ -32,6 +32,7 @@ const { getCertBuffer, tieneCertificado, getCertInfo } = require('../utils/certU
 const { enviarDocumentoFiscal } = require('../utils/email');
 const { condicionComprasDeducibles } = require('../utils/comprasFiscal');
 const { requiereNCAutomaticaPorVentana } = require('../utils/anulacionFactura');
+const { validarIvaFactura } = require('../utils/ivaFactura');
 
 // Aplicar autenticación JWT a todas las rutas
 router.use(proteger);
@@ -1132,7 +1133,7 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
     if (tipoIdentificacionComprador === '04' && !/^\d{13}$/.test(identificacionComprador)) {
       return res.status(400).json({ ok: false, error: `El RUC del comprador debe tener 13 dígitos (tiene ${identificacionComprador.length}). Si es una cédula, selecciona "Cédula" como tipo de identificación.` });
     }
-    if (!detalles || detalles.length === 0) {
+    if (!Array.isArray(detalles) || detalles.length === 0) {
       return res.status(400).json({ ok: false, error: 'Debe incluir al menos un detalle' });
     }
 
@@ -1221,6 +1222,9 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
         error: `La fecha de emisión debe corresponder a la operación real (máximo ${MAX_DIAS_ATRASO_FECHA_EMISION} días de atraso, sin fechas futuras) — Res. SRI NAC-DGERCGC25-00000014, transmisión inmediata vigente desde 2026-01-01. Para facturas de períodos anteriores usa "Importar facturas históricas".`,
       });
     }
+
+    // Validar antes de reservar el secuencial o registrar venta/inventario/caja.
+    validarIvaFactura(detallesFinales, fechaEmisionEC);
 
     // Punto de venta que emite el documento — si no viene en el body (ej.
     // integraciones que no seleccionan punto de venta), cae al único
@@ -1369,6 +1373,9 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
     res.status(201).json({ ok: true, data: factura, mensaje: 'Factura creada. Procesando en SRI...' });
   } catch (err) {
     console.error('Error al crear factura:', err);
+    if (err.code === 'IVA_FACTURA_INVALIDO') {
+      return res.status(400).json({ ok: false, error: err.message });
+    }
     if (/Stock insuficiente|Producto no encontrado/.test(err.message || '')) {
       return res.status(400).json({ ok: false, error: err.message });
     }
@@ -1385,6 +1392,19 @@ router.post('/:id/reenviar', permitirEmitirFacturacion, async (req, res) => {
     if (!factura) return res.status(404).json({ ok: false, error: 'Factura no encontrada' });
     if (factura.estadoSri === 'AUTORIZADO') {
       return res.status(400).json({ ok: false, error: 'La factura ya está autorizada' });
+    }
+
+    // Reenviar conserva el XML original: repetirlo no corrige un IVA inválido.
+    // No alterar aquí los importes de una venta ya registrada.
+    try {
+      const detalles = typeof factura.detalles === 'string' ? JSON.parse(factura.detalles) : factura.detalles;
+      validarIvaFactura(detalles || [], factura.fechaEmision);
+    } catch (errIva) {
+      if (errIva.code !== 'IVA_FACTURA_INVALIDO') throw errIva;
+      return res.status(400).json({
+        ok: false,
+        error: `${errIva.message} Anula localmente la factura no autorizada y emite una nueva con los datos correctos; reenviar el mismo XML repetirá el rechazo.`,
+      });
     }
 
     // Si el rechazo fue por límite diario del SRI (error 90), encolar para mañana
