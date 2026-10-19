@@ -4,6 +4,9 @@ Este directorio concentra la documentacion funcional y tecnica principal del pro
 
 ## Indice
 
+- `pendientes-2026-10-19-lavatodo-no-inventariable.md`
+  - causa y corrección de una compra vinculada a un producto sin control de inventario
+  - entrada autorizada de ocho unidades y verificación sin duplicados
 - `pendientes-2026-10-17-factura-iva-no-vigente.md`
   - rechazo SRI 52 por IVA 12% en una factura de octubre de 2026
   - validación por fecha, corrección del selector en Facturación/POS y pasos para la factura rechazada
