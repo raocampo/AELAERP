@@ -4,6 +4,9 @@ Este directorio concentra la documentacion funcional y tecnica principal del pro
 
 ## Indice
 
+- `revision-2026-10-20-envio-correos-facturas.md`
+  - destinatarios de facturas y revisión del envío normal y por cola SRI
+  - diferencia entre autorización fiscal y entrega de correo; confirmación del proveedor pendiente
 - `pendientes-2026-10-19-lavatodo-no-inventariable.md`
   - causa y corrección de una compra vinculada a un producto sin control de inventario
   - entrada autorizada de ocho unidades y verificación sin duplicados
