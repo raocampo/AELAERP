@@ -4,8 +4,11 @@ Este directorio concentra la documentacion funcional y tecnica principal del pro
 
 ## Indice
 
+- `pendientes-2026-10-20-correo-facturas-cola-sri.md`
+  - caso confirmado de El Rincón de la Catedral dentro de corpsimtelec multiempresa
+  - corrección del correo omitido por la cola SRI y del RIDE incompleto; recuperación de correos pendiente
 - `revision-2026-10-20-envio-correos-facturas.md`
-  - destinatarios de facturas y revisión del envío normal y por cola SRI
+  - revisión preliminar de sys: destinatarios y envío normal y por cola SRI
   - diferencia entre autorización fiscal y entrega de correo; confirmación del proveedor pendiente
 - `pendientes-2026-10-19-lavatodo-no-inventariable.md`
   - causa y corrección de una compra vinculada a un producto sin control de inventario

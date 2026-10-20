@@ -187,16 +187,19 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config, tenantSlug =
 
     // Firmar
     const xmlFirmado = sri.firmarXML(xmlGenerado, p12Buffer, claveP12);
-    await prisma.facturas.update({
-      where: { id: facturaId },
+    const firmada = await prisma.facturas.updateMany({
+      where: { id: facturaId, empresaId: config.empresaId, anulada: false,
+        estadoSri: { not: 'AUTORIZADO' } },
       data:  { xmlFirmado, estadoSri: 'ENVIADO' },
     });
+    if (!firmada.count) return;
 
     // Enviar al SRI
     const recepcion = await sri.enviarComprobanteSRI(xmlFirmado, config.ambiente);
     if (recepcion.estado !== 'RECIBIDA') {
-      await prisma.facturas.update({
-        where: { id: facturaId },
+      await prisma.facturas.updateMany({
+        where: { id: facturaId, empresaId: config.empresaId, anulada: false,
+          estadoSri: { not: 'AUTORIZADO' } },
         data:  { estadoSri: 'RECHAZADO', mensajesSri: recepcion },
       });
       return;
@@ -218,15 +221,18 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config, tenantSlug =
       const pdfPath = path.join(DIR_FACTURAS, `factura-${facturaId}.pdf`);
       const enlacePublico = sri.construirEnlacePublicoFactura({ tenantSlug, numeroFactura: factura.numeroFactura });
       await sri.generarRIDEFactura(
-        { ...factura, xmlAutorizado: autorizacion.xmlAutorizado },
+        { ...factura, xmlAutorizado: autorizacion.xmlAutorizado,
+          numeroAutorizacion: autorizacion.numeroAutorizacion,
+          fechaAutorizacion: autorizacion.fechaAutorizacion },
         config,
         pdfPath,
         { enlacePublico }
       );
       const pdfUrl = `/uploads/facturas/factura-${facturaId}.pdf`;
 
-      await prisma.facturas.update({
-        where: { id: facturaId },
+      const actualizada = await prisma.facturas.updateMany({
+        where: { id: facturaId, empresaId: factura.empresaId, anulada: false,
+          estadoSri: { not: 'AUTORIZADO' } },
         data: {
           estadoSri:         'AUTORIZADO',
           numeroAutorizacion: autorizacion.numeroAutorizacion,
@@ -236,6 +242,9 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config, tenantSlug =
           pdfUrl,
         },
       });
+      // La cola y el reenvío manual pueden coincidir: solo quien completa la
+      // transición debe emitir la notificación de esta autorización.
+      if (!actualizada.count) return;
 
       try {
         await crearAsientoFacturaAutorizada({
@@ -277,8 +286,9 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config, tenantSlug =
       // Si hay mensajes de rechazo reales del SRI → RECHAZADO definitivo
       // Si la respuesta está vacía (SRI aún procesando) → FIRMADO_PENDIENTE_ENVIO para reintento
       const esRechazoReal = autorizacion.mensajes && autorizacion.mensajes.length > 0;
-      await prisma.facturas.update({
-        where: { id: facturaId },
+      await prisma.facturas.updateMany({
+        where: { id: facturaId, empresaId: config.empresaId, anulada: false,
+          estadoSri: { not: 'AUTORIZADO' } },
         data: {
           estadoSri:   esRechazoReal ? 'RECHAZADO' : 'FIRMADO_PENDIENTE_ENVIO',
           mensajesSri: { recepcion, autorizacion: autorizacion.mensajes },
@@ -291,8 +301,9 @@ async function procesarFacturaEnSRI(facturaId, xmlGenerado, config, tenantSlug =
     if (nuevoEstado === 'FIRMADO_PENDIENTE_ENVIO') {
       console.log(`[SRI] Factura #${facturaId} queda en cola — sin internet (${err.code || err.message})`);
     }
-    await prisma.facturas.update({
-      where: { id: facturaId },
+    await prisma.facturas.updateMany({
+      where: { id: facturaId, empresaId: config.empresaId, anulada: false,
+        estadoSri: { not: 'AUTORIZADO' } },
       data:  { estadoSri: nuevoEstado, mensajesSri: { error: err.message, code: err.code } },
     }).catch(() => {});
   }

@@ -1,5 +1,13 @@
 # Revisión 2026-10-20 — Correo de facturas
 
+**Aclaración posterior del alcance:** el usuario identificó el caso real como
+RUC `1100646239001`, empresa de `corpsimtelec` multiempresa. Los resultados de
+`sys` que siguen son de la consulta preliminar. La revisión de esa empresa,
+los logs de producción y la corrección implementada se documentan en
+[Correo de facturas por cola SRI](pendientes-2026-10-20-correo-facturas-cola-sri.md).
+Las limitaciones de acceso indicadas aquí describen el momento de esa primera
+revisión; después se consiguió consultar Railway mediante la sesión de su CLI.
+
 ## Alcance y resultado
 
 Consulta de solo lectura del tenant `sys` y revisión de los caminos de

@@ -11,6 +11,7 @@ const prisma = require('../config/prisma');
 const sri    = require('./sri');
 const fs     = require('fs');
 const path   = require('path');
+const email  = require('./email');
 const { getCertBuffer, tieneCertificado } = require('./certUtils');
 const { getTenantPrisma }  = require('../config/prismaTenant');
 const { getPrismaMaster }  = require('../config/prismaMaster');
@@ -115,6 +116,31 @@ async function getConfigSRI(empresaId) {
   return config;
 }
 
+// El fallo del proveedor de correo no debe convertir una factura autorizada
+// en un error fiscal ni provocar un nuevo envío al SRI.
+async function notificarFacturaAutorizada(factura, config, autorizacion, pdfPath) {
+  const destinatario = factura.emailComprador?.trim();
+  if (!destinatario) return;
+  try {
+    await email.enviarDocumentoFiscal({
+      tipo: 'FACTURA',
+      numero: factura.numeroFactura,
+      email: destinatario,
+      pdfPath,
+      razonSocialEmisor: factura.razonSocialEmisor,
+      nombreComercialEmisor: config.nombreComercial,
+      logoUrl: config.logoUrl,
+      razonSocialComprador: factura.razonSocialComprador,
+      fecha: factura.fechaEmision,
+      total: factura.importeTotal,
+      claveAcceso: factura.claveAcceso,
+      numeroAutorizacion: autorizacion.numeroAutorizacion,
+    });
+  } catch (err) {
+    console.error(`[email] ColaSRI factura #${factura.id}:`, err.message);
+  }
+}
+
 // ─── Reintento: Factura ─────────────────────────────────────
 async function reintentarFactura(factura) {
   // Espera por límite diario del SRI (error 90)
@@ -134,10 +160,12 @@ async function reintentarFactura(factura) {
     if (!xmlFirmado) {
       const p12Buffer = getCertBuffer(config);
       xmlFirmado = sri.firmarXML(factura.xmlGenerado, p12Buffer, config.claveCertificado || '');
-      await prisma.facturas.update({
-        where: { id: factura.id },
+      const firmada = await prisma.facturas.updateMany({
+        where: { id: factura.id, empresaId: factura.empresaId, anulada: false,
+          estadoSri: { not: 'AUTORIZADO' } },
         data:  { xmlFirmado, estadoSri: 'ENVIADO' },
       });
+      if (!firmada.count) return;
     } else {
       // El XML ya fue firmado y probablemente enviado (RECIBIDA por el SRI).
       // Intentar autorizar directamente antes de re-enviar.
@@ -152,12 +180,15 @@ async function reintentarFactura(factura) {
         const DIR_FACTURAS = path.join(__dirname, '..', 'uploads', 'facturas');
         const pdfPath = path.join(DIR_FACTURAS, `factura-${factura.id}.pdf`);
         await sri.generarRIDEFactura(
-          { ...factura, xmlAutorizado: autorizacionDirecta.xmlAutorizado },
+          { ...factura, xmlAutorizado: autorizacionDirecta.xmlAutorizado,
+            numeroAutorizacion: autorizacionDirecta.numeroAutorizacion,
+            fechaAutorizacion: autorizacionDirecta.fechaAutorizacion },
           config,
           pdfPath
         );
-        await prisma.facturas.update({
-          where: { id: factura.id },
+        const actualizada = await prisma.facturas.updateMany({
+          where: { id: factura.id, empresaId: factura.empresaId, anulada: false,
+            estadoSri: { not: 'AUTORIZADO' } },
           data: {
             estadoSri:          'AUTORIZADO',
             numeroAutorizacion: autorizacionDirecta.numeroAutorizacion,
@@ -167,19 +198,24 @@ async function reintentarFactura(factura) {
             pdfUrl:             `/uploads/facturas/factura-${factura.id}.pdf`,
           },
         });
+        // Otro proceso pudo completar la autorización mientras consultábamos al SRI.
+        if (!actualizada.count) return;
         try {
           const { crearAsientoFacturaAutorizada } = require('./contabilidad');
           await crearAsientoFacturaAutorizada({ facturaId: factura.id, usuarioId: factura.emisorId, fecha: factura.fechaEmision || new Date() });
         } catch (_) {}
         console.log(`[ColaSRI] Factura #${factura.id} autorizada OK (autorización directa)`);
+        await notificarFacturaAutorizada(factura, config, autorizacionDirecta, pdfPath);
         return;
       }
 
       // No está autorizada aún — re-enviar al SRI (puede haber expirado o nunca llegó)
-      await prisma.facturas.update({
-        where: { id: factura.id },
+      const reenviada = await prisma.facturas.updateMany({
+        where: { id: factura.id, empresaId: factura.empresaId, anulada: false,
+          estadoSri: { not: 'AUTORIZADO' } },
         data:  { estadoSri: 'ENVIADO' },
       });
+      if (!reenviada.count) return;
     }
 
     const recepcion = await sri.enviarComprobanteSRI(xmlFirmado, config.ambiente);
@@ -187,8 +223,9 @@ async function reintentarFactura(factura) {
       const mensajes = recepcion.mensajes || recepcion.recepcion?.mensajes || [];
       if (esLimiteError(mensajes)) {
         const reintentar = reintentarDesdeManana();
-        await prisma.facturas.update({
-          where: { id: factura.id },
+        await prisma.facturas.updateMany({
+          where: { id: factura.id, empresaId: factura.empresaId, anulada: false,
+            estadoSri: { not: 'AUTORIZADO' } },
           data: {
             estadoSri:   'FIRMADO_PENDIENTE_ENVIO',
             xmlFirmado:  null, // re-firmar mañana con el cert correcto
@@ -198,8 +235,9 @@ async function reintentarFactura(factura) {
         console.log(`[ColaSRI] Factura #${factura.id} — error 90 SRI, reintentará ${reintentar}`);
         return;
       }
-      await prisma.facturas.update({
-        where: { id: factura.id },
+      await prisma.facturas.updateMany({
+        where: { id: factura.id, empresaId: factura.empresaId, anulada: false,
+          estadoSri: { not: 'AUTORIZADO' } },
         data:  { estadoSri: 'RECHAZADO', mensajesSri: recepcion },
       });
       return;
@@ -210,13 +248,16 @@ async function reintentarFactura(factura) {
       const DIR_FACTURAS = path.join(__dirname, '..', 'uploads', 'facturas');
       const pdfPath = path.join(DIR_FACTURAS, `factura-${factura.id}.pdf`);
       await sri.generarRIDEFactura(
-        { ...factura, xmlAutorizado: autorizacion_result.xmlAutorizado },
+        { ...factura, xmlAutorizado: autorizacion_result.xmlAutorizado,
+          numeroAutorizacion: autorizacion_result.numeroAutorizacion,
+          fechaAutorizacion: autorizacion_result.fechaAutorizacion },
         config,
         pdfPath
       );
 
-      await prisma.facturas.update({
-        where: { id: factura.id },
+      const actualizada = await prisma.facturas.updateMany({
+        where: { id: factura.id, empresaId: factura.empresaId, anulada: false,
+          estadoSri: { not: 'AUTORIZADO' } },
         data: {
           estadoSri:          'AUTORIZADO',
           numeroAutorizacion: autorizacion_result.numeroAutorizacion,
@@ -226,6 +267,7 @@ async function reintentarFactura(factura) {
           pdfUrl:             `/uploads/facturas/factura-${factura.id}.pdf`,
         },
       });
+      if (!actualizada.count) return;
 
       // Asiento contable
       try {
@@ -238,10 +280,12 @@ async function reintentarFactura(factura) {
       } catch (_) {}
 
       console.log(`[ColaSRI] Factura #${factura.id} autorizada OK (reintento)`);
+      await notificarFacturaAutorizada(factura, config, autorizacion_result, pdfPath);
     } else {
       const esRechazoReal = autorizacion_result.mensajes && autorizacion_result.mensajes.length > 0;
-      await prisma.facturas.update({
-        where: { id: factura.id },
+      await prisma.facturas.updateMany({
+        where: { id: factura.id, empresaId: factura.empresaId, anulada: false,
+          estadoSri: { not: 'AUTORIZADO' } },
         data: {
           estadoSri: esRechazoReal ? 'RECHAZADO' : 'FIRMADO_PENDIENTE_ENVIO',
           mensajesSri: { recepcion, autorizacion: autorizacion_result.mensajes },
@@ -252,13 +296,15 @@ async function reintentarFactura(factura) {
   } catch (err) {
     if (esErrorConectividad(err)) {
       // Volver a FIRMADO_PENDIENTE_ENVIO para reintentar después
-      await prisma.facturas.update({
-        where: { id: factura.id },
+      await prisma.facturas.updateMany({
+        where: { id: factura.id, empresaId: factura.empresaId, anulada: false,
+          estadoSri: { not: 'AUTORIZADO' } },
         data:  { estadoSri: 'FIRMADO_PENDIENTE_ENVIO' },
       }).catch(() => {});
     } else {
-      await prisma.facturas.update({
-        where: { id: factura.id },
+      await prisma.facturas.updateMany({
+        where: { id: factura.id, empresaId: factura.empresaId, anulada: false,
+          estadoSri: { not: 'AUTORIZADO' } },
         data:  { estadoSri: 'ERROR', mensajesSri: { error: err.message } },
       }).catch(() => {});
       console.error(`[ColaSRI] Error no recuperable en factura #${factura.id}:`, err.message);
@@ -620,10 +666,8 @@ async function procesarPendientesEnDB() {
     const [facturas, retenciones, liquidaciones, notasDebito, notasCredito] = await Promise.all([
       prisma.facturas.findMany({
         where:   { estadoSri: 'FIRMADO_PENDIENTE_ENVIO' },
-        select:  {
-          id: true, empresaId: true, emisorId: true, claveAcceso: true,
-          xmlGenerado: true, xmlFirmado: true, fechaEmision: true, mensajesSri: true,
-        },
+        // El RIDE y el correo requieren comprador, número, importes y detalles.
+        // La selección parcial anterior producía un PDF sin esos datos.
         orderBy: { createdAt: 'asc' },
         take:    20,
       }),
