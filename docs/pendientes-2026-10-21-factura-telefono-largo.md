@@ -47,6 +47,26 @@ reserva. No requiere renumerar ni emitir automáticamente comprobantes.
 - `prisma validate`, compilación del frontend y ESLint del componente cambiado:
   correctos.
 
-La aplicación del esquema en producción corresponde al despliegue automático
-del commit. La comprobación posterior consiste en consultar los tres límites
-de columna y la salud del backend, sin emitir una factura real de prueba.
+## Aplicación en producción y despliegue pendiente
+
+El código se publicó en `main` mediante el commit `c20791a`. Al intentar
+desplegar ese SHA explícitamente, Railway respondió
+`Deploys have been paused temporarily`, sin crear un despliegue. El proveedor
+confirmó una [incidencia general con builds pausados el 21 de octubre](https://status.railway.com/incident/QH8L8B3E).
+El backend seguía ejecutando `b876b50`.
+
+Para resolver el error de la factura, se aplicó el archivo SQL ya probado
+únicamente sobre el esquema `public` de la BD principal `railway`, en una
+transacción con espera de bloqueo limitada a tres segundos. Se comprobaron
+los tres límites anteriores de 20 y los posteriores de 50; la consulta se
+repitió después del COMMIT. Se conserva el respaldo de metadatos antes/después
+en `backups/corpsimtelec-telefonos-schema-2026-10-21.json`, ignorado por Git.
+
+La ampliación es compatible con el backend que sigue en ejecución y permite
+guardar el teléfono de 21 caracteres sin recortarlo. No se emitió una factura
+real como prueba. No se hicieron cambios directos en BDs de otros tenants.
+
+Pendiente: desplegar la versión nueva de `main` cuando Railway restablezca los
+builds, para activar las validaciones y mensajes nuevos del backend. La
+migración incluida es idempotente y respetará la ampliación ya aplicada a la
+BD principal; el arranque habitual cubre las BDs de tenants.
