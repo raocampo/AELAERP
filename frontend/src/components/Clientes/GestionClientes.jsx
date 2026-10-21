@@ -715,6 +715,7 @@ export default function GestionClientes() {
                   <input
                     type="text"
                     value={form.telefono}
+                    maxLength={50}
                     onChange={(e) => setForm((p) => ({ ...p, telefono: e.target.value }))}
                   />
                 </div>

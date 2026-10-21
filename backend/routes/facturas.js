@@ -33,6 +33,7 @@ const { enviarDocumentoFiscal } = require('../utils/email');
 const { condicionComprasDeducibles } = require('../utils/comprasFiscal');
 const { requiereNCAutomaticaPorVentana } = require('../utils/anulacionFactura');
 const { validarIvaFactura } = require('../utils/ivaFactura');
+const { normalizarTelefonoContacto } = require('../utils/telefonoContacto');
 
 // Aplicar autenticación JWT a todas las rutas
 router.use(proteger);
@@ -1103,7 +1104,7 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
       razonSocialComprador,
       direccionComprador,
       emailComprador,
-      telefonoComprador,
+      telefonoComprador: telefonoCompradorBody,
       detalles,
       pagos,
       propina,
@@ -1129,6 +1130,9 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
         return res.status(200).json({ ok: true, data: yaExiste, mensaje: 'Ya existía, se devuelve la factura registrada' });
       }
     }
+
+    // Antes de reservar el secuencial: un contacto inválido no crea una venta.
+    const telefonoComprador = normalizarTelefonoContacto(telefonoCompradorBody, 'El teléfono del comprador');
 
     // Validaciones mínimas
     if (!tipoIdentificacionComprador || !identificacionComprador || !razonSocialComprador) {
@@ -1384,8 +1388,11 @@ router.post('/', permitirEmitirFacturacion, async (req, res) => {
     res.status(201).json({ ok: true, data: factura, mensaje: 'Factura creada. Procesando en SRI...' });
   } catch (err) {
     console.error('Error al crear factura:', err);
-    if (err.code === 'IVA_FACTURA_INVALIDO') {
+    if (err.code === 'IVA_FACTURA_INVALIDO' || err.code === 'TELEFONO_CONTACTO_INVALIDO') {
       return res.status(400).json({ ok: false, error: err.message });
+    }
+    if (err.code === 'P2000') {
+      return res.status(400).json({ ok: false, error: 'Uno de los datos de la factura supera el tamaño permitido. Revisa los datos del comprador.' });
     }
     if (/Stock insuficiente|Producto no encontrado/.test(err.message || '')) {
       return res.status(400).json({ ok: false, error: err.message });

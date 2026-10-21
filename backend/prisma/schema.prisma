@@ -201,7 +201,7 @@ model clientes {
   nombreComercial    String?  @db.VarChar(300)
   direccion          String?  @db.VarChar(300)
   email              String?  @db.VarChar(150)
-  telefono           String?  @db.VarChar(20)
+  telefono           String?  @db.VarChar(50)
   activo             Boolean  @default(true)
   // Agente vendedor asignado (módulo Agente Vendedor). El vendedor solo ve
   // los clientes con su propio id acá. NULL = sin asignar.
@@ -755,7 +755,7 @@ model facturas {
   razonSocialComprador        String    @db.VarChar(300)
   direccionComprador          String?   @db.VarChar(300)
   emailComprador              String?   @db.VarChar(150)
-  telefonoComprador           String?   @db.VarChar(20)
+  telefonoComprador           String?   @db.VarChar(50)
   clienteId                   Int?
   fechaEmision                DateTime
   subtotal0                   Decimal   @default(0) @db.Decimal(14, 2)
@@ -1548,7 +1548,7 @@ model directorio_global {
   nombreComercial    String?  @db.VarChar(300)
   direccion          String?  @db.VarChar(300)
   email              String?  @db.VarChar(150)
-  telefono           String?  @db.VarChar(20)
+  telefono           String?  @db.VarChar(50)
   fuente             String   @default("manual") @db.VarChar(15)
   // sri_csv | sri_api | importacion | manual
   createdAt          DateTime @default(now())

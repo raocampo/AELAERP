@@ -5,6 +5,7 @@
 // ====================================
 
 const express = require('express');
+const { normalizarTelefonoContacto } = require('../utils/telefonoContacto');
 const multer  = require('multer');
 const router  = express.Router();
 const prisma  = require('../config/prisma');
@@ -383,7 +384,7 @@ router.post('/', proteger, async (req, res) => {
         nombreComercial: nombreComercial?.trim() || null,
         direccion: direccion?.trim() || null,
         email: email?.trim().toLowerCase() || null,
-        telefono: telefono?.trim() || null,
+        telefono: normalizarTelefonoContacto(telefono),
       },
     });
 
@@ -400,6 +401,9 @@ router.post('/', proteger, async (req, res) => {
 
     res.status(201).json({ success: true, data: cliente });
   } catch (error) {
+    if (error.code === 'TELEFONO_CONTACTO_INVALIDO') {
+      return res.status(400).json({ success: false, mensaje: error.message });
+    }
     if (error.code === 'P2002') {
       return res.status(409).json({ success: false, mensaje: 'Ya existe un cliente con esa identificación' });
     }
@@ -421,7 +425,7 @@ router.put('/:id', proteger, async (req, res) => {
     if (nombreComercial !== undefined) data.nombreComercial = nombreComercial;
     if (direccion !== undefined)       data.direccion       = direccion;
     if (email !== undefined)           data.email           = email?.toLowerCase();
-    if (telefono !== undefined)        data.telefono        = telefono;
+    if (telefono !== undefined)        data.telefono        = normalizarTelefonoContacto(telefono);
     if (activo !== undefined)          data.activo          = activo;
 
     const cliente = await prisma.clientes.update({
@@ -430,6 +434,9 @@ router.put('/:id', proteger, async (req, res) => {
     });
     res.json({ success: true, data: cliente });
   } catch (error) {
+    if (error.code === 'TELEFONO_CONTACTO_INVALIDO') {
+      return res.status(400).json({ success: false, mensaje: error.message });
+    }
     res.status(500).json({ success: false, mensaje: 'Error al actualizar cliente' });
   }
 });

@@ -5,6 +5,8 @@
  */
 
 const { Client } = require('pg');
+const fs = require('fs');
+const path = require('path');
 
 const FIXES = [
   // Impresora térmica POS
@@ -909,6 +911,9 @@ const FIXES = [
   // para el número de referencia cuando el tipo de pago es CHEQUE o
   // TRANSFERENCIA.
   `ALTER TABLE "comprobantes_bancarios_pagos" ADD COLUMN IF NOT EXISTS "referencia" VARCHAR(50)`,
+  // También en tenants creados con db push: ejecutar la misma ampliación
+  // idempotente que usa migrate deploy, después de crear directorio_global.
+  fs.readFileSync(path.join(__dirname, '../prisma/migrations/20261021000000_ampliar_telefonos_contacto/migration.sql'), 'utf8'),
 ];
 
 async function applyFixesToDb(connectionString, label) {

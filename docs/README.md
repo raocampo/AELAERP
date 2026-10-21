@@ -4,6 +4,9 @@ Este directorio concentra la documentacion funcional y tecnica principal del pro
 
 ## Indice
 
+- `pendientes-2026-10-21-factura-telefono-largo.md`
+  - error al guardar una factura con dos números telefónicos: formulario de 50 y columna de 20
+  - ampliación sin recortes, validación previa al secuencial y pruebas del SQL en PostgreSQL
 - `pendientes-2026-10-20-correo-facturas-cola-sri.md`
   - caso confirmado de El Rincón de la Catedral dentro de corpsimtelec multiempresa
   - corrección del correo omitido por la cola SRI y del RIDE incompleto; recuperación de correos pendiente
