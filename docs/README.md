@@ -4,6 +4,9 @@ Este directorio concentra la documentacion funcional y tecnica principal del pro
 
 ## Indice
 
+- `seguridad-2026-10-21-incidente-railway.md`
+  - inventario sin valores secretos y plan de respuesta al aviso de seguridad de Railway
+  - rotación coordinada de PostgreSQL, correo, sesiones y contraseñas cifradas de tenants
 - `pendientes-2026-10-21-factura-telefono-largo.md`
   - error al guardar una factura con dos números telefónicos: formulario de 50 y columna de 20
   - ampliación sin recortes, validación previa al secuencial y pruebas del SQL en PostgreSQL
