@@ -13,7 +13,7 @@ const IV_LEN    = 12; // bytes — recomendado para GCM
 
 function getKey() {
   const hex = process.env.DB_ENCRYPT_KEY;
-  if (!hex || hex.length !== 64) {
+  if (!/^[a-f\d]{64}$/i.test(hex || '')) {
     throw new Error('DB_ENCRYPT_KEY faltante o inválida — debe ser 64 hex chars (32 bytes)');
   }
   return Buffer.from(hex, 'hex');
@@ -30,7 +30,7 @@ function cifrar(texto) {
   return `enc:${iv.toString('hex')}:${tag.toString('hex')}:${cifrado.toString('hex')}`;
 }
 
-function descifrar(valor) {
+function descifrar(valor, { permitirClaveAnterior = true } = {}) {
   if (!valor || !valor.startsWith('enc:')) {
     return valor; // plaintext heredado
   }
@@ -39,15 +39,28 @@ function descifrar(valor) {
   if (partes.length !== 4) throw new Error('Formato cifrado inválido');
 
   const [, ivHex, tagHex, cifradoHex] = partes;
-  const key     = getKey();
+  const keys = [getKey()];
+  const anterior = process.env.DB_ENCRYPT_KEY_PREVIOUS;
+  if (permitirClaveAnterior && anterior) {
+    if (!/^[a-f\d]{64}$/i.test(anterior)) {
+      throw new Error('DB_ENCRYPT_KEY_PREVIOUS inválida — debe ser 64 hex chars (32 bytes)');
+    }
+    keys.push(Buffer.from(anterior, 'hex'));
+  }
   const iv      = Buffer.from(ivHex, 'hex');
   const tag     = Buffer.from(tagHex, 'hex');
   const cifrado = Buffer.from(cifradoHex, 'hex');
 
-  const decipher = crypto.createDecipheriv(ALGORITMO, key, iv);
-  decipher.setAuthTag(tag);
-
-  return Buffer.concat([decipher.update(cifrado), decipher.final()]).toString('utf8');
+  for (const key of keys) {
+    try {
+      const decipher = crypto.createDecipheriv(ALGORITMO, key, iv);
+      decipher.setAuthTag(tag);
+      return Buffer.concat([decipher.update(cifrado), decipher.final()]).toString('utf8');
+    } catch (_) {
+      // Durante una rotación, aceptar temporalmente los registros anteriores.
+    }
+  }
+  throw new Error('No se pudo descifrar la credencial del tenant con las claves configuradas');
 }
 
 module.exports = { cifrar, descifrar };

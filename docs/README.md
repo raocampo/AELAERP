@@ -4,6 +4,9 @@ Este directorio concentra la documentacion funcional y tecnica principal del pro
 
 ## Indice
 
+- `seguridad-2026-10-22-rotacion-credenciales.md`
+  - renovación coordinada y almacenamiento de las claves nuevas fuera de Git
+  - migración transaccional del cifrado de contraseñas de tenants y comprobaciones
 - `seguridad-2026-10-21-incidente-railway.md`
   - inventario sin valores secretos y plan de respuesta al aviso de seguridad de Railway
   - acceso público de PostgreSQL cerrado y disponibilidad verificada sin reiniciar servicios
