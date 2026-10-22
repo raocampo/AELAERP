@@ -7,11 +7,79 @@ al contenido descifrado de algunas. Recomienda renovar secretos y revisar
 actividad: [aviso oficial](https://blog.railway.com/p/security-disclosure-wednesday-october-21st).
 El aviso no confirma por sí solo acceso a las bases de datos de AELA.
 
-Esta intervención identifica credenciales configuradas en el servicio AELAERP
-y revisa sus dependencias en el código. Solo se registran nombres y presencia;
-no se guardan valores de secretos en este documento ni en Git. La rotación,
-revocación y revisión completa de actividad siguen pendientes. No se cambiaron
-credenciales ni se cerraron sesiones durante esta revisión.
+Esta intervención identifica credenciales configuradas en el servicio AELAERP,
+revisa sus dependencias y cierra el acceso público de PostgreSQL. Solo se
+registran nombres y presencia; no se guardan valores de secretos en este
+documento ni en Git. La rotación, revocación y revisión completa de actividad
+siguen pendientes. No se cambiaron credenciales ni se reiniciaron servicios.
+
+## Contención aplicada sin despliegue
+
+El usuario confirmó que los clientes usan AELA por la web y que no hay programas
+externos conectados directamente a la base de datos. Solicitó preservar la
+continuidad mientras los despliegues están pausados.
+
+El 21 de octubre de 2026, aproximadamente a las 21:45 de Ecuador (22 de octubre,
+02:45 UTC), se eliminó únicamente el proxy TCP público de PostgreSQL del
+proyecto AELA, entorno production. Se respaldaron su configuración y el estado
+de los servicios en archivos locales de `backups/`, excluidos de Git.
+
+Comprobaciones realizadas:
+
+- Antes del cierre, `DATABASE_URL`, `DATABASE_MASTER_URL` y `DATABASE_ADMIN_URL`
+  apuntaban a hosts privados de Railway. Los cuatro tenants activos también
+  tenían hosts privados y contraseñas cifradas en el catálogo.
+- Después del cierre, la API de Railway devolvió cero proxies TCP para ese
+  servicio PostgreSQL. Un intento nuevo de conexión externa a la entrada
+  anterior recibió `ECONNRESET`; antes del cierre se podía consultar la BD.
+- La web y `/api/health` respondieron HTTP 200 antes y después. Además,
+  `/api/super-admin/stats` ejecutó consultas reales al catálogo y respondió
+  correctamente en ambos momentos. No se emitieron facturas ni correos como
+  parte de estas comprobaciones.
+- AELAERP y PostgreSQL conservaron sus deployments activos, ambos en estado
+  `SUCCESS`. La operación no necesitó un build ni reiniciar la BD.
+
+Esta medida retira una entrada directa desde Internet; las conexiones privadas
+de la aplicación siguen disponibles. El acceso de mantenimiento desde equipos
+externos por la URL pública anterior también queda deshabilitado. Si vuelve a
+ser necesario, habrá que planificar un acceso controlado; no reabrirlo como
+parte de una verificación rutinaria.
+
+No se comprobaron todas las operaciones de cada cliente. La evidencia acredita
+la disponibilidad de la web y la consulta al catálogo, junto con la
+configuración privada de los tenants. La recomendación de mantener internos los
+servicios de datos está documentada en la
+[guía de protección de producción de Railway](https://docs.railway.com/guides/lock-down-production-project).
+
+## Revisión inicial de actividad
+
+Se preservaron metadatos de roles, sesiones y configuración de logs mediante
+una transacción de solo lectura antes de cerrar el acceso público. La revisión
+identificó un único rol con login y privilegios de superusuario, compartido por
+las conexiones de los tenants. Es necesario considerar todos sus consumidores
+al renovar la contraseña.
+
+La consulta del historial de auditoría de Railway para este proyecto desde
+el 21 de octubre a las 00:00 UTC devolvió cero eventos. La extracción de hasta
+500 entradas de logs PostgreSQL con el filtro `authentication failed` desde
+esa misma hora también devolvió cero entradas. Estos resultados están
+limitados por la disponibilidad y cobertura de las fuentes: no prueban ausencia
+de acceso no autorizado, especialmente si se usaron credenciales válidas. No
+se completó la revisión de actividad de los proveedores de correo.
+
+## Próxima intervención
+
+La renovación coordinada de secretos queda pendiente para el 22 de octubre de
+2026 en horario de Ecuador, condicionada a que Railway permita actualizar los
+servicios y comprobar sus consumidores. No hay ejecución automática programada.
+La pausa de builds seguía vigente en la actualización oficial de las 02:19 UTC
+del 22 de octubre (21:19 del día 21 en Ecuador).
+
+El cierre de la entrada pública no revoca contraseñas ni claves de correo,
+sesiones o administración. Es una contención parcial; siguen aplicando las
+acciones de rotación y revisión descritas a continuación. La regeneración de
+PostgreSQL reinicia la BD y corta conexiones, por lo que se difirió para
+coordinarla con los consumidores y la restricción de continuidad del usuario.
 
 ## Inventario confirmado
 
