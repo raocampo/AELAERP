@@ -7,6 +7,8 @@ al contenido descifrado de algunas. Recomienda renovar secretos y revisar
 actividad: [aviso oficial](https://blog.railway.com/p/security-disclosure-wednesday-october-21st).
 El aviso no confirma por sí solo acceso a las bases de datos de AELA.
 
+Continuación del trabajo: [rotación coordinada del 22 de octubre](seguridad-2026-10-22-rotacion-credenciales.md).
+
 Esta intervención identifica credenciales configuradas en el servicio AELAERP,
 revisa sus dependencias y cierra el acceso público de PostgreSQL. Solo se
 registran nombres y presencia; no se guardan valores de secretos en este

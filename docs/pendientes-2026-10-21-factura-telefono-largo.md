@@ -47,7 +47,7 @@ reserva. No requiere renumerar ni emitir automáticamente comprobantes.
 - `prisma validate`, compilación del frontend y ESLint del componente cambiado:
   correctos.
 
-## Aplicación en producción y despliegue pendiente
+## Aplicación en producción
 
 El código se publicó en `main` mediante el commit `c20791a`. Al intentar
 desplegar ese SHA explícitamente, Railway respondió
@@ -62,11 +62,16 @@ los tres límites anteriores de 20 y los posteriores de 50; la consulta se
 repitió después del COMMIT. Se conserva el respaldo de metadatos antes/después
 en `backups/corpsimtelec-telefonos-schema-2026-10-21.json`, ignorado por Git.
 
-La ampliación es compatible con el backend que sigue en ejecución y permite
+La ampliación era compatible con el backend entonces en ejecución y permitió
 guardar el teléfono de 21 caracteres sin recortarlo. No se emitió una factura
 real como prueba. No se hicieron cambios directos en BDs de otros tenants.
 
-Pendiente: desplegar la versión nueva de `main` cuando Railway restablezca los
-builds, para activar las validaciones y mensajes nuevos del backend. La
-migración incluida es idempotente y respetará la ampliación ya aplicada a la
+El 22 de octubre, el deployment `247f0f77-6ea3-4681-aa45-a64ba9ca56c5`
+del commit `b77cc3b` terminó en `SUCCESS`. Esa versión incluye `c20791a`,
+por lo que las validaciones y mensajes del backend ya están desplegados.
+Después del cambio respondieron correctamente la web, una consulta real de la
+BD principal y consultas de solo lectura a las BDs de los cuatro tenants
+activos. No se emitieron facturas como prueba.
+
+La migración incluida es idempotente y respeta la ampliación ya aplicada a la
 BD principal; el arranque habitual cubre las BDs de tenants.
