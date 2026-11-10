@@ -150,3 +150,24 @@ test('construirDetalleVentaXML con nota de crédito (04): sin formasDePago', () 
   assert.equal(v.tipoComprobante, '04');
   assert.equal(v.formasDePago, undefined);
 });
+
+// ─── totalVentasAts ──────────────────────────────────────────────────────────
+// Regresión DIMM (Laboratorio San José, ATS 2026-10): "El valor de TOTAL DE
+// VENTAS [5978.97] es diferente a la sumatoria de las VENTAS [0.00]". DIMM no
+// suma las ventas electrónicas (tipoEmision E) y usa bases sin IVA.
+const { totalVentasAts } = require('../routes/ats');
+
+test('totalVentasAts: solo ventas electrónicas → 0.00', () => {
+  assert.equal(totalVentasAts([
+    { tipoEmision: 'E', tipoComprobante: '18', baseNoGraIva: 0, baseImponible: 5978.97, baseImpGrav: 0 },
+  ]), 0);
+  assert.equal(totalVentasAts([]), 0);
+});
+
+test('totalVentasAts: suma bases (sin IVA) de ventas físicas y resta NC físicas', () => {
+  assert.equal(totalVentasAts([
+    { tipoEmision: 'F', tipoComprobante: '18', baseNoGraIva: 1, baseImponible: 10, baseImpGrav: 100, montoIva: 15 },
+    { tipoEmision: 'F', tipoComprobante: '04', baseNoGraIva: 0, baseImponible: 0, baseImpGrav: 20 },
+    { tipoEmision: 'E', tipoComprobante: '18', baseNoGraIva: 0, baseImponible: 500, baseImpGrav: 0 },
+  ]), 91);
+});

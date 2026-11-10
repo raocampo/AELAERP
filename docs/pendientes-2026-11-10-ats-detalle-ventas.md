@@ -47,3 +47,19 @@ ventas en el detalle.
 - La ficha (resolución NAC-DGERCGC16-00000092) exime de registrar en el
   módulo de ventas los comprobantes electrónicos; AELA los reporta con
   `tipoEmision` E, que DIMM acepta. No se cambió ese criterio.
+
+## Ronda 2 del mismo día: totalVentas
+
+Con el detalle ya aceptado, DIMM reportó: "El valor de TOTAL DE VENTAS
+[5978.97] es diferente a la sumatoria de las VENTAS [0.00]".
+
+- Ficha técnica: `totalVentas` es la suma de baseImponible + baseImpGrav +
+  baseNoGraIva (sin IVA), y las ventas con emisión electrónica "no se sumarán
+  al talón resumen". DIMM suma solo `tipoEmision` F. AELA emite todo
+  electrónico, así que el total correcto es 0.00. Se enviaba importeTotal
+  con IVA de todas las ventas.
+- La suma de `ventasEstab` no puede superar `totalVentas`: ahora también es
+  la base de ventas físicas por establecimiento (0.00), e `ivaComp` (IVA
+  compensado, Ley de Solidaridad) va 0.00 en lugar del IVA cobrado.
+- Nueva función `totalVentasAts` (resta NC físicas). 210/210 pruebas; XML
+  con totales en 0.00 validado contra `ats.xsd`.

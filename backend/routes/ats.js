@@ -213,7 +213,7 @@ function construirDetalleVentaXML(v) {
       <tpIdCliente>${tpId}</tpIdCliente>
       <idCliente>${v.idCliente}</idCliente>${parteRel}${datosPasaporte}
       <tipoComprobante>${v.tipoComprobante}</tipoComprobante>
-      <tipoEmision>E</tipoEmision>
+      <tipoEmision>${v.tipoEmision || TIPO_EMISION_VENTAS_AELA}</tipoEmision>
       <numeroComprobantes>${v.count}</numeroComprobantes>
       <baseNoGraIva>${v.baseNoGraIva.toFixed(2)}</baseNoGraIva>
       <baseImponible>${v.baseImponible.toFixed(2)}</baseImponible>
@@ -223,6 +223,23 @@ function construirDetalleVentaXML(v) {
       <valorRetIva>0.00</valorRetIva>
       <valorRetRenta>0.00</valorRetRenta>${formasDePago}
     </detalleVentas>`;
+}
+
+// ─── totalVentas (cabecera del ATS) ──────────────────────────────────────────
+// Ficha Técnica ATS: totalVentas es la suma de baseImponible + baseImpGrav +
+// baseNoGraIva de las ventas reportadas, y "si [la emisión] es electrónica
+// no se sumará los valores al talón resumen". DIMM valida que totalVentas
+// sea igual a esa sumatoria, que excluye tipoEmision E (las electrónicas ya
+// las tiene el SRI). AELA solo emite comprobantes electrónicos, así que su
+// total es 0.00 aunque el detalle se informe. La NC (04) resta.
+const TIPO_EMISION_VENTAS_AELA = 'E';
+function totalVentasAts(detalles) {
+  const total = (detalles || []).reduce((s, v) => {
+    if (v.tipoEmision !== 'F') return s;
+    const base = Number(v.baseNoGraIva || 0) + Number(v.baseImponible || 0) + Number(v.baseImpGrav || 0);
+    return s + (v.tipoComprobante === '04' ? -base : base);
+  }, 0);
+  return Math.max(0, r2(total));
 }
 
 // ─── <ventasEstablecimiento> (hijo de ivaType, hermano de <ventas>) ──────────
@@ -506,14 +523,6 @@ router.get('/exportar', async (req, res) => {
       }),
     ]);
 
-    // ── totalVentas ───────────────────────────────────────────────────────────
-    const totalVentas = [
-      ...facturas.map(f => r2(f.importeTotal)),
-      ...liquidaciones.map(l => r2(l.importeTotal)),
-      ...ncs.map(n => r2(n.importeTotal)),
-      ...notasVenta.map(n => r2(n.total)),
-    ].reduce((s, v) => s + v, 0);
-
     // ── <ventas> — agrupar por (tipoId, id, tipoComprobante) ─────────────────
     const ventasMap = new Map();
     const acumularVenta = (tpId, idCliente, tipoCbteComprobante, row, razonSocial) => {
@@ -523,7 +532,7 @@ router.get('/exportar', async (req, res) => {
       const key = `${tpId}|${idCliente}|${tipoCbte}`;
       if (!ventasMap.has(key)) {
         ventasMap.set(key, {
-          tpIdCliente: tpId, idCliente, tipoComprobante: tipoCbte, razonSocial,
+          tpIdCliente: tpId, idCliente, tipoComprobante: tipoCbte, razonSocial, tipoEmision: TIPO_EMISION_VENTAS_AELA,
           count: 0, baseNoGraIva: 0, baseImponible: 0, baseImpGrav: 0, montoIva: 0,
           formasPago: new Set(),
         });
@@ -553,7 +562,7 @@ router.get('/exportar', async (req, res) => {
       if (!ventasMap.has(key)) {
         ventasMap.set(key, {
           tpIdCliente: n.tipoIdentificacionComprador, idCliente: n.identificacionComprador,
-          tipoComprobante: '04', razonSocial: n.razonSocialComprador,
+          tipoComprobante: '04', razonSocial: n.razonSocialComprador, tipoEmision: TIPO_EMISION_VENTAS_AELA,
           count: 0, baseNoGraIva: 0, baseImponible: 0, baseImpGrav: 0, montoIva: 0,
           formasPago: new Set(),
         });
@@ -570,6 +579,12 @@ router.get('/exportar', async (req, res) => {
     let ventasXML = '';
     ventasMap.forEach(v => { ventasXML += construirDetalleVentaXML(v); });
 
+    // ── totalVentas ───────────────────────────────────────────────────────────
+    // CORREGIDO 2026-11-10: se reportaba importeTotal (con IVA) de todas las
+    // ventas. DIMM: "El valor de TOTAL DE VENTAS [5978.97] es diferente a la
+    // sumatoria de las VENTAS [0.00]". Ver totalVentasAts.
+    const totalVentas = totalVentasAts([...ventasMap.values()]);
+
     // ── <ventasEstablecimiento> — ventas totales + IVA por establecimiento ────
     // Regla de negocio de DIMM (no es un simple chequeo de XSD, el XSD marca
     // ventasEstablecimiento como opcional — minOccurs=0 — pero DIMM exige el
@@ -580,19 +595,25 @@ router.get('/exportar', async (req, res) => {
     // `establecimiento` como columna propia (no hace falta parsear el número
     // de comprobante como si hace falta en compras).
     const ventasEstabMap = new Map();
-    const acumularVentaEstab = (establecimiento, total, iva) => {
+    // CORREGIDO 2026-11-10: ventasEstab sumaba importeTotal (con IVA) de
+    // todas las ventas e ivaComp el IVA cobrado. La ficha: la suma de
+    // ventasEstab no puede superar totalVentas, que solo incluye ventas
+    // físicas; ivaComp es el IVA COMPENSADO (Ley de Solidaridad), no el IVA
+    // de las ventas. Se conserva un <ventaEst> por establecimiento con
+    // actividad, con su base de ventas físicas (0 si todo es electrónico).
+    const acumularVentaEstab = (establecimiento, base, signo = 1) => {
       const estab = String(establecimiento || '001').padStart(3, '0');
       if (!ventasEstabMap.has(estab)) ventasEstabMap.set(estab, { total: 0, iva: 0 });
+      if (TIPO_EMISION_VENTAS_AELA !== 'F') return;
       const e = ventasEstabMap.get(estab);
-      e.total = r2(e.total + Number(total || 0));
-      e.iva   = r2(e.iva   + Number(iva   || 0));
+      e.total = Math.max(0, r2(e.total + signo * Number(base || 0)));
     };
-    facturas.forEach(f => acumularVentaEstab(f.establecimiento, f.importeTotal, f.totalIva));
-    liquidaciones.forEach(l => acumularVentaEstab(l.establecimiento, l.importeTotal, l.totalIva));
-    notasVenta.forEach(n => acumularVentaEstab(n.establecimiento, n.total, 0));
-    // Nota de crédito: mismo criterio de "siempre positivo" que el resto del
-    // ATS (ver comentario arriba, monedaType exige minInclusive 0.0).
-    ncs.forEach(n => acumularVentaEstab(n.establecimiento, n.importeTotal, n.totalIva));
+    const baseVenta = (row) => r2(row.subtotalNoObjetoIva || 0) + r2(row.subtotal0 || 0)
+      + r2((row.subtotal5 || 0) + (row.subtotal12 || 0) + (row.subtotal15 || 0));
+    facturas.forEach(f => acumularVentaEstab(f.establecimiento, baseVenta(f)));
+    liquidaciones.forEach(l => acumularVentaEstab(l.establecimiento, baseVenta(l)));
+    notasVenta.forEach(n => acumularVentaEstab(n.establecimiento, n.total));
+    ncs.forEach(n => acumularVentaEstab(n.establecimiento, n.totalSinImpuestos, -1));
 
     // CORREGIDO 2026-10-12 (2da vuelta, mismo error): el primer intento
     // asumió la regla literal del mensaje de DIMM ("Cuando EXISTAN detalles
@@ -1299,3 +1320,4 @@ module.exports.construirVentasEstablecimientoXML = construirVentasEstablecimient
 module.exports.tipoComprobanteVentaAts = tipoComprobanteVentaAts;
 module.exports.codigosFormaPagoVenta = codigosFormaPagoVenta;
 module.exports.construirDetalleVentaXML = construirDetalleVentaXML;
+module.exports.totalVentasAts = totalVentasAts;
