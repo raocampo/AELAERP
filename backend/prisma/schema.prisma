@@ -1000,6 +1000,9 @@ model cobros_cliente {
   // Fila en Libro de Bancos del cobro no-efectivo con banco elegido
   // (transferencia/cheque/tarjeta) — permite reversarla al anular.
   movimientoBancarioId Int?     @unique
+  // Id del pago en el sistema externo (API /api/ext/v1/pagos) — llave de
+  // idempotencia: el mismo idExterno no crea un segundo cobro.
+  idExterno          String?   @db.VarChar(100)
   anulado            Boolean   @default(false)
   motivoAnulacion    String?   @db.VarChar(500)
   fechaAnulacion     DateTime?
@@ -1018,6 +1021,7 @@ model cobros_cliente {
   comisionesDevengadas comision_devengada[]
 
   @@unique([empresaId, numero])
+  @@unique([empresaId, idExterno])
   @@index([empresaId])
   @@index([facturaId])
   @@index([clienteId])

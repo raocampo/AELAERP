@@ -88,3 +88,37 @@ Acciones sugeridas: que AVALAB corrija la selección y reenvíe las 60
 (idempotente por `claveAcceso`; el Excel no trae clave ni ítems, por lo que
 AELA no puede crearlas con fidelidad), que implemente `POST /pagos`, y
 agregar a la API endpoints de nota de crédito y anulación.
+
+## 4. API externa v1.1 (implementado)
+
+Para que AVALAB pueda reenviar lo faltante y registrar cobros y NC
+(`backend/routes/external.js`, referencia para AVALAB en
+`docs/integracion-avalab-api-reference.md`, que también tiene la lista de
+acciones que deben hacer):
+
+- `POST /pagos`: la factura se indica con `claveAcceso`, `facturaId` o
+  `numeroFactura`; `idPagoExterno` lo hace idempotente (columna nueva
+  `cobros_cliente.idExterno`, única por empresa); `bancoId` opcional, si no
+  se envía usa `brandConfig.extBancoId` del tenant o la única cuenta
+  activa; el saldo descuenta las NC (antes no).
+- Nuevos: `GET /facturas` (rango), `POST /facturas/verificar` (claves que
+  faltan), `POST /notas-credito` (idempotente por clave, crea asiento NC),
+  `POST /facturas/anular` (exige anular antes los cobros, reversa asiento),
+  `POST /pagos/anular`, `GET /bancos`, `GET /log`.
+- Bitácora `ext_api_log` (tabla SQL cruda creada por migración y
+  `applySchemaFixes.js`): cada POST con ruta, status, clave e error. Los
+  logs de Railway solo guardan el último deploy, por eso no se pudo saber
+  si AVALAB intentó enviar las 60 faltantes; desde ahora sí.
+- La ruta activa el prisma de contexto del tenant (`runWithClient`), porque
+  las funciones de asiento de NC y anulación no reciben `db`.
+- Pruebas: `test/externalApi.test.js` (6, BD simulada); suite 216/216.
+
+Respaldo, sin cargar: `UtilitariosSCFI/AVALAB/cobros-respaldo-importacion-cxc-2026-11-10.xlsx`
+con las 115 facturas "Pagado" ($8,431.88) en el formato de Importar cobros
+de CxC; fecha = emisión y método = efectivo son supuestos (el exporte de
+AVALAB no los trae). Usarlo solo si AVALAB no puede enviar los cobros; si
+se carga y luego AVALAB los envía, se duplicarían (el saldo los rechazará
+por exceder, pero conviene no mezclar).
+
+Pendiente: deploy, que AVALAB corrija la selección, reenvíe y envíe cobros;
+definir `extBancoId` si labsanjose tiene más de una cuenta bancaria.

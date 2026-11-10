@@ -915,6 +915,22 @@ const FIXES = [
   // bancoId pero no dejaba fila en Libro de Bancos; ver crearAsientoCobroCliente.
   `ALTER TABLE "cobros_cliente" ADD COLUMN IF NOT EXISTS "movimientoBancarioId" INTEGER`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "cobros_cliente_movimientoBancarioId_key" ON "cobros_cliente"("movimientoBancarioId")`,
+  // API externa (2026-11-10) — idempotencia de POST /api/ext/v1/pagos y
+  // bitácora de llamadas (tabla fuera de schema.prisma, igual que proformas).
+  `ALTER TABLE "cobros_cliente" ADD COLUMN IF NOT EXISTS "idExterno" VARCHAR(100)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "cobros_cliente_empresaId_idExterno_key" ON "cobros_cliente"("empresaId", "idExterno")`,
+  `CREATE TABLE IF NOT EXISTS "ext_api_log" (
+    "id" SERIAL PRIMARY KEY,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "metodo" VARCHAR(10) NOT NULL,
+    "ruta" VARCHAR(200) NOT NULL,
+    "status" INTEGER NOT NULL,
+    "referencia" VARCHAR(120),
+    "error" TEXT,
+    "duracionMs" INTEGER
+  )`,
+  `CREATE INDEX IF NOT EXISTS "ext_api_log_createdAt_idx" ON "ext_api_log"("createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "ext_api_log_referencia_idx" ON "ext_api_log"("referencia")`,
   // También en tenants creados con db push: ejecutar la misma ampliación
   // idempotente que usa migrate deploy, después de crear directorio_global.
   fs.readFileSync(path.join(__dirname, '../prisma/migrations/20261021000000_ampliar_telefonos_contacto/migration.sql'), 'utf8'),
