@@ -911,6 +911,10 @@ const FIXES = [
   // para el número de referencia cuando el tipo de pago es CHEQUE o
   // TRANSFERENCIA.
   `ALTER TABLE "comprobantes_bancarios_pagos" ADD COLUMN IF NOT EXISTS "referencia" VARCHAR(50)`,
+  // Cobros CxC no-efectivo con banco (2026-11-10) — antes el cobro guardaba
+  // bancoId pero no dejaba fila en Libro de Bancos; ver crearAsientoCobroCliente.
+  `ALTER TABLE "cobros_cliente" ADD COLUMN IF NOT EXISTS "movimientoBancarioId" INTEGER`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "cobros_cliente_movimientoBancarioId_key" ON "cobros_cliente"("movimientoBancarioId")`,
   // También en tenants creados con db push: ejecutar la misma ampliación
   // idempotente que usa migrate deploy, después de crear directorio_global.
   fs.readFileSync(path.join(__dirname, '../prisma/migrations/20261021000000_ampliar_telefonos_contacto/migration.sql'), 'utf8'),

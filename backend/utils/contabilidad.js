@@ -1052,8 +1052,20 @@ async function crearAsientoCobroFactura({ facturaId, metodoPago = 'efectivo', us
 // y su referencia es única POR FACTURA, incompatible con abonos parciales),
 // estas funciones se referencian por el ID del registro de cobro/pago —
 // permiten múltiples cobros/pagos parciales sobre el mismo documento.
+// metodoPago del cobro -> tipo de movimiento de INGRESO en Libro de Bancos.
+const TIPO_MOVBANCO_POR_METODO_COBRO = {
+  transferencia: 'TRANSFERENCIA_IN',
+  tarjeta: 'TRANSFERENCIA_IN',
+  cheque: 'DEPOSITO',
+};
+
+// CORREGIDO 2026-11-10: el cobro de CxC con transferencia/cheque/tarjeta
+// guardaba bancoId pero (a) debitaba una cuenta "Bancos" genérica en vez de
+// la cuenta contable del banco elegido y (b) no dejaba fila en Libro de
+// Bancos, así que el ingreso no aparecía ni conciliaba. Mismo criterio que
+// crearAsientoPagoProveedor, en sentido inverso (ingreso).
 async function crearAsientoCobroCliente({ cobroId, usuarioId, fecha = new Date(), db = prisma }) {
-  const cobro = await db.cobros_cliente.findUnique({ where: { id: toInt(cobroId) }, include: { factura: true } });
+  const cobro = await db.cobros_cliente.findUnique({ where: { id: toInt(cobroId) }, include: { factura: true, banco: true } });
   if (!cobro) throw new Error('Cobro no encontrado');
 
   const referencia = `COBRO-${cobro.id}`;
@@ -1063,13 +1075,20 @@ async function crearAsientoCobroCliente({ cobroId, usuarioId, fecha = new Date()
   if (existente) return { asiento: existente, creado: false };
 
   const monto = round2(cobro.monto);
+  const metodo = (cobro.metodoPago || '').toLowerCase();
   const cuentaCxC = await ensureCuentaMovimiento({
     empresaId: cobro.empresaId, tx: db,
     codigo: '1.1.03.001', nombre: 'Cuentas por Cobrar', tipo: 'ACTIVO', naturaleza: 'DEBITO',
   });
-  const cuentaCobro = (cobro.metodoPago || '').toLowerCase() === 'efectivo'
-    ? await ensureCuentaMovimiento({ empresaId: cobro.empresaId, tx: db, codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO' })
-    : await ensureCuentaMovimiento({ empresaId: cobro.empresaId, tx: db, codigo: '1.1.02.001', nombre: 'Bancos', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+  let cuentaCobro = null;
+  if (metodo === 'efectivo') {
+    cuentaCobro = await ensureCuentaMovimiento({ empresaId: cobro.empresaId, tx: db, codigo: '1.1.01.001', nombre: 'Caja', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+  } else if (cobro.banco?.cuentaContableId) {
+    cuentaCobro = await db.plan_cuentas.findUnique({ where: { id: cobro.banco.cuentaContableId } });
+  }
+  if (!cuentaCobro) {
+    cuentaCobro = await ensureCuentaMovimiento({ empresaId: cobro.empresaId, tx: db, codigo: '1.1.02.001', nombre: 'Bancos', tipo: 'ACTIVO', naturaleza: 'DEBITO' });
+  }
 
   const asiento = await crearAsientoContable({
     empresaId: cobro.empresaId,
@@ -1086,7 +1105,36 @@ async function crearAsientoCobroCliente({ cobroId, usuarioId, fecha = new Date()
     ],
   });
 
-  await db.cobros_cliente.update({ where: { id: cobro.id }, data: { asientoId: asiento.id } });
+  const dataActualizacion = { asientoId: asiento.id };
+  if (metodo !== 'efectivo' && cobro.bancoId) {
+    // El cobro en ruta del vendedor ya dejó su movimiento al registrarse
+    // (referencia = número del cobro) — se enlaza en vez de duplicarlo.
+    let mov = cobro.movimientoBancarioId
+      ? await db.movimientos_bancarios.findUnique({ where: { id: cobro.movimientoBancarioId } })
+      : await db.movimientos_bancarios.findFirst({
+          where: { empresaId: cobro.empresaId, bancoId: cobro.bancoId, referencia: cobro.numero, debe: monto, cobroCliente: { is: null } },
+        });
+    if (mov) {
+      if (!mov.asientoId) await db.movimientos_bancarios.update({ where: { id: mov.id }, data: { asientoId: asiento.id } });
+    } else {
+      mov = await registrarMovimientoBancarioLigado({
+        bancoId: cobro.bancoId,
+        empresaId: cobro.empresaId,
+        fecha,
+        tipo: TIPO_MOVBANCO_POR_METODO_COBRO[metodo] || 'TRANSFERENCIA_IN',
+        concepto: `Cobro ${cobro.numero} factura ${cobro.factura.numeroFactura}`,
+        referencia: cobro.referencia || cobro.numero,
+        monto,
+        esIngreso: true,
+        asientoId: asiento.id,
+        chequeId: cobro.chequeId || null,
+        db,
+      });
+    }
+    dataActualizacion.movimientoBancarioId = mov.id;
+  }
+
+  await db.cobros_cliente.update({ where: { id: cobro.id }, data: dataActualizacion });
   return { asiento, creado: true };
 }
 
@@ -1216,6 +1264,26 @@ async function crearAsientoReversoCobroCliente({ cobroId, usuarioId, fecha = new
     tx: db,
     detalles,
   });
+
+  // Si el cobro dejó un movimiento en Libro de Bancos, se reversa con una
+  // fila de signo contrario (nunca se edita/borra la original).
+  if (cobro.movimientoBancarioId) {
+    const movOriginal = await db.movimientos_bancarios.findUnique({ where: { id: cobro.movimientoBancarioId } });
+    if (movOriginal && round2(movOriginal.debe) > 0) {
+      await registrarMovimientoBancarioLigado({
+        bancoId: movOriginal.bancoId,
+        empresaId: cobro.empresaId,
+        fecha,
+        tipo: 'RETIRO',
+        concepto: `Reverso cobro ${cobro.numero}`,
+        referencia: `COBRO-ANUL-${cobro.id}`,
+        monto: round2(movOriginal.debe),
+        esIngreso: false,
+        asientoId: asiento.id,
+        db,
+      });
+    }
+  }
 
   return { asiento, creado: true };
 }

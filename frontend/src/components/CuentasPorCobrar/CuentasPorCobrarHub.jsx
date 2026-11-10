@@ -46,7 +46,9 @@ function ModalCobro({ factura, onClose, onSaved }) {
     setError('');
     setGuardando(true);
     try {
-      const res = await api.post('/cxc/cobros', { ...form, facturaId: factura.id });
+      const payload = { ...form, facturaId: factura.id };
+      if (payload.metodoPago === 'efectivo') payload.bancoId = '';
+      const res = await api.post('/cxc/cobros', payload);
       const cobroId = res.data?.data?.id;
       onSaved();
       if (cobroId) abrirRecibo(cobroId);
@@ -83,8 +85,8 @@ function ModalCobro({ factura, onClose, onSaved }) {
             </div>
             {form.metodoPago !== 'efectivo' && (
               <div className="form-group">
-                <label>Banco</label>
-                <select name="bancoId" value={form.bancoId} onChange={handleChange}>
+                <label>{form.metodoPago === 'cheque' ? 'Banco (si ya se depositó)' : 'Banco donde ingresó *'}</label>
+                <select name="bancoId" value={form.bancoId} onChange={handleChange} required={form.metodoPago !== 'cheque'}>
                   <option value="">— Seleccione —</option>
                   {bancos.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
                 </select>

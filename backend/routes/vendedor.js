@@ -374,10 +374,13 @@ router.post('/cobros', autorizarPermiso('vendedor.cobros'), async (req, res) => 
           monto: montoNum, descripcion, referencia: numero, origenId: nuevo.id, esEfectivo: true,
         });
       } else {
-        await registrarMovimientoBancarioLigado({
-          db: tx, bancoId: bancoIdNum, empresaId: eId, tipo: 'INGRESO', concepto: descripcion,
+        const mov = await registrarMovimientoBancarioLigado({
+          db: tx, bancoId: bancoIdNum, empresaId: eId, tipo: 'TRANSFERENCIA_IN', concepto: descripcion,
           referencia: numero, monto: montoNum, esIngreso: true,
         });
+        // Enlace explícito: al verificar, crearAsientoCobroCliente reutiliza
+        // este movimiento en vez de crear otro.
+        await tx.cobros_cliente.update({ where: { id: nuevo.id }, data: { movimientoBancarioId: mov.id } });
       }
 
       // Agente Vendedor Fase 4: si la factura es de un pedido de vendedor,

@@ -997,6 +997,9 @@ model cobros_cliente {
   referencia         String?   @db.VarChar(100)
   observaciones      String?
   asientoId          Int?
+  // Fila en Libro de Bancos del cobro no-efectivo con banco elegido
+  // (transferencia/cheque/tarjeta) — permite reversarla al anular.
+  movimientoBancarioId Int?     @unique
   anulado            Boolean   @default(false)
   motivoAnulacion    String?   @db.VarChar(500)
   fechaAnulacion     DateTime?
@@ -1011,6 +1014,7 @@ model cobros_cliente {
   banco   bancos?             @relation(fields: [bancoId], references: [id])
   cheque  cheques?            @relation(fields: [chequeId], references: [id])
   asiento asientos_contables? @relation(fields: [asientoId], references: [id])
+  movimientoBancario movimientos_bancarios? @relation(fields: [movimientoBancarioId], references: [id])
   comisionesDevengadas comision_devengada[]
 
   @@unique([empresaId, numero])
@@ -2011,6 +2015,7 @@ model movimientos_bancarios {
   asiento            asientos_contables?     @relation(fields: [asientoId], references: [id])
   cheque             cheques?                @relation(fields: [chequeId], references: [id])
   pagoProveedor      pagos_proveedor?
+  cobroCliente       cobros_cliente?
   movimientoCajaChica movimientos_caja_chica?
 
   @@index([bancoId])

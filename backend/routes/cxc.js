@@ -375,6 +375,18 @@ router.post('/cobros', autorizarPermiso('cxc.gestionar'), async (req, res) => {
       return res.status(400).json({ success: false, mensaje: `metodoPago debe ser uno de: ${METODOS_VALIDOS.join(', ')}` });
     }
 
+    // Transferencia/tarjeta entran a una cuenta bancaria concreta: sin banco
+    // no hay dónde registrar el ingreso en Libro de Bancos (mismo criterio
+    // que POS/Factura, ver utils/pagosVenta.js). El cheque puede quedar en
+    // cartera sin banco hasta depositarse.
+    const bancoIdNum = bancoId ? parseIntSafe(bancoId) : null;
+    if (['transferencia', 'tarjeta'].includes(String(metodoPago)) && !bancoIdNum) {
+      return res.status(400).json({ success: false, mensaje: 'Seleccione la cuenta bancaria donde ingresó el cobro' });
+    }
+    if (bancoIdNum && !(await db.bancos.findFirst({ where: { id: bancoIdNum, empresaId }, select: { id: true } }))) {
+      return res.status(400).json({ success: false, mensaje: 'Cuenta bancaria no encontrada' });
+    }
+
     const cobro = await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM facturas WHERE id = ${facturaIdNum} FOR UPDATE`;
 
@@ -404,7 +416,7 @@ router.post('/cobros', autorizarPermiso('cxc.gestionar'), async (req, res) => {
         data: {
           empresaId, facturaId: facturaIdNum, clienteId: factura.clienteId || null,
           numero, fecha: fecha ? new Date(fecha) : new Date(), monto: montoNum, metodoPago,
-          bancoId: bancoId ? parseIntSafe(bancoId) : null,
+          bancoId: metodoPago === 'efectivo' ? null : bancoIdNum,
           chequeId: chequeId ? parseIntSafe(chequeId) : null,
           referencia: referencia || null, observaciones: observaciones || null,
           usuarioId: req.usuario?.id || null,
