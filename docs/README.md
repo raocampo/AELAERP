@@ -4,6 +4,9 @@ Este directorio concentra la documentacion funcional y tecnica principal del pro
 
 ## Indice
 
+- `pendientes-2026-11-10-avalab-conciliacion-cobros-bancos.md`
+  - conciliación AVALAB vs AELA: 54 facturas desde el 20/10 no llegaron; NC y anulaciones sin endpoint
+  - cobros CxC no-efectivo ahora crean su movimiento en Libro de Bancos
 - `pendientes-2026-11-10-ats-detalle-ventas.md`
   - DIMM rechazaba ventas: tipo de comprobante 18, tipoCliente solo con pasaporte, formas de cobro
 - `seguridad-2026-10-22-rotacion-credenciales.md`
