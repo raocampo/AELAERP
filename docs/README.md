@@ -4,6 +4,8 @@ Este directorio concentra la documentacion funcional y tecnica principal del pro
 
 ## Indice
 
+- `pendientes-2026-11-10-ats-detalle-ventas.md`
+  - DIMM rechazaba ventas: tipo de comprobante 18, tipoCliente solo con pasaporte, formas de cobro
 - `seguridad-2026-10-22-rotacion-credenciales.md`
   - renovación coordinada y almacenamiento de las claves nuevas fuera de Git
   - migración transaccional del cifrado de contraseñas de tenants y comprobaciones

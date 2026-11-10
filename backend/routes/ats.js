@@ -13,7 +13,7 @@ const { registrarFuentesPdf } = require('../utils/pdfFonts');
 const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { soloFull } = require('../middleware/edition');
 const { requiereModulo } = require('../middleware/modulos');
-const { CODIGOS_RETENCION_RENTA, parsearNotaCreditoRecibidaXml } = require('../utils/sri');
+const { CODIGOS_RETENCION_RENTA, parsearNotaCreditoRecibidaXml, resolverFormaPago } = require('../utils/sri');
 const { condicionComprasDeducibles } = require('../utils/comprasFiscal');
 
 // El ATS es un reporte TRANSACCIONAL (informa al SRI qué compras existieron,
@@ -151,6 +151,78 @@ function construirFormasDePagoXML(codigosFormaPago) {
       <formasDePago>${codigosFormaPago.map(cod => `
         <formaPago>${cod}</formaPago>`).join('')}
       </formasDePago>`;
+}
+
+// ─── <detalleVentas> ─────────────────────────────────────────────────────────
+// CORREGIDO 2026-11-10 (Laboratorio San José, período 2026-10): DIMM rechazó
+// cada línea de venta con tres errores. Verificado contra la Ficha Técnica
+// del ATS (módulo Ventas) y el XSD oficial:
+//  1. "El CÓDIGO TIPO DE COMPROBANTE en Ventas [01] no es válido": en ventas
+//     se usa la Tabla 4 del ATS, no el catálogo de comprobantes electrónicos.
+//     Factura y nota de venta van como 18 ("Documentos autorizados utilizados
+//     en ventas excepto N/C N/D"); la nota de crédito sigue siendo 04.
+//  2. "No debe indicar el tipo de cliente cuando el tipo de identificación es
+//     05": tipoCliente (y denoCli) solo se informan con pasaporte (06).
+//     parteRelVtas solo con 04/05/06 (no con consumidor final 07).
+//  3. "A partir del periodo junio-2016 debe indicar las formas de cobro":
+//     <formasDePago> es obligatorio en ventas (Tabla 13), sin umbral de monto
+//     (a diferencia de compras). Se exige para el tipo 18; no aplica a la NC.
+const TIPO_COMPROBANTE_VENTA_ATS = { '01': '18', '02': '18' };
+function tipoComprobanteVentaAts(codigo) {
+  const c = String(codigo || '').trim();
+  return TIPO_COMPROBANTE_VENTA_ATS[c] || c;
+}
+
+// Extrae los códigos de la Tabla 13 (formas de cobro) de una venta. Las
+// facturas guardan `pagos` con códigos SRI o con nombres ("Efectivo"); las
+// notas de venta guardan `formaPago` en texto y `pagos` solo si son mixtos.
+// resolverFormaPago es el mismo que usa el XML de la factura, así el ATS
+// reporta exactamente lo que el SRI ya recibió en el comprobante.
+function codigosFormaPagoVenta({ pagos, formaPago } = {}) {
+  let lista = pagos;
+  if (typeof lista === 'string') {
+    try { lista = JSON.parse(lista); } catch { lista = null; }
+  }
+  if (!Array.isArray(lista) || !lista.length) lista = formaPago ? [{ formaPago }] : [];
+  return [...new Set(lista.map(p => resolverFormaPago(p?.formaPago ?? 'Efectivo')))];
+}
+
+// denoProvType del XSD: solo letras/dígitos ASCII y espacios, empezando por
+// alfanumérico, máximo 500.
+function limpiarDenominacionAts(texto) {
+  const limpio = String(texto || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
+  return limpio || 'SIN NOMBRE';
+}
+
+function construirDetalleVentaXML(v) {
+  const tpId = String(v.tpIdCliente || '').trim();
+  const parteRel = ['04', '05', '06'].includes(tpId) ? `
+      <parteRelVtas>NO</parteRelVtas>` : '';
+  const datosPasaporte = tpId === '06' ? `
+      <tipoCliente>01</tipoCliente>
+      <denoCli>${limpiarDenominacionAts(v.razonSocial)}</denoCli>` : '';
+  const codigos = v.formasPago && v.formasPago.size ? [...v.formasPago] : ['01'];
+  const formasDePago = v.tipoComprobante === '18' ? construirFormasDePagoXML(codigos) : '';
+  return `
+    <detalleVentas>
+      <tpIdCliente>${tpId}</tpIdCliente>
+      <idCliente>${v.idCliente}</idCliente>${parteRel}${datosPasaporte}
+      <tipoComprobante>${v.tipoComprobante}</tipoComprobante>
+      <tipoEmision>E</tipoEmision>
+      <numeroComprobantes>${v.count}</numeroComprobantes>
+      <baseNoGraIva>${v.baseNoGraIva.toFixed(2)}</baseNoGraIva>
+      <baseImponible>${v.baseImponible.toFixed(2)}</baseImponible>
+      <baseImpGrav>${v.baseImpGrav.toFixed(2)}</baseImpGrav>
+      <montoIva>${v.montoIva.toFixed(2)}</montoIva>
+      <montoIce>0.00</montoIce>
+      <valorRetIva>0.00</valorRetIva>
+      <valorRetRenta>0.00</valorRetRenta>${formasDePago}
+    </detalleVentas>`;
 }
 
 // ─── <ventasEstablecimiento> (hijo de ivaType, hermano de <ventas>) ──────────
@@ -444,16 +516,21 @@ router.get('/exportar', async (req, res) => {
 
     // ── <ventas> — agrupar por (tipoId, id, tipoComprobante) ─────────────────
     const ventasMap = new Map();
-    const acumularVenta = (tpId, idCliente, tipoCbte, row) => {
+    const acumularVenta = (tpId, idCliente, tipoCbteComprobante, row, razonSocial) => {
+      // Factura y nota de venta comparten el código ATS 18 → una sola línea
+      // por cliente (la ficha agrupa por cliente + tipo de comprobante).
+      const tipoCbte = tipoComprobanteVentaAts(tipoCbteComprobante);
       const key = `${tpId}|${idCliente}|${tipoCbte}`;
       if (!ventasMap.has(key)) {
         ventasMap.set(key, {
-          tpIdCliente: tpId, idCliente, tipoComprobante: tipoCbte,
+          tpIdCliente: tpId, idCliente, tipoComprobante: tipoCbte, razonSocial,
           count: 0, baseNoGraIva: 0, baseImponible: 0, baseImpGrav: 0, montoIva: 0,
+          formasPago: new Set(),
         });
       }
       const e = ventasMap.get(key);
       e.count++;
+      codigosFormaPagoVenta(row).forEach(c => e.formasPago.add(c));
       // baseNoGraIva combina No Objeto + Exento de IVA — el XSD del ATS
       // (detalleVentasType) solo tiene este único campo para ventas, sin
       // equivalente a baseImpExe (ese existe solo en detalleComprasType),
@@ -465,17 +542,20 @@ router.get('/exportar', async (req, res) => {
       e.montoIva      += r2(row.totalIva   || 0);
     };
 
-    facturas.forEach(f => acumularVenta(f.tipoIdentificacionComprador, f.identificacionComprador, '01', f));
-    liquidaciones.forEach(l => acumularVenta(l.tipoIdentificacionProveedor, l.identificacionProveedor, '03', l));
+    facturas.forEach(f => acumularVenta(f.tipoIdentificacionComprador, f.identificacionComprador, '01', f, f.razonSocialComprador));
+    liquidaciones.forEach(l => acumularVenta(l.tipoIdentificacionProveedor, l.identificacionProveedor, '03', l, l.razonSocialProveedor));
     // Notas de venta RIMPE: sin desglose de IVA (diseño del sistema — ver
     // FormNotaVenta.jsx), se reportan como base imponible tarifa 0%.
-    notasVenta.forEach(n => acumularVenta(n.tipoIdentificacion, n.identificacion, '02', { subtotal0: n.total, totalIva: 0 }));
+    notasVenta.forEach(n => acumularVenta(n.tipoIdentificacion, n.identificacion, '02',
+      { subtotal0: n.total, totalIva: 0, pagos: n.pagos, formaPago: n.formaPago }, n.razonSocial));
     ncs.forEach(n => {
       const key = `${n.tipoIdentificacionComprador}|${n.identificacionComprador}|04`;
       if (!ventasMap.has(key)) {
         ventasMap.set(key, {
           tpIdCliente: n.tipoIdentificacionComprador, idCliente: n.identificacionComprador,
-          tipoComprobante: '04', count: 0, baseNoGraIva: 0, baseImponible: 0, baseImpGrav: 0, montoIva: 0,
+          tipoComprobante: '04', razonSocial: n.razonSocialComprador,
+          count: 0, baseNoGraIva: 0, baseImponible: 0, baseImpGrav: 0, montoIva: 0,
+          formasPago: new Set(),
         });
       }
       const e = ventasMap.get(key);
@@ -488,25 +568,7 @@ router.get('/exportar', async (req, res) => {
     });
 
     let ventasXML = '';
-    ventasMap.forEach(v => {
-      ventasXML += `
-    <detalleVentas>
-      <tpIdCliente>${v.tpIdCliente}</tpIdCliente>
-      <idCliente>${v.idCliente}</idCliente>
-      <parteRelVtas>NO</parteRelVtas>
-      <tipoCliente>01</tipoCliente>
-      <tipoComprobante>${v.tipoComprobante}</tipoComprobante>
-      <tipoEmision>E</tipoEmision>
-      <numeroComprobantes>${v.count}</numeroComprobantes>
-      <baseNoGraIva>${v.baseNoGraIva.toFixed(2)}</baseNoGraIva>
-      <baseImponible>${v.baseImponible.toFixed(2)}</baseImponible>
-      <baseImpGrav>${v.baseImpGrav.toFixed(2)}</baseImpGrav>
-      <montoIva>${v.montoIva.toFixed(2)}</montoIva>
-      <montoIce>0.00</montoIce>
-      <valorRetIva>0.00</valorRetIva>
-      <valorRetRenta>0.00</valorRetRenta>
-    </detalleVentas>`;
-    });
+    ventasMap.forEach(v => { ventasXML += construirDetalleVentaXML(v); });
 
     // ── <ventasEstablecimiento> — ventas totales + IVA por establecimiento ────
     // Regla de negocio de DIMM (no es un simple chequeo de XSD, el XSD marca
@@ -1234,3 +1296,6 @@ module.exports.tipoIdProveedorAts = tipoIdProveedorAts;
 module.exports.construirPagoExteriorXML = construirPagoExteriorXML;
 module.exports.construirFormasDePagoXML = construirFormasDePagoXML;
 module.exports.construirVentasEstablecimientoXML = construirVentasEstablecimientoXML;
+module.exports.tipoComprobanteVentaAts = tipoComprobanteVentaAts;
+module.exports.codigosFormaPagoVenta = codigosFormaPagoVenta;
+module.exports.construirDetalleVentaXML = construirDetalleVentaXML;

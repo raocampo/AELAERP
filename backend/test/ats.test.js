@@ -92,3 +92,61 @@ test('construirVentasEstablecimientoXML genera un <ventaEst> por establecimiento
     { codEstab: '031', ventasEstab: '111.16', ivaComp: '16.67' },
   ]);
 });
+
+// ─── <detalleVentas> ─────────────────────────────────────────────────────────
+// Regresión del error real de DIMM (Laboratorio San José, ATS 2026-10): cada
+// venta con cédula salía con tipoComprobante 01, tipoCliente y sin formas de
+// cobro. Ficha Técnica ATS, módulo Ventas: tipo 18 para facturas/notas de
+// venta, tipoCliente solo con pasaporte (06), forma de cobro obligatoria.
+const { tipoComprobanteVentaAts, codigosFormaPagoVenta, construirDetalleVentaXML } = require('../routes/ats');
+
+function ventaBase(extra = {}) {
+  return {
+    tpIdCliente: '05', idCliente: '1104301336', tipoComprobante: '18', razonSocial: 'Juan Pérez',
+    count: 2, baseNoGraIva: 0, baseImponible: 25, baseImpGrav: 0, montoIva: 0,
+    formasPago: new Set(['01']), ...extra,
+  };
+}
+const parserVenta = new XMLParser({ parseTagValue: false, isArray: (n) => n === 'formaPago' });
+const parsearVenta = (xml) => parserVenta.parse(`<root>${xml}</root>`).root.detalleVentas;
+
+test('tipoComprobanteVentaAts: factura (01) y nota de venta (02) se reportan como 18; NC queda 04', () => {
+  assert.equal(tipoComprobanteVentaAts('01'), '18');
+  assert.equal(tipoComprobanteVentaAts('02'), '18');
+  assert.equal(tipoComprobanteVentaAts('04'), '04');
+});
+
+test('codigosFormaPagoVenta usa la Tabla 13 con códigos o nombres y deduplica', () => {
+  assert.deepEqual(codigosFormaPagoVenta({ pagos: [{ formaPago: '01' }, { formaPago: 'Efectivo' }, { formaPago: 'Transferencia' }] }), ['01', '20']);
+  assert.deepEqual(codigosFormaPagoVenta({ pagos: JSON.stringify([{ formaPago: '19' }]) }), ['19']);
+  assert.deepEqual(codigosFormaPagoVenta({ pagos: null, formaPago: 'Tarjeta de crédito' }), ['19']);
+  assert.deepEqual(codigosFormaPagoVenta({}), []);
+});
+
+test('construirDetalleVentaXML con cédula: sin tipoCliente, con parteRelVtas y forma de cobro', () => {
+  const v = parsearVenta(construirDetalleVentaXML(ventaBase({ formasPago: new Set(['01', '20']) })));
+  assert.equal(v.tipoComprobante, '18');
+  assert.equal(v.tipoCliente, undefined);
+  assert.equal(v.denoCli, undefined);
+  assert.equal(v.parteRelVtas, 'NO');
+  assert.deepEqual(v.formasDePago.formaPago, ['01', '20']);
+});
+
+test('construirDetalleVentaXML con consumidor final (07): sin parteRelVtas ni tipoCliente; cobro 01 por defecto', () => {
+  const v = parsearVenta(construirDetalleVentaXML(ventaBase({ tpIdCliente: '07', idCliente: '9999999999999', formasPago: new Set() })));
+  assert.equal(v.parteRelVtas, undefined);
+  assert.equal(v.tipoCliente, undefined);
+  assert.deepEqual(v.formasDePago.formaPago, ['01']);
+});
+
+test('construirDetalleVentaXML con pasaporte (06): tipoCliente y denoCli limpio (solo alfanumérico)', () => {
+  const v = parsearVenta(construirDetalleVentaXML(ventaBase({ tpIdCliente: '06', idCliente: 'AB123', razonSocial: 'José Ñúñez & Cía.' })));
+  assert.equal(v.tipoCliente, '01');
+  assert.equal(v.denoCli, 'Jose Nunez Cia');
+});
+
+test('construirDetalleVentaXML con nota de crédito (04): sin formasDePago', () => {
+  const v = parsearVenta(construirDetalleVentaXML(ventaBase({ tipoComprobante: '04' })));
+  assert.equal(v.tipoComprobante, '04');
+  assert.equal(v.formasDePago, undefined);
+});
