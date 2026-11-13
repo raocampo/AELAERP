@@ -104,10 +104,12 @@ function _generarPdfProforma(p, configSri, outputPath) {
          .text(cfg.emailNotificaciones || cfg.email, ML, yL, { width: LP, lineBreak: false });
       yL += 10;
     }
-    if (cfg.contribuyenteRimpe) {
-      const rimpeLabel = cfg.negocioPopular
-        ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
-        : 'CONTRIBUYENTE RÉGIMEN RIMPE';
+    {
+      const rimpeLabel = !cfg.contribuyenteRimpe
+        ? 'CONTRIBUYENTE RÉGIMEN GENERAL'
+        : cfg.negocioPopular
+          ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
+          : 'CONTRIBUYENTE RÉGIMEN RIMPE';
       doc.fontSize(6).font('Helvetica-Bold').fillColor(MORADO)
          .text(rimpeLabel, ML, yL, { width: LP, lineBreak: false });
       yL += 10;

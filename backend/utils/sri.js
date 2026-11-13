@@ -1334,10 +1334,15 @@ async function generarRIDEFactura(factura, configSri, outputPath, opciones = {})
        .text(`Obligado a llevar contabilidad: ${config.obligadoContabilidad ? 'SI' : 'NO'}`, ML, yL, { width: LP - 4, lineBreak: false });
     yL += 10;
 
-    if (config.contribuyenteRimpe) {
-      const rimpeLabel = config.negocioPopular
-        ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
-        : 'CONTRIBUYENTE RÉGIMEN RIMPE';
+    {
+      // Leyenda de régimen. En el XML solo existe el campo contribuyenteRimpe
+      // (dos textos RIMPE); el régimen general no tiene campo, pero se imprime
+      // en el RIDE para que se vea el cambio de categoría del emisor.
+      const rimpeLabel = !config.contribuyenteRimpe
+        ? 'CONTRIBUYENTE RÉGIMEN GENERAL'
+        : config.negocioPopular
+          ? 'CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE'
+          : 'CONTRIBUYENTE RÉGIMEN RIMPE';
       doc.fontSize(6.5).font('Helvetica-Bold').fillColor(AZUL)
          .text(rimpeLabel, ML, yL, { width: LP - 4, lineBreak: false });
       yL += 10;
