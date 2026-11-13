@@ -936,7 +936,7 @@ export default function PuntoVenta() {
                       <input type="number" min="1" step="1" value={item.cantidad} onChange={(e) => actualizarLinea(item.uid, 'cantidad', e.target.value)} />
                     </td>
                     <td>
-                      <input type="number" min="0" step="0.0001" value={item.precioUnitario} onChange={(e) => actualizarLinea(item.uid, 'precioUnitario', e.target.value)} />
+                      <input type="number" min="0" step="0.000001" value={item.precioUnitario} onChange={(e) => actualizarLinea(item.uid, 'precioUnitario', e.target.value)} />
                     </td>
                     {tipoDocumento === 'factura' && (
                       <td>

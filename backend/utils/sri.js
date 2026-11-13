@@ -240,6 +240,17 @@ function generarClaveAcceso({ fecha, tipoCod, ruc, ambiente, estab, ptoEmi, secu
 }
 
 /**
+ * Precio unitario para el RIDE: mínimo 2 decimales y hasta 6 (máximo del
+ * XSD del SRI) cuando el precio realmente los tiene — con 2 fijos, 109 x
+ * 1.055046 se imprimía como 1.06 y la línea no cuadraba a la vista.
+ */
+function fmtPrecioUnitario(valor) {
+  const s = (Number(valor) || 0).toFixed(6).replace(/0+$/, '');
+  const dec = (s.split('.')[1] || '').length;
+  return dec >= 2 ? s : (Number(valor) || 0).toFixed(2);
+}
+
+/**
  * Formatea el número de factura: "001-001-000000001"
  */
 function formatearNumeroFactura(estab, ptoEmi, secuencial) {
@@ -1490,7 +1501,7 @@ async function generarRIDEFactura(factura, configSri, outputPath, opciones = {})
         { v: det.codigoPrincipal || '', al: 'left',  wrap: false },
         { v: cant.toFixed(2),           al: 'right', wrap: false },
         { v: descTexto,                 al: 'left',  wrap: true  },
-        { v: prec.toFixed(2),           al: 'right', wrap: false },
+        { v: fmtPrecioUnitario(prec),   al: 'right', wrap: false },
         { v: desc.toFixed(2),           al: 'right', wrap: false },
         { v: `${ivaPct}%`,              al: 'right', wrap: false },
         { v: tot.toFixed(2),            al: 'right', wrap: false },
@@ -1723,7 +1734,7 @@ async function generarRIDENotaCredito(nc, configSri, outputPath) {
       doc.fontSize(7).font('Helvetica').fillColor('#000')
         .text(det.descripcion, 50, y + 3)
         .text(cant.toFixed(2), 280, y + 3, { width: 60, align: 'right' })
-        .text(prec.toFixed(2), 345, y + 3, { width: 60, align: 'right' })
+        .text(fmtPrecioUnitario(prec), 345, y + 3, { width: 60, align: 'right' })
         .text(sub, 410, y + 3, { width: 70, align: 'right' });
       y += 14;
     });
@@ -1919,7 +1930,7 @@ async function generarReciboPOS(factura, configSri, outputPath, opciones = {}) {
       doc.fontSize(6.5).font('Helvetica').fillColor('#000000')
          .text(det.descripcion || '', ML, y, { width: C0 });
       doc.text(cant.toFixed(2), ML + C0,           y, { width: C1, align: 'right', lineBreak: false });
-      doc.text(prec.toFixed(2), ML + C0 + C1,      y, { width: C2, align: 'right', lineBreak: false });
+      doc.text(fmtPrecioUnitario(prec), ML + C0 + C1,      y, { width: C2, align: 'right', lineBreak: false });
       doc.text(tot,             ML + C0 + C1 + C2, y, { width: C3, align: 'right', lineBreak: false });
       y += rowH;
     });
@@ -2846,7 +2857,7 @@ async function generarRIDELiquidacionCompra(liq, configSri, outputPath) {
         { v: det.codigoPrincipal || '-',         al: 'center' },
         { v: det.descripcion || '',               al: 'left'   },
         { v: cant.toFixed(2),                     al: 'right'  },
-        { v: `$${precio.toFixed(4)}`,             al: 'right'  },
+        { v: `$${fmtPrecioUnitario(precio)}`,     al: 'right'  },
         { v: `$${desc.toFixed(2)}`,               al: 'right'  },
         { v: `${ivaPct}%`,                        al: 'center' },
         { v: `$${total.toFixed(2)}`,              al: 'right'  },

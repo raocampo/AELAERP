@@ -421,7 +421,7 @@ export default function FormProforma() {
                         />
                       </td>
                       <td>
-                        <input type="number" min="0" step="0.0001"
+                        <input type="number" min="0" step="0.000001"
                           value={d.precioUnitario}
                           onChange={e => handleDetalleChange(i, 'precioUnitario', e.target.value)}
                           className="prf-input-num"

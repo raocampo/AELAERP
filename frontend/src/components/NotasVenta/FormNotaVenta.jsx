@@ -527,7 +527,7 @@ export default function FormNotaVenta() {
                           style={{ width: 68, textAlign: 'center' }} />
                       </td>
                       <td>
-                        <input type="number" value={d.precioUnitario} min="0" step="0.0001"
+                        <input type="number" value={d.precioUnitario} min="0" step="0.000001"
                           onChange={e => actualizarDetalle(idx, 'precioUnitario', e.target.value)}
                           style={{ width: 88, textAlign: 'right' }}
                           placeholder="0.00" required />

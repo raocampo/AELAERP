@@ -852,7 +852,7 @@ const FormFactura = () => {
                       value={det.descripcion}
                       onChange={e => actualizarDetalle(idx, 'descripcion', e.target.value)}
                       placeholder="Descripción" required />
-                    <input type="number" min="0" step="0.0001"
+                    <input type="number" min="0" step="0.000001"
                       style={{ flex: '0 0 72px', textAlign: 'right' }}
                       value={det.precioUnitario}
                       onChange={e => actualizarDetalle(idx, 'precioUnitario', e.target.value)}
