@@ -433,3 +433,54 @@
   }
   .fact-busqueda, .fact-select { width: 100%; }
 }
+
+/* ── Resumen de ventas (espejo del resumen de Compras) ─────────────── */
+.vent-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: .75rem;
+  padding: .9rem 1rem;
+  margin-bottom: 1rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 8px 24px rgba(15,23,42,.05);
+}
+.vent-summary-card { border: 1px solid #e2e8f0; border-radius: .9rem; padding: .8rem 1rem; min-width: 0; }
+.vent-summary-card span   { display: block; color: #64748b; font-size: .82rem; }
+.vent-summary-card strong { display: block; margin-top: .3rem; font-size: 1.4rem; color: #1e293b; overflow-wrap: anywhere; }
+.vent-summary-card--iva strong { color: #7c3aed; }
+
+.vent-resumen {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: .9rem;
+  padding: .9rem 1.25rem;
+  margin-bottom: 1rem;
+}
+.vent-resumen-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: .65rem; flex-wrap: wrap; gap: .5rem;
+}
+.vent-resumen-header h3 { font-size: .9rem; font-weight: 600; color: #1e293b; margin: 0; }
+.vent-resumen-scroll { overflow-x: auto; }
+.vent-resumen-tabla { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.vent-resumen-tabla th,
+.vent-resumen-tabla td { padding: .4rem .7rem; text-align: left; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+.vent-resumen-tabla th { background: #f8fafc; color: #475569; font-weight: 600; }
+.vent-resumen-tabla tfoot td { border-top: 2px solid #e2e8f0; border-bottom: none; }
+.vent-resumen-tabla .num { text-align: right; }
+.vent-resumen-tabla .iva-cell   { color: #7c3aed; }
+.vent-resumen-tabla .total-cell { color: #0f172a; font-weight: 600; }
+.vent-resumen-nota { margin: .5rem 0 0; color: #94a3b8; font-size: .75rem; }
+
+@media (max-width: 768px) {
+  .vent-summary { grid-template-columns: repeat(3, 1fr); }
+  .vent-summary-card strong { font-size: 1.1rem; }
+  .vent-resumen-tabla { font-size: .75rem; }
+  .vent-resumen-tabla th,
+  .vent-resumen-tabla td { padding: .3rem .4rem; }
+}
+@media (max-width: 480px) {
+  .vent-summary { grid-template-columns: repeat(2, 1fr); }
+}

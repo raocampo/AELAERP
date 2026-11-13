@@ -22,6 +22,8 @@ const { proteger, autorizarPermiso } = require('../middleware/auth');
 const { requiereModulo } = require('../middleware/modulos');
 const { construirConfiguracionSriBase } = require('../utils/sriContribuyente');
 const { asegurarConfiguracionSistemaEmpresa } = require('../utils/configuracionSistema');
+const { aplicarCambioRegimen, sincronizarRegimenConfig } = require('../utils/regimenSri');
+const { resumenVentas } = require('../utils/resumenVentas');
 const { siguienteSecuencial, siguienteSecuencialFacturaAtomico } = require('../utils/secuenciales');
 const { registrarMovimientoCaja } = require('../utils/caja');
 const { esEfectivo } = require('../utils/formasPago');
@@ -609,37 +611,29 @@ router.put('/configuracion', permitirConfigurarSri, async (req, res) => {
     //    empresa en un solo UPDATE, para no obligar a editar producto por
     //    producto (hallazgo real: Deportivo Cat tenía 205 productos
     //    cargados con precio sin IVA pese a ser Negocio Popular).
-    const eraPopular   = !!existing?.negocioPopular;
-    const ahoraPopular = !!fields.negocioPopular;
-    if (eraPopular !== ahoraPopular) {
-      const nuevoDefaultPos = ahoraPopular ? 'nota_venta' : 'factura';
-      const configSistema = await asegurarConfiguracionSistemaEmpresa(req.empresa.id, prisma);
-      if (configSistema && configSistema.documentoPosDefault !== nuevoDefaultPos) {
-        await prisma.configuracion_sistema.update({
-          where: { empresaId: req.empresa.id },
-          data: { documentoPosDefault: nuevoDefaultPos },
-        });
-      }
-
-      if (ahoraPopular) {
-        // Pasa A Negocio Popular: base sin IVA -> precio final con IVA.
-        await prisma.$executeRaw`
-          UPDATE productos_servicios
-          SET "precioUnitario" = ROUND("precioUnitario" * (1 + "tarifaIva"::numeric / 100), 2)
-          WHERE "empresaId" = ${req.empresa.id}
-        `;
-      } else {
-        // Sale de Negocio Popular: precio final con IVA -> base sin IVA.
-        await prisma.$executeRaw`
-          UPDATE productos_servicios
-          SET "precioUnitario" = ROUND("precioUnitario" / (1 + "tarifaIva"::numeric / 100), 2)
-          WHERE "empresaId" = ${req.empresa.id}
-        `;
-      }
-    }
+    await aplicarCambioRegimen({
+      db: prisma, empresaId: req.empresa.id,
+      eraPopular: !!existing?.negocioPopular, ahoraPopular: !!fields.negocioPopular,
+    });
 
     await registrarAuditoria({ usuarioId: req.usuario.id, accion: 'UPDATE', tabla: 'configuracion_sri', registroId: config.id, req });
     res.json({ ok: true, data: config });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// POST /api/facturas/configuracion/verificar-regimen
+// Consulta ya el régimen en el SRI (lo mismo que hace el worker diario).
+router.post('/configuracion/verificar-regimen', permitirConfigurarSri, async (req, res) => {
+  try {
+    const config = await getConfigSRI(req.empresa.id);
+    if (!config) return res.status(400).json({ ok: false, error: 'Configure primero los datos del SRI' });
+    const r = await sincronizarRegimenConfig({ db: prisma, config });
+    if (r.estado === 'sri_no_disponible') {
+      return res.status(503).json({ ok: false, error: 'El SRI no respondió o no devolvió el régimen; intente más tarde' });
+    }
+    res.json({ ok: true, data: r });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -1058,10 +1052,15 @@ router.get('/', permitirVerFacturacion, async (req, res) => {
         importeTotal: true, estadoSri: true, anulada: true,
         numeroAutorizacion: true, pdfUrl: true, clienteId: true,
         createdAt: true,
+        // Solo para el resumen (no se devuelven en `data`)
+        subtotal0: true, subtotal5: true, subtotal12: true, subtotal15: true,
+        subtotalNoObjetoIva: true, totalIva: true, pagos: true,
       },
     });
 
-    res.json({ ok: true, data: facturas });
+    const resumen = resumenVentas(facturas);
+    const data = facturas.map(({ subtotal0, subtotal5, subtotal12, subtotal15, subtotalNoObjetoIva, totalIva, pagos, ...f }) => f);
+    res.json({ ok: true, data, resumen });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

@@ -6,6 +6,7 @@
 require('dotenv').config();
 const app = require('./app');
 const { iniciarWorkerColaSRI } = require('./utils/colaSRI');
+const { iniciarVerificacionRegimen } = require('./utils/regimenSri');
 
 const PORT = process.env.PORT || 5600;
 const EDITION = process.env.AELA_EDITION || 'full';
@@ -20,4 +21,5 @@ app.listen(PORT, () => {
 
   // Iniciar worker de reintentos SRI (cola offline)
   iniciarWorkerColaSRI();
+  iniciarVerificacionRegimen();
 });

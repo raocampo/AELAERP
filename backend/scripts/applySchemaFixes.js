@@ -931,6 +931,9 @@ const FIXES = [
   )`,
   `CREATE INDEX IF NOT EXISTS "ext_api_log_createdAt_idx" ON "ext_api_log"("createdAt")`,
   `CREATE INDEX IF NOT EXISTS "ext_api_log_referencia_idx" ON "ext_api_log"("referencia")`,
+  // Verificación automática del régimen del emisor contra el SRI (2026-11-13)
+  `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "regimenSriVerificadoEn" TIMESTAMP(3)`,
+  `ALTER TABLE "configuracion_sri" ADD COLUMN IF NOT EXISTS "regimenSriCambio" JSONB`,
   // También en tenants creados con db push: ejecutar la misma ampliación
   // idempotente que usa migrate deploy, después de crear directorio_global.
   fs.readFileSync(path.join(__dirname, '../prisma/migrations/20261021000000_ampliar_telefonos_contacto/migration.sql'), 'utf8'),

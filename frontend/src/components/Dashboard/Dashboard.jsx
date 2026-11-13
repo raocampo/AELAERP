@@ -240,6 +240,19 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Cambio de régimen detectado en el SRI y aplicado automáticamente */}
+      {stats?.alertaRegimenSri && tienePermiso(usuario?.rol, 'sri.configurar') && (
+        <div className="dash-cert por-vencer">
+          <div className="dash-cert-left">
+            <span className="dash-cert-icono">ℹ️</span>
+            <div>
+              <strong className="dash-cert-titulo">Régimen tributario actualizado</strong>
+              <span className="dash-cert-cn">{stats.alertaRegimenSri.mensaje}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tope de ingresos por régimen RIMPE */}
       {stats?.alertaRimpe && tienePermiso(usuario?.rol, 'sri.configurar') && (
         <div className={`dash-cert ${stats.alertaRimpe.nivel === 'error' ? 'vencido' : 'por-vencer'}`}>

@@ -13,6 +13,8 @@ import { IcVer, IcPDF, IcDescargar, IcReenviar, IcAnular } from '../../utils/ico
 import { descargarExcel, descargarPdf, descargarXml, abrirBlobEnNuevaPestana } from '../../utils/exportCsv';
 import './ListaFacturas.css';
 
+const fmtMoneda = (v) => `$${(Number(v) || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 // ─── Badge de estado SRI ─────────────────────────────────────────────────────
 const BadgeEstado = ({ estado }) => {
   const conf = {
@@ -31,6 +33,7 @@ const BadgeEstado = ({ estado }) => {
 // ─── Tab: Facturas ────────────────────────────────────────────────────────────
 const TabFacturas = ({ navigate, onIrNC }) => {
   const [facturas, setFacturas]   = useState([]);
+  const [resumen,  setResumen]    = useState(null);
   const [loading,  setLoading]    = useState(true);
   const [busqueda, setBusqueda]   = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -65,6 +68,7 @@ const TabFacturas = ({ navigate, onIrNC }) => {
     try {
       const res = await api.get('/facturas', { params: buildParams() });
       setFacturas(res.data.data || []);
+      setResumen(res.data.resumen || null);
     } catch {
       toast.error('Error al cargar facturas');
     } finally {
@@ -174,8 +178,77 @@ const TabFacturas = ({ navigate, onIrNC }) => {
     }
   };
 
+  const exportarResumenCsv = () => {
+    if (!resumen) return;
+    const t = resumen.totales;
+    const lineas = [
+      'Forma de cobro,Facturas,Base 0%,Base IVA,IVA,Total',
+      ...resumen.grupos.map(g => `"${g.etiqueta}",${g.facturas},${g.base0.toFixed(2)},${g.baseIva.toFixed(2)},${g.iva.toFixed(2)},${g.total.toFixed(2)}`),
+      `"TOTAL",${t.facturas},${t.base0.toFixed(2)},${t.baseIva.toFixed(2)},${t.iva.toFixed(2)},${t.total.toFixed(2)}`,
+    ];
+    const blob = new Blob(['\uFEFF' + lineas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: `resumen-ventas-${new Date().toISOString().slice(0, 10)}.csv` });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const t = resumen?.totales;
+
   return (
     <>
+      {/* KPIs de ventas (facturas vigentes: sin anuladas ni rechazadas) */}
+      {t && (
+        <section className="vent-summary">
+          <article className="vent-summary-card"><span>Facturas vigentes</span><strong>{t.facturas}</strong></article>
+          <article className="vent-summary-card"><span>Total vendido</span><strong>{fmtMoneda(t.total)}</strong></article>
+          <article className="vent-summary-card"><span>Base 0% IVA</span><strong>{fmtMoneda(t.base0)}</strong></article>
+          <article className="vent-summary-card"><span>Base con IVA</span><strong>{fmtMoneda(t.baseIva)}</strong></article>
+          <article className="vent-summary-card vent-summary-card--iva"><span>IVA cobrado</span><strong>{fmtMoneda(t.iva)}</strong></article>
+          <article className="vent-summary-card"><span>Anuladas / rechazadas</span><strong>{t.anuladas + t.rechazadas}</strong></article>
+        </section>
+      )}
+
+      {t && resumen.grupos.length > 0 && (
+        <section className="vent-resumen">
+          <div className="vent-resumen-header">
+            <h3>Resumen por forma de cobro</h3>
+            <button className="btn-secondary" onClick={exportarResumenCsv}>📊 Descargar resumen CSV</button>
+          </div>
+          <div className="vent-resumen-scroll">
+            <table className="vent-resumen-tabla">
+              <thead>
+                <tr>
+                  <th>Forma de cobro</th><th className="num">Facturas</th>
+                  <th className="num">Base 0%</th><th className="num">Base IVA</th>
+                  <th className="num">IVA</th><th className="num">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumen.grupos.map(g => (
+                  <tr key={g.categoria}>
+                    <td>{g.etiqueta}</td><td className="num">{g.facturas}</td>
+                    <td className="num">{fmtMoneda(g.base0)}</td><td className="num">{fmtMoneda(g.baseIva)}</td>
+                    <td className="num iva-cell">{fmtMoneda(g.iva)}</td><td className="num total-cell">{fmtMoneda(g.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td><strong>TOTAL</strong></td><td className="num"><strong>{t.facturas}</strong></td>
+                  <td className="num"><strong>{fmtMoneda(t.base0)}</strong></td><td className="num"><strong>{fmtMoneda(t.baseIva)}</strong></td>
+                  <td className="num iva-cell"><strong>{fmtMoneda(t.iva)}</strong></td><td className="num total-cell"><strong>{fmtMoneda(t.total)}</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="vent-resumen-nota">
+            Según los filtros aplicados. Una factura con varias formas de pago se reparte en proporción a cada una
+            (por eso la columna Facturas puede sumar más que el total).
+          </p>
+        </section>
+      )}
+
       {/* Filtros */}
       <div className="fact-filtros">
         <input

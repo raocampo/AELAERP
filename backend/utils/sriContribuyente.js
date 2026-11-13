@@ -91,6 +91,7 @@ function parsearContribuyenteSri(datos, identificacionOriginal) {
 
   const resumenRegimen = [
     contribuyente.regimen,
+    contribuyente.categoria, // "NEGOCIO POPULAR" | "EMPRENDEDOR" (catastro vigente)
     contribuyente.claseContribuyente,
     contribuyente.tipoContribuyente,
   ]

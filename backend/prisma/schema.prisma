@@ -707,6 +707,10 @@ model configuracion_sri {
   // aplica; 'OPERADORA' → codigoAuxiliar H492001 (factura a cliente);
   // 'SOCIO' → codigoAuxiliar H492002 (factura del socio a la operadora).
   sectorTransporte      String?  @db.VarChar(20)
+  // Verificación automática del régimen contra el catastro del SRI
+  // (utils/regimenSri.js): última consulta y último cambio aplicado.
+  regimenSriVerificadoEn DateTime?
+  regimenSriCambio       Json?
   obligadoContabilidad  Boolean  @default(false)
   agenteRetencion       String?  @db.VarChar(13)
   certificadoP12        String?  @db.VarChar(500)

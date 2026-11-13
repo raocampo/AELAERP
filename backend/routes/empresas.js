@@ -292,7 +292,7 @@ router.get('/estadisticas', proteger, async (req, res) => {
       }),
       req.prisma.configuracion_sri.findFirst({
         where: { empresaId: eId, activo: true },
-        select: { contribuyenteRimpe: true, negocioPopular: true },
+        select: { contribuyenteRimpe: true, negocioPopular: true, regimenSriCambio: true },
       }),
 
       // Ventas de hoy (desglose efectivo/bancos) — se trae `pagos` completo
@@ -388,9 +388,24 @@ router.get('/estadisticas', proteger, async (req, res) => {
       }
     }
 
+    // Cambio de régimen detectado en el SRI y aplicado automáticamente
+    // (utils/regimenSri.js) — se avisa durante 30 días.
+    let alertaRegimenSri = null;
+    const cambioSri = configSriRimpe?.regimenSriCambio;
+    if (cambioSri?.fecha && Date.now() - new Date(cambioSri.fecha).getTime() < 30 * 86400000) {
+      const f = new Date(cambioSri.fecha).toLocaleDateString('es-EC', { timeZone: 'America/Guayaquil' });
+      const contab = (cambioSri.cambios || []).includes('obligadoContabilidad')
+        ? ` Obligado a llevar contabilidad: ${cambioSri.despues?.obligadoContabilidad ? 'SÍ' : 'NO'}.` : '';
+      alertaRegimenSri = {
+        nivel: 'info',
+        mensaje: `El ${f} AELA detectó en el SRI un cambio en tu RUC y actualizó la configuración: ${cambioSri.antes?.regimen} → ${cambioSri.despues?.regimen}.${contab} Tus comprobantes ya salen con el régimen correcto.`,
+      };
+    }
+
     res.json({
       success: true,
       data: {
+        alertaRegimenSri,
         año: añoEC,
         mes: mesEC,
 
