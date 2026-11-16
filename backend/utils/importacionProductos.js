@@ -336,10 +336,31 @@ function extraerTarifaIvaDetalle(impuesto) {
   return CODIGO_A_TARIFA[codigo] ?? 0;
 }
 
+// Un <detalle> puede traer varios <impuesto>: IVA (codigo 2), ICE (codigo 3)
+// e IRBPNR — botellas plásticas (codigo 5). Antes se tomaba SIEMPRE el
+// primero como si fuera el IVA: en facturas de bebidas (Tesalia, Pepsi, etc.)
+// el primero es el ICE con <tarifa>10.00</tarifa>, que normalizarTarifaIva
+// redondeaba a "12%" — las líneas salían con IVA 12% inexistente y la compra
+// quedaba sin IVA 15%, sin ICE y sin IRBPNR (total menor al real).
+function impuestosDelDetalle(detalle) {
+  return ensureArray(detalle?.impuestos?.impuesto).filter(Boolean);
+}
+
 function obtenerImpuestoDetalle(detalle) {
-  const impuestos = detalle?.impuestos?.impuesto;
-  if (Array.isArray(impuestos)) return impuestos[0] || null;
-  return impuestos || null;
+  const impuestos = impuestosDelDetalle(detalle);
+  const iva = impuestos.find((i) => String(i.codigo ?? '').trim() === '2');
+  if (iva) return iva;
+  // XMLs sin <codigo> (muy antiguos/manuales): se mantiene el criterio previo.
+  // Si todos traen código y ninguno es IVA, la línea no tiene IVA.
+  const sinCodigo = impuestos.find((i) => String(i.codigo ?? '').trim() === '');
+  return sinCodigo || null;
+}
+
+// Suma el <valor> de los impuestos del detalle con ese código SRI (3=ICE, 5=IRBPNR)
+function valorImpuestoDetalle(detalle, codigo) {
+  return impuestosDelDetalle(detalle)
+    .filter((i) => String(i.codigo ?? '').trim() === codigo)
+    .reduce((s, i) => s + toNumber(i.valor, 0), 0);
 }
 
 function parsearProductosDesdeXmlFactura(xmlString, margenUtilidad = 0) {
@@ -445,7 +466,11 @@ function parsearFacturaCompraDesdeXml(xmlString) {
     // No Objeto (6) y Exento (7) son sentinels, no un % real — nunca generan
     // IVA aunque porcentajeIva > 0.
     const esTarifaReal = porcentajeIva > 0 && porcentajeIva !== 6 && porcentajeIva !== 7;
-    const totalLinea = precioTotalSinImpuesto + (esTarifaReal ? toNumber(impuesto?.valor, precioTotalSinImpuesto * (porcentajeIva / 100)) : 0);
+    // IVA real del XML (su base incluye el ICE, por eso no es subtotal × %)
+    const valorIva = esTarifaReal ? toNumber(impuesto?.valor, precioTotalSinImpuesto * (porcentajeIva / 100)) : 0;
+    const valorIce = valorImpuestoDetalle(detalle, '3');
+    const valorIrbpnr = valorImpuestoDetalle(detalle, '5');
+    const totalLinea = precioTotalSinImpuesto + valorIva + valorIce + valorIrbpnr;
 
     return {
       codigoPrincipal: limpiarCodigo(detalle.codigoPrincipal || generarCodigoDesdeTexto(detalle.descripcion, index)),
@@ -456,6 +481,9 @@ function parsearFacturaCompraDesdeXml(xmlString) {
       porcentajeIva,
       descuento,
       subtotal: Number(precioTotalSinImpuesto.toFixed(2)),
+      totalIva: Number(valorIva.toFixed(2)),
+      ...(valorIce > 0 ? { valorIce: Number(valorIce.toFixed(2)) } : {}),
+      ...(valorIrbpnr > 0 ? { valorIrbpnr: Number(valorIrbpnr.toFixed(2)) } : {}),
       total: Number(totalLinea.toFixed(2)),
       // Best-effort: si la descripción es claramente un servicio/gasto (arriendo,
       // internet, honorarios, etc.) no se marca inventariable. El llamador (ver
@@ -474,7 +502,9 @@ function parsearFacturaCompraDesdeXml(xmlString) {
     const descuento = toNumber(item.descuento, 0);
     const pct = item.porcentajeIva;
     const esTarifaReal = pct > 0 && pct !== 6 && pct !== 7;
-    const iva = esTarifaReal ? subtotal * (pct / 100) : 0;
+    const iva = esTarifaReal ? toNumber(item.totalIva, subtotal * (pct / 100)) : 0;
+    const ice = toNumber(item.valorIce, 0);
+    const irbpnr = toNumber(item.valorIrbpnr, 0);
 
     if (pct === 6)          acc.subtotalNoObjeto += subtotal;
     else if (pct === 7)     acc.subtotalExento += subtotal;
@@ -485,9 +515,13 @@ function parsearFacturaCompraDesdeXml(xmlString) {
 
     acc.totalDescuento += descuento;
     acc.totalIva += iva;
-    acc.importeTotal += subtotal + iva;
+    acc.valorIce += ice;
+    acc.valorIrbpnr += irbpnr;
+    acc.importeTotal += subtotal + iva + ice + irbpnr;
     return acc;
   }, {
+    valorIce: 0,
+    valorIrbpnr: 0,
     subtotal0: 0,
     subtotal5: 0,
     subtotal12: 0,
@@ -498,6 +532,21 @@ function parsearFacturaCompraDesdeXml(xmlString) {
     totalIva: 0,
     importeTotal: 0,
   });
+
+  // Totales oficiales de la cabecera (<totalConImpuestos>): son los que el SRI
+  // cruza en el ATS. La suma por línea puede diferir 1-2 centavos por
+  // redondeo del emisor; si la cabecera trae el impuesto, manda la cabecera.
+  const totalesCabecera = ensureArray(infoFactura?.totalConImpuestos?.totalImpuesto).filter(Boolean);
+  const sumaCabecera = (codigo) => {
+    const items = totalesCabecera.filter((i) => String(i.codigo ?? '').trim() === codigo);
+    return items.length ? items.reduce((acc, i) => acc + toNumber(i.valor, 0), 0) : null;
+  };
+  const ivaCabecera = sumaCabecera('2');
+  const iceCabecera = sumaCabecera('3');
+  const irbpnrCabecera = sumaCabecera('5');
+  if (ivaCabecera !== null) totales.totalIva = ivaCabecera;
+  if (iceCabecera !== null) totales.valorIce = iceCabecera;
+  if (irbpnrCabecera !== null) totales.valorIrbpnr = irbpnrCabecera;
 
   const pagos = ensureArray(infoFactura?.pagos?.pago).map((pago) => ({
     formaPago: limpiarTexto(pago.formaPago || pago.codigo || '20') || '20',
@@ -533,7 +582,11 @@ function parsearFacturaCompraDesdeXml(xmlString) {
       subtotalExento: Number(totales.subtotalExento.toFixed(2)),
       totalDescuento: Number(totales.totalDescuento.toFixed(2)),
       totalIva: Number(totales.totalIva.toFixed(2)),
-      importeTotal: Number(totales.importeTotal.toFixed(2)),
+      valorIce: Number(totales.valorIce.toFixed(2)),
+      valorIrbpnr: Number(totales.valorIrbpnr.toFixed(2)),
+      // El importeTotal del XML manda (incluye propina u otros cargos que no
+      // van por línea); el calculado queda solo como respaldo.
+      importeTotal: Number(toNumber(infoFactura.importeTotal, totales.importeTotal).toFixed(2)),
     },
     xmlOrigen: xmlPrincipal,
   };

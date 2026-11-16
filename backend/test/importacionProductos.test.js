@@ -274,3 +274,27 @@ test('obtenerXmlDesdeAutorizacion NO marca conectividad si el SRI sí respondió
     sri.autorizarComprobanteSRI = original;
   }
 });
+
+test('parsearFacturaCompraDesdeXml toma el IVA (codigo 2) aunque el ICE venga primero, y suma ICE + IRBPNR — antes salía "IVA 12%"', () => {
+  // Estructura real de una factura de Tesalia (2026-10-17): ICE tarifa 10 primero
+  const imp = (codigo, codPct, tarifa, base, valor) =>
+    `<impuesto><codigo>${codigo}</codigo><codigoPorcentaje>${codPct}</codigoPorcentaje><tarifa>${tarifa}</tarifa><baseImponible>${base}</baseImponible><valor>${valor}</valor></impuesto>`;
+  const xml = `<factura><infoTributaria><ruc>1790005739001</ruc><estab>017</estab><ptoEmi>010</ptoEmi><secuencial>001770992</secuencial></infoTributaria>
+    <infoFactura><fechaEmision>17/10/2026</fechaEmision><importeTotal>3.53</importeTotal></infoFactura><detalles>
+    <detalle><codigoPrincipal>BA011039</codigoPrincipal><descripcion>Guitig Limonada</descripcion><cantidad>6</cantidad><precioUnitario>0.335</precioUnitario><descuento>0</descuento><precioTotalSinImpuesto>2.01</precioTotalSinImpuesto>
+      <impuestos>${imp(3, 3051, '10.00', '2.01', '0.22')}${imp(2, 4, '15.00', '2.23', '0.33')}${imp(5, 5001, '0.02', '6.00', '0.12')}</impuestos></detalle>
+    <detalle><codigoPrincipal>X</codigoPrincipal><descripcion>Bonificado</descripcion><cantidad>1</cantidad><precioUnitario>0.75</precioUnitario><descuento>0</descuento><precioTotalSinImpuesto>0.75</precioTotalSinImpuesto>
+      <impuestos>${imp(3, 3051, '10.00', '0.75', '0.00')}</impuestos></detalle>
+  </detalles></factura>`;
+  const { detalles, totales } = parsearFacturaCompraDesdeXml(xml);
+  assert.equal(detalles[0].porcentajeIva, 15);
+  assert.equal(detalles[0].total, 2.68);
+  assert.equal(detalles[1].porcentajeIva, 0, 'solo ICE, sin IVA: no se inventa una tarifa');
+  assert.equal(totales.subtotal12, 0);
+  assert.equal(totales.subtotal15, 2.01);
+  assert.equal(totales.subtotal0, 0.75);
+  assert.equal(totales.totalIva, 0.33);
+  assert.equal(totales.valorIce, 0.22);
+  assert.equal(totales.valorIrbpnr, 0.12);
+  assert.equal(totales.importeTotal, 3.53);
+});

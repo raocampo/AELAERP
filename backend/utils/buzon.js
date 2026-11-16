@@ -342,6 +342,7 @@ async function importarDocumentoRecibido({
         subtotalExento: datos.totales.subtotalExento || 0,
         totalDescuento: datos.totales.totalDescuento,
         totalIva: datos.totales.totalIva,
+        valorIce: datos.totales.valorIce || null,
         importeTotal: datos.totales.importeTotal,
         detalles: datos.detalles,
         pagos: datos.pagos,
