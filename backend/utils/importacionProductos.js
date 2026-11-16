@@ -316,7 +316,9 @@ function extraerXmlPrincipal(xmlString) {
 // "15%(servicios)"/"5%(bienes)" en códigos '6'/'7'/'8' que no corresponden a
 // ningún IVA real) — cualquier detalle 5%, 12%, No Objeto o Exento de una
 // compra importada por XML (Buzón SRI) quedaba mal clasificado.
-const CODIGO_A_TARIFA = { '0': 0, '1': 12, '2': 12, '3': 14, '4': 15, '5': 5, '6': 6, '7': 7 };
+// '8' = 8%: tarifa reducida de feriados turísticos (restaurantes/hoteles). Antes
+// no existía y normalizarTarifaIva(8) la redondeaba a 12%.
+const CODIGO_A_TARIFA = { '0': 0, '1': 12, '2': 12, '3': 14, '4': 15, '5': 5, '6': 6, '7': 7, '8': 8 };
 
 // Devuelve la tarifa IVA del detalle usando el mismo sentinel numérico que
 // el resto del sistema: 0/5/12/15 para tarifas reales, 6 para No Objeto de
@@ -329,9 +331,10 @@ function extraerTarifaIvaDetalle(impuesto) {
   // del XML puede venir en 0 para ambos, así que el código manda primero.
   if (codigo === '6') return 6;
   if (codigo === '7') return 7;
+  if (codigo === '8') return 8;
 
   const tarifa = toNumber(impuesto.tarifa, NaN);
-  if (Number.isFinite(tarifa)) return normalizarTarifaIva(tarifa);
+  if (Number.isFinite(tarifa)) return Math.round(tarifa) === 8 ? 8 : normalizarTarifaIva(tarifa);
 
   return CODIGO_A_TARIFA[codigo] ?? 0;
 }
@@ -509,7 +512,7 @@ function parsearFacturaCompraDesdeXml(xmlString) {
     if (pct === 6)          acc.subtotalNoObjeto += subtotal;
     else if (pct === 7)     acc.subtotalExento += subtotal;
     else if (pct === 5)     acc.subtotal5  += subtotal;
-    else if (pct === 12 || pct === 14) acc.subtotal12 += subtotal;
+    else if (pct === 12 || pct === 14 || pct === 8) acc.subtotal12 += subtotal; // otras tarifas gravadas
     else if (pct > 0)       acc.subtotal15 += subtotal;
     else                    acc.subtotal0  += subtotal;
 

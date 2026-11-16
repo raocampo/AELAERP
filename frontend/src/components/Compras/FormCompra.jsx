@@ -437,7 +437,7 @@ export default function FormCompra() {
     if (detalle.esNoObjetoIva) acc.subtotalNoObjeto += calc.subtotal;
     else if (detalle.esExentoIva) acc.subtotalExento += calc.subtotal;
     else if (pct === 5) acc.subtotal5 += calc.subtotal;
-    else if (pct === 12) acc.subtotal12 += calc.subtotal;
+    else if (pct === 12 || pct === 8) acc.subtotal12 += calc.subtotal;
     else if (pct === 15) acc.subtotal15 += calc.subtotal;
     else acc.subtotal0 += calc.subtotal;
     acc.totalIva += calc.iva;
@@ -973,6 +973,7 @@ export default function FormCompra() {
                         >
                           <option value={0}>0%</option>
                           <option value={5}>5%</option>
+                          <option value={8}>8% (feriado)</option>
                           <option value={12}>12%</option>
                           <option value={15}>15%</option>
                           <option value="NO_OBJETO">No objeto de IVA</option>
@@ -1055,7 +1056,7 @@ export default function FormCompra() {
           )}
           {resumen.subtotal12 > 0 && (
             <div className="compra-total-row">
-              <span>Subtotal 12%</span>
+              <span>Subtotal 12% / 8%</span>
               <strong>{resumen.subtotal12.toFixed(2)}</strong>
             </div>
           )}

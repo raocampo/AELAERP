@@ -1073,7 +1073,7 @@ router.post('/importar/ejecutar', soloFull, upload.single('archivo'), async (req
           if (detalle.esNoObjetoIva)          acc.subtotalNoObjeto += detalle.subtotal;
           else if (detalle.esExentoIva)       acc.subtotalExento += detalle.subtotal;
           else if (pct === 5)                acc.subtotal5  += detalle.subtotal;
-          else if (pct === 12 || pct === 14) acc.subtotal12 += detalle.subtotal;
+          else if (pct === 12 || pct === 14 || pct === 8) acc.subtotal12 += detalle.subtotal;
           else if (pct > 0)                  acc.subtotal15 += detalle.subtotal;
           else                               acc.subtotal0  += detalle.subtotal;
           acc.totalDescuento += detalle.descuento;
@@ -1239,7 +1239,7 @@ router.post('/', async (req, res) => {
       if (detalle.esNoObjetoIva)          acc.subtotalNoObjeto += detalle.subtotal;
       else if (detalle.esExentoIva)       acc.subtotalExento += detalle.subtotal;
       else if (pct === 5)                acc.subtotal5  += detalle.subtotal;
-      else if (pct === 12 || pct === 14) acc.subtotal12 += detalle.subtotal;
+      else if (pct === 12 || pct === 14 || pct === 8) acc.subtotal12 += detalle.subtotal;
       else if (pct > 0)                  acc.subtotal15 += detalle.subtotal;
       else                               acc.subtotal0  += detalle.subtotal;
       acc.totalDescuento += detalle.descuento;

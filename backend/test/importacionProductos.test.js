@@ -298,3 +298,16 @@ test('parsearFacturaCompraDesdeXml toma el IVA (codigo 2) aunque el ICE venga pr
   assert.equal(totales.valorIrbpnr, 0.12);
   assert.equal(totales.importeTotal, 3.53);
 });
+
+test('parsearFacturaCompraDesdeXml reconoce IVA 8% (feriado, codigo 8) — antes se redondeaba a 12%', () => {
+  const xml = `<factura><infoTributaria><ruc>0990000000001</ruc><estab>115</estab><ptoEmi>051</ptoEmi><secuencial>000056819</secuencial></infoTributaria>
+    <infoFactura><fechaEmision>08/08/2026</fechaEmision><importeTotal>23.22</importeTotal>
+    <totalConImpuestos><totalImpuesto><codigo>2</codigo><codigoPorcentaje>8</codigoPorcentaje><baseImponible>21.50</baseImponible><tarifa>8</tarifa><valor>1.72</valor></totalImpuesto></totalConImpuestos></infoFactura>
+    <detalles><detalle><codigoPrincipal>A</codigoPrincipal><descripcion>Combo</descripcion><cantidad>1</cantidad><precioUnitario>21.50</precioUnitario><descuento>0</descuento><precioTotalSinImpuesto>21.50</precioTotalSinImpuesto>
+      <impuestos><impuesto><codigo>2</codigo><codigoPorcentaje>8</codigoPorcentaje><tarifa>8</tarifa><baseImponible>21.50</baseImponible><valor>1.72</valor></impuesto></impuestos></detalle></detalles></factura>`;
+  const { detalles, totales } = parsearFacturaCompraDesdeXml(xml);
+  assert.equal(detalles[0].porcentajeIva, 8);
+  assert.equal(totales.subtotal12, 21.5);
+  assert.equal(totales.totalIva, 1.72);
+  assert.equal(totales.importeTotal, 23.22);
+});
